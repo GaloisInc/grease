@@ -1,0 +1,121 @@
+name: docker
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+
+env:
+  DOCKER_IMAGE: ghcr.io/galoisinc/grease
+
+jobs:
+  build-image:
+    runs-on: ${{ matrix.os }}
+    if: github.ref == 'refs/heads/main' &&
+        github.event.pull_request.head.repo.fork == false &&
+        github.repository_owner == 'GaloisInc'
+    strategy:
+      fail-fast: false
+      matrix:
+        # Cover both x86-64 and ARM64.
+        os: [ubuntu-22.04, ubuntu-22.04-arm]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker metadata
+        uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,manifest-descriptor
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          tags: ${{ env.DOCKER_IMAGE }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ runner.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  push-image:
+    runs-on: ubuntu-22.04
+    needs: [build-image]
+    if: github.ref == 'refs/heads/main' &&
+        github.event.pull_request.head.repo.fork == false &&
+        github.repository_owner == 'GaloisInc'
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker metadata
+        uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: |
+            type=raw,value=nightly,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        # Build and run a complex command line with eval to avoid wrong word splitting on spaces in the annotations.
+        run: |
+          eval "docker buildx imagetools create ${ANNOTATIONS} \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(jq -cr '.annotations | map("--annotation \"" + . + "\"") | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)"
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.version }}

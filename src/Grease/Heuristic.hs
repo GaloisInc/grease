@@ -1,0 +1,586 @@
+{-|
+Copyright        : (c) Galois, Inc. 2024
+Maintainer       : GREASE Maintainers <grease@galois.com>
+-}
+
+{-|
+Module      : Grease.Heuristic
+
+For an overview of refinement, see "Grease.Refinement".
+-}
+
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+
+module Grease.Heuristic
+  ( OnlineSolverAndBackend
+  , InitialMem(..)
+  , CantRefine(..)
+  , HeuristicResult(..)
+  , RefineHeuristic
+  , mustFailHeuristic
+  , llvmHeuristics
+  , macawHeuristics
+  ) where
+
+import Prelude (div, fromIntegral)
+
+import Control.Applicative (Alternative((<|>)), Const(..), pure)
+import Control.Exception.Safe (MonadThrow, throw)
+import Control.Lens (Lens', (^.), (.~))
+import qualified Data.BitVector.Sized as BV
+import qualified Data.Bool as Bool
+import Data.Eq ((==), (/=))
+import Data.Functor ((<$>))
+import Data.Function (($), (.), (&))
+import Data.Maybe (Maybe(..))
+import qualified Data.Maybe as Maybe
+import qualified Data.Parameterized.Context as Ctx
+import Data.Semigroup (Semigroup((<>)))
+import Data.String (String)
+import Data.Text (Text)
+import qualified Data.Text as Text
+import qualified Data.Tuple as Tuple
+import Data.Type.Equality (type (~), (:~:)(Refl), testEquality)
+import Numeric.Natural (Natural)
+import System.IO (IO)
+
+import qualified Lumberjack as LJ
+
+import qualified Text.LLVM.AST as L
+
+-- parameterized-utils
+import Data.Parameterized.Classes (IxedF'(..))
+import qualified Data.Parameterized.NatRepr as NatRepr
+
+-- what4
+import qualified What4.Interface as W4
+import qualified What4.Expr as W4
+import qualified What4.LabeledPred as W4
+import qualified What4.ProgramLoc as W4
+
+-- crucible
+import qualified Lang.Crucible.Simulator as C
+import qualified Lang.Crucible.Backend as C
+import qualified Lang.Crucible.CFG.Core as C
+import qualified Lang.Crucible.CFG.Extension as C
+
+-- crucible-llvm
+import qualified Lang.Crucible.LLVM.Bytes as Bytes
+import           Lang.Crucible.LLVM.Extension (LLVM)
+import qualified Lang.Crucible.LLVM.MemModel.CallStack as Mem
+import qualified Lang.Crucible.LLVM.MemModel as Mem hiding (Mem)
+import qualified Lang.Crucible.LLVM.MemModel.Generic as Mem
+import qualified Lang.Crucible.LLVM.MemModel.Partial as Mem
+import qualified Lang.Crucible.LLVM.MemModel.Pointer as Mem
+import qualified Lang.Crucible.LLVM.Errors as Mem
+import qualified Lang.Crucible.LLVM.Errors.MemoryError as Mem
+import qualified Lang.Crucible.LLVM.Errors.UndefinedBehavior as Mem
+
+-- macaw-base
+import qualified Data.Macaw.CFG as MC
+
+-- macaw-symbolic
+import qualified Data.Macaw.Symbolic as Symbolic
+
+-- macaw-loader-aarch32
+import Data.Macaw.BinaryLoader.AArch32 ()
+
+import qualified Grease.Bug as Bug
+import qualified Grease.Bug.UndefinedBehavior as UB
+import qualified Grease.Cursor as Cursor
+import Grease.Cursor.Pointer (Dereference)
+import Grease.Diagnostic
+import Grease.Heuristic.Result
+import qualified Grease.Heuristic.Diagnostic as Diag
+import Grease.Macaw.RegName (RegNames, getRegName, mkRegName)
+import qualified Grease.MustFail as MustFail
+import Grease.Shape
+import Grease.Shape.NoTag (NoTag(NoTag))
+import Grease.Shape.Pointer
+import Grease.Shape.Selector
+import Grease.Setup
+import qualified Grease.Setup.Annotations as Anns
+import Grease.Utility (GreaseException(..), OnlineSolverAndBackend, ppProgramLoc, tshow)
+
+doLog :: GreaseLogAction -> Diag.Diagnostic -> IO ()
+doLog la diag = LJ.writeLog la (HeuristicDiagnostic diag)
+
+type RefineHeuristic sym bak ext tys =
+  bak ->
+  Anns.Annotations sym ext tys ->
+  InitialMem sym ->
+  C.ProofObligation sym ->
+  Maybe (Mem.CallStack, Mem.BadBehavior sym) ->
+  -- Argument names
+  Ctx.Assignment (Const String) tys ->
+  ArgShapes ext NoTag tys ->
+  IO (HeuristicResult ext tys)
+
+selectArg :: ArgSelector ext argTys ts t -> Lens' (ArgShapes ext NoTag argTys) (Shape ext NoTag t)
+selectArg sel = argShapes . ixF' (sel ^. argSelectorIndex)
+
+newtype MemoryErrorHeuristic sym ext w argTys =
+  MemoryErrorHeuristic
+    (forall ts t.
+      ( C.IsSymInterface sym
+      , Cursor.Last ts ~ Mem.LLVMPointerType w
+      ) =>
+      sym ->
+      W4.ProgramLoc ->
+      -- Argument names
+      Ctx.Assignment (Const String) argTys ->
+      ArgShapes ext NoTag argTys ->
+      Mem.MemoryError sym ->
+      ArgSelector ext argTys ts t ->
+      IO (HeuristicResult ext argTys))
+
+refinePtrArg ::
+  ( ExtShape ext ~ PtrShape ext w
+  , Cursor.CursorExt ext ~ Dereference ext w
+  , Mem.HasPtrWidth w
+  , Cursor.Last ts ~ Mem.LLVMPointerType w'
+  ) =>
+  GreaseLogAction ->
+  ArgShapes ext NoTag argTys ->
+  ((regTy ~ Mem.LLVMPointerType w) => PtrTarget w NoTag -> IO (PtrTarget w NoTag)) ->
+  ArgSelector ext argTys ts regTy ->
+  IO (HeuristicResult ext argTys)
+refinePtrArg la args modify sel =
+  case args ^. selectArg sel of
+    ShapeExt (ShapePtr _tag offset pt) -> do
+      doLog la $ Diag.HeuristicPtrTarget pt
+      pt' <- modify pt
+      let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag offset pt')
+      pure $ RefinedPrecondition args'
+    _ -> pure Unknown
+
+-- | If a byte was treated as a pointer, turn it into one
+newPointer ::
+  ( ExtShape ext ~ PtrShape ext w
+  , Cursor.CursorExt ext ~ Dereference ext w
+  , Mem.HasPtrWidth w
+  , Cursor.Last ts ~ Mem.LLVMPointerType 8
+  ) =>
+  GreaseLogAction ->
+  -- | Argument names
+  Ctx.Assignment (Const String) argTys ->
+  ArgShapes ext NoTag argTys ->
+  ArgSelector ext argTys ts regTy ->
+  IO (HeuristicResult ext argTys)
+newPointer la argNames args sel = do
+  let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
+  doLog la $ Diag.DefaultHeuristicsBytesToPtr argName sel
+  let path = sel ^. argSelectorPath
+  refinePtrArg la args (bytesToPointers ?ptrWidth NoTag path) sel
+
+-- | Grow and/or initialize an allocation
+handleMemErr ::
+  ( ExtShape ext ~ PtrShape ext w
+  , Cursor.CursorExt ext ~ Dereference ext w
+  , Mem.HasPtrWidth w
+  , Cursor.Last ts ~ Mem.LLVMPointerType w
+  ) =>
+  GreaseLogAction ->
+  -- | Argument names
+  Ctx.Assignment (Const String) argTys ->
+  ArgShapes ext NoTag argTys ->
+  Mem.MemoryError sym ->
+  ArgSelector ext argTys ts regTy ->
+  IO (HeuristicResult ext argTys)
+handleMemErr la argNames args (Mem.MemoryError _op reason) sel =
+  case reason of
+    -- Most of the time, expanding an allocation backing a function won't help
+    -- with calling the function. The one exception to this rule is when the
+    -- function pointer value is a raw bitvector: crucible-llvm will always fail
+    -- if this is the case, and expanding the function pointer value to an
+    -- actual pointer might make some progress. (As explained in
+    -- Note [Initializing empty pointer shapes] in Grease.Setup, this scenario
+    -- can actually happen when refining a function pointer argument to a
+    -- function.)
+    Mem.BadFunctionPointer fle
+      |  fle /= Mem.RawBitvector
+      -> pure Unknown
+    _ -> do
+      let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
+      doLog la $ Diag.DefaultHeuristicsGrowAndInitMem argName sel
+      let modifyInner = pure @IO . initializeOrGrowPtrTarget NoTag
+      let path = sel ^. argSelectorPath
+      refinePtrArg la args (modifyPtrTarget ?ptrWidth modifyInner path) sel
+
+testPtrWidth ::
+  ( Mem.HasPtrWidth wptr
+  , C.IsSymInterface sym
+  ) =>
+  Mem.LLVMPtr sym w ->
+  Maybe (w C.:~: wptr)
+testPtrWidth ptr = testEquality (Mem.ptrWidth ptr) ?ptrWidth
+
+assertPtrWidth ::
+  forall sym wptr w m.
+  ( MonadThrow m
+  , Mem.HasPtrWidth wptr
+  , C.IsSymInterface sym
+  ) =>
+  Mem.LLVMPtr sym w ->
+  m (w C.:~: wptr)
+assertPtrWidth ptr =
+  case testPtrWidth ptr of
+    Nothing -> throw (GreaseException "Non-pointer-width pointer in memory op?")
+    Just r -> pure r
+
+allocInfoLoc ::
+  W4.IsExprBuilder sym =>
+  sym ->
+  Mem.Mem sym ->
+  Mem.LLVMPtr sym w ->
+  Maybe Text
+allocInfoLoc sym mem ptr = do
+  Mem.AllocInfo _aTy _sz _mut _align loc <-
+    allocInfoFromPtr sym mem ptr
+  let allocLoc = Text.pack loc
+  if "grease setup" `Text.isPrefixOf` allocLoc
+  then Nothing  -- not helpful to report "internal" locations like this
+  else Just ("Allocated at " <> allocLoc)
+
+-- | See if a pointer came from an argument, and if so, grow/initialize it,
+-- otherwise return 'Unknown'.
+modPtr ::
+  forall sym ext t st fs w w0 argTys.
+  ( ExtShape ext ~ PtrShape ext w
+  , C.IsSymInterface sym
+  , sym ~ W4.ExprBuilder t st fs
+  , Cursor.CursorExt ext ~ Dereference ext w
+  , Mem.HasPtrWidth w
+  ) =>
+  GreaseLogAction ->
+  Anns.Annotations sym ext argTys ->
+  sym ->
+  ArgShapes ext NoTag argTys ->
+  (PtrTarget w NoTag -> PtrTarget w NoTag) ->
+  Mem.LLVMPtr sym w0 ->
+  IO (HeuristicResult ext argTys)
+modPtr la anns sym args modify ptr = do
+  Refl <- assertPtrWidth ptr
+  case Anns.lookupPtrAnnotation anns sym ?ptrWidth ptr of
+    Just (Anns.SomePtrSelector (SelectArg sel)) -> do
+      let path = sel ^. argSelectorPath
+      refinePtrArg la args (modifyPtrTarget ?ptrWidth (pure . modify) path) sel
+    Just (Anns.SomePtrSelector (SelectRet {})) ->
+      pure Unknown
+    Nothing ->
+      pure Unknown
+
+-- | Helper, not exported
+growPtrTargetUpToBv ::
+  W4.IsExprBuilder sym =>
+  Mem.HasPtrWidth w =>
+  Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
+  sym ->
+  W4.SymBV sym w' ->
+  PtrTarget w tag ->
+  PtrTarget w tag
+growPtrTargetUpToBv sym symBv =
+  case W4.asBV (Maybe.fromMaybe symBv (W4.getUnannotatedTerm sym symBv)) of
+    Nothing -> growPtrTarget
+    Just bv ->
+      let minSz = Bytes.toBytes (BV.asUnsigned bv) in
+      growPtrTargetUpTo minSz
+
+-- | Helper, not exported
+ptrBytes :: Mem.HasPtrWidth w => Bytes.Bytes
+ptrBytes = Bytes.toBytes (NatRepr.widthVal ?ptrWidth `div` 8)
+
+-- | Heuristics for dealing with undefined behavior.
+--
+-- * If a non-heap pointer in an argument was freed, initialize that pointer
+handleUB ::
+  forall sym ext t st fs w argTys.
+  ( ExtShape ext ~ PtrShape ext w
+  , C.IsSymInterface sym
+  , sym ~ W4.ExprBuilder t st fs
+  , Cursor.CursorExt ext ~ Dereference ext w
+  , Mem.HasPtrWidth w
+  ) =>
+  GreaseLogAction ->
+  Anns.Annotations sym ext argTys ->
+  sym ->
+  W4.ProgramLoc ->
+  ArgShapes ext NoTag argTys ->
+  Mem.UndefinedBehavior (C.RegValue' sym) ->
+  IO (HeuristicResult ext argTys)
+handleUB la anns sym _loc args =
+  \case
+    Mem.FreeUnallocated (C.RV ptr) ->
+      modPtr la anns sym args (growPtrTargetUpTo ptrBytes) ptr
+    Mem.MemsetInvalidRegion (C.RV ptr) _val (C.RV len) ->
+      modPtr la anns sym args (growPtrTargetUpToBv sym len) ptr
+    Mem.PtrAddOffsetOutOfBounds (C.RV ptr) (C.RV offset) ->
+      modPtr la anns sym args (growPtrTargetUpToBv sym offset) ptr
+    _ -> pure Unknown
+
+-- | Apply some heuristics to a single pointer.
+applyMemoryHeuristics ::
+  ( C.IsSymInterface sym
+  , C.IsSyntaxExtension ext
+  , ExtShape ext ~ PtrShape ext wptr
+  , Cursor.CursorExt ext ~ Dereference ext wptr
+  , sym ~ W4.ExprBuilder t st fs
+  , Mem.HasPtrWidth wptr
+  ) =>
+  GreaseLogAction ->
+  Anns.Annotations sym ext argTys ->
+  sym ->
+  MemoryErrorHeuristic sym ext wptr argTys ->
+  MemoryErrorHeuristic sym ext 8 argTys ->
+  W4.ProgramLoc ->
+  InitialMem sym ->
+  Mem.MemoryError sym ->
+  -- | Argument names
+  Ctx.Assignment (Const String) argTys ->
+  ArgShapes ext NoTag argTys ->
+  Mem.LLVMPtr sym w ->
+  IO (HeuristicResult ext argTys)
+applyMemoryHeuristics _la anns sym ptrHeuristic byteHeuristic loc (InitialMem memImpl) memErr argNames args ptr = do
+  Refl <- assertPtrWidth ptr
+  let msel = Anns.lookupPtrAnnotation anns sym ?ptrWidth ptr
+  let msel' = Anns.lookupPtrAnnotation anns sym (C.knownNat @8) ptr
+  Mem.MemoryError op reason <- pure memErr
+  case (msel, msel') of
+    (_, Just (Anns.SomePtrSelector (SelectRet {}))) ->
+      pure Unknown
+    (Just (Anns.SomePtrSelector (SelectRet {})), _) ->
+      pure Unknown
+    (Just (Anns.SomePtrSelector (SelectArg sel)), _) ->
+      let MemoryErrorHeuristic h = ptrHeuristic
+      in h sym loc argNames args memErr sel
+    (_, Just (Anns.SomePtrSelector (SelectArg sel))) ->
+      let MemoryErrorHeuristic h = byteHeuristic
+      in h sym loc argNames args memErr sel
+    -- No matching selector, so this was a pointer to an allocation made by the
+    -- program, not by GREASE.
+    (Nothing, Nothing) -> do
+      let mem = Mem.memOpMem op
+      let ptrAllocType = do
+            Mem.AllocInfo aTy _sz _mut _align _loc <-
+              allocInfoFromPtr sym mem ptr
+            Just aTy
+      case reason of
+        Mem.NoSatisfyingWrite {} | ptrAllocType == Just Mem.StackAlloc ->
+          let bug =
+                Bug.BugInstance
+                { Bug.bugType = Bug.UninitStackRead
+                , Bug.bugLoc = ppProgramLoc loc
+                , Bug.bugDetails = allocInfoLoc sym (Mem.memOpMem op) ptr
+                , Bug.bugUb = Nothing
+                }
+          in pure (PossibleBug bug)
+        Mem.NoSatisfyingWrite {} | Just name <- globalPtrName sym memImpl Mem.Mutable ptr ->
+          pure (CantRefine (MutableGlobal name))
+        Mem.BadFunctionPointer Mem.NoOverride ->
+          let maybeName = globalPtrName sym memImpl Mem.Immutable ptr
+          in pure (CantRefine (MissingFunc maybeName))
+        _ -> pure Unknown
+
+-- | Must-fail heuristic (see UC-KLEE paper)
+--
+-- Paper and video: https://www.usenix.org/conference/usenixsecurity15/technical-sessions/presentation/ramos
+-- PDF: https://www.usenix.org/system/files/conference/usenixsecurity15/sec15-paper-ramos.pdf
+mustFailHeuristic ::
+  forall wptr solver sym bak t st fs ext argTys fm.
+  ( OnlineSolverAndBackend solver sym bak t st fs
+  , 16 C.<= wptr
+  , Mem.HasPtrWidth wptr
+  , Mem.HasLLVMAnn sym
+  , ?memOpts :: Mem.MemOptions
+  , fs ~ W4.Flags fm
+  ) =>
+  RefineHeuristic sym bak ext argTys
+mustFailHeuristic bak _anns _initMem obligation minfo _argNames _args =
+  if MustFail.excludeMustFail obligation (Tuple.snd <$> minfo)
+  then pure Unknown
+  else do
+    mustFail <- MustFail.oneMustFail bak [obligation]
+    let lp = C.proofGoal obligation
+    let simError = lp ^. W4.labeledPredMsg
+    let loc = C.simErrorLoc simError
+    let bug =
+          Bug.BugInstance
+          { Bug.bugType = Bug.MustFail
+          , Bug.bugLoc = ppProgramLoc loc
+          , Bug.bugDetails = do
+              let txt = tshow (C.ppSimError simError)
+              case minfo of
+                Just (callStack, badBehavior) ->
+                  let txt' = tshow (Mem.ppBB badBehavior) in
+                  Just $
+                    if Mem.null callStack
+                    then txt'
+                    else txt' <> "\nin context:\n" <> tshow (Mem.ppCallStack callStack)
+                Nothing -> Just txt
+          , Bug.bugUb = do  -- Maybe
+              (_cs, Mem.BBUndefinedBehavior ub) <- minfo
+              Just (UB.makeUb ub)
+          }
+    if Bool.not mustFail
+    then pure Unknown
+    else pure (PossibleBug bug)
+
+pointerHeuristics ::
+  forall wptr solver sym bak t st fs ext argTys.
+  ( C.IsSyntaxExtension ext
+  , ExtShape ext ~ PtrShape ext wptr
+  , Cursor.CursorExt ext ~ Dereference ext wptr
+  , OnlineSolverAndBackend solver sym bak t st fs
+  , 16 C.<= wptr
+  , Mem.HasPtrWidth wptr
+  , Mem.HasLLVMAnn sym
+  , ?memOpts :: Mem.MemOptions
+  ) =>
+  GreaseLogAction ->
+  MemoryErrorHeuristic sym ext wptr argTys ->
+  MemoryErrorHeuristic sym ext 8 argTys ->
+  [RefineHeuristic sym bak ext argTys]
+pointerHeuristics la ptrHeuristic byteHeuristic =
+  [ \bak anns initMem obligation minfo argNames args -> do
+      let sym = C.backendGetSym bak
+      let labeledPred = C.proofGoal obligation
+      let loc = C.simErrorLoc (labeledPred ^. W4.labeledPredMsg)
+      case minfo of
+        Just (_cs, Mem.BBUndefinedBehavior ub) ->
+          handleUB la anns sym loc args ub
+        Just (_cs, Mem.BBMemoryError memErr@(Mem.MemoryError op reason)) -> do
+          let onePtrHeuristics =
+                applyMemoryHeuristics la anns sym ptrHeuristic byteHeuristic loc initMem memErr argNames args
+          case op of
+            Mem.MemLoadOp _ _ ptr _ -> onePtrHeuristics ptr
+            Mem.MemStoreOp _ _ ptr _ -> onePtrHeuristics ptr
+            Mem.MemStoreBytesOp _ ptr _ _ -> onePtrHeuristics ptr
+            Mem.MemLoadHandleOp _ _ ptr _ -> onePtrHeuristics ptr
+            Mem.MemInvalidateOp _ _ ptr _ _ -> onePtrHeuristics ptr
+            Mem.MemCopyOp (_, dst) (_, src) _len _ -> do
+              case reason of
+                Mem.UnreadableRegion -> onePtrHeuristics src
+                Mem.UnwritableRegion -> onePtrHeuristics dst
+                _ -> do
+                  r1 <- onePtrHeuristics dst
+                  r2 <- onePtrHeuristics src
+                  pure (mergeResultsOptimistic r1 r2)
+        Nothing -> pure Unknown
+  ]
+
+getConcretePointerBlock :: W4.IsExprBuilder sym => sym -> Mem.LLVMPtr sym w -> Maybe Natural
+getConcretePointerBlock sym ptr =  tryAnnotated <|> tryUnannotated
+  where
+    int = W4.natToIntegerPure (Mem.llvmPointerBlock ptr)
+    tryAnnotated = fromIntegral <$> W4.asInteger int
+    tryUnannotated = do
+      term <- W4.getUnannotatedTerm sym int
+      fromIntegral <$> W4.asInteger term
+
+allocInfoFromPtr :: W4.IsExprBuilder sym => sym -> Mem.Mem sym -> Mem.LLVMPtr sym w -> Maybe (Mem.AllocInfo sym)
+allocInfoFromPtr sym mem ptr = do
+  int <- getConcretePointerBlock sym ptr
+  Mem.possibleAllocInfo int (Mem.memAllocs mem)
+
+-- | Check if this pointer is a global with the given mutability, and if so,
+-- return the name of the associated global variable. Returns 'Nothing' if the
+-- mutability is wrong, if the pointer is not a global, or if the pointer\'s
+-- block or offset aren\'t concrete.
+globalPtrName :: C.IsSymInterface sym => sym -> Mem.MemImpl sym -> Mem.Mutability -> Mem.LLVMPtr sym w -> Maybe String
+globalPtrName sym mem mut ptr =
+  case allocInfoFromPtr sym (Mem.memImplHeap mem) ptr of
+    Just (Mem.AllocInfo Mem.GlobalAlloc _sz actualMut _align _loc) | mut == actualMut -> do
+      L.Symbol nm <- Mem.isGlobalPointer (Mem.memImplSymbolMap mem) ptr
+      Just nm
+    _ -> Nothing
+
+memOpPtrs :: Mem.MemoryOp sym w -> [Mem.LLVMPtr sym w]
+memOpPtrs =
+  \case
+    Mem.MemLoadOp _ _ ptr _ -> [ptr]
+    Mem.MemStoreOp _ _ ptr _ -> [ptr]
+    Mem.MemStoreBytesOp _ ptr _ _ -> [ptr]
+    Mem.MemLoadHandleOp _ _ ptr _ -> [ptr]
+    Mem.MemInvalidateOp _ _ ptr _ _ -> [ptr]
+    Mem.MemCopyOp (_, dst) (_, src) _ _ -> [dst, src]
+
+llvmHeuristics ::
+  forall solver sym bak t st fs wptr argTys.
+  ( OnlineSolverAndBackend solver sym bak t st fs
+  , Mem.HasPtrWidth wptr
+  , Mem.HasLLVMAnn sym
+  , ?memOpts :: Mem.MemOptions
+  , wptr ~ 64  -- TODO(lb): Why is this necessary?
+  ) =>
+  GreaseLogAction ->
+  [RefineHeuristic sym bak LLVM argTys]
+llvmHeuristics la =
+  let ptrHeuristic :: MemoryErrorHeuristic sym LLVM wptr argTys
+      ptrHeuristic = MemoryErrorHeuristic (\_sym _loc -> handleMemErr la)
+      byteHeuristic :: MemoryErrorHeuristic sym LLVM 8 argTys
+      byteHeuristic = MemoryErrorHeuristic (\_sym _loc argNames args _err sel -> newPointer la argNames args sel)
+  in pointerHeuristics la ptrHeuristic byteHeuristic
+
+-- | 'macawHeuristics' differs from 'llvmHeuristics' in that it explicitly
+-- handles bad reads and writes to the stack.
+macawHeuristics ::
+  forall solver sym bak t st fs arch.
+  ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
+  , OnlineSolverAndBackend solver sym bak t st fs
+  , Symbolic.SymArchConstraints arch
+  , 16 C.<= MC.ArchAddrWidth arch
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , Mem.HasLLVMAnn sym
+  , ?memOpts :: Mem.MemOptions
+  ) =>
+  GreaseLogAction ->
+  RegNames arch ->
+  [RefineHeuristic sym bak (Symbolic.MacawExt arch) (Symbolic.MacawCrucibleRegTypes arch)]
+macawHeuristics la rNames =
+  let ptrHeuristic = MemoryErrorHeuristic (\sym -> handleMemErr' sym)
+      byteHeuristic = MemoryErrorHeuristic (\_sym _loc argNames args _err sel -> newPointer la argNames args sel)
+  in pointerHeuristics la ptrHeuristic byteHeuristic
+  where
+    handleMemErr' ::
+      forall ts regTy.
+      (Cursor.Last ts ~ Mem.LLVMPointerType (MC.ArchAddrWidth arch)) =>
+      sym ->
+      Cursor.Last ts ~ Mem.LLVMPointerType (MC.ArchAddrWidth arch) =>
+      W4.ProgramLoc ->
+      -- | Argument names
+      Ctx.Assignment (Const String) (Symbolic.MacawCrucibleRegTypes arch) ->
+      ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.MacawCrucibleRegTypes arch) ->
+      Mem.MemoryError sym ->
+      ArgSelector (Symbolic.MacawExt arch) (Symbolic.MacawCrucibleRegTypes arch) ts regTy ->
+      IO (HeuristicResult (Symbolic.MacawExt arch) (Symbolic.MacawCrucibleRegTypes arch))
+    handleMemErr' sym loc argNames args e@(Mem.MemoryError op reason) sel =
+      if getRegName rNames (sel ^. argSelectorIndex) == mkRegName @arch MC.sp_reg
+      then
+        case reason of
+          Mem.NoSatisfyingWrite _ ->
+            let bug =
+                  Bug.BugInstance
+                  { Bug.bugType = Bug.UninitStackRead
+                  , Bug.bugLoc = ppProgramLoc loc
+                  , Bug.bugDetails = do
+                      let ptrs = memOpPtrs op
+                      let details = Maybe.mapMaybe (allocInfoLoc sym (Mem.memOpMem op)) ptrs
+                      Maybe.listToMaybe details
+                  , Bug.bugUb = Nothing
+                  }
+            in pure (PossibleBug bug)
+          _ ->
+            -- In this case, we don't want to apply the default memory
+            -- heuristics. These heuristics generally grow and initialize
+            -- allocations, which isn't appropriate for the stack. We
+            -- shouldn't pre-initialize the stack because it isn't realistic,
+            -- and it causes performance issues (we can end up creating 1MiB =
+            -- 1048576 fresh, bound variables, one for each byte in the stack).
+            -- See !218 for details.
+            pure Unknown
+      else handleMemErr la argNames args e sel

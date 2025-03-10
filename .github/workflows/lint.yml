@@ -1,0 +1,25 @@
+name: lint
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-22.04
+    name: lint
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - shell: bash
+        run: |
+          curl -fsS --location -o hlint.tar.gz \
+            https://github.com/ndmitchell/hlint/releases/download/v3.8/hlint-3.8-x86_64-linux.tar.gz
+          tar xvf hlint.tar.gz
+
+          ./hlint-3.8/hlint main src tests

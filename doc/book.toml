@@ -1,0 +1,6 @@
+[book]
+authors = ["Galois, Inc."]
+language = "en"
+multilingual = false
+src = "."
+title = "GREASE"
