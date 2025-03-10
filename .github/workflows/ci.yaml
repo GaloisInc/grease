@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-22.04]
+      # complete all jobs
+      fail-fast: false
+    name: GREASE
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        submodules: false
