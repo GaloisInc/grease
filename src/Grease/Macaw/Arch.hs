@@ -1,0 +1,404 @@
+{-|
+Copyright        : (c) Galois, Inc. 2024
+Maintainer       : GREASE Maintainers <grease@galois.com>
+-}
+
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+
+module Grease.Macaw.Arch
+  ( ArchRepr(.., PPC32Repr, PPC64Repr)
+  , ArchRegs
+  , ArchRegCFG
+  , ArchRegCFGMap
+  , ArchCFG
+  , ArchResult
+  , ArchReloc
+  , ArchContext(..)
+  , archRepr
+  , archEndianness
+  , archGetIP
+  , archInfo
+  , archPcReg
+  , archVals
+  , archRelocSupported
+  , archIsGlobDatReloc
+  , archIntegerArguments
+  , archIntegerReturnRegisters
+  , archFunctionReturnAddr
+  , archSyscallArgumentRegisters
+  , archSyscallNumberRegister
+  , archSyscallReturnRegisters
+  , archSyscallCodeMapping
+  , archStackPtrShape
+  , archInitGlobals
+  , archRegOverrides
+  ) where
+
+import Control.Lens.TH (makeLenses)
+import Data.Kind (Type)
+import Data.IntMap (IntMap)
+import Data.Map (Map)
+import Data.Text (Text)
+
+-- bv-sized
+import qualified Data.BitVector.Sized as BV
+
+-- parameterized-utils
+import qualified Data.Parameterized.Context as Ctx
+
+-- what4
+import qualified What4.Expr as W4
+import qualified What4.Interface as W4
+import qualified What4.Protocol.Online as W4
+
+-- crucible
+import qualified Lang.Crucible.Backend as C
+import qualified Lang.Crucible.Backend.Online as C
+import qualified Lang.Crucible.CFG.Core as C
+import qualified Lang.Crucible.CFG.Reg as C.Reg
+import qualified Lang.Crucible.Simulator as C
+
+-- crucible-llvm
+import qualified Lang.Crucible.LLVM.DataLayout as Mem
+import qualified Lang.Crucible.LLVM.MemModel as Mem
+
+-- macaw-base
+import qualified Data.Macaw.Architecture.Info as MI
+import qualified Data.Macaw.CFG as MC
+import           Data.Macaw.Types (BVType)
+
+-- macaw-symbolic
+import qualified Data.Macaw.Symbolic as Symbolic
+import qualified Data.Macaw.Memory as Symbolic
+
+-- macaw-aarch32
+import qualified Data.Macaw.ARM as ARM (ARM)
+
+-- macaw-ppc
+import qualified Data.Macaw.PPC as PPC
+
+-- macaw-x86
+import qualified Data.Macaw.X86 as X86 (X86_64)
+
+-- stubs
+import qualified Stubs.Common as Stubs
+import qualified Stubs.FunctionOverride as Stubs
+
+import Grease.Macaw.Load.Relocation (RelocType)
+import Grease.Macaw.RegName (RegName)
+import Grease.Shape.NoTag (NoTag)
+import Grease.Shape.Pointer (PtrShape)
+
+-- | Run-time representative of supported architectures, used to provide
+-- architecture-specific functionality in code that is mostly architecture
+-- generic.
+data ArchRepr arch where
+  ARMRepr :: ArchRepr ARM.ARM
+  PPCRepr :: PPC.VariantRepr v -> ArchRepr (PPC.AnyPPC v)
+  X86Repr :: ArchRepr X86.X86_64
+
+pattern PPC32Repr :: () => (arch ~ PPC.PPC32) => ArchRepr arch
+pattern PPC32Repr = PPCRepr PPC.V32Repr
+
+pattern PPC64Repr :: () => (arch ~ PPC.PPC64) => ArchRepr arch
+pattern PPC64Repr = PPCRepr PPC.V64Repr
+
+{-# COMPLETE ARMRepr, PPC32Repr, PPC64Repr, X86Repr #-}
+
+type ArchRegs sym arch = Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch)
+
+type ArchRegCFG arch = C.Reg.SomeCFG
+  (Symbolic.MacawExt arch)
+  (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
+  (Symbolic.ArchRegStruct arch)
+
+type ArchRegCFGMap arch = Map (Symbolic.MemSegmentOff (MC.ArchAddrWidth arch)) (ArchRegCFG arch)
+
+type ArchCFG arch = C.SomeCFG
+  (Symbolic.MacawExt arch)
+  (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
+  (Symbolic.ArchRegStruct arch)
+
+type ArchResult p sym arch = C.ExecResult
+  p
+  sym
+  (Symbolic.MacawExt arch)
+  (C.RegEntry sym (Symbolic.ArchRegStruct arch))
+
+-- | The ELF relocation data type for a specific architecture.
+type family ArchReloc arch :: Type
+
+-- | Architecture-specific information and operations. This is similar to the
+-- 'Stubs.FunctionABI' data type from @stubs-common@, but it is different enough
+-- to warrant being a separate data type.
+data ArchContext arch = ArchContext
+  { _archRepr :: ArchRepr arch
+  , _archInfo :: MI.ArchitectureInfo arch
+  , _archEndianness :: Mem.EndianForm
+  , _archGetIP ::
+      forall sym.
+      C.IsSymInterface sym =>
+      ArchRegs sym arch ->
+      IO (W4.SymExpr sym (W4.BaseBVType (MC.ArchAddrWidth arch)))
+  , _archPcReg :: MC.ArchReg arch (BVType (MC.ArchAddrWidth arch))
+  , _archVals :: Symbolic.GenArchVals Symbolic.LLVMMemory arch
+    -- Check if @grease@ supports a particular relocation type. This should
+    -- return 'Nothing' if it is unsupported and 'Just' if it is supported.
+  , _archRelocSupported :: ArchReloc arch -> Maybe RelocType
+  , -- Check if a relocation type is @GLOB_DAT@.
+    _archIsGlobDatReloc :: ArchReloc arch -> Bool
+  , -- Given a full register state, extract all of the arguments we need for the
+    -- function call.
+    _archIntegerArguments ::
+      forall sym bak atps.
+      ( C.IsSymBackend sym bak
+      , Mem.HasLLVMAnn sym
+      ) =>
+      bak ->
+      C.CtxRepr atps
+        {- Types of arguments -} ->
+      Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch)
+        {- Argument register values -} ->
+      Mem.MemImpl sym
+        {- The memory state at the time of the function call -} ->
+      IO (Ctx.Assignment (C.RegEntry sym) atps, Stubs.GetVarArg sym)
+        {- A pair containing the function argument values and a callback for
+        retrieving variadic arguments. -}
+  , -- Build an OverrideSim action with appropriate return register types.
+    _archIntegerReturnRegisters ::
+      forall sym bak p t r args rtp mem.
+      C.IsSymBackend sym bak =>
+      bak ->
+      Symbolic.GenArchVals mem arch
+        {- Architecture-specific information -} ->
+      C.TypeRepr t
+        {- Function return type -} ->
+      Stubs.OverrideResult sym arch t
+        {- Function's return value -} ->
+      C.RegValue sym (Symbolic.ArchRegStruct arch)
+        {- Argument register values from before function execution -} ->
+      C.OverrideSim p sym (Symbolic.MacawExt arch) r args rtp (C.RegValue sym (Symbolic.ArchRegStruct arch))
+        {- OverrideSim action with return type matching system return register type -}
+  , -- If the return address for the function being called can be determined,
+    -- then return Just that address. Otherwise, return Nothing. Some ABIs
+    -- store this information directly in a register, while other ABIs store
+    -- this information on the stack, so we provide both registers and the stack
+    -- as arguments.
+    _archFunctionReturnAddr ::
+      forall sym bak solver scope st fs mem.
+      ( C.IsSymBackend sym bak
+      , sym ~ W4.ExprBuilder scope st fs
+      , bak ~ C.OnlineBackend solver scope st fs
+      , W4.OnlineSolver solver
+      , Mem.HasLLVMAnn sym
+      ) =>
+      bak ->
+      Symbolic.GenArchVals mem arch ->
+      Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
+        {- Registers for the given architecture -}
+      Mem.MemImpl sym ->
+        {- The memory state at the time of the function call -}
+      IO (Maybe (MC.MemWord (MC.ArchAddrWidth arch)))
+  , -- Given a full register state, extract all of the arguments we need for
+    -- the system call.
+    _archSyscallArgumentRegisters ::
+      forall sym bak args atps.
+      C.IsSymBackend sym bak =>
+      bak ->
+      C.CtxRepr atps
+        {- Types of argument registers -} ->
+      C.RegEntry sym (C.StructType atps)
+        {- Argument register values -} ->
+      C.CtxRepr args
+        {- Types of syscall arguments -} ->
+      IO (Ctx.Assignment (C.RegEntry sym) args)
+        {- Syscall argument values -}
+  , -- Extract the syscall number from the register state.
+    _archSyscallNumberRegister
+     :: forall sym bak atps.
+        C.IsSymBackend sym bak =>
+        bak ->
+        Ctx.Assignment C.TypeRepr atps
+          {- Types of argument registers -} ->
+        C.RegEntry sym (C.StructType atps)
+          {- Argument register values -} ->
+        IO (C.RegEntry sym (C.BVType (MC.ArchAddrWidth arch)))
+          {- Extracted syscall number -}
+  , -- Build an OverrideSim action with appropriate return register types from
+    -- a given OverrideSim action.
+    _archSyscallReturnRegisters ::
+      forall sym p t ext r args rtps atps.
+      C.TypeRepr t ->
+       {- Syscall return type -}
+      C.OverrideSim p sym ext r args (C.StructType rtps) (C.RegValue sym t) ->
+       {- OverrideSim action producing the syscall's return value -}
+      C.CtxRepr atps ->
+        {- Argument register types -}
+      C.RegEntry sym (C.StructType atps) ->
+        {- Argument register values from before syscall execution -}
+      C.CtxRepr rtps ->
+        {- Return register types -}
+      C.OverrideSim p sym ext r args (C.StructType rtps) (C.RegValue sym (C.StructType rtps))
+        {- OverrideSim action with return type matching system return register
+           type -}
+  , -- A mapping from syscall numbers to names.
+    _archSyscallCodeMapping :: IntMap Text
+  , -- | Shape of the stack pointer
+    --
+    -- A function that writes to the stack on architectures where it grows down
+    -- (including armv7l, PowerPC, and x86_64) will generally subtract an offset
+    -- from the stack pointer to do so. If we treated the stack pointer like any
+    -- other register, the resulting behavior when encountering a write would be
+    -- that the heuristics would make it point to the base of a fresh
+    -- allocation. When the function subtracts an offset to write to it, it
+    -- would wrap around, making the offset huge and resulting in
+    -- non-termination (see gitlab#53).
+    --
+    -- Instead, we point the stack pointer to the end of a large, fresh memory
+    -- allocation. On x86_64, we additionally initialize a pointer-sized chunk at
+    -- the end of the stack, as x86_64 reads the return address from the stack.
+    _archStackPtrShape :: PtrShape (Symbolic.MacawExt arch) (MC.ArchAddrWidth arch) NoTag (Mem.LLVMPointerType (MC.ArchAddrWidth arch))
+  , -- Initialize architecture-specific global variables before simulation
+    -- begins. Currently, this is only used to initialize thread-local state.
+    -- See Note [Coping with stack protection] for how this is used.
+    _archInitGlobals ::
+      forall sym.
+      Mem.HasLLVMAnn sym =>
+      Stubs.Sym sym ->
+      Mem.MemImpl sym ->
+      IO (Mem.MemImpl sym, C.SymGlobalState sym)
+  , -- | When setting up the initial register values just before starting
+    -- simulation, override the default values for the following registers and
+    -- replace them with the 'BV.BV' values corresponding to each register's
+    -- 'RegName'. Currently, this is only used to ensure that the initial value
+    -- in certain architectures' link register (which stores the return address)
+    -- is a value within the @.text@ section, which helps satisfy @grease@'s
+    -- @in-text@ requirement.
+    _archRegOverrides :: Map RegName (BV.BV (MC.ArchAddrWidth arch))
+  }
+makeLenses ''ArchContext
+
+{-
+Note [Coping with stack protection]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Many C compilers enable -fstack-protector by default, which causes the
+generated assembly for certain functions to check for buffer overflows. This
+Note describes how grease copes with -fstack-protector–compiled binaries on
+each of the currently supported architectures.
+
+-----
+-- x86-64 (full support)
+-----
+
+x86-64 binaries compiled with -fstack-protector will generate extra code for
+protected functions such that:
+
+* When the function is first invoked, it will load a piece of thread-local
+  state via the %fs segment register.
+
+* Just before the function returns, it will once again load the same
+  thread-local state from %fs.
+
+* It will then check to see if the two thread-local state values are the same.
+  If they are equal, then return from the function normally. If they are not
+  equal, then this is evidence that a buffer overflow has occurred, so call the
+  __stack_chk_fail function (which halts execution).
+
+The tricky part is dealing with %fs. Unlike other x86-64 registers, segment
+registers (%fs and %gs) are not modeled as part of the giant register struct
+that is passed around during simulation. Instead, reading from segment
+registers is handled via the ReadFSBase and ReadGSBase primitive functions in
+macaw-x86. By default, macaw-x86-symbolic will crash if it encounters one of
+these primitive functions, so it is up to grease to give these primitive
+functions meaningful semantics.
+
+One possible approach would be to reverse-engineer the exact shape of the
+thread-local state that is accessed in stack-protected functions. This is
+doable but tricky to get right, and especially so when you consider that some
+of this thread-local state may be compiler-specific.
+
+Instead, we adopt a much simpler approach: initialize all of %fs with a
+symbolic array. It doesn't particularly matter /what/ value is stored in %fs so
+long as it is equal to itself, and a symbolic array meets that criterion. In
+fact, this is exactly the same approach that stubs uses, so we are able to
+piggyback on stubs' implementation. (See the relevant comments in
+Grease.Macaw.Arch.X86.x86Ctx.)
+
+-----
+-- AArch32 (partial support)
+-----
+
+The story for AArch32 is similar to that of x86-64, except that instead of
+loading a segment register, AArch32 binaries compiled with -fstack-protector
+will load the contents of a global variable named __stack_chk_guard. The
+details of how __stack_chk_guard materializes at the binary level depend on
+whether the binary is statically or dynamically linked.
+
+If the binary is statically linked, then __stack_chk_guard is defined as:
+
+00020450 <__stack_chk_guard>:
+   20450:       00000000        andeq   r0, r0, r0
+
+And sure enough, 00000000 equals 00000000, so grease has no issues at all with
+this. (In reality, the binary's startup code would modify the value of
+__stack_chk_guard before calling the main() function, but we don't model the
+startup code. Nor do we particularly need to for this example to work out.)
+
+Unfortunately, life is harder when dealing with dynamically linked binaries, as
+__stack_chk_guard is referenced indirectly via an R_ARM_COPY or R_ARM_GLOB_DAT
+relocation. grease does not yet model the semantics of these relocation types
+in full fidelity (see #22). Instead, it will populate the part of the binary
+where __stack_chk_guard's relocation resides with symbolic bytes. grease will
+then attempt to interpret these symbolic bytes as a pointer and read from it,
+but this will fail.
+
+If we wanted to support stack protection in dynamically linked AArch32
+binaries, we could consider special-casing the code that populates
+__stack_chk_guard's relocation region so that it populates it with a dummy
+pointer value that points to something valid.
+
+-----
+-- PowerPC (no support)
+-----
+
+grease currently does not support stack protection on PowerPC at all.
+
+More specifically, PowerPC binaries compiled with -fstack-protector will
+attempt to access a piece of thread-local state via r2 (the table of contents
+register) at an extremely large offset (e.g., -28680). This does not play well
+with grease's heuristics, which will attempt to allocate space for r2 one byte
+at a time, causing the refinement loop to time out well before it ever
+allocates enough space to cover the large offset. If we want to support this,
+we will likely need to give r2 a pre-determined PtrShape that allocates this
+space ahead of time, similarly to how we deal with the stack pointer register.
+
+-----
+
+Regardless of which architecture is used, the stack protection code will call
+out to the __stack_chk_fail function in the event of a buffer overflow.
+Usually, the call to __stack_chk_fail is guarded behind a symbolic equality
+check, so grease will usually simulate the definition of __stack_chk_fail (even
+if the SMT solver ultimately concludes that the path condition leading up to
+calling __stack_chk_fail is unsatisfiable). Unfortunately, the definition of
+__stack_chk_fail is usually too gnarly for Macaw to handle. For instance, the
+x86-64 version of __stack_chk_fail invokes the `hlt` instruction, which
+macaw-x86-symbolic does not have semantics for.
+
+As such, we install an override for __stack_chk_fail that simply calls the
+abort() function, which grease can handle without issue. Actually, to be more
+precise, we install this as an override for both __stack_chk_fail and its
+cousin, the __stack_chk_fail_local function. There are two reasons for this:
+
+* On PowerPC, __stack_chk_fail_local is an entirely separate function that is
+  defined in terms of __stack_chk_fail. We could try to simulate the definition
+  of __stack_chk_fail_local, but there's not much reason to.
+
+* On x86-64 and AArch32, __stack_chk_fail_local is a weak alias for the
+  __stack_chk_fail function, and both functions are defined at the same
+  address. Due to a quirk in how macaw-loader works, however (see
+  https://github.com/GaloisInc/macaw-loader/issues/25), the override will apply
+  to __stack_chk_fail_local, /not/ __stack_chk_fail. As such, it is convenient
+  to override both functions just in case.
+-}

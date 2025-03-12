@@ -1,0 +1,159 @@
+# HLint's default suggestions are opinionated, so we disable all of them by
+# default and enable just a small subset we can agree on.
+
+- ignore: {}  # ignore all
+- error: { name: "Redundant bracket" }
+- error: { name: "Redundant do" }
+- error: { name: "Unused LANGUAGE pragma" }
+- error: { name: "Use module export list" }
+- error: { name: "Use unless" }
+- error: { name: "Use when" }
+
+- error:
+    name: Use PP.viaShow
+    lhs: "Prettyprinter.pretty (show x)"
+    rhs: 'Prettyprinter.viaShow x'
+
+# Enforce naming conventions, e.g., if you import Control.Applicative qualified,
+# it must be as 'Applicative'.
+- error: { name: "Avoid restricted alias" }
+- modules:
+    # base and libraries that ship with it
+    - { name: Control.Applicative, as: Applicative }  # base
+    - { name: Control.Monad, as: Monad }  # base
+    - { name: Data.Array, as: Array }  # array
+    - { name: Data.Array.IArray, as: IArray }  # array
+    - { name: Data.Array.MArray, as: MArray }  # array
+    - { name: Data.Array.Unboxed, as: UArray }  # array
+    - { name: Data.Bifoldable1, as: Bifoldable1 }  # base
+    - { name: Data.Bifoldable, as: Bifoldable }  # base
+    - { name: Data.Bifunctor, as: Bifunctor }  # base
+    - { name: Data.Bitraversable, as: Bitraversable }  # base
+    - { name: Data.Bits, as: Bits }  # base
+    - { name: Data.Bool, as: Bool }  # base
+    - { name: Data.Bounded, as: Bounded }  # base
+    - { name: Data.ByteString, as: BS }  # bytestring
+    - { name: Data.ByteString.Lazy, as: BSL }  # bytestring
+    - { name: Data.Char, as: Char }  # base
+    - { name: Data.Coerce, as: Coerce }  # base
+    - { name: Data.Complex, as: Cplx }  # base
+    - { name: Data.Data, as: Data }  # base
+    - { name: Data.Dynamic, as: Dyn }  # base
+    - { name: Data.Either, as: Either }  # base
+    - { name: Data.Enum, as: Enum }  # base
+    - { name: Data.Eq, as: Eq }  # base
+    - { name: Data.Fixed, as: Fixed }  # base
+    - { name: Data.Foldable1, as: Foldable1 }  # base
+    - { name: Data.Foldable, as: Foldable }  # base
+    - { name: Data.Function, as: Function }  # base
+    - { name: Data.Functor, as: Functor }  # base
+    - { name: Data.Functor.Compose, as: Compose }  # base
+    - { name: Data.Functor.Const, as: Const }  # base
+    - { name: Data.Functor.Contravariant, as: Contra }  # base
+    - { name: Data.Functor.Identity, as: Identity }  # base
+    - { name: Data.Functor.Product, as: Product }  # base
+    - { name: Data.Functor.Sum, as: Sum }  # base
+    - { name: Data.Int, as: Int }  # base
+    - { name: Data.IntMap, as: IntMap }  # containers
+    - { name: Data.IntMap.Lazy, as: IntMap }  # containers
+    - { name: Data.IntMap.Strict, as: IntMap }  # containers
+    - { name: Data.IntSet, as: IntSet }  # containers
+    - { name: Data.IORef, as: IORef }  # base
+    - { name: Data.Ix, as: Ix }  # base
+    - { name: Data.Kind, as: Kind }  # base
+    - { name: Data.List, as: List }  # base
+    - { name: Data.List.NonEmpty, as: NE }  # base
+    - { name: Data.Map, as: Map }  # containers
+    - { name: Data.Map.Lazy, as: Map }  # containers
+    - { name: Data.Map.Strict, as: Map }  # containers
+    - { name: Data.Maybe, as: Maybe }  # base
+    - { name: Data.Monoid, as: Monoid }  # base
+    - { name: Data.NonEmpty, as: NE }  # base
+    - { name: Data.Ord, as: Ord }  # base
+    - { name: Data.Proxy, as: Proxy }  # base
+    - { name: Data.Ratio, as: Ratio }  # base
+    - { name: Data.Semigroup, as: Semigroup }  # base
+    - { name: Data.Sequence, as: Seq }  # containers
+    - { name: Data.Set, as: Set }  # containers
+    - { name: Data.STRef, as: STRef }  # base
+    - { name: Data.STRef.Lazy, as: STRef }  # base
+    - { name: Data.STRef.Strict, as: STRef }  # base
+    - { name: Data.String, as: String }  # base
+    - { name: Data.Text, as: Text }  # text
+    - { name: Data.Text.Encoding, as: Text }  # text
+    - { name: Data.Text.Encoding.Error, as: Text }  # text
+    - { name: Data.Traversable, as: Traversable }  # base
+    - { name: Data.Tuple, as: Tuple }  # base
+    - { name: Data.Typeable, as: Typeable }  # base
+    - { name: Data.Unique, as: Unique }  # base
+    - { name: Data.Version, as: Version }  # base
+    - { name: Data.Void, as: Void }  # base
+    - { name: Data.Word, as: Word }  # base
+    - { name: System.Directory, as: Dir }  # directory
+    - { name: System.Environment, as: Env }  # base
+    - { name: System.Exit, as: Exit }  # base
+    - { name: System.FilePath, as: FilePath }  # filepath
+    - { name: System.IO, as: IO }  # base
+    - { name: System.Process, as: Process }  # base
+    - { name: Text.Read, as: Read }  # base
+
+    # mtl
+    - { name: Control.Monad.Cont, as: Cont }
+    - { name: Control.Monad.Error, as: Error }
+    - { name: Control.Monad.Error.Class, as: Error }
+    - { name: Control.Monad.Reader, as: Reader }
+    - { name: Control.Monad.Reader.Class, as: Reader }
+    - { name: Control.Monad.RWS, as: RWS }
+    - { name: Control.Monad.RWS.Class, as: RWS }
+    - { name: Control.Monad.RWS.Lazy, as: RWS }
+    - { name: Control.Monad.RWS.Strict, as: RWS }
+    - { name: Control.Monad.State, as: State }
+    - { name: Control.Monad.State.Class, as: State }
+    - { name: Control.Monad.State.Lazy, as: State }
+    - { name: Control.Monad.State.Strict, as: State }
+    - { name: Control.Monad.Writer, as: Writer }
+    - { name: Control.Monad.Writer.Class, as: Writer }
+    - { name: Control.Monad.Writer.Lazy, as: Writer }
+    - { name: Control.Monad.Writer.Strict, as: Writer }
+
+    # transformers
+    - { name: Control.Monad.Trans.Cont, as: ContT }
+    - { name: Control.Monad.Trans.Except, as: ExceptT }
+    - { name: Control.Monad.Trans.Maybe, as: MaybeT }
+    - { name: Control.Monad.Trans.Reader, as: ReaderT }
+    - { name: Control.Monad.Trans.RWS, as: RWST }
+    - { name: Control.Monad.Trans.RWS.CPS, as: RWST }
+    - { name: Control.Monad.Trans.RWS.Lazy, as: RWST }
+    - { name: Control.Monad.Trans.RWS.Strict, as: RWST }
+    - { name: Control.Monad.Trans.State, as: StateT }
+    - { name: Control.Monad.Trans.State.Lazy, as: StateT }
+    - { name: Control.Monad.Trans.State.Strict, as: StateT }
+    - { name: Control.Monad.Trans.Writer, as: WriterT }
+    - { name: Control.Monad.Trans.Writer.CPS, as: WriterT }
+    - { name: Control.Monad.Trans.Writer.Lazy, as: WriterT }
+    - { name: Control.Monad.Trans.Writer.Strict, as: WriterT }
+
+    # common packages
+    - { name: Control.Concurrent.Async, as: Async }  # async
+    - { name: Control.Lens, as: Lens }  # lens
+    - { name: Data.Aeson, as: Aeson }  # aeson
+    - { name: Data.Aeson.Types, as: Aeson }  # aeson
+    - { name: Data.Array.Unboxed, as: Array }  # array
+    - { name: Data.Vector, as: Vec }  # vector
+    - { name: Prettyprinter, as: PP }  # prettyprinter
+
+    # galois packages
+    - { name: Data.BitVector.Sized, as: BV }
+    - { name: Lumberjack, as: LJ }
+
+    # parameterized-utils
+    - { name: Data.Parameterized.Context, as: Ctx }
+    - { name: Data.Parameterized.Fin, as: Fin }
+    - { name: Data.Parameterized.NatRepr, as: NatRepr }
+    - { name: Data.Parameterized.Nonce, as: Nonce }
+    - { name: Data.Parameterized.Some, as: Some }
+    - { name: Data.Parameterized.Map, as: MapF }
+    - { name: Data.Parameterized.TraversableF, as: TF }
+    - { name: Data.Parameterized.TraversableFC, as: TFC }
+
+

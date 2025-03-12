@@ -1,0 +1,54 @@
+cabal-version: 2.2
+name: elf-edit-core-dump
+version: 0.1
+synopsis: Utilities for reading and analyzing ELF core dumps using elf-edit
+description:
+  Utilities for reading and analyzing ELF core dumps using
+  [elf-edit](https://github.com/GaloisInc/elf-edit). An example program
+  (@extract-core-dump@) is included as a demonstration of how to use the API.
+license: BSD-3-Clause
+license-file: LICENSE
+author: Ryan Scott
+maintainer: rscott@galois.com
+copyright: Galois Inc., 2024-2025
+category: Data
+build-type: Simple
+extra-source-files: README.md
+
+source-repository head
+  type: git
+  location: https://github.com/GaloisInc/grease
+  subdir: elf-edit-core-dump
+
+common warnings
+    ghc-options: -Wall
+
+library
+    import: warnings
+    exposed-modules:
+      Data.ElfEdit.CoreDump
+      Data.ElfEdit.CoreDump.ARM
+      Data.ElfEdit.CoreDump.PPC
+      Data.ElfEdit.CoreDump.X86_64
+      Data.ElfEdit.Prim.Nhdr
+    build-depends:
+      base >= 4.12 && < 5,
+      binary,
+      bytestring,
+      containers,
+      elf-edit,
+    hs-source-dirs: src
+    default-language: Haskell2010
+
+executable extract-core-dump
+    import: warnings
+    main-is: Main.hs
+    build-depends:
+      base >= 4.12 && < 5,
+      bytestring,
+      elf-edit,
+      elf-edit-core-dump,
+      optparse-applicative,
+      pretty-show,
+    hs-source-dirs: extract-core-dump
+    default-language: Haskell2010

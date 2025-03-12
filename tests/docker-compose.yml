@@ -1,0 +1,7 @@
+version: "3"
+services:
+  grease-cross:
+    build: .
+    volumes:
+      - ./failing:/workdir/failing:rw
+      - ./succeeding:/workdir/succeeding:rw

@@ -1,0 +1,42 @@
+[submodule "deps/macaw"]
+	path = deps/macaw
+	url = https://github.com/GaloisInc/macaw
+[submodule "deps/arm-asl-parser"]
+	path = deps/arm-asl-parser
+	url = https://github.com/GaloisInc/arm-asl-parser
+[submodule "deps/asl-translator"]
+	path = deps/asl-translator
+	url = https://github.com/GaloisInc/asl-translator
+[submodule "deps/elf-edit"]
+	path = deps/elf-edit
+	url = https://github.com/GaloisInc/elf-edit
+[submodule "deps/crucible"]
+	path = deps/crucible
+	url = https://github.com/GaloisInc/crucible
+[submodule "deps/dismantle"]
+	path = deps/dismantle
+	url = https://github.com/travitch/dismantle
+[submodule "deps/what4"]
+	path = deps/what4
+	url = https://github.com/GaloisInc/what4
+[submodule "deps/semmc"]
+	path = deps/semmc
+	url = https://github.com/GaloisInc/semmc
+[submodule "deps/dwarf"]
+	path = deps/dwarf
+	url = https://github.com/GaloisInc/dwarf
+[submodule "deps/flexdis86"]
+	path = deps/flexdis86
+	url = https://github.com/GaloisInc/flexdis86
+[submodule "deps/llvm-pretty-bc-parser"]
+	path = deps/llvm-pretty-bc-parser
+	url = https://github.com/GaloisInc/llvm-pretty-bc-parser
+[submodule "deps/llvm-pretty"]
+	path = deps/llvm-pretty
+	url = https://github.com/elliottt/llvm-pretty
+[submodule "deps/stubs"]
+	path = deps/stubs
+	url = https://github.com/GaloisInc/stubs
+[submodule "deps/sympro-ui"]
+	path = deps/sympro-ui
+	url = https://github.com/GaloisInc/sympro-ui
