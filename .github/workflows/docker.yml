@@ -19,7 +19,11 @@ jobs:
       fail-fast: false
       matrix:
         # Cover both x86-64 and ARM64.
-        os: [ubuntu-22.04, ubuntu-22.04-arm]
+        #
+        # For now, we disable the ARM64 job, as ARM64 Ubuntu runners are only
+        # available in public repos. Once we make this repo public, we can
+        # re-enable it. (#55)
+        os: [ubuntu-22.04] #, ubuntu-22.04-arm]
     steps:
       - uses: actions/checkout@v4
         with:
