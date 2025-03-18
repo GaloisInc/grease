@@ -4,6 +4,8 @@
 
 For more information, see [the documentation](https://galoisinc.github.io/grease).
 
+<img src="doc/logo.png" alt="GREASE logo" width="500" align="center" />
+
 ## Acknowledgements
 
 This material is based upon work supported by the Defense Advanced Research Projects Agency under Contract No. W31P4Q-22-C-0017 and W31P4Q-23-C-0020.

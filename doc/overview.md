@@ -2,6 +2,8 @@
 
 `grease` is a CLI tool that analyzes binaries using under-constrained symbolic execution. `grease` supports analysis of ELF executables or shared objects containing ARMv7l, PowerPC, or x86_64 code. `grease` can also analyze LLVM bitcode.
 
+<img src="logo.png" alt="GREASE logo" width="500" align="center" />
+
 ## Demo
 
 Consider the following function derived from `libpng`. Can you spot the bug?[^libpng]
