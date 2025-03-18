@@ -4,7 +4,7 @@
 
 For more information, see [the documentation](https://galoisinc.github.io/grease).
 
-<img src="doc/logo.png" alt="GREASE logo" width="500" align="center" />
+<img src="doc/logo.png" alt="GREASE logo" width="50%" />
 
 ## Acknowledgements
 
