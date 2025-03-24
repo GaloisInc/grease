@@ -20,7 +20,6 @@ import Control.Lens ((^.), (%~), (.~), to)
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Foldable (foldl')
-import Data.Functor ((<$>))
 import Data.Function (($), (&), (.))
 import Data.Int (Int)
 import qualified Data.IntMap as IntMap
@@ -57,7 +56,6 @@ import qualified Lang.Crucible.Simulator as C
 
 -- crucible-llvm
 import qualified Lang.Crucible.LLVM.MemModel as Mem
-import           Lang.Crucible.LLVM.MemModel.Pointer (ptrAdd)
 
 -- macaw-base
 import qualified Data.Macaw.CFG as MC
@@ -67,9 +65,6 @@ import qualified Data.Macaw.Memory.ElfLoader as EL
 
 -- macaw-loader
 import qualified Data.Macaw.BinaryLoader.ELF as Loader
-
--- macaw-x86
-import qualified Data.Macaw.X86.X86Reg as X86
 
 -- macaw-symbolic
 import qualified Data.Macaw.Symbolic as Symbolic
@@ -83,7 +78,6 @@ import qualified Stubs.Syscall as Stubs
 
 import Grease.Diagnostic (Diagnostic(..), GreaseLogAction)
 import Grease.Macaw.Arch
-import Grease.Macaw.Arch.X86.Reg (modifyX86Reg)
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.FunctionOverride
 import qualified Grease.Macaw.ResolveCall.Diagnostic as Diag
@@ -98,26 +92,6 @@ doLog la diag = LJ.writeLog la (ResolveCallDiagnostic diag)
 
 regStructRepr :: ArchContext arch -> C.TypeRepr (Symbolic.ArchRegStruct arch)
 regStructRepr arch = C.StructRepr . Symbolic.crucArchRegTypes $ arch ^. archVals . to Symbolic.archFunctions
-
--- | On x86, the `call` instruction pushes the return address onto the stack.
--- When skipping a function or using an override, no `ret` instruction will
--- pop the return address (and increment the stack pointer accordingly), so we
--- simulate that effect here.
-fixStackPointer ::
-  forall arch sym p ext rtp a r.
-  C.IsSymInterface sym =>
-  ArchContext arch ->
-  ArchRegs sym arch ->
-  C.OverrideSim p sym ext rtp a r (ArchRegs sym arch)
-fixStackPointer arch regs = do
-  sym <- C.getSymInterface
-  case arch ^. archRepr of
-    X86Repr ->
-      modifyX86Reg regs X86.RSP $ \(C.RV rsp) -> liftIO $ do
-        let widthRepr = C.knownNat @(MC.ArchAddrWidth arch)
-        eight <- W4.bvLit sym widthRepr (BV.mkBV widthRepr 8)
-        C.RV <$> ptrAdd sym widthRepr rsp eight
-    _ -> pure regs
 
 -- | Create a new override that post-composes an 'OverrideSim' action wtih an existing one.
 useComposedOverride ::
@@ -197,7 +171,7 @@ lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs 
         let override = C.mkOverride' funcName (regStructRepr arch) $ do
               args <- C.getOverrideArgs
               let regs' = Ctx.last $ C.regMap args
-              fixStackPointer arch (C.regValue regs')
+              (arch ^. archOffsetStackPointerPostCall) (C.regValue regs')
         pure $ useFnHandleAndState handle (C.UseOverride override) st
 
   case W4.asBV symAddr1 of
@@ -401,7 +375,7 @@ useMacawFunctionOverride bak la halloc arch allOvs
     let st1 = st0 & C.stateContext . C.functionBindings
                  .~ C.FnBindings fnHdlMap1
         funcName = W4.functionNameFromText "_grease_fix_stack_ptr"
-    useComposedOverride halloc arch publicOvHdl publicOv st1 funcName (fixStackPointer arch)
+    useComposedOverride halloc arch publicOvHdl publicOv st1 funcName (arch ^. archOffsetStackPointerPostCall)
 
 -- | Register the 'C.FnHandle's of any Macaw functions that this override may
 -- invoke, be it through auxiliary functions or forward declarations. Note that

@@ -51,7 +51,7 @@ import qualified Stubs.Memory.PPC.Linux as Stubs
 import qualified Stubs.Syscall.PPC.Linux as Stubs
 import qualified Stubs.Syscall.Names.PPC64.Linux as Stubs
 
-import Grease.Macaw.Arch (ArchContext(..), ArchReloc, ArchRepr(PPC64Repr))
+import Grease.Macaw.Arch (ArchContext(..), ArchReloc)
 import Grease.Macaw.Load.Relocation (RelocType(..))
 import Grease.Macaw.RegName (RegName(..))
 import Grease.Options (ExtraStackSlots)
@@ -93,8 +93,7 @@ ppc64Ctx mbReturnAddr stackArgSlots loadedBinary = do
             Map.empty
   return
     ArchContext
-      { _archRepr = PPC64Repr
-      , _archInfo = PPC.ppc64_linux_info loadedBinary
+      { _archInfo = PPC.ppc64_linux_info loadedBinary
       , _archEndianness = Mem.BigEndian
       , _archGetIP = \regs -> do
           C.RV (Mem.LLVMPointer _base off) <- PPC.Symbolic.Regs.lookupReg PPC.PPC_IP regs
@@ -114,6 +113,7 @@ ppc64Ctx mbReturnAddr stackArgSlots loadedBinary = do
       , _archStackPtrShape = ppcStackPtrShape (bytes64LE <$> mbReturnAddr) stackArgSlots
       , _archInitGlobals = \_ mem -> pure (mem, C.emptyGlobals)
       , _archRegOverrides = regOverrides
+      , _archOffsetStackPointerPostCall = pure
       }
 
 ppc64RelocSupported :: EE.PPC64_RelocationType -> Maybe RelocType
