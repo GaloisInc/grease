@@ -296,11 +296,22 @@ other than relying on PLT stubs.
 We work around both issues using the same solution. Both .plt.got stubs and
 inlined code arising from -fno-plt share the characteristic that the
 corresponding entries in the GOT contain GLOB_DAT relocations, which identify
-the symbol of the external function. Therefore, if we are about to call into
-an address that corresponds to a GLOB_DAT relocation, then we assume that the
-GLOB_DAT's symbol is an external function. This is an over-approximation, as
-GLOB_DAT relocations can refer to things besides functions (e.g., global
-variables), but this over-approximation is unlikely to cause any harm.
+the symbol of the external function.
+
+Normally, the memory that a GLOB_DAT relocation's address points to would not
+be known statically, as this is information that would be determined at dynamic
+load time. For simulation purposes, however, we can employ a simple hack: we
+pretend that this memory contains the address of the relocation itself. The
+relocation address is a reasonably unique identifier that we can use to
+determine if we are about to call into the function corresponding the the
+GLOB_DAT relocation. (See Grease.Macaw.globalMemoryHooks for where this hack is
+implemented.)
+
+Therefore, if we are about to call into an address that corresponds to a
+GLOB_DAT relocation, then we assume that the GLOB_DAT's symbol is an external
+function. This is an over-approximation, as GLOB_DAT relocations can refer to
+things besides functions (e.g., global variables), but this over-approximation
+is unlikely to cause any harm.
 
 In the event that this workaround isn't enough, we also provide a --plt-stub
 command-line flag that allows users to specify the names and addresses of
