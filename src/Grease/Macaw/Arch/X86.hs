@@ -51,7 +51,7 @@ import qualified Stubs.Syscall.Names.X86_64.Linux as Stubs
 -- what4
 import qualified What4.Interface as W4
 
-import Grease.Macaw.Arch (ArchContext(..), ArchReloc, ArchRegs, ArchRepr(X86Repr))
+import Grease.Macaw.Arch (ArchContext(..), ArchReloc, ArchRegs)
 import Grease.Macaw.Arch.X86.Reg (getX86Reg, modifyX86Reg)
 import Grease.Macaw.Load.Relocation (RelocType(..))
 import Grease.Options (ExtraStackSlots)
@@ -84,8 +84,7 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
     Just avals -> pure avals
   return
     ArchContext
-      { _archRepr = X86Repr
-      , _archInfo = X86.x86_64_linux_info
+      { _archInfo = X86.x86_64_linux_info
       , _archEndianness = Mem.LittleEndian
       , _archVals = avals
       , _archRelocSupported = x64RelocSupported

@@ -3,20 +3,17 @@ Copyright        : (c) Galois, Inc. 2024
 Maintainer       : GREASE Maintainers <grease@galois.com>
 -}
 
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Grease.Macaw.Arch
-  ( ArchRepr(.., PPC32Repr, PPC64Repr)
-  , ArchRegs
+  ( ArchRegs
   , ArchRegCFG
   , ArchRegCFGMap
   , ArchCFG
   , ArchResult
   , ArchReloc
   , ArchContext(..)
-  , archRepr
   , archEndianness
   , archGetIP
   , archInfo
@@ -74,15 +71,6 @@ import           Data.Macaw.Types (BVType)
 import qualified Data.Macaw.Symbolic as Symbolic
 import qualified Data.Macaw.Memory as Symbolic
 
--- macaw-aarch32
-import qualified Data.Macaw.ARM as ARM (ARM)
-
--- macaw-ppc
-import qualified Data.Macaw.PPC as PPC
-
--- macaw-x86
-import qualified Data.Macaw.X86 as X86 (X86_64)
-
 -- stubs
 import qualified Stubs.Common as Stubs
 import qualified Stubs.FunctionOverride as Stubs
@@ -91,22 +79,6 @@ import Grease.Macaw.Load.Relocation (RelocType)
 import Grease.Macaw.RegName (RegName)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrShape)
-
--- | Run-time representative of supported architectures, used to provide
--- architecture-specific functionality in code that is mostly architecture
--- generic.
-data ArchRepr arch where
-  ARMRepr :: ArchRepr ARM.ARM
-  PPCRepr :: PPC.VariantRepr v -> ArchRepr (PPC.AnyPPC v)
-  X86Repr :: ArchRepr X86.X86_64
-
-pattern PPC32Repr :: () => (arch ~ PPC.PPC32) => ArchRepr arch
-pattern PPC32Repr = PPCRepr PPC.V32Repr
-
-pattern PPC64Repr :: () => (arch ~ PPC.PPC64) => ArchRepr arch
-pattern PPC64Repr = PPCRepr PPC.V64Repr
-
-{-# COMPLETE ARMRepr, PPC32Repr, PPC64Repr, X86Repr #-}
 
 type ArchRegs sym arch = Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch)
 
@@ -135,8 +107,7 @@ type family ArchReloc arch :: Type
 -- 'Stubs.FunctionABI' data type from @stubs-common@, but it is different enough
 -- to warrant being a separate data type.
 data ArchContext arch = ArchContext
-  { _archRepr :: ArchRepr arch
-  , _archInfo :: MI.ArchitectureInfo arch
+  { _archInfo :: MI.ArchitectureInfo arch
   , _archEndianness :: Mem.EndianForm
   , _archGetIP ::
       forall sym.

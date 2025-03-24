@@ -50,7 +50,7 @@ import qualified Stubs.Memory.AArch32.Linux as Stubs
 import qualified Stubs.Syscall.AArch32.Linux as Stubs
 import qualified Stubs.Syscall.Names.AArch32.Linux as Stubs
 
-import Grease.Macaw.Arch (ArchContext(..), ArchReloc, ArchRepr(ARMRepr))
+import Grease.Macaw.Arch (ArchContext(..), ArchReloc)
 import Grease.Macaw.Load.Relocation (RelocType(..))
 import Grease.Macaw.RegName (RegName(..))
 import Grease.Options (ExtraStackSlots)
@@ -82,8 +82,7 @@ armCtx halloc mbReturnAddr stackArgSlots = do
             Map.empty
   return
     ArchContext
-      { _archRepr = ARMRepr
-      , _archInfo = ARM.arm_linux_info
+      { _archInfo = ARM.arm_linux_info
       , _archEndianness = Mem.LittleEndian
       , _archGetIP = \regs -> do
           let C.RV (Mem.LLVMPointer _base off) = ARM.Symbolic.lookupReg ARM.pc regs

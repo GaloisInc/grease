@@ -48,7 +48,7 @@ import qualified Stubs.Memory.PPC.Linux as Stubs
 import qualified Stubs.Syscall.PPC.Linux as Stubs
 import qualified Stubs.Syscall.Names.PPC32.Linux as Stubs
 
-import Grease.Macaw.Arch (ArchContext(..), ArchReloc, ArchRepr(PPC32Repr))
+import Grease.Macaw.Arch (ArchContext(..), ArchReloc)
 import Grease.Macaw.Load.Relocation (RelocType(..))
 import Grease.Macaw.RegName (RegName(..))
 import Grease.Options (ExtraStackSlots)
@@ -84,8 +84,7 @@ ppc32Ctx mbReturnAddr stackArgSlots = do
             Map.empty
   return
     ArchContext
-      { _archRepr = PPC32Repr
-      , _archInfo = PPC.ppc32_linux_info
+      { _archInfo = PPC.ppc32_linux_info
       , _archEndianness = Mem.BigEndian
       , _archGetIP = \regs -> do
           C.RV (Mem.LLVMPointer _base off) <- PPC.Symbolic.Regs.lookupReg PPC.PPC_IP regs
