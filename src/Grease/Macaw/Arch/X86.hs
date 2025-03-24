@@ -88,7 +88,6 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
       , _archEndianness = Mem.LittleEndian
       , _archVals = avals
       , _archRelocSupported = x64RelocSupported
-      , _archIsGlobDatReloc = (== EE.R_X86_64_GLOB_DAT)
       , _archGetIP = \regs -> do
           C.RV (Mem.LLVMPointer _base off) <- getX86Reg X86.X86_IP regs
           pure off
@@ -112,6 +111,7 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
 x64RelocSupported :: EE.X86_64_RelocationType -> Maybe RelocType
 x64RelocSupported EE.R_X86_64_RELATIVE = Just RelativeReloc
 x64RelocSupported EE.R_X86_64_GLOB_DAT = Just SymbolReloc
+x64RelocSupported EE.R_X86_64_64 = Just SymbolReloc
 x64RelocSupported _ = Nothing
 
 -- | On x86, the @call@ instruction pushes the return address onto the stack.

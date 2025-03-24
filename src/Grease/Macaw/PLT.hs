@@ -185,7 +185,7 @@ pltStubParser = do
 --
 -- * The the @.plt@ or @.plt.sec@ section (see the 'pltStubSymbols' function)
 --
--- * @GLOB_DAT@ dynamic relocations
+-- * @SymbolReloc@ dynamic relocations
 --
 -- * User-provided 'PltStub's
 --
@@ -206,12 +206,12 @@ resolvePltStubs ::
   Elf.ElfHeaderInfo w
     {- ^ The dynamically linked ELF binary. -} ->
   Map.Map (MM.MemWord w) W4.FunctionName ->
-    {- ^ Map of @GLOB_DAT@ relocation addresses to their symbols. -}
+    {- ^ Map of @SymbolReloc@ relocation addresses to their symbols. -}
   [PltStub]
     {- ^ User-specified PLT stubs. -} ->
   MC.Memory w ->
   IO (Map.Map (MM.MemSegmentOff w) W4.FunctionName)
-resolvePltStubs mbPltStubInfo loadOptions ehi globDatRelocs userPltStubs memory = do
+resolvePltStubs mbPltStubInfo loadOptions ehi symbolRelocs userPltStubs memory = do
   let -- This only contains the PLT stubs located in the @.plt@ section, for
       -- which Macaw's heuristics are somewhat reliable.
       pltStubAddrToNameMap :: Map.Map (MM.MemWord w) W4.FunctionName
@@ -238,11 +238,11 @@ resolvePltStubs mbPltStubInfo loadOptions ehi globDatRelocs userPltStubs memory 
             (MM.memWord (addr + offset), W4.functionNameFromText name))
           userPltStubs
 
-  -- This contains GLOB_DAT relocations.
+  -- This contains SymbolReloc relocations.
   -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 1: .plt.got) for why
   -- we do this.
-  let globDatRelocAddrToNameList :: Seq.Seq (MM.MemWord w, W4.FunctionName)
-      globDatRelocAddrToNameList = Seq.fromList $ Map.toList globDatRelocs
+  let symbolRelocAddrToNameList :: Seq.Seq (MM.MemWord w, W4.FunctionName)
+      symbolRelocAddrToNameList = Seq.fromList $ Map.toList symbolRelocs
 
   pltStubSegOffToNameList <-
     traverse
@@ -254,7 +254,7 @@ resolvePltStubs mbPltStubInfo loadOptions ehi globDatRelocs userPltStubs memory 
             ": " <> W4.functionName name)
       (pltStubAddrToNameList <>
        userPltStubAddrToNameList <>
-       globDatRelocAddrToNameList)
+       symbolRelocAddrToNameList)
 
   pure $ Map.fromList $ Foldable.toList pltStubSegOffToNameList
 
@@ -312,6 +312,9 @@ GLOB_DAT relocation, then we assume that the GLOB_DAT's symbol is an external
 function. This is an over-approximation, as GLOB_DAT relocations can refer to
 things besides functions (e.g., global variables), but this over-approximation
 is unlikely to cause any harm.
+
+We apply the same workaround to other forms of SymbolRelocs (e.g., R_X86_64_64
+on x86-64).
 
 In the event that this workaround isn't enough, we also provide a --plt-stub
 command-line flag that allows users to specify the names and addresses of
