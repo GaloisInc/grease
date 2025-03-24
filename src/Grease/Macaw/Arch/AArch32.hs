@@ -103,6 +103,7 @@ armCtx halloc mbReturnAddr stackArgSlots = do
       , _archStackPtrShape = armStackPtrShape stackArgSlots
       , _archInitGlobals = Stubs.aarch32LinuxInitGlobals tlsGlob
       , _archRegOverrides = regOverrides
+      , _archOffsetStackPointerPostCall = pure
       }
 
 armRelocSupported :: EE.ARM32_RelocationType -> Maybe RelocType

@@ -105,6 +105,7 @@ ppc32Ctx mbReturnAddr stackArgSlots = do
       , _archStackPtrShape = ppcStackPtrShape (bytes32LE <$> mbReturnAddr) stackArgSlots
       , _archInitGlobals = \_ mem -> pure (mem, C.emptyGlobals)
       , _archRegOverrides = regOverrides
+      , _archOffsetStackPointerPostCall = pure
       }
 
 ppc32RelocSupported :: EE.PPC32_RelocationType -> Maybe RelocType

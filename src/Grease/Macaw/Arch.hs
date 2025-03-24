@@ -34,6 +34,7 @@ module Grease.Macaw.Arch
   , archStackPtrShape
   , archInitGlobals
   , archRegOverrides
+  , archOffsetStackPointerPostCall
   ) where
 
 import Control.Lens.TH (makeLenses)
@@ -277,6 +278,23 @@ data ArchContext arch = ArchContext
     -- is a value within the @.text@ section, which helps satisfy @grease@'s
     -- @in-text@ requirement.
     _archRegOverrides :: Map RegName (BV.BV (MC.ArchAddrWidth arch))
+  , -- | On certain architectures, invoking a function will push the return
+    -- address onto the stack (e.g., x86-64's @call@ instruction). This
+    -- generally comes with the expectation that the invoked function will pop
+    -- the return address and increment the stack pointer accordingly (e.g.,
+    -- x86-64's @ret@ instruction). When skipping a function or using an
+    -- override, however, no instruction will pop the return address (and
+    -- increment the stack pointer accordingly), so
+    -- '_archOffsetStackPointerPostCall' simulates that effect.
+    --
+    -- Currently, x86-64 is the only supported architecture that does something
+    -- non-trivial here. All other architectures can simply leave the stack
+    -- pointer by implementing @'_archOffsetStackPointerPostCall' = 'pure'@.
+    _archOffsetStackPointerPostCall ::
+      forall sym p ext rtp a r.
+      C.IsSymInterface sym =>
+      ArchRegs sym arch ->
+      C.OverrideSim p sym ext rtp a r (ArchRegs sym arch)
   }
 makeLenses ''ArchContext
 

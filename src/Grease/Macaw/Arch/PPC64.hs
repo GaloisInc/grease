@@ -114,6 +114,7 @@ ppc64Ctx mbReturnAddr stackArgSlots loadedBinary = do
       , _archStackPtrShape = ppcStackPtrShape (bytes64LE <$> mbReturnAddr) stackArgSlots
       , _archInitGlobals = \_ mem -> pure (mem, C.emptyGlobals)
       , _archRegOverrides = regOverrides
+      , _archOffsetStackPointerPostCall = pure
       }
 
 ppc64RelocSupported :: EE.PPC64_RelocationType -> Maybe RelocType
