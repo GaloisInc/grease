@@ -1,5 +1,5 @@
 cabal-version: 2.4
-name: grease
+name: grease-cli
 version: 0.1.0.0
 author: Galois, Inc.
 maintainer: grease@galois.com
@@ -13,13 +13,12 @@ description:
   under-constrained symbolic execution.
 extra-source-files:
   README.md
-  grease.buildinfo.json
 category: Static Analysis
 
 source-repository head
   type: git
   location: https://github.com/GaloisInc/grease
-  subdir: grease
+  subdir: grease-cli
 
 common shared
   default-language: GHC2021
@@ -125,7 +124,8 @@ library
   import: shared
   hs-source-dirs: src
   build-depends:
-      aeson >= 2
+    , grease
+    , aeson >= 2
     , async
     , bytestring
     , containers
@@ -183,80 +183,41 @@ library
     , stubs-wrapper
 
   exposed-modules:
-    Grease.Main.Diagnostic
-    Grease.AssertProperty
-    Grease.BranchTracer
-    Grease.BranchTracer.Diagnostic
-    Grease.Bug
-    Grease.Bug.UndefinedBehavior
-    Grease.Concretize
-    Grease.Concretize.JSON
-    Grease.Cursor
-    Grease.Cursor.List
-    Grease.Cursor.Pointer
-    Grease.Diagnostic
-    Grease.Diagnostic.Severity
-    Grease.Entrypoint
-    Grease.FunctionOverride
-    Grease.Heuristic
-    Grease.Heuristic.Diagnostic
-    Grease.Heuristic.Result
-    Grease.LLVM
-    Grease.LLVM.Overrides
-    Grease.LLVM.Overrides.Diagnostic
-    Grease.LLVM.SimulatorHooks
-    Grease.LLVM.SimulatorHooks.Diagnostic
-    Grease.Macaw
-    Grease.Macaw.Arch
-    Grease.Macaw.Arch.AArch32
-    Grease.Macaw.Arch.PPC32
-    Grease.Macaw.Arch.PPC64
-    Grease.Macaw.Arch.X86
-    Grease.Macaw.Arch.X86.Reg
-    Grease.Macaw.Discovery
-    Grease.Macaw.FunctionOverride
-    Grease.Macaw.Load
-    Grease.Macaw.Load.Diagnostic
-    Grease.Macaw.Load.Relocation
-    Grease.Macaw.Memory
-    Grease.Macaw.PLT
-    Grease.Macaw.SimulatorHooks
-    Grease.Macaw.SimulatorHooks.Diagnostic
-    Grease.Macaw.SimulatorState
-    Grease.Macaw.RegName
-    Grease.Macaw.ResolveCall
-    Grease.Macaw.ResolveCall.Diagnostic
-    Grease.Macaw.SkippedCall
-    Grease.Macaw.Syscall
-    Grease.MustFail
-    Grease.Options
-    Grease.Output
-    Grease.Pretty
-    Grease.Refine
-    Grease.Refine.Diagnostic
-    Grease.Requirement
-    Grease.Setup
-    Grease.Setup.Annotations
-    Grease.Setup.Diagnostic
-    Grease.Shape
-    Grease.Shape.Concretize
-    Grease.Shape.NoTag
-    Grease.Shape.Pointer
-    Grease.Shape.Selector
-    Grease.Shape.Parse
-    Grease.Shape.Print
-    Grease.Skip
-    Grease.Skip.Diagnostic
-    Grease.Solver
-    Grease.Syntax
-    Grease.Syscall
-    Grease.Time
-    Grease.Utility
-    Grease.Version
+    Grease.Main
+    Grease.Profiler.EmbeddedData
+    Grease.Profiler.Feature
+    Grease.Profiler.Paths
 
-  autogen-modules:
-    Paths_grease
+executable grease
+  import: shared
+  hs-source-dirs: main
+  main-is: Main.hs
+  build-depends: grease-cli
+
+test-suite grease-tests
+  import: shared
+  hs-source-dirs: tests
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
   other-modules:
-    Grease.GitRev
-    Grease.Panic
-    Paths_grease
+    Shape
+  build-depends:
+      grease-cli
+    , grease
+    , bv-sized
+    , containers
+    , crucible-llvm
+    , directory
+    , filepath
+    , hedgehog
+    , lumberjack
+    , macaw-base
+    , megaparsec
+    , optparse-applicative
+    , parameterized-utils
+    , prettyprinter
+    , tasty
+    , tasty-expected-failure
+    , tasty-hedgehog
+    , tasty-hunit
+    , text

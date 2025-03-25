@@ -70,8 +70,8 @@ RUN mkdir -p /home/src
 COPY . /home/src
 WORKDIR /home/src
 RUN cabal configure -w "ghc-${GHC_VER}" --enable-tests -j5 && \
-    cabal build pkg:grease
-RUN cabal test pkg:grease
+    cabal build pkg:grease-cli
+RUN cabal test pkg:grease-cli
 
 RUN cp $(cabal list-bin -v0 exe:grease)        /usr/local/bin/grease && \
     cp $(cabal list-bin -v0 test:grease-tests) /usr/local/bin/grease-tests && \
@@ -99,6 +99,6 @@ COPY --from=build \
   /usr/local/bin/yices \
   /usr/local/bin/z3 \
   /usr/local/bin/
-COPY --from=build /home/src/grease/tests /tests
+COPY --from=build /home/src/grease-cli/tests /tests
 
 ENTRYPOINT ["/usr/local/bin/grease"]
