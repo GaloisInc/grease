@@ -19,6 +19,7 @@ category: Static Analysis
 source-repository head
   type: git
   location: https://github.com/GaloisInc/grease
+  subdir: grease
 
 common shared
   default-language: GHC2021

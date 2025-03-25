@@ -1,5 +1,5 @@
 packages:
-  grease.cabal
+  grease/grease.cabal
   doc/diagrams/grease-diagrams.cabal
   elf-edit-core-dump
 

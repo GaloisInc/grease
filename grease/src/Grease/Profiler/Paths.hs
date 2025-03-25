@@ -15,7 +15,7 @@ module Grease.Profiler.Paths
 import System.FilePath ((</>))
 
 profilerDir :: FilePath
-profilerDir = "deps" </> "sympro-ui"
+profilerDir = ".." </> "deps" </> "sympro-ui"
 
 profileHtmlPath :: FilePath
 profileHtmlPath = "profile.html"

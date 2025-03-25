@@ -60,7 +60,7 @@ jobs:
     - name: Check .cabal files
       shell: bash
       run: |
-        cabal check
+        (cd grease && cabal check)
         (cd doc/diagrams && cabal check)
         (cd elf-edit-core-dump && cabal check)
 
