@@ -101,7 +101,6 @@ ppc64Ctx mbReturnAddr stackArgSlots loadedBinary = do
       , _archPcReg = PPC.PPC_IP
       , _archVals = avals
       , _archRelocSupported = ppc64RelocSupported
-      , _archIsGlobDatReloc = (== EE.R_PPC64_GLOB_DAT)
       , _archIntegerArguments = \bak ->
           Stubs.ppcLinuxIntegerArguments bak avals
       , _archIntegerReturnRegisters = Stubs.ppcLinuxIntegerReturnRegisters
@@ -119,4 +118,5 @@ ppc64Ctx mbReturnAddr stackArgSlots loadedBinary = do
 ppc64RelocSupported :: EE.PPC64_RelocationType -> Maybe RelocType
 ppc64RelocSupported EE.R_PPC64_RELATIVE = Just RelativeReloc
 ppc64RelocSupported EE.R_PPC64_GLOB_DAT = Just SymbolReloc
+ppc64RelocSupported EE.R_PPC64_ADDR64 = Just SymbolReloc
 ppc64RelocSupported _ = Nothing

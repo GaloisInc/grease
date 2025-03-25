@@ -215,7 +215,7 @@ import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
 import qualified Grease.Macaw.FunctionOverride as Macaw
 import Grease.Macaw.Load (LoadedProgram(..), load)
-import Grease.Macaw.Load.Relocation (elfRelocationMap)
+import Grease.Macaw.Load.Relocation (RelocType(..), elfRelocationMap)
 import Grease.Macaw.PLT
 import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, emptyGreaseSimulatorState)
 import Grease.Pretty (prettyPtrFnMap)
@@ -1018,19 +1018,20 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
   let dynFunMap = progDynFunMap loadedProg
 
   let relocs = elfRelocationMap (Proxy @(ArchReloc arch)) loadOpts elf
-  let globDatRelocs = Map.mapMaybe
-                        (\(reloc, symb) ->
-                          if (archCtx ^. archIsGlobDatReloc) reloc
-                            then Just $ functionNameFromByteString symb
-                            else Nothing)
-                        relocs
+  let symbolRelocs =
+       Map.mapMaybe
+         (\(reloc, symb) ->
+           if (archCtx ^. archRelocSupported) reloc == Just SymbolReloc
+             then Just $ functionNameFromByteString symb
+             else Nothing)
+         relocs
 
   -- A map of each PLT stub address to its symbol name, which we consult
   -- later to check for the presence of `mprotect` (i.e., the `no-mprotect`
   -- requirement). This check only applies to dynamically linked binaries, and
   -- for statically linked binaries, this map will be empty.
   pltStubSegOffToNameMap <-
-    resolvePltStubs mbPltStubInfo loadOpts elf globDatRelocs (simPltStubs simOpts) memory
+    resolvePltStubs mbPltStubInfo loadOpts elf symbolRelocs (simPltStubs simOpts) memory
 
   let -- The inverse of `pltStubSegOffToNameMap`.
       pltStubNameToSegOffMap :: Map.Map W4.FunctionName (MC.ArchSegmentOff arch)

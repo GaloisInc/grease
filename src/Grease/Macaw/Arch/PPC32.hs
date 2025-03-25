@@ -92,7 +92,6 @@ ppc32Ctx mbReturnAddr stackArgSlots = do
       , _archPcReg = PPC.PPC_IP
       , _archVals = avals
       , _archRelocSupported = ppc32RelocSupported
-      , _archIsGlobDatReloc = (== EE.R_PPC_GLOB_DAT)
       , _archIntegerArguments = \bak ->
           Stubs.ppcLinuxIntegerArguments bak avals
       , _archIntegerReturnRegisters = Stubs.ppcLinuxIntegerReturnRegisters
@@ -110,4 +109,5 @@ ppc32Ctx mbReturnAddr stackArgSlots = do
 ppc32RelocSupported :: EE.PPC32_RelocationType -> Maybe RelocType
 ppc32RelocSupported EE.R_PPC_RELATIVE = Just RelativeReloc
 ppc32RelocSupported EE.R_PPC_GLOB_DAT = Just SymbolReloc
+ppc32RelocSupported EE.R_PPC_ADDR32 = Just SymbolReloc
 ppc32RelocSupported _ = Nothing

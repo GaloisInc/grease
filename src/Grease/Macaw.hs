@@ -26,9 +26,10 @@ import Control.Lens ((^.), to)
 import Control.Monad (return)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Bool (otherwise)
+import qualified Data.ByteString.Builder as Builder
+import qualified Data.ByteString.Lazy as BSL
 import Data.Function (($), (.))
-import Data.Functor ((<$>))
-import Data.Int (Int)
+import Data.Int (Int, Int64)
 import Data.Kind (Type)
 import Data.List ((++))
 import qualified Data.Map.Strict as Map
@@ -40,6 +41,7 @@ import Data.String (String)
 import qualified Data.Text as Text
 import Data.Traversable (traverse)
 import Data.Type.Equality (type (~), (:~:)(Refl))
+import Data.Word (Word8, Word64)
 import Prelude (Num(..), fromInteger, fromIntegral)
 import System.IO (IO)
 import Text.Show (Show(..))
@@ -69,6 +71,7 @@ import qualified Lang.Crucible.Simulator as C
 import qualified Lang.Crucible.Simulator.GlobalState as C
 
 -- crucible-llvm
+import qualified Lang.Crucible.LLVM.DataLayout as Mem
 import qualified Lang.Crucible.LLVM.MemModel as Mem
 import qualified Lang.Crucible.LLVM.Intrinsics as Mem
 
@@ -185,18 +188,8 @@ globalMemoryHooks arch relocs = Symbolic.GlobalMemoryHooks {
           -> case supportedRelocType of
                RelativeReloc ->
                  relativeRelocHook sym reloc relocAbsBaseAddr
-               -- We populate SymbolRelocs with symbolic bytes so that we return
-               -- _something_ when the relocations are read, for much for the
-               -- same reasons as listed above. Note that we don't intend for
-               -- the simulator to reach these parts of the binary via function
-               -- calls, however. Currently, the only supported SymbolReloc is
-               -- GLOB_DAT, and if you are about to jump to a GLOB_DAT address,
-               -- grease will interpret that as an external function call and
-               -- intercept it with a function override (or skip it, if there
-               -- is no override). See Note [Subtleties of resolving PLT stubs]
-               -- (Wrinkle 1: .plt.got) in Grease.Macaw.PLT.
                SymbolReloc ->
-                 symbolicRelocation sym reloc (show <$> relocationSymName reloc)
+                 symbolRelocHook sym reloc relocAbsBaseAddr
         _ ->
           symbolicRelocation sym reloc Nothing
   }
@@ -245,14 +238,6 @@ globalMemoryHooks arch relocs = Symbolic.GlobalMemoryHooks {
                      , "Address:    " ++ show addr
                      ]
 
-    -- If the supplied Relocation is a SymbolRelocation, return Just its name.
-    -- Otherwise, return Nothing.
-    relocationSymName :: MM.Relocation w -> Maybe MM.SymbolName
-    relocationSymName reloc =
-      case MM.relocationSym reloc of
-        MM.SymbolRelocation name _version -> Just name
-        _ -> Nothing
-
     -- Compute the address that a relocation references and convert it to a
     -- list of bytes.
     relocAddrBV ::
@@ -278,7 +263,7 @@ globalMemoryHooks arch relocs = Symbolic.GlobalMemoryHooks {
       --- ...finally, convert each byte to a SymBV.
       traverse (W4.bvLit sym (W4.knownNat @8) . BV.word8) bytesLE
 
-    -- Handle a RELATIVE relocation. This is perhaps the simplest type of
+    -- Handle a RelativeReloc relocation. This is perhaps the simplest type of
     -- relocation to handle, as there are no symbol names to cross-reference.
     -- All we have to do is compute the address that the relocation references.
     relativeRelocHook ::
@@ -289,6 +274,54 @@ globalMemoryHooks arch relocs = Symbolic.GlobalMemoryHooks {
       MM.MemWord (MC.ArchAddrWidth arch) ->
       IO [W4.SymBV sym 8]
     relativeRelocHook = relocAddrBV
+
+    -- Handle a SymbolReloc relocation (e.g., GLOB_DAT). We populate
+    -- SymbolRelocs with the address of the relocation itself. This is a hack,
+    -- but it is a useful one: the relocation address is a reasonably unique
+    -- value, so if the program tries to call a function with this same address,
+    -- then we can look up the address to determine if it is an external
+    -- function and simulate it appropriately. See Note [Subtleties of resolving
+    -- PLT stubs] (Wrinkle 1: .plt.got) in Grease.Macaw.PLT.
+    symbolRelocHook ::
+      forall sym.
+      C.IsSymInterface sym =>
+      sym ->
+      MM.Relocation (MC.ArchAddrWidth arch) ->
+      MM.MemWord (MC.ArchAddrWidth arch) ->
+      IO [W4.SymBV sym 8]
+    symbolRelocHook sym reloc relocAbsBaseAddr =
+      let -- First, convert the relocation address to a Word64. Note that the
+          -- size of the address itself may be less than 64 bits (e.g., on
+          -- 32-bit architectures), but we will truncate the Word64 to the
+          -- appropriate size later.
+          relocAbsBaseAddrWord64 :: Word64
+          relocAbsBaseAddrWord64 = MM.memWordValue relocAbsBaseAddr
+
+          relocSizeInt64 :: Int64
+          relocSizeInt64 =
+            fromIntegral @Int @Int64 (MM.relocationSize reloc)
+
+          -- Next, convert the relocation address to a ByteString of the
+          -- appropriate size and endianness.
+          relocAbsBaseAddrBs :: BSL.ByteString
+          relocAbsBaseAddrBs =
+            case arch ^. archEndianness of
+              Mem.LittleEndian ->
+                BSL.take relocSizeInt64 $
+                Builder.toLazyByteString $
+                Builder.word64LE relocAbsBaseAddrWord64
+              Mem.BigEndian ->
+                BSL.takeEnd relocSizeInt64 $
+                Builder.toLazyByteString $
+                Builder.word64BE relocAbsBaseAddrWord64
+
+          -- Finally, create an individual list of bytes corresponding to the
+          -- relocation address. This is what we will write to the memory that
+          -- the relocation address points to.
+          relocAbsBaseAddrWord8s :: [Word8]
+          relocAbsBaseAddrWord8s = BSL.unpack relocAbsBaseAddrBs in
+
+      traverse (W4.bvLit sym W4.knownRepr . BV.word8) relocAbsBaseAddrWord8s
 
 minimalArgShapes ::
   forall arch sym bak m wptr.

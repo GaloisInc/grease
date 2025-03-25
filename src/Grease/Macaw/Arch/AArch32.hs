@@ -90,7 +90,6 @@ armCtx halloc mbReturnAddr stackArgSlots = do
       , _archPcReg = ARM.pc
       , _archVals = avals
       , _archRelocSupported = armRelocSupported
-      , _archIsGlobDatReloc = (== EE.R_ARM_GLOB_DAT)
       , _archIntegerArguments = \bak ->
           Stubs.aarch32LinuxIntegerArguments bak avals
       , _archIntegerReturnRegisters = Stubs.aarch32LinuxIntegerReturnRegisters
@@ -108,4 +107,5 @@ armCtx halloc mbReturnAddr stackArgSlots = do
 armRelocSupported :: EE.ARM32_RelocationType -> Maybe RelocType
 armRelocSupported EE.R_ARM_RELATIVE = Just RelativeReloc
 armRelocSupported EE.R_ARM_GLOB_DAT = Just SymbolReloc
+armRelocSupported EE.R_ARM_ABS32 = Just SymbolReloc
 armRelocSupported _ = Nothing

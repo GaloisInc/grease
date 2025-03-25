@@ -14,6 +14,7 @@ module Grease.Macaw.Load.Relocation
 import Control.Exception (throw)
 import qualified Data.ByteString as BS
 import Data.Either (Either(..), either)
+import Data.Eq (Eq)
 import Data.Function (($), const)
 import Data.List (map)
 import qualified Data.Map.Strict as Map
@@ -43,6 +44,7 @@ data RelocType
     -- These include absolute references to symbols in the same shared library
     -- (e.g., @R_ARM_ABS32@) and global variables defined in separate shared
     -- libraries (e.g., @R_ARM_GLOB_DAT@).
+  deriving Eq
 
 -- | Read the @.rela.dyn@ and @.rel.dyn@ sections of an ELF binary (if they
 -- exist) to construct a map of dynamic relocation addresses to their

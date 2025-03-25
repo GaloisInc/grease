@@ -20,7 +20,6 @@ module Grease.Macaw.Arch
   , archPcReg
   , archVals
   , archRelocSupported
-  , archIsGlobDatReloc
   , archIntegerArguments
   , archIntegerReturnRegisters
   , archFunctionReturnAddr
@@ -119,8 +118,6 @@ data ArchContext arch = ArchContext
     -- Check if @grease@ supports a particular relocation type. This should
     -- return 'Nothing' if it is unsupported and 'Just' if it is supported.
   , _archRelocSupported :: ArchReloc arch -> Maybe RelocType
-  , -- Check if a relocation type is @GLOB_DAT@.
-    _archIsGlobDatReloc :: ArchReloc arch -> Bool
   , -- Given a full register state, extract all of the arguments we need for the
     -- function call.
     _archIntegerArguments ::
