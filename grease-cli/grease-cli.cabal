@@ -184,6 +184,8 @@ library
 
   exposed-modules:
     Grease.Main
+
+  other-modules:
     Grease.Profiler.EmbeddedData
     Grease.Profiler.Feature
     Grease.Profiler.Paths
