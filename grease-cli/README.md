@@ -4,7 +4,7 @@
 
 For more information, see [the blog post introducing GREASE](https://www.galois.com/articles/introducing-grease), or [the documentation](https://galoisinc.github.io/grease).
 
-<img src="doc/logo.png" alt="GREASE logo" width="50%" />
+<img src="../doc/logo.png" alt="GREASE logo" width="50%" />
 
 ## Acknowledgements
 
