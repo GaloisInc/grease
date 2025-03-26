@@ -43,9 +43,6 @@ import qualified Lang.Crucible.LLVM.MemModel as Mem
 -- what4
 import qualified What4.FunctionName as W4
 
--- macaw-loader-aarch32
-import Data.Macaw.BinaryLoader.AArch32 ()
-
 -- macaw-base
 import qualified Data.Macaw.CFG as MC
 import qualified Data.Macaw.Types as MT

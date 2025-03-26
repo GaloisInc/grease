@@ -59,9 +59,6 @@ import qualified Lang.Crucible.CFG.Core as C
 import Lang.Crucible.LLVM.Extension (LLVM)
 import qualified Lang.Crucible.LLVM.MemModel as Mem
 
--- macaw-loader-aarch32
-import Data.Macaw.BinaryLoader.AArch32 ()
-
 -- macaw-base
 import qualified Data.Macaw.CFG as MC
 

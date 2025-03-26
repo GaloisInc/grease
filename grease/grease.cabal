@@ -159,7 +159,6 @@ library
     , elf-edit
     , elf-edit-core-dump
     , macaw-loader
-    , macaw-loader-aarch32
     , macaw-base
     , macaw-symbolic
     , macaw-symbolic-syntax
