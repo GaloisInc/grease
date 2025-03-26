@@ -130,26 +130,17 @@ library
     , bytestring
     , containers
     , directory
-    , exceptions
     , file-embed
     , filepath
-    , gitrev
     , lens
-    , libBF
     , lumberjack >= 1.0 && < 1.1
-    , megaparsec
-    , mtl
     , optparse-applicative
-    , panic >= 0.3
     , safe-exceptions
     , text
-    , time
-    , transformers
     , vector
 
     , prettyprinter
     , parameterized-utils
-    , bv-sized
     , what4
     , llvm-pretty
     , llvm-pretty-bc-parser
@@ -161,11 +152,8 @@ library
     , crucible-macaw-debug
     , crucible-syntax
     , elf-edit
-    , elf-edit-core-dump
-    , asl-translator
     , macaw-loader
     , macaw-loader-aarch32
-    , macaw-loader-ppc
     , macaw-loader-x86
     , macaw-base
     , macaw-symbolic
@@ -180,7 +168,6 @@ library
     , macaw-x86-symbolic
     , macaw-x86-syntax
     , stubs-common
-    , stubs-wrapper
 
   exposed-modules:
     Grease.Main
@@ -214,7 +201,6 @@ test-suite grease-tests
     , hedgehog
     , lumberjack
     , macaw-base
-    , megaparsec
     , optparse-applicative
     , parameterized-utils
     , prettyprinter
