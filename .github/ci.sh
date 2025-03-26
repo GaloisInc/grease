@@ -10,7 +10,7 @@ BIN=${PWD}/bin
 is_exe() { [[ -x "$1/$2$EXT" ]] || command -v "$2" > /dev/null 2>&1; }
 
 # Create a grease.buildinfo.json file for the benefit of the Docker image.
-# (See Note [grease.buildinfo.json] in src/Grease/Version.hs.)
+# (See Note [grease.buildinfo.json] in grease/src/Grease/Version.hs.)
 #
 # The first argument is the git commit, and the second argument is the git
 # branch name.
@@ -23,7 +23,7 @@ generate_buildinfo() {
     --arg branch "$CI_COMMIT_REF_NAME" \
     --argjson dirty false \
     '{"hash": $hash, "branch": $branch, "dirty": $dirty}' \
-    > grease.buildinfo.json
+    > grease/grease.buildinfo.json
 }
 
 install_system_deps() {

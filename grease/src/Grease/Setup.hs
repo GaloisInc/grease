@@ -78,9 +78,6 @@ import qualified Lang.Crucible.LLVM.MemModel as Mem
 import qualified Lang.Crucible.LLVM.MemModel.Pointer as Mem
 import qualified Lang.Crucible.LLVM.DataLayout as Mem
 
--- macaw-loader-aarch32
-import Data.Macaw.BinaryLoader.AArch32 ()
-
 import qualified Grease.Cursor as Cursor
 import qualified Grease.Cursor.Pointer as PtrCursor
 import Grease.Diagnostic (GreaseLogAction, Diagnostic(SetupDiagnostic))

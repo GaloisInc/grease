@@ -9,7 +9,7 @@ This page describes the refinement algorithm in additional detail. However,
 it does not discuss implementation techniques, which are documented [in
 the Haddocks][haddocks].
 
-[haddocks]: https://github.com/GaloisInc/grease/blob/main/src/Grease/Refine.hs
+[haddocks]: https://github.com/GaloisInc/grease/blob/main/grease/src/Grease/Refine.hs
 
 The algorithm is similar to [the corresponding functionality in UC-Crux-LLVM][uc-crux].
 

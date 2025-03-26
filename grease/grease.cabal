@@ -19,6 +19,7 @@ category: Static Analysis
 source-repository head
   type: git
   location: https://github.com/GaloisInc/grease
+  subdir: grease
 
 common shared
   default-language: GHC2021
@@ -125,7 +126,6 @@ library
   hs-source-dirs: src
   build-depends:
       aeson >= 2
-    , async
     , bytestring
     , containers
     , directory
@@ -151,40 +151,31 @@ library
     , bv-sized
     , what4
     , llvm-pretty
-    , llvm-pretty-bc-parser
     , crucible
     , crucible-debug
-    , crucible-llvm-debug
     , crucible-llvm
     , crucible-llvm-syntax
-    , crucible-macaw-debug
     , crucible-syntax
     , elf-edit
     , elf-edit-core-dump
-    , asl-translator
     , macaw-loader
-    , macaw-loader-aarch32
-    , macaw-loader-ppc
-    , macaw-loader-x86
     , macaw-base
     , macaw-symbolic
     , macaw-symbolic-syntax
     , macaw-aarch32
     , macaw-aarch32-symbolic
-    , macaw-aarch32-syntax
     , macaw-ppc
     , macaw-ppc-symbolic
-    , macaw-ppc-syntax
     , macaw-x86
     , macaw-x86-symbolic
-    , macaw-x86-syntax
     , stubs-common
     , stubs-wrapper
 
   exposed-modules:
-    Grease.Main
     Grease.Main.Diagnostic
     Grease.AssertProperty
+    Grease.BranchTracer
+    Grease.BranchTracer.Diagnostic
     Grease.Bug
     Grease.Bug.UndefinedBehavior
     Grease.Concretize
@@ -230,9 +221,6 @@ library
     Grease.Options
     Grease.Output
     Grease.Pretty
-    Grease.Profiler.EmbeddedData
-    Grease.Profiler.Feature
-    Grease.Profiler.Paths
     Grease.Refine
     Grease.Refine.Diagnostic
     Grease.Requirement
@@ -251,48 +239,13 @@ library
     Grease.Solver
     Grease.Syntax
     Grease.Syscall
+    Grease.Time
     Grease.Utility
     Grease.Version
 
   autogen-modules:
     Paths_grease
   other-modules:
-    Grease.BranchTracer
-    Grease.BranchTracer.Diagnostic
     Grease.GitRev
     Grease.Panic
-    Grease.Time
     Paths_grease
-
-executable grease
-  import: shared
-  hs-source-dirs: main
-  main-is: Main.hs
-  build-depends: grease
-
-test-suite grease-tests
-  import: shared
-  hs-source-dirs: tests
-  type: exitcode-stdio-1.0
-  main-is: Main.hs
-  other-modules:
-    Shape
-  build-depends:
-      grease
-    , bv-sized
-    , containers
-    , crucible-llvm
-    , directory
-    , filepath
-    , hedgehog
-    , lumberjack
-    , macaw-base
-    , megaparsec
-    , optparse-applicative
-    , parameterized-utils
-    , prettyprinter
-    , tasty
-    , tasty-expected-failure
-    , tasty-hedgehog
-    , tasty-hunit
-    , text

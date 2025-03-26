@@ -1,5 +1,6 @@
 packages:
-  grease.cabal
+  grease/grease.cabal
+  grease-cli/grease-cli.cabal
   doc/diagrams/grease-diagrams.cabal
   elf-edit-core-dump
 

@@ -1,0 +1,211 @@
+cabal-version: 2.4
+name: grease-cli
+version: 0.1.0.0
+author: Galois, Inc.
+maintainer: grease@galois.com
+copyright: Galois, Inc. 2024
+license: BSD-3-Clause
+license-file: LICENSE
+synopsis:
+  Checks properties about binaries using under-constrained symbolic execution
+description:
+  @grease@ is a tool that checks properties about binaries using
+  under-constrained symbolic execution.
+extra-source-files:
+  README.md
+category: Static Analysis
+
+source-repository head
+  type: git
+  location: https://github.com/GaloisInc/grease
+  subdir: grease-cli
+
+common shared
+  default-language: GHC2021
+  build-depends: base >= 4.17 && < 4.20
+
+  -- Specifying -Wall and -Werror can cause the project to fail to build on
+  -- newer versions of GHC simply due to new warnings being added to -Wall. To
+  -- prevent this from happening we manually list which warnings should be
+  -- considered errors. We also list some warnings that are not in -Wall, though
+  -- try to avoid "opinionated" warnings (though this judgement is clearly
+  -- subjective).
+  --
+  -- Warnings are grouped by the GHC version that introduced them, and then
+  -- alphabetically.
+  --
+  -- A list of warnings and the GHC version in which they were introduced is
+  -- available here:
+  -- https://ghc.gitlab.haskell.org/ghc/doc/users_guide/using-warnings.html
+
+  -- Since GHC 9.4 or earlier:
+  ghc-options:
+    -Wall
+    -Werror=ambiguous-fields
+    -Werror=compat-unqualified-imports
+    -Werror=deferred-type-errors
+    -Werror=deprecated-flags
+    -Werror=deprecations
+    -Werror=deriving-defaults
+    -Werror=deriving-typeable
+    -Werror=dodgy-foreign-imports
+    -Werror=duplicate-exports
+    -Werror=empty-enumerations
+    -Werror=gadt-mono-local-binds
+    -Werror=identities
+    -Werror=inaccessible-code
+    -Werror=incomplete-patterns
+    -Werror=incomplete-record-updates
+    -Werror=incomplete-uni-patterns
+    -Werror=inline-rule-shadowing
+    -Werror=misplaced-pragmas
+    -Werror=missed-extra-shared-lib
+    -Werror=missing-exported-signatures
+    -Werror=missing-fields
+    -Werror=missing-home-modules
+    -Werror=missing-methods
+    -Werror=missing-pattern-synonym-signatures
+    -Werror=missing-signatures
+    -Werror=name-shadowing
+    -Werror=noncanonical-monad-instances
+    -Werror=noncanonical-monoid-instances
+    -Werror=operator-whitespace
+    -Werror=operator-whitespace-ext-conflict
+    -Werror=orphans
+    -Werror=overflowed-literals
+    -Werror=overlapping-patterns
+    -Werror=partial-fields
+    -Werror=partial-type-signatures
+    -Werror=redundant-bang-patterns
+    -Werror=redundant-record-wildcards
+    -Werror=redundant-strictness-flags
+    -Werror=simplifiable-class-constraints
+    -Werror=star-binder
+    -Werror=star-is-type
+    -Werror=tabs
+    -Werror=type-defaults
+    -Werror=typed-holes
+    -Werror=type-equality-out-of-scope
+    -Werror=type-equality-requires-operators
+    -Werror=unicode-bidirectional-format-characters
+    -Werror=unrecognised-pragmas
+    -Werror=unrecognised-warning-flags
+    -Werror=unsupported-calling-conventions
+    -Werror=unsupported-llvm-version
+    -Werror=unticked-promoted-constructors
+    -Werror=unused-do-bind
+    -Werror=unused-imports
+    -Werror=unused-record-wildcards
+    -Werror=warnings-deprecations
+    -Werror=wrong-do-bind
+
+  if impl(ghc < 9.8)
+    ghc-options:
+      -Werror=forall-identifier
+
+  if impl(ghc >= 9.8)
+    ghc-options:
+      -Werror=incomplete-export-warnings
+      -Werror=inconsistent-flags
+      -Werror=missing-poly-kind-signatures
+
+  -- TODO(#44): Enable these warnings when supporting these GHC versions.
+  --
+  -- if impl(ghc >= 9.10)
+  --   -Werror=badly-staged-types
+  --   -Werror=data-kinds-tc
+  --   -Werror=deprecated-type-abstractions
+  --   -Werror=incomplete-record-selectors
+
+  -- if impl(ghc >= 9.12)
+  --   -Werror=view-pattern-signatures
+
+library
+  import: shared
+  hs-source-dirs: src
+  build-depends:
+    , grease
+    , aeson >= 2
+    , async
+    , bytestring
+    , containers
+    , directory
+    , file-embed
+    , filepath
+    , lens
+    , lumberjack >= 1.0 && < 1.1
+    , optparse-applicative
+    , safe-exceptions
+    , text
+    , vector
+
+    , prettyprinter
+    , parameterized-utils
+    , what4
+    , llvm-pretty
+    , llvm-pretty-bc-parser
+    , crucible
+    , crucible-debug
+    , crucible-llvm-debug
+    , crucible-llvm
+    , crucible-llvm-syntax
+    , crucible-macaw-debug
+    , crucible-syntax
+    , elf-edit
+    , macaw-loader
+    , macaw-loader-aarch32
+    , macaw-loader-x86
+    , macaw-base
+    , macaw-symbolic
+    , macaw-symbolic-syntax
+    , macaw-aarch32
+    , macaw-aarch32-symbolic
+    , macaw-aarch32-syntax
+    , macaw-ppc
+    , macaw-ppc-symbolic
+    , macaw-ppc-syntax
+    , macaw-x86
+    , macaw-x86-symbolic
+    , macaw-x86-syntax
+    , stubs-common
+
+  exposed-modules:
+    Grease.Main
+
+  other-modules:
+    Grease.Profiler.EmbeddedData
+    Grease.Profiler.Feature
+    Grease.Profiler.Paths
+
+executable grease
+  import: shared
+  hs-source-dirs: main
+  main-is: Main.hs
+  build-depends: grease-cli
+
+test-suite grease-tests
+  import: shared
+  hs-source-dirs: tests
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules:
+    Shape
+  build-depends:
+      grease-cli
+    , grease
+    , bv-sized
+    , containers
+    , crucible-llvm
+    , directory
+    , filepath
+    , hedgehog
+    , lumberjack
+    , macaw-base
+    , optparse-applicative
+    , parameterized-utils
+    , prettyprinter
+    , tasty
+    , tasty-expected-failure
+    , tasty-hedgehog
+    , tasty-hunit
+    , text

@@ -62,9 +62,6 @@ import qualified Data.ElfEdit.CoreDump as CoreDump
 import qualified Data.Macaw.BinaryLoader as Loader
 import qualified Data.Macaw.BinaryLoader.ELF as Loader
 
--- macaw-loader-aarch32
-import Data.Macaw.BinaryLoader.AArch32 ()
-
 -- macaw-base
 import qualified Data.Macaw.CFG as MC
 import qualified Data.Macaw.Memory as MM

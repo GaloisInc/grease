@@ -86,9 +86,6 @@ import Lang.Crucible.LLVM.Bytes (Bytes(..))
 import qualified Lang.Crucible.LLVM.Bytes as Bytes
 import qualified Lang.Crucible.LLVM.MemModel as Mem
 
--- macaw-loader-aarch32
-import Data.Macaw.BinaryLoader.AArch32 ()
-
 -- macaw-base
 import qualified Data.Macaw.CFG as MC
 
@@ -160,7 +157,7 @@ instance MC.PrettyF tag => PP.Pretty (MemShape wptr tag) where
       Uninitialized bs -> "uninitialized x" PP.<+> PP.viaShow (Bytes.bytesToInteger bs)
       Initialized tag bs ->
         PP.hcat
-        [ "initialized" 
+        [ "initialized"
         , ppTag tag
         , "x "
         , PP.viaShow (Bytes.bytesToInteger bs)
@@ -312,7 +309,7 @@ ptrTargetSize ::
 ptrTargetSize proxy (PtrTarget s) = Foldable.sum (fmap (memShapeSize proxy) s)
 
 -- | Grow an allocation by adding some uninitialized bytes to the end
-growPtrTargetBy :: 
+growPtrTargetBy ::
   Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
   Bytes ->
   PtrTarget wptr tag ->
@@ -332,14 +329,14 @@ growPtrTargetUpTo amount t =
   growPtrTargetBy (max 1 (amount - ptrTargetSize ?ptrWidth t)) t
 
 -- | Grow an allocation by adding an uninitialized byte to the end
-growPtrTarget :: 
+growPtrTarget ::
   Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
   PtrTarget wptr tag ->
   PtrTarget wptr tag
 growPtrTarget = growPtrTargetBy (Bytes.toBytes (1 :: Integer))
 
 -- | Inintialize all uninitialized parts of an allocation
-initializePtrTarget :: 
+initializePtrTarget ::
   Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
   -- | Tag for newly-initialized bytes
   tag (C.VectorType (Mem.LLVMPointerType 8)) ->

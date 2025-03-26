@@ -139,9 +139,6 @@ import qualified Lang.Crucible.LLVM.MemModel as Mem
 import qualified Lang.Crucible.LLVM.MemModel.CallStack as Mem
 import qualified Lang.Crucible.LLVM.Errors as Mem
 
--- macaw-loader-aarch32
-import Data.Macaw.BinaryLoader.AArch32 ()
-
 -- macaw-base
 import qualified Data.Macaw.CFG as MC
 

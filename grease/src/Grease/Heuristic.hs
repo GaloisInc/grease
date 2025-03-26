@@ -87,9 +87,6 @@ import qualified Data.Macaw.CFG as MC
 -- macaw-symbolic
 import qualified Data.Macaw.Symbolic as Symbolic
 
--- macaw-loader-aarch32
-import Data.Macaw.BinaryLoader.AArch32 ()
-
 import qualified Grease.Bug as Bug
 import qualified Grease.Bug.UndefinedBehavior as UB
 import qualified Grease.Cursor as Cursor

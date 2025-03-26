@@ -71,6 +71,15 @@ We treat a small number of hlint warnings as errors in CI. To run hlint locally,
 hlint main src tests
 ```
 
+## Source code
+
+The `grease` source code is split up into a number of smaller libraries, each
+residing in its own top-level directory:
+
+* `grease`: This comprises the core of `grease` as a library.
+* `grease-cli`: This defines a command-line application on top of the library
+  code in `grease`.
+
 ## Test suite
 
 To run the tests:

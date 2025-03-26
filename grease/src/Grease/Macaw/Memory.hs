@@ -53,9 +53,6 @@ import qualified Lang.Crucible.Simulator as C
 -- crucible-llvm
 import qualified Lang.Crucible.LLVM.MemModel as Mem
 
--- macaw-loader-aarch32
-import Data.Macaw.BinaryLoader.AArch32 ()
-
 -- macaw-base
 import qualified Data.Macaw.CFG as MC
 import qualified Data.Macaw.Memory as MM
