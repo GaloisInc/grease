@@ -106,7 +106,7 @@ data Shape ext tag t where
     tag (C.StructType ctx) ->
     Ctx.Assignment (Shape ext tag) ctx ->
     Shape ext tag (C.StructType ctx)
-  ShapeUnit :: 
+  ShapeUnit ::
     tag C.UnitType ->
     Shape ext tag C.UnitType
 
