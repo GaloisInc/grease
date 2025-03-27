@@ -51,5 +51,8 @@ packages:
   deps/llvm-pretty/
   deps/llvm-pretty-bc-parser/
   deps/stubs/stubs-common/
+  deps/stubs/stubs-common-aarch32/
+  deps/stubs/stubs-common-ppc/
+  deps/stubs/stubs-common-x86/
   deps/stubs/stubs-translator/
   deps/stubs/stubs-wrapper/

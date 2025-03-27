@@ -169,6 +169,9 @@ library
     , macaw-x86
     , macaw-x86-symbolic
     , stubs-common
+    , stubs-common-aarch32
+    , stubs-common-ppc
+    , stubs-common-x86
     , stubs-wrapper
 
   exposed-modules:
