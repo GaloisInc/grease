@@ -1,5 +1,5 @@
 cabal-version: 2.4
-name: grease-cli
+name: grease-aarch32
 version: 0.1.0.0
 author: Galois, Inc.
 maintainer: grease@galois.com
@@ -7,10 +7,10 @@ copyright: Galois, Inc. 2024
 license: BSD-3-Clause
 license-file: LICENSE
 synopsis:
-  Checks properties about binaries using under-constrained symbolic execution
+  Extends @grease@ with AArch32-specific reasoning
 description:
-  @grease@ is a tool that checks properties about binaries using
-  under-constrained symbolic execution.
+  @grease-aarch32@ is a library that extends @grease@ with the ability to reason
+  about AArch32 binaries.
 extra-doc-files:
   README.md
 category: Static Analysis
@@ -18,7 +18,7 @@ category: Static Analysis
 source-repository head
   type: git
   location: https://github.com/GaloisInc/grease
-  subdir: grease-cli
+  subdir: grease-aarch32
 
 common shared
   default-language: GHC2021
@@ -125,91 +125,19 @@ library
   hs-source-dirs: src
   build-depends:
     , grease
-    , grease-aarch32
-    , grease-ppc
-    , grease-x86
 
-    , aeson >= 2
-    , async
-    , bytestring
     , containers
-    , directory
-    , file-embed
-    , filepath
-    , lens
-    , lumberjack >= 1.0 && < 1.1
-    , optparse-applicative
     , safe-exceptions
-    , text
-    , vector
 
-    , prettyprinter
-    , parameterized-utils
-    , what4
-    , llvm-pretty
-    , llvm-pretty-bc-parser
+    , bv-sized
     , crucible
-    , crucible-debug
-    , crucible-llvm-debug
     , crucible-llvm
-    , crucible-llvm-syntax
-    , crucible-macaw-debug
-    , crucible-syntax
     , elf-edit
-    , macaw-loader
-    , macaw-loader-aarch32
-    , macaw-loader-x86
-    , macaw-base
-    , macaw-symbolic
-    , macaw-symbolic-syntax
     , macaw-aarch32
     , macaw-aarch32-symbolic
-    , macaw-aarch32-syntax
-    , macaw-ppc
-    , macaw-ppc-symbolic
-    , macaw-ppc-syntax
-    , macaw-x86
-    , macaw-x86-symbolic
-    , macaw-x86-syntax
-    , stubs-common
+    , macaw-symbolic
+    , parameterized-utils
+    , stubs-common-aarch32
 
   exposed-modules:
-    Grease.Main
-
-  other-modules:
-    Grease.Profiler.EmbeddedData
-    Grease.Profiler.Feature
-    Grease.Profiler.Paths
-
-executable grease
-  import: shared
-  hs-source-dirs: main
-  main-is: Main.hs
-  build-depends: grease-cli
-
-test-suite grease-tests
-  import: shared
-  hs-source-dirs: tests
-  type: exitcode-stdio-1.0
-  main-is: Main.hs
-  other-modules:
-    Shape
-  build-depends:
-      grease-cli
-    , grease
-    , bv-sized
-    , containers
-    , crucible-llvm
-    , directory
-    , filepath
-    , hedgehog
-    , lumberjack
-    , macaw-base
-    , optparse-applicative
-    , parameterized-utils
-    , prettyprinter
-    , tasty
-    , tasty-expected-failure
-    , tasty-hedgehog
-    , tasty-hunit
-    , text
+    Grease.Macaw.Arch.AArch32

@@ -77,6 +77,12 @@ The `grease` source code is split up into a number of smaller libraries, each
 residing in its own top-level directory:
 
 * `grease`: This comprises the core of `grease` as a library.
+* `grease-aarch32`: This extends the `grease` library with the ability to reason
+  about AArch32 binaries.
+* `grease-ppc`: This extends the `grease` library with the ability to reason
+  about 32-bit and 64-bit PowerPC binaries.
+* `grease-x86`: This extends the `grease` library with the ability to reason
+  about x86-64 binaries.
 * `grease-cli`: This defines a command-line application on top of the library
   code in `grease`.
 
