@@ -13,7 +13,7 @@ maintainer: rscott@galois.com
 copyright: Galois Inc., 2024-2025
 category: Data
 build-type: Simple
-extra-source-files: README.md
+extra-doc-files: README.md
 
 source-repository head
   type: git

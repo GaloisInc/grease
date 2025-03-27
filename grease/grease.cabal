@@ -11,8 +11,9 @@ synopsis:
 description:
   @grease@ is a tool that checks properties about binaries using
   under-constrained symbolic execution.
-extra-source-files:
+extra-doc-files:
   README.md
+extra-source-files:
   grease.buildinfo.json
 category: Static Analysis
 

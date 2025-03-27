@@ -11,7 +11,7 @@ synopsis:
 description:
   @grease-aarch32@ is a library that extends @grease@ with the ability to reason
   about AArch32 binaries.
-extra-source-files:
+extra-doc-files:
   README.md
 category: Static Analysis
 

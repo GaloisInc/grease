@@ -11,7 +11,7 @@ synopsis:
 description:
   @grease-ppc@ is a library that extends @grease@ with the ability to reason
   about PowerPC binaries.
-extra-source-files:
+extra-doc-files:
   README.md
 category: Static Analysis
 

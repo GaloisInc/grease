@@ -11,7 +11,7 @@ synopsis:
 description:
   @grease-x86@ is a library that extends @grease@ with the ability to reason
   about x86-64 binaries.
-extra-source-files:
+extra-doc-files:
   README.md
 category: Static Analysis
 
