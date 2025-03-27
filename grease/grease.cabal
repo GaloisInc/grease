@@ -162,16 +162,7 @@ library
     , macaw-base
     , macaw-symbolic
     , macaw-symbolic-syntax
-    , macaw-aarch32
-    , macaw-aarch32-symbolic
-    , macaw-ppc
-    , macaw-ppc-symbolic
-    , macaw-x86
-    , macaw-x86-symbolic
     , stubs-common
-    , stubs-common-aarch32
-    , stubs-common-ppc
-    , stubs-common-x86
     , stubs-wrapper
 
   exposed-modules:
@@ -200,11 +191,6 @@ library
     Grease.LLVM.SimulatorHooks.Diagnostic
     Grease.Macaw
     Grease.Macaw.Arch
-    Grease.Macaw.Arch.AArch32
-    Grease.Macaw.Arch.PPC32
-    Grease.Macaw.Arch.PPC64
-    Grease.Macaw.Arch.X86
-    Grease.Macaw.Arch.X86.Reg
     Grease.Macaw.Discovery
     Grease.Macaw.FunctionOverride
     Grease.Macaw.Load
