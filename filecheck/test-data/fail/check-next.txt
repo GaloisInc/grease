@@ -1,0 +1,5 @@
+# CHECK: first
+# CHECK-NEXT: third
+first
+second
+third
