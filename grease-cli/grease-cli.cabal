@@ -201,6 +201,7 @@ test-suite grease-tests
     , containers
     , crucible-llvm
     , directory
+    , filecheck
     , filepath
     , hedgehog
     , lumberjack
