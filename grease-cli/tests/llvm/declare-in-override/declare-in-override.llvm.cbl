@@ -17,3 +17,4 @@
     (store none i64 p forty-two)
     (funcall @free p)
     (return ())))
+; CHECK: All goals passed!

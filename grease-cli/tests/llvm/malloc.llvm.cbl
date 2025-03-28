@@ -15,3 +15,4 @@
     (assert! (not (equal? mblk 0)) "malloc'd block number nonzero")
 
     (return ())))
+; CHECK: All goals passed!

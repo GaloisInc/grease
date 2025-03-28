@@ -7,3 +7,9 @@
     (let v (ptr 8 blk off))
     (store none i8 p v)
     (return ())))
+; CHECK: All goals passed!
+; CHECK: Final refined precondition:
+; CHECK-EMPTY:
+; CHECK: %0: 000000+0000000000000000
+; CHECK-EMPTY:
+; CHECK: 000000: ##

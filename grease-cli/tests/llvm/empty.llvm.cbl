@@ -3,3 +3,4 @@
 (defun @test () Unit
   (start start:
     (return ())))
+; CHECK: All goals passed!

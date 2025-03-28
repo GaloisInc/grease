@@ -6,3 +6,4 @@
     (let h (load-handle Unit ((Ptr 64)) g))
     (funcall h p)
     (return ())))
+; CHECK: All goals passed!

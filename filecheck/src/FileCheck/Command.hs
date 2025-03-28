@@ -34,7 +34,7 @@ splitOnOne needle haystack =
 -- | Parse a t'Command'. Returns 'Nothing' on parse failure.
 parse :: Maybe Prefix -> Text -> Maybe Loc -> Text -> Maybe Command
 parse pfx comment loc t0 = do
-  t <- Text.stripPrefix comment t0
+  t <- Text.stripPrefix comment (Text.strip t0)
   let split = ":"
   let (hd, tl) = splitOnOne split t
   d <- FCD.parse pfx hd

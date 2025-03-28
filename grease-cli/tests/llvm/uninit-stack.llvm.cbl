@@ -6,3 +6,5 @@
     (let a (alloca none sz))
     (load none i8 a)
     (return ())))
+; CHECK: Likely bug: uninitialized stack read
+; CHECK-NEXT: Allocated at
