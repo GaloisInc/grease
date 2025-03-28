@@ -72,6 +72,14 @@ jobs:
       shell: bash
       run: cabal configure --enable-tests
 
+    - name: Build FileCheck
+      shell: bash
+      run: cabal build pkg:filecheck
+
+    - name: Test FileCheck
+      shell: bash
+      run: cabal test pkg:filecheck
+
     - name: Build grease-cli
       shell: bash
       run: cabal build pkg:grease-cli pkg:grease-diagrams

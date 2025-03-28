@@ -1,0 +1,5 @@
+# CHECK: first
+# CHECK: fourth
+first
+second
+third
