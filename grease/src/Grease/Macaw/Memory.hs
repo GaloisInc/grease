@@ -3,19 +3,12 @@ Copyright        : (c) Galois, Inc. 2024
 Maintainer       : GREASE Maintainers <grease@galois.com>
 
 Various utilities for loading strings from memory. Strictly speaking, nothing
-about this functionality is @grease@-specific, but there are some opinionated
-design choices being made here that warrant a closer look before being
-considered for inclusion upstream in @macaw@:
-
-* We currently require all strings to be null-terminated. There are some other
-  functions that only load a specific number of characters (e.g., @strncpy@),
-  however, and if we wanted to support overriding those functions, we would need
-  to change the API to allow users to configure the maximum number of characters
-  to load.
-
-* We check if the last character is a null terminator by consuling an SMT
-  solver. This is useful (and necessary) for some use cases, but it does require
-  adding 'OnlineSolverAndBackend' constraints to support it.
+about this functionality is @grease@-specific, but we make a somewhat
+opinionated design choice: when checking if the last character is a null
+terminator, we consult an SMT solver. This is useful (and necessary) for some
+use cases, but it does require adding 'OnlineSolverAndBackend' constraints to
+support it. This design choice warrants a closer look before being considered
+for inclusion upstream in @macaw@.
 -}
 
 {-# LANGUAGE DataKinds #-}
@@ -28,14 +21,16 @@ module Grease.Macaw.Memory
 
 import Control.Applicative (pure)
 import Control.Monad.IO.Class (MonadIO(..))
+import Data.Bool (otherwise)
 import qualified Data.ByteString as BS
 import Data.Eq (Eq(..))
 import Data.Function (($), id)
 import Data.Functor ((<$>))
+import Data.Int (Int)
 import Data.Maybe (Maybe(..))
 import Data.Traversable (Traversable(..))
 import Data.Word (Word8)
-import Prelude (Num(..))
+import Prelude (Num(..), subtract)
 import qualified GHC.Stack as Stack
 import System.IO (IO)
 
@@ -67,8 +62,8 @@ import Grease.Utility (OnlineSolverAndBackend)
 -- | Load a null-terminated string from memory.
 --
 -- The pointer to read from must be concrete and nonnull. We allow symbolic
--- characters, but we require that the string end with a concrete null
--- terminator character.
+-- characters, but if the @'Maybe' 'Int'@ argument is 'Nothing', then we require
+-- that the string end with a concrete null terminator character.
 loadString ::
   forall sym bak p arch rtp f args solver t st fm.
   ( OnlineSolverAndBackend solver sym bak t st fm
@@ -86,6 +81,9 @@ loadString ::
   MC.Endianness ->
   -- | The pointer to the string.
   C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  -- | If @'Just' n@, read a maximum of @n@ characters. If 'Nothing', read until
+  -- a concrete null terminator character is encountered.
+  Maybe Int ->
   -- | The initial Crucible state.
   C.SimState p sym (Symbolic.MacawExt arch) rtp f args ->
   -- | The loaded bytes from the string (excluding the null terminator) and the
@@ -93,7 +91,7 @@ loadString ::
   IO ( [W4.SymBV sym 8]
      , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
      )
-loadString bak mvar mmConf endian ptr0 st = do
+loadString bak mvar mmConf endian ptr0 maxChars0 st = do
   memImpl <- Symbolic.getMem st mvar
   let sym = C.backendGetSym bak
   -- Normally, the lazy `macaw-symbolic` memory model would resolve all pointer
@@ -109,25 +107,29 @@ loadString bak mvar mmConf endian ptr0 st = do
   let go ::
         ([W4.SymBV sym 8] -> [W4.SymBV sym 8]) ->
         C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+        Maybe Int ->
         C.SimState p sym (Symbolic.MacawExt arch) rtp f args ->
         IO ( [W4.SymBV sym 8]
            , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
            )
-      go f p st0 = do
-        let addrWidth = MC.addrWidthRepr ?ptrWidth
-        let readInfo = MC.BVMemRepr (W4.knownNat @1) endian
-        (v, st1) <-
-          liftIO $ Symbolic.doReadMemModel mvar mmConf addrWidth readInfo p st0
-        x <- liftIO $ Mem.projectLLVM_bv bak v
-        if (BV.asUnsigned <$> W4.asBV x) == Just 0
-          then pure (f [], st1) -- We have encountered a null terminator, so stop.
-          else do
-            one <- liftIO $ W4.bvOne sym Mem.PtrWidth
-            p' <- liftIO $ Mem.doPtrAddOffset bak memImpl (C.regValue p) one
-            let pEntry' = C.RegEntry Mem.PtrRepr p'
-            go (\xs -> f (x:xs)) pEntry' st1
+      go f p maxChars st0
+        | maxChars == Just 0
+        = pure (f [], st0)
+        | otherwise = do
+            let addrWidth = MC.addrWidthRepr ?ptrWidth
+            let readInfo = MC.BVMemRepr (W4.knownNat @1) endian
+            (v, st1) <-
+              liftIO $ Symbolic.doReadMemModel mvar mmConf addrWidth readInfo p st0
+            x <- liftIO $ Mem.projectLLVM_bv bak v
+            if (BV.asUnsigned <$> W4.asBV x) == Just 0
+              then pure (f [], st1) -- We have encountered a null terminator, so stop.
+              else do
+                one <- liftIO $ W4.bvOne sym Mem.PtrWidth
+                p' <- liftIO $ Mem.doPtrAddOffset bak memImpl (C.regValue p) one
+                let pEntry' = C.RegEntry Mem.PtrRepr p'
+                go (\xs -> f (x:xs)) pEntry' (subtract 1 <$> maxChars) st1
 
-  go id ptrEntry1 st
+  go id ptrEntry1 maxChars0 st
 
 -- | Like 'loadString', except that each character read is asserted to be
 -- concrete. If a symbolic character is encountered, this function will
@@ -146,12 +148,13 @@ loadConcreteString ::
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
   MC.Endianness ->
   C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  Maybe Int ->
   C.SimState p sym (Symbolic.MacawExt arch) rtp f args ->
   IO ( BS.ByteString
      , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
      )
-loadConcreteString bak mvar mmConf endian ptr st0 = do
-  (symBytes, st1) <- loadString bak mvar mmConf endian ptr st0
+loadConcreteString bak mvar mmConf endian ptr maxChars st0 = do
+  (symBytes, st1) <- loadString bak mvar mmConf endian ptr maxChars st0
   bytes <- traverse concretizeByte symBytes
   pure (BS.pack bytes, st1)
   where
