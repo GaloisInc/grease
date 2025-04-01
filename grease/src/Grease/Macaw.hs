@@ -106,10 +106,13 @@ import Grease.Macaw.SimulatorState
 import Grease.Panic (panic)
 import Grease.Utility
 
--- | Hook to run before executing a CFG
-newtype SetupHook
+-- | Hook to run before executing a CFG.
+--
+-- Note that @sym@ is a type parameter so that users can define 'SetupHook's
+-- that reference a fixed @sym@ type.
+newtype SetupHook sym
   = SetupHook
-    (forall arch sym bak rtp a r solver scope st fs p.
+    (forall arch bak rtp a r solver scope st fs p.
       ( C.IsSymBackend sym bak
       , sym ~ W4.ExprBuilder scope st fs
       , bak ~ C.OnlineBackend solver scope st fs
@@ -534,7 +537,7 @@ initState ::
   C.SymGlobalState sym ->
   ArchContext arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
-  SetupHook ->
+  SetupHook sym ->
   -- | The initial personality state.
   p ->
   -- | The initial register state.

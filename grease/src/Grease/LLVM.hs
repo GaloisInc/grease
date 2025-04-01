@@ -43,10 +43,13 @@ import Grease.Options (ErrorSymbolicFunCalls)
 import Grease.Setup (SetupMem(getSetupMem))
 import Grease.Utility (printHandle)
 
--- | Hook to run before executing a CFG
-newtype SetupHook
+-- | Hook to run before executing a CFG.
+--
+-- Note that @sym@ is a type parameter so that users can define 'SetupHook's
+-- that reference a fixed @sym@ type.
+newtype SetupHook sym
   = SetupHook
-    (forall arch p sym bak rtp a r.
+    (forall arch p bak rtp a r.
       ( C.IsSymBackend sym bak
       , 16 C.<= ArchWidth arch
       , ArchWidth arch ~ 64
@@ -81,7 +84,7 @@ initState ::
   SetupMem sym ->
   C.SymGlobalState sym ->
   Trans.LLVMContext arch ->
-  SetupHook ->
+  SetupHook sym ->
   -- | The initial arguments to the entrypoint function.
   Ctx.Assignment (C.RegValue' sym) argTys ->
   -- | An optional startup override to run just before the entrypoint function.
