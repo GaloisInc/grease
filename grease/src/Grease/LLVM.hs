@@ -79,6 +79,7 @@ initState ::
   C.HandleAllocator ->
   ErrorSymbolicFunCalls ->
   SetupMem sym ->
+  C.SymGlobalState sym ->
   Trans.LLVMContext arch ->
   SetupHook ->
   -- | The initial arguments to the entrypoint function.
@@ -88,7 +89,7 @@ initState ::
   -- | The CFG of the user-requested entrypoint function.
   C.SomeCFG LLVM argTys retTy ->
   m (C.ExecState () sym LLVM (C.RegEntry sym retTy))
-initState bak la llvmExtImpl halloc errorSymbolicFunCalls mem llvmCtx setupHook initArgs mbStartupOvCfg (C.SomeCFG cfg) = do
+initState bak la llvmExtImpl halloc errorSymbolicFunCalls mem globs llvmCtx setupHook initArgs mbStartupOvCfg (C.SomeCFG cfg) = do
   let dl = TCtx.llvmDataLayout (llvmCtx ^. Trans.llvmTypeCtx)
   let extImpl = greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls llvmExtImpl
   let bindings = C.FnBindings
@@ -109,7 +110,7 @@ initState bak la llvmExtImpl halloc errorSymbolicFunCalls mem llvmCtx setupHook 
   let mvar = Trans.llvmMemVar llvmCtx
   pure $
     C.InitialState ctx
-      (C.insertGlobal mvar (getSetupMem mem) C.emptyGlobals)
+      (C.insertGlobal mvar (getSetupMem mem) globs)
       C.defaultAbortHandler
       (C.cfgReturnType cfg)
       (C.runOverrideSim (C.cfgReturnType cfg) $ do

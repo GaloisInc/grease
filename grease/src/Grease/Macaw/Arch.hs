@@ -237,6 +237,7 @@ data ArchContext arch = ArchContext
       Mem.HasLLVMAnn sym =>
       Stubs.Sym sym ->
       Mem.MemImpl sym ->
+      C.SymGlobalState sym ->
       IO (Mem.MemImpl sym, C.SymGlobalState sym)
   , -- | When setting up the initial register values just before starting
     -- simulation, override the default values for the following registers and
