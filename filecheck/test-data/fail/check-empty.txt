@@ -3,3 +3,4 @@
 # CHECK: second
 first
 second
+# OUT: ❌ CHECK-EMPTY

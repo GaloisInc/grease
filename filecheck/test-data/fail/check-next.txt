@@ -3,3 +3,5 @@
 first
 second
 third
+# OUT: ✔️ CHECK
+# OUT: ❌ CHECK-NEXT at test-data/fail/check-next.txt:2:1-2:20 did not match text at <out>:3:6
