@@ -23,7 +23,6 @@ import qualified Data.BitVector.Sized as BV
 import Data.Parameterized.NatRepr (knownNat)
 
 -- crucible
-import qualified Lang.Crucible.Simulator.GlobalState as C
 import qualified Lang.Crucible.Simulator.RegValue as C
 
 -- crucible-llvm
@@ -101,7 +100,7 @@ ppc32Ctx mbReturnAddr stackArgSlots = do
       , _archSyscallReturnRegisters = Stubs.ppcLinuxSyscallReturnRegisters PPC.V32Repr
       , _archSyscallCodeMapping = Stubs.syscallMap
       , _archStackPtrShape = ppcStackPtrShape (bytes32LE <$> mbReturnAddr) stackArgSlots
-      , _archInitGlobals = \_ mem -> pure (mem, C.emptyGlobals)
+      , _archInitGlobals = \_ mem globals -> pure (mem, globals)
       , _archRegOverrides = regOverrides
       , _archOffsetStackPointerPostCall = pure
       }

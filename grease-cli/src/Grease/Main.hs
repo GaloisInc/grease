@@ -679,7 +679,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         -- use an empty map instead. (See gitlab#118 for more discussion on this point.)
         let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` ssaCfgHdl) mbCfgAddr
         let personality = emptyGreaseSimulatorState & discoveredFnHandles .~ discoveredHdls
-        initState bak la macawExtImpl halloc mvar mem' archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa'
+        initState bak la macawExtImpl halloc mvar mem' C.emptyGlobals archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa'
 
   doLog la (Diag.TargetCFG ssaCfg)
   result <- refinementLoop la (maxIters simOpts) (simTimeout simOpts) rNamesAssign' initArgs $ \argShapes -> do
@@ -1154,7 +1154,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
     let ?recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
           modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
     let llvmExtImpl = CLLVM.llvmExtensionImpl ?memOpts
-    st <- LLVM.initState bak la llvmExtImpl halloc (simErrorSymbolicFunCalls simOpts) setupMem llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
+    st <- LLVM.initState bak la llvmExtImpl halloc (simErrorSymbolicFunCalls simOpts) setupMem C.emptyGlobals llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
     let cmdExt = Debug.llvmCommandExt
     debuggerFeat <-
       liftIO $
