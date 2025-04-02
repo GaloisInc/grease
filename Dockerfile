@@ -35,7 +35,7 @@ WORKDIR /usr/local/bin
 RUN case ${TARGETPLATFORM} in \
       "linux/amd64") \
         WHAT4_SOLVERS_ARCH=X64 ;; \
-      "linux/arm64") \
+      "linux/arm64" | "linux/arm64/v8") \
         WHAT4_SOLVERS_ARCH=ARM64 ;; \
       *) \
         printf "Unsupported architecture: %s\n" "${TARGETPLATFORM}" >&2 \
@@ -50,7 +50,7 @@ ENV PATH=/root/ghcup-download/bin:/root/.ghcup/bin:$PATH
 RUN case ${TARGETPLATFORM} in \
       "linux/amd64") \
         GHCUP_ARCH=x86_64 ;; \
-      "linux/arm64") \
+      "linux/arm64" | "linux/arm64/v8") \
         GHCUP_ARCH=aarch64 ;; \
       *) \
         printf "Unsupported architecture: %s\n" "${TARGETPLATFORM}" >&2 \
