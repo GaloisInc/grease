@@ -39,9 +39,11 @@ parseWithPrefix (Prefix pfx) t =
      | t == "COM" -> Just Com
      | otherwise -> Nothing
 
+-- | Parse a 'Directive'. Returns 'Nothing' on parse failure.
 parse :: Maybe Prefix -> Text -> Maybe Directive
 parse pfx = parseWithPrefix (Maybe.fromMaybe (Prefix "CHECK") pfx)
 
+-- | Print a 'Directive'. Conceptually the inverse of 'parse'.
 print :: Directive -> Text
 print =
   \case

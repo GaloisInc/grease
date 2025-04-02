@@ -12,6 +12,10 @@ import Data.Text (Text)
 import FileCheck.Directive (Directive, Prefix)
 import FileCheck.Directive qualified as FCD
 
+-- | A 'Command' is a pair of a 'Directive' and its argument.
+--
+-- It represents a single line written by the user, e.g., @CHECK: foo@ is parsed
+-- to @'Command' 'FCD.Check' "foo"@.
 data Command
   = Command
     { cmdDirective :: Directive
@@ -23,7 +27,7 @@ splitOnOne needle haystack =
   let (hd, tl) = Text.breakOn needle haystack in
   (hd, Text.drop (Text.length needle) tl)
 
-
+-- | Parse a 'Command'. Returns 'Nothing' on parse failure.
 parse :: Maybe Prefix -> Text -> Maybe Command
 parse pfx t = do
   let split = ":"
@@ -35,7 +39,8 @@ parse pfx t = do
 -- | Match a 'Command' against a chunk of 'Text'.
 --
 -- Returns 'Just' the remaining text after the match, or 'Nothing' if matching
--- fails.
+-- fails. See the README and test suite for more details about the semantics
+-- of matching.
 match ::
   Command ->
   Text ->
