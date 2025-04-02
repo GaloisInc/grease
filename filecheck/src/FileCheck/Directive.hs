@@ -13,9 +13,11 @@ import Data.Text (Text)
 import qualified Data.Maybe as Maybe
 import Prelude hiding (print)
 
--- | @-check-prefix@
+-- | See LLVM FileCheck\'s @-check-prefix@ flag.
 newtype Prefix = Prefix Text
 
+-- | These directives are inspired by LLVM FileCheck, see upstream docs (and the
+-- test suite) for details on what they check and how they check it.
 data Directive
   = -- | @CHECK@
     Check
