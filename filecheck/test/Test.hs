@@ -16,7 +16,7 @@ import Test.Tasty qualified as TT
 
 discover :: Bool -> FilePath -> IO [TT.TestTree]
 discover pass dir = do
-  entries <- map (dir </>) <$> Dir.getDirectoryContents dir
+  entries <- map (dir </>) <$> Dir.listDirectory dir
   files <- Monad.filterM Dir.doesFileExist entries
   Monad.forM files $ \file -> do
     content <- Text.IO.readFile file
