@@ -10,6 +10,8 @@ module FileCheck
   , CommandParseFailure
   , parseCommentsAndCheck
   , parseCommentsAndCheck'
+  , Loc(..)
+  , Pos(..)
   ) where
 
 import Control.Exception qualified as X
@@ -21,6 +23,8 @@ import FileCheck.Command (Command)
 import FileCheck.Command qualified as FCC
 import FileCheck.Directive qualified as FCD
 import FileCheck.Directive (Prefix)
+import FileCheck.Pos qualified as FCP
+import FileCheck.Pos (Loc(..), Pos(..))
 import GHC.Stack (HasCallStack)
 import Prelude hiding (lines)
 
@@ -30,10 +34,15 @@ newtype Output = Output Text
 data FileCheckFailure = FileCheckFailure Command Text
 
 instance Show FileCheckFailure where
-  show (FileCheckFailure (FCC.Command d c) t) =
+  show (FileCheckFailure (FCC.Command d c loc) t) =
     Text.unpack $
       Text.unlines
-      [ FCD.print d <> ": " <> c
+      [ mconcat
+        [ case loc of
+            Just l -> FCP.printLoc l <> ": "
+            Nothing -> mempty
+        , FCD.print d <> ": " <> c
+        ]
       , "does not match"
       , t
       ]
@@ -75,12 +84,15 @@ instance X.Exception CommandParseFailure
 parseAndCheck ::
   HasCallStack =>
   Maybe Prefix ->
-  -- | Lines representing commands
-  [Text] ->
+  -- | Name of the file from which the lines come
+  Maybe FilePath ->
+  -- | Lines representing commands (together with their line numbers)
+  [(Int, Text)] ->
   Output ->
   Either FileCheckFailure ()
-parseAndCheck pfx cmdsTxt out =
-  let cmds = Maybe.mapMaybe (FCC.parse pfx) cmdsTxt
+parseAndCheck pfx fileName cmdsTxt out =
+  let mkLoc lineNo = Just (Loc fileName (Pos lineNo 0)) in
+  let cmds = Maybe.mapMaybe (\(no, l) -> FCC.parse pfx (mkLoc no) l) cmdsTxt
   in check cmds out
 
 -- | Parse 'Command's from comments embedded in a file, and use them to check
@@ -92,25 +104,29 @@ parseCommentsAndCheck ::
   Maybe Prefix ->
   -- | Start of line comment
   Text ->
+  -- | Name of the file from which the text comes
+  Maybe FilePath ->
   -- | Text containing comments with embedded commands
   Text ->
   Output ->
   Either FileCheckFailure ()
-parseCommentsAndCheck pfx comment cmdsTxt out =
+parseCommentsAndCheck pfx comment fileName cmdsTxt out =
   let lines = Text.lines cmdsTxt in
   let cmds = Maybe.mapMaybe (Text.stripPrefix comment) lines in
-  parseAndCheck pfx cmds out
+  parseAndCheck pfx fileName (zip [0..] cmds) out
 
 
 -- | Like 'parseCommentsAndCheck', but throws 'FileCheckFailure' on failure. 
 parseCommentsAndCheck' ::
   HasCallStack =>
   Maybe Prefix ->
+  -- | Name of the file from which the text comes
+  Maybe FilePath ->
   Text ->
   Text ->
   Output ->
   IO ()
-parseCommentsAndCheck' pfx comment cmdsTxt out =
-  case parseCommentsAndCheck pfx comment cmdsTxt out of
+parseCommentsAndCheck' pfx fileName comment cmdsTxt out =
+  case parseCommentsAndCheck pfx comment fileName cmdsTxt out of
     Left failure -> X.throwIO failure
     Right () -> pure ()

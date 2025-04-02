@@ -132,6 +132,7 @@ library
   other-modules:
     FileCheck.Directive
     FileCheck.Command
+    FileCheck.Pos
 
 test-suite filecheck-tests
   import: shared

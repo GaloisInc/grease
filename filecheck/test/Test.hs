@@ -30,7 +30,7 @@ discover pass dir = do
               filter (not . isComment) &
               Text.unlines &
               Output
-        let result = parseCommentsAndCheck prefix comment content output
+        let result = parseCommentsAndCheck prefix comment (Just file) content output
         let check = if pass then Either.isRight else Either.isLeft
         TTH.assertBool file (check result)
 

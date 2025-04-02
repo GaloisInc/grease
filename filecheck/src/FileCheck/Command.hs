@@ -11,6 +11,7 @@ import Data.Text qualified as Text
 import Data.Text (Text)
 import FileCheck.Directive (Directive, Prefix)
 import FileCheck.Directive qualified as FCD
+import FileCheck.Pos (Loc)
 
 -- | A 'Command' is a pair of a 'Directive' and its argument.
 --
@@ -19,7 +20,8 @@ import FileCheck.Directive qualified as FCD
 data Command
   = Command
     { cmdDirective :: Directive
-    , cmdContent :: Text
+    , cmdContent :: !Text
+    , cmdPos :: !(Maybe Loc)
     }
 
 splitOnOne :: Text -> Text -> (Text, Text)
@@ -28,13 +30,13 @@ splitOnOne needle haystack =
   (hd, Text.drop (Text.length needle) tl)
 
 -- | Parse a 'Command'. Returns 'Nothing' on parse failure.
-parse :: Maybe Prefix -> Text -> Maybe Command
-parse pfx t = do
+parse :: Maybe Prefix -> Maybe Loc -> Text -> Maybe Command
+parse pfx pos t = do
   let split = ":"
   let (hd, tl) = splitOnOne split t
   d <- FCD.parse pfx hd
   let tl' = Maybe.fromMaybe tl (Text.stripPrefix " " tl)
-  pure (Command d tl')
+  pure (Command d tl' pos)
 
 -- | Match a 'Command' against a chunk of 'Text'.
 --
@@ -45,7 +47,7 @@ match ::
   Command ->
   Text ->
   Maybe Text
-match (Command d c) t =
+match (Command d c _pos) t =
   case d of
     FCD.Check ->
       if Text.null c
