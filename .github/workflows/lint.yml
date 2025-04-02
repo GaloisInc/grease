@@ -22,4 +22,4 @@ jobs:
             https://github.com/ndmitchell/hlint/releases/download/v3.8/hlint-3.8-x86_64-linux.tar.gz
           tar xvf hlint.tar.gz
 
-          ./hlint-3.8/hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/{main,src,tests}
+          ./hlint-3.8/hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/{main,src,tests} filecheck/{src,test}

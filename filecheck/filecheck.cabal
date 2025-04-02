@@ -7,7 +7,10 @@ copyright: Galois, Inc. 2025
 license: BSD-3-Clause
 license-file: LICENSE
 synopsis: Like LLVM's FileCheck tool, but as a Haskell library.
-description: Like LLVM's FileCheck tool, but as a Haskell library.
+description:
+  Like LLVM's FileCheck tool, but as a Haskell library.
+
+  See upstream docs for details.
 extra-doc-files:
   README.md
 category: Testing
