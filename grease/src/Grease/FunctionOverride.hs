@@ -371,7 +371,8 @@ callAssert bak mvar mmConf archCtx _pfn _pfile _pline ptxt = do
   let sym = C.backendGetSym bak
   st0 <- get
   let endian = Symbolic.fromCrucibleEndian (archCtx ^. archEndianness)
-  (txt, st1) <- liftIO $ loadConcreteString bak mvar mmConf endian ptxt st0
+  let maxSize = Nothing
+  (txt, st1) <- liftIO $ loadConcreteString bak mvar mmConf endian ptxt maxSize st0
   put st1
   let err = C.AssertFailureSimError "Call to assert()" (BSC.unpack txt)
   _ <- liftIO $ C.addFailedAssertion bak err
@@ -452,9 +453,10 @@ callPrintf bak mvar mmConf archCtx formatStrPtr gva = do
   let sym = C.backendGetSym bak
   st0 <- get
   let endian = Symbolic.fromCrucibleEndian (archCtx ^. archEndianness)
+  let maxSize = Nothing
   -- Read format string
   (formatStr, st1) <- liftIO $
-    loadConcreteString bak mvar mmConf endian formatStrPtr st0
+    loadConcreteString bak mvar mmConf endian formatStrPtr maxSize st0
   put st1
   -- Parse format directives
   case Printf.parseDirectives (BS.unpack formatStr) of
@@ -567,7 +569,8 @@ callPuts bak mvar mmConf archCtx (C.regValue -> strPtr) = do
   st0 <- get
   let endian = Symbolic.fromCrucibleEndian (archCtx ^. archEndianness)
   let strEntry = C.RegEntry Mem.PtrRepr strPtr
-  (str, st1) <- liftIO $ loadConcreteString bak mvar mmConf endian strEntry st0
+  let maxSize = Nothing
+  (str, st1) <- liftIO $ loadConcreteString bak mvar mmConf endian strEntry maxSize st0
   put st1
   h <- C.printHandle <$> C.getContext
   liftIO $ BSC.hPutStrLn h str
