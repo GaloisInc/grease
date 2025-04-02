@@ -569,7 +569,7 @@ simulateMacawCfg ::
   MacawCfgConfig arch ->
   ArchContext arch ->
   SimOpts ->
-  Macaw.SetupHook ->
+  Macaw.SetupHook sym ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
@@ -801,7 +801,7 @@ simulateMacawCfgs ::
   MacawCfgConfig arch ->
   ArchContext arch ->
   SimOpts ->
-  Macaw.SetupHook ->
+  (forall sym. Macaw.SetupHook sym) ->
   Map Entrypoint (MacawEntrypointCfgs arch) ->
   IO Results
 simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs = do
@@ -951,7 +951,8 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
   let cfgs' = Map.map (\cfg -> MacawEntrypointCfgs cfg Nothing) cfgs
   let memory = MC.emptyMemory (archCtx ^. archInfo . to MI.archAddrWidth)
   let dl = DataLayout.defaultDataLayout
-  let setupHook = Macaw.SetupHook $ \bak mvar funOvs -> do
+  let setupHook :: forall sym. SetupHook sym
+      setupHook = Macaw.SetupHook $ \bak mvar funOvs -> do
         -- Register overrides, both user-defined ones and ones that are
         -- hard-coded into GREASE itself.
         forM_ (Map.elems funOvs) $ \mfo -> do
@@ -1084,7 +1085,8 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
   -- work. Given that startup overrides can't invoke anything defined in the
   -- main program itself, it's much less work to register them ahead of time
   -- here.)
-  let setupHook = Macaw.SetupHook $ \bak _mvar funOvs ->
+  let setupHook :: forall sym. SetupHook sym
+      setupHook = Macaw.SetupHook $ \bak _mvar funOvs ->
         forM_ (Map.elems cfgs) $ \(MacawEntrypointCfgs entrypointCfgs _) ->
           forM_ (startupOvForwardDecs <$> entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
             Macaw.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
@@ -1117,7 +1119,7 @@ simulateLlvmCfg ::
   C.HandleAllocator ->
   Trans.LLVMContext arch ->
   InitialMem sym ->
-  LLVM.SetupHook ->
+  LLVM.SetupHook sym ->
   -- | An optional startup override to run just before the entrypoint function.
   Maybe (C.SomeCFG CLLVM.LLVM argTys (C.StructType argTys)) ->
   -- | The CFG of the user-requested entrypoint function.
@@ -1211,7 +1213,7 @@ simulateLlvmCfgs ::
   C.HandleAllocator ->
   Trans.LLVMContext arch ->
   (forall sym bak. C.IsSymBackend sym bak => bak -> IO (InitialMem sym)) ->
-  LLVM.SetupHook ->
+  (forall sym. LLVM.SetupHook sym) ->
   Map Entrypoint (EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
   IO Results
 simulateLlvmCfgs la simOpts halloc llvmCtx mkMem setupHook cfgs = do
@@ -1284,7 +1286,8 @@ simulateLlvmSyntax simOpts la = do
         , Trans.llvmGlobalAliases = Map.empty
         , Trans.llvmFunctionAliases = Map.empty
         }
-  let setupHook = LLVM.SetupHook $ \bak halloc' llvmCtx' -> do
+  let setupHook :: forall sym. LLVM.SetupHook sym
+      setupHook = LLVM.SetupHook $ \bak halloc' llvmCtx' -> do
         -- Register built-in and user overrides.
         funOvs <-
           LLVM.registerLLVMSexpOverrides la builtinLLVMOverrides (simOverrides simOpts) bak halloc' llvmCtx' prog
@@ -1381,7 +1384,8 @@ simulateLlvm transOpts simOpts la = do
               Nothing -> throw $ GreaseException $ "Could not find function: " <> nm
 
     let dl = DataLayout.defaultDataLayout
-    let setupHook = LLVM.SetupHook $ \bak halloc' llvmCtx -> do
+    let setupHook :: forall sym. LLVM.SetupHook sym
+        setupHook = LLVM.SetupHook $ \bak halloc' llvmCtx -> do
           -- Register defined functions...
           let handleTranslationWarning warn = doLog la (Diag.LLVMTranslationWarning warn)
           Trans.llvmPtrWidth llvmCtxt $ \ptrW' -> Mem.withPtrWidth ptrW' $
