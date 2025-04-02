@@ -42,7 +42,6 @@ instance X.Exception FileCheckFailure
 
 -- | Match text against a sequence of 'Command's.
 check ::
-  HasCallStack =>
   [Command] ->
   Output ->
   Either FileCheckFailure ()
