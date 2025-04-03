@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+-- | See the package README for a high-level description.
 module FileCheck
   ( Prefix(..)
   , Output(..)
@@ -38,11 +39,12 @@ import Prelude hiding (lines, span)
 -- | Output of the program under test
 newtype Output = Output Text
 
+-- | A t'Command' that has failed to match.
 data FileCheckFailure
   = FileCheckFailure
-    { -- | All 'Command's that were to be checked
+    { -- | All t'Command's that were to be checked
       failureCommands :: [Command]
-      -- | The 'Command' that did not match
+      -- | The t'Command' that did not match
     , failureFailedCommand :: !Command
     , failureResult :: !Result
     }
@@ -99,16 +101,18 @@ instance Show FileCheckFailure where
 
 instance X.Exception FileCheckFailure
 
+-- | The result of checking a sequence of t'Command's against some t'Output'
 data Result
   = Result
-    { -- | 'Loc' after the last match
+    { -- | t'Loc' after the last match
       resultLocation :: Loc
-      -- | Successful 'Matches'
+      -- | Successful 'Match'es
     , resultMatches :: Seq Match
       -- | Remaining text after the last match
     , resultRemainder :: Text
     }
 
+-- | Pretty-print a t'Result'
 printResult ::
   [Command] ->
   Result ->
@@ -119,7 +123,7 @@ printResult cmds r =
     [] -> printMatches (zip cmds (toList matches))
     (failed : _) -> Text.pack (show (FileCheckFailure cmds failed r))
 
--- | Match text against a sequence of 'Command's.
+-- | Match text against a sequence of t'Command's.
 check ::
   [Command] ->
   Output ->
@@ -149,7 +153,7 @@ checkResult cmds r =
     [] -> pure (cmds, r)
     (failed : _) -> X.throwIO (FileCheckFailure cmds failed r)
 
--- | Like 'check', but throws 'FileCheckFailure' on failure.
+-- | Like 'check', but throws t'FileCheckFailure' on failure.
 check' ::
   HasCallStack =>
   [Command] ->
@@ -157,15 +161,16 @@ check' ::
   IO Result
 check' cmds out = snd <$> checkResult cmds (check cmds out)
 
+-- | Failure to parse a t'Command'
 data CommandParseFailure = CommandParseFailure Text
   deriving Show
 
 instance X.Exception CommandParseFailure
 
--- | Parse 'Command's from comments embedded in a file, and use them to check
--- an 'Output'.
+-- | Parse t'Command's from comments embedded in a file, and use them to check
+-- an t'Output'.
 --
--- Throws 'CommandParseFailure' if the commands cannot be parsed.
+-- Throws t'CommandParseFailure' if the commands cannot be parsed.
 parseCommentsAndCheck ::
   HasCallStack =>
   Maybe Prefix ->
@@ -184,7 +189,7 @@ parseCommentsAndCheck pfx comment fileName cmdsTxt out =
   in (cmds, check cmds out)
 
 
--- | Like 'parseCommentsAndCheck', but throws 'FileCheckFailure' on failure. 
+-- | Like 'parseCommentsAndCheck', but throws t'FileCheckFailure' on failure. 
 parseCommentsAndCheck' ::
   HasCallStack =>
   Maybe Prefix ->

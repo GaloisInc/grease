@@ -15,10 +15,10 @@ import FileCheck.Pos qualified as FCP
 import FileCheck.Pos (Loc, Span)
 import Prelude hiding (span)
 
--- | A 'Command' is a pair of a 'Directive' and its argument.
+-- | A t'Command' is a pair of a 'Directive' and its argument.
 --
 -- It represents a single line written by the user, e.g., @CHECK: foo@ is parsed
--- to @'Command' 'FCD.Check' "foo"@.
+-- to @v'Command' 'FCD.Check' "foo"@.
 data Command
   = Command
     { cmdDirective :: Directive
@@ -31,7 +31,7 @@ splitOnOne needle haystack =
   let (hd, tl) = Text.breakOn needle haystack in
   (hd, Text.drop (Text.length needle) tl)
 
--- | Parse a 'Command'. Returns 'Nothing' on parse failure.
+-- | Parse a t'Command'. Returns 'Nothing' on parse failure.
 parse :: Maybe Prefix -> Text -> Maybe Loc -> Text -> Maybe Command
 parse pfx comment loc t0 = do
   t <- Text.stripPrefix comment t0
@@ -47,6 +47,7 @@ parse pfx comment loc t0 = do
             Just (FCP.Span (FCP.path l) start (FCP.incPos start t0))
   pure (Command d tl' span)
 
+-- | A successful match of some t'Command' against some 'Text'
 data Match
   = Match
     { -- | The 'Span' of the match
@@ -57,7 +58,7 @@ data Match
     , matchRemainder :: !Text
     }
 
--- | Match a 'Command' against a chunk of 'Text'.
+-- | Match a t'Command' against a chunk of 'Text'.
 --
 -- Returns 'Just' the remaining text after the match, or 'Nothing' if matching
 -- fails. See the README and test suite for more details about the semantics
