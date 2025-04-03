@@ -15,7 +15,9 @@ import Prelude (Bounded(..), (==), (||), otherwise, error)
 import System.Exit (exitFailure)
 import System.IO (IO, putStrLn)
 import System.FilePath ((</>), FilePath, replaceExtension, replaceExtensions, takeBaseName, takeDirectory)
+import System.FilePath qualified as FilePath
 import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
+import qualified System.Directory as Dir
 
 import Data.Bool (Bool(..), not)
 import Data.Eq (Eq)
@@ -40,6 +42,7 @@ import qualified Prettyprinter as PP
 import Control.Applicative (pure)
 import Control.Exception (SomeException, try)
 import Control.Monad (Monad((>>), (>>=), return), filterM, forM, mapM, forM_, void)
+import qualified Control.Monad as Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
 import qualified Options.Applicative as Opt
@@ -460,42 +463,14 @@ makeSanityTests arch d =
         BatchTimeout -> pure ()
         _ -> T.U.assertFailure "Timeout not exceeded"
 
-llvmTests :: T.TestTree
-llvmTests =
-  T.testGroup "LLVM"
-    [ testCase "abort" "abort.llvm.cbl"
-    , testCase "both branches abort" "both-branches-abort.llvm.cbl"
-    , testCase "double free" "double-free.llvm.cbl"
-    , testCase "free non pointer" "free-non-ptr.llvm.cbl"
-    , testCase "free stack pointer" "free-stack.llvm.cbl"
-    , testCase "uninit stack" "uninit-stack.llvm.cbl"
-    , testCase "empty" "empty.llvm.cbl"
-    , testCase "exit" "exit.llvm.cbl"
-    , testCase "function call" "id-bool.llvm.cbl"
-    , testCase "free" "free.llvm.cbl"
-    , testCase "func-ptr" "func-ptr.llvm.cbl"
-    , testCase "func-ptr-error" "func-ptr-error.llvm.cbl"
-    , testCase "load" "load.llvm.cbl"
-    , testCase "malloc" "malloc.llvm.cbl"
-    , testCase "memcpy" "memcpy.llvm.cbl"
-    , testCase "memset" "memset.llvm.cbl"
-    , testCase "memset large const len" "memset-large-const-len.llvm.cbl"
-    , testCase "null read" "null-read.llvm.cbl"
-    , testCase "null write" "null-write.llvm.cbl"
-    , testCase "pointer add offset" "ptr-add-offset.llvm.cbl"
-    , testCase "pointer add large offset" "ptr-add-large-offset.llvm.cbl"
-    , testCase "skip non-void call" "skip-ptr.llvm.cbl"
-    , testCase "skip void call" "skip-void.llvm.cbl"
-    , testCase "store" "store.llvm.cbl"
-    , testCase "trap" "trap.llvm.cbl"
-    , testCase "user override" "user-override.llvm.cbl"
-    , testCase "user override defun" "user-override-defun.llvm.cbl"
-    , testCase "struct override" "struct-override-caller.llvm.cbl"
-    , testCase "declare in override" "declare-in-override/declare-in-override.llvm.cbl"
-    , testCase "startup override" "startup-override/test.llvm.cbl"
-    , testCase "Rust enum" "rust-enum.llvm.cbl"
-    ]
+llvmTests :: IO T.TestTree
+llvmTests = do
+  entries <- Dir.listDirectory dir
+  files <- Monad.filterM (Dir.doesFileExist . (dir </>)) entries
+  let cbls = List.filter ((== ".cbl") . FilePath.takeExtension) files
+  pure (T.testGroup "LLVM" (List.map testCase cbls))
   where
+    dir = "tests/llvm"
 
     capture ::
       MonadIO m =>
@@ -515,12 +490,11 @@ llvmTests =
       pure logTxt
 
     testCase ::
-      T.TestName ->
       FilePath ->
       T.TestTree
-    testCase testName fileName =
-      T.U.testCase testName $ do
-        let path = "tests/llvm" </> fileName
+    testCase fileName =
+      T.U.testCase (FilePath.dropExtension (FilePath.dropExtension fileName)) $ do
+        let path = dir </> fileName
         content <- Text.IO.readFile path
         opts <- getNonExeTestOpts path []
         logTxt <-
@@ -648,4 +622,5 @@ main = do
 
       return (T.testGroup (ppArch arch) [propTests, refineTests, sanityTests])
 
-  T.defaultMain $ T.testGroup "Tests" (shapeTests:llvmTests:llvmBcTests:armCfgTests:ppc32CfgTests:x86CfgTests:archTests)
+  llTests <- llvmTests
+  T.defaultMain $ T.testGroup "Tests" (shapeTests:llTests:llvmBcTests:armCfgTests:ppc32CfgTests:x86CfgTests:archTests)
