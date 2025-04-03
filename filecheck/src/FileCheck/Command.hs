@@ -21,7 +21,7 @@ import Prelude hiding (span)
 -- to @v'Command' 'FCD.Check' "foo"@.
 data Command
   = Command
-    { cmdDirective :: Directive
+    { cmdDirective :: !Directive
     , cmdContent :: !Text
     , cmdSpan :: !(Maybe Span)
     }

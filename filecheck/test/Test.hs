@@ -1,5 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{-
+Test FileCheck, using FileCheck.
+
+The test suite reads text files from @test-data/{fail,pass}/@ and runs
+FileCheck on them /twice/. All of the commands are embedded in the text files,
+on lines that start with @#@. It first matches against the entire text file
+(specifically, the non-@#@ lines) using the unprefixed commands (e.g., @CHECK@).
+It then serializes the t'FC.Result' and matches /that/ against the commands
+using @v'FC.Prefix "OUT"@. This double-checking ensures that directives match
+(and don't match) where expected, and that FileCheck's output is readable and
+correct (which is non-trivial, especially source span tracking).
+-}
 module Main (main) where
 
 import Control.Monad qualified as Monad
