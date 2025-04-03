@@ -39,6 +39,14 @@ Also, FileCheck is used to test itself. See the test suite for usage examples.
 
 ## Motivation
 
+In comparison to golden testing, FileCheck-style tests are *coarser*. They only
+check particular parts of the program's output. This can cause less churn in the
+test-suite when the program output changes in ways that are not relevant to the
+properties being tested. However, it is more complex. For example, it requires
+learning the FileCheck command language. It can also cause unexpected successes,
+e.g., if the program output contains the pattern being checked, but not in the
+proper place.
+
 Why build a Haskell library when LLVM already provides their FileCheck tool?
 There are a variety of reasons:
 
