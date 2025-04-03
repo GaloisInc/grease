@@ -25,14 +25,90 @@ CHECK: Hello
 CHECK: world
 ```
 
+## Example
+
+Let's say that you have decided to write the first ever Haskell implementation
+of a POSIX shell, `hsh`. Here's how to test it with FileCheck.
+
 If the input to the program under test is a file format that supports comments,
 it is often convenient to embed FileCheck commands in the input itself. For
-example, the following file could be used to test the `echo` command of a shell:
+example, here's a test for `echo`:
 
 ```sh
 # CHECK: Hello, world!
-echo "Hello, world!"
+echo 'Hello, world!'
 ```
+
+Using this strategy, each test case is a single file. You can use the
+`directory` package to discover tests from a directory, and `tasty{,-hunit}` to
+run tests:
+
+```haskell
+module Main (main) where
+
+import Control.Monad (filterM, forM)
+import Data.Text.IO qualified as Text.IO
+import FileCheck qualified as FC
+import System.Directory qualified as Dir
+import Test.Tasty.HUnit qualified as TTH
+import Test.Tasty qualified as TT
+
+-- Code under test:
+-- runScript :: Text -> (Text, Text)
+-- Returns (stdout, stderr)
+import Hsh (runScript)
+
+test :: FilePath -> IO ()
+test sh = do
+  let prefix = Nothing
+  let comment = "# "  -- shell script start-of-line comment
+  content <- Text.IO.readFile sh
+  (stdout, _stderr) <- runScript content
+  (cmds, _result) <- FC.parseCommentsAndCheck' prefix comment (Just sh) content (FC.Output stdout)
+  TTH.assertBool (sh ++ " contained some assertions") (not (null cmds))
+
+main :: IO ()
+main = do
+  let dir = "test-data/"
+  entries <- map (dir </>) <$> Dir.listDirectory dir
+  files <- filterM Dir.doesFileExist entries
+  let shs = List.filter ((== ".sh") . FilePath.takeExtension) files
+  let mkTest path = TTH.testCase path (test path)
+  let tests = map mkTest shs
+  TT.defaultMain (TT.testGroup "hsh tests" tests)
+```
+
+Now you can just toss `.sh` scripts into `test-data/` and have them picked up
+as tests.
+
+What if you wanted to test both stdout and stderr? You can use a `Prefix`:
+```haskell
+test :: FilePath -> IO ()
+test sh = do
+  -- snip --
+  let stdoutPfx = Just (FC.Prefix "STDOUT")
+  (stdoutCmds, _result) <-
+    FC.parseCommentsAndCheck' stdoutPfx comment (Just sh) content (FC.Output stdout)
+
+  let stderrPfx = Just (FC.Prefix "STDERR")
+  (stderrCmds, _result) <-
+    FC.parseCommentsAndCheck' stderrPfx comment (Just sh) content (FC.Output stderr)
+
+  TTH.assertBool
+    (sh ++ " contained some assertions")
+    (not (null (stdoutCmds ++ stderrCmds)))
+```
+
+Test cases would then look like so:
+
+```sh
+# STDOUT: Hello, stdout!
+echo 'Hello, stdout!'
+# STDERR: Hello, stderr!
+echo 'Hello, stderr!' 1>&2
+```
+
+## Documentation
 
 Reference documentation is a work in progress. For now, see the upstream docs.
 Also, FileCheck is used to test itself. See the test suite for usage examples.
