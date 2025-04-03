@@ -39,6 +39,11 @@ Also, FileCheck is used to test itself. See the test suite for usage examples.
 
 ## Motivation
 
+The overall FileCheck paradigm is a form of [data driven testing]. See that blog
+post for considerable motivation and discussion.
+
+[data driven testing]: https://matklad.github.io/2021/05/31/how-to-test.html#Data-Driven-Testing
+
 In comparison to golden testing, FileCheck-style tests are *coarser*. They only
 check particular parts of the program's output. This can cause less churn in the
 test-suite when the program output changes in ways that are not relevant to the
