@@ -63,7 +63,7 @@ printMatches =
       Text.unlines
       [ Text.unwords
         [ "✔️"
-        , FCD.print (FCC.cmdDirective c)
+        , FCD.printDirective (FCC.cmdDirective c)
         , "at"
         , maybe "<unknown location>" FCP.printSpan (FCC.cmdSpan c)
         , "matched text at"
@@ -86,7 +86,7 @@ instance Show FileCheckFailure where
       , "Failing check:"
       , Text.unwords
         [ "❌"
-        , FCD.print (FCC.cmdDirective (failureFailedCommand f))
+        , FCD.printDirective (FCC.cmdDirective (failureFailedCommand f))
         , "at"
         , maybe "<unknown location>" FCP.printSpan (FCC.cmdSpan (failureFailedCommand f))
         , "did not match text at"

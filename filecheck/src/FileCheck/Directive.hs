@@ -6,12 +6,11 @@ module FileCheck.Directive
   ( Prefix(..)
   , Directive(..)
   , parse
-  , print
+  , printDirective
   ) where
 
 import Data.Text (Text)
 import qualified Data.Maybe as Maybe
-import Prelude hiding (print)
 
 -- | See LLVM FileCheck\'s @-check-prefix@ flag.
 newtype Prefix = Prefix Text
@@ -44,8 +43,8 @@ parse :: Maybe Prefix -> Text -> Maybe Directive
 parse pfx = parseWithPrefix (Maybe.fromMaybe (Prefix "CHECK") pfx)
 
 -- | Print a 'Directive'. Conceptually the inverse of 'parse'.
-print :: Directive -> Text
-print =
+printDirective :: Directive -> Text
+printDirective =
   \case
     Check -> "CHECK"
     CheckEmpty -> "CHECK-EMPTY"
