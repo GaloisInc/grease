@@ -18,7 +18,7 @@ import Prelude hiding (span)
 -- | A t'Command' is a pair of a 'Directive' and its argument.
 --
 -- It represents a single line written by the user, e.g., @CHECK: foo@ is parsed
--- to @v'Command' 'FCD.Check' "foo"@.
+-- to @v'Command' 'FCD.Check' "foo" span@ (for an appropriate @span@).
 data Command
   = Command
     { cmdDirective :: !Directive

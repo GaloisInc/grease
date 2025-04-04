@@ -28,7 +28,7 @@ data Pos
     , col :: {-# UNPACK #-} !Int
     }
 
--- | Move a position forward past a of text.
+-- | Move a position forward past a chunk of text.
 incPos :: Pos -> Text -> Pos
 incPos (Pos l c) t =
   let newlines = Text.count "\n" t in
