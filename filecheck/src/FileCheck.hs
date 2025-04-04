@@ -11,7 +11,6 @@ module FileCheck
   , printResult
   , check
   , check'
-  , CommandParseFailure
   , parseCommentsAndCheck
   , parseCommentsAndCheck'
   , Loc(..)
@@ -161,16 +160,8 @@ check' ::
   IO Result
 check' cmds out = snd <$> checkResult cmds (check cmds out)
 
--- | Failure to parse a t'Command'
-data CommandParseFailure = CommandParseFailure Text
-  deriving Show
-
-instance X.Exception CommandParseFailure
-
 -- | Parse t'Command's from comments embedded in a file, and use them to check
 -- an t'Output'.
---
--- Throws t'CommandParseFailure' if the commands cannot be parsed.
 parseCommentsAndCheck ::
   HasCallStack =>
   Maybe Prefix ->
