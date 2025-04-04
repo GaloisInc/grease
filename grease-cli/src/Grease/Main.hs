@@ -26,6 +26,7 @@ module Grease.Main
   , Results(..)
   , SimOpts(..)
   , optsToSimOpts
+  , logResults
   ) where
 
 import System.IO (IO)
@@ -1547,6 +1548,15 @@ simulateFile path =
      | ".llvm.cbl" `List.isSuffixOf` path -> simulateLlvmSyntax
      | otherwise -> simulateElf
 
+-- | Also used in the test suite
+logResults :: GreaseLogAction -> Results -> IO ()
+logResults la (Results results) =
+  forM_ (Map.toList results) $ \(entrypoint, result) ->
+    doLog la $
+    Diag.AnalyzedEntrypoint
+      (entrypointLocation entrypoint)
+      (batchStatus result)
+
 main :: IO ()
 main = do
   parsedOpts <- Opt.execParser optsInfo
@@ -1555,12 +1565,8 @@ main = do
 
       la :: GreaseLogAction
       la = logAction (optsVerbosity parsedOpts)
-  Results results <-
+  rs@(Results results) <-
     simulateFile path simOpts la
   if optsJSON parsedOpts
     then forM_ (Map.elems results) $ putStrLn . renderJSON
-    else forM_ (Map.toList results) $ \(entrypoint, result) ->
-      doLog la $
-      Diag.AnalyzedEntrypoint
-        (entrypointLocation entrypoint)
-        (batchStatus result)
+    else logResults la rs

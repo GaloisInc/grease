@@ -15,16 +15,19 @@ import Prelude (Bounded(..), (==), (||), otherwise, error)
 import System.Exit (exitFailure)
 import System.IO (IO, putStrLn)
 import System.FilePath ((</>), FilePath, replaceExtension, replaceExtensions, takeBaseName, takeDirectory)
+import System.FilePath qualified as FilePath
 import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
+import qualified System.Directory as Dir
 
-import Data.Bool (Bool(..))
+import Data.Bool (Bool(..), not)
 import Data.Eq (Eq)
 import Data.Either (Either(..))
 import Data.Foldable (foldr)
-import Data.Function (($))
+import Data.Function (($), (.))
 import Data.Functor ((<$>))
 import Data.Int (Int)
 import Data.List ((++), map)
+import qualified Data.IORef as IORef
 import qualified Data.List as List
 import qualified Data.Map as Map
 import Data.Maybe (Maybe(..))
@@ -39,9 +42,12 @@ import qualified Prettyprinter as PP
 import Control.Applicative (pure)
 import Control.Exception (SomeException, try)
 import Control.Monad (Monad((>>), (>>=), return), filterM, forM, mapM, forM_, void)
+import qualified Control.Monad as Monad
+import Control.Monad.IO.Class (MonadIO, liftIO)
 
 import qualified Options.Applicative as Opt
 
+import FileCheck qualified as FileCheck
 import qualified Lumberjack as LJ
 
 import qualified Test.Tasty as T
@@ -53,11 +59,11 @@ import qualified Lang.Crucible.LLVM.Translation as Trans
 
 import qualified Grease.Bug as Bug
 import qualified Grease.Bug.UndefinedBehavior as UB
-import Grease.Diagnostic (GreaseLogAction)
+import Grease.Diagnostic (Diagnostic, GreaseLogAction)
 import Grease.Entrypoint (Entrypoint(..), EntrypointLocation(..), entrypointNoStartupOv)
 import Grease.Output (CheckStatus(..), BatchStatus (..))
 import qualified Grease.Output as Output
-import Grease.Main (Results(..), simulateARM, simulateARMSyntax, simulatePPC32, simulatePPC32Syntax, simulateX86, simulateX86Syntax, simulateLlvm, simulateLlvmSyntax, SimOpts (..), optsToSimOpts)
+import Grease.Main (Results(..), simulateARM, simulateARMSyntax, simulatePPC32, simulatePPC32Syntax, simulateX86, simulateX86Syntax, simulateLlvm, simulateLlvmSyntax, SimOpts (..), optsToSimOpts, logResults)
 import Grease.Options (Opts, optsInfo)
 import Grease.Requirement (Requirement (..), parseReq)
 import Grease.Utility (pshow)
@@ -457,52 +463,50 @@ makeSanityTests arch d =
         BatchTimeout -> pure ()
         _ -> T.U.assertFailure "Timeout not exceeded"
 
-llvmTests :: T.TestTree
-llvmTests =
-  T.testGroup "LLVM"
-    [ testCase "abort" "abort.llvm.cbl" $ assertSpecificBug Bug.MustFail Nothing
-    , testCase "both branches abort" "both-branches-abort.llvm.cbl" $ assertSpecificBug Bug.OneMustFail Nothing
-    , testCase "double free" "double-free.llvm.cbl" $ assertSpecificBug Bug.MustFail (Just UB.DoubleFree)
-    , testCase "free non pointer" "free-non-ptr.llvm.cbl" $ assertSpecificBug Bug.MustFail (Just UB.FreeUnallocated)
-    , testCase "free stack pointer" "free-stack.llvm.cbl" $ assertSpecificBug Bug.MustFail (Just UB.FreeUnallocated)
-    , testCase "uninit stack" "uninit-stack.llvm.cbl" $ assertSpecificBug Bug.UninitStackRead Nothing
-    , testCase "empty" "empty.llvm.cbl" assertSuccess
-    , testCase "exit" "exit.llvm.cbl" assertSuccess
-    , testCase "function call" "id-bool.llvm.cbl" assertSuccess
-    , testCase "free" "free.llvm.cbl" assertSuccess
-    , testCase "func-ptr" "func-ptr.llvm.cbl" assertSuccess
-    , testCase "func-ptr-error" "func-ptr-error.llvm.cbl" assertCouldNotInfer
-    , testCase "load" "load.llvm.cbl" assertSuccess
-    , testCase "malloc" "malloc.llvm.cbl" assertSuccess
-    , testCase "memcpy" "memcpy.llvm.cbl" assertSuccess
-    , testCase "memset" "memset.llvm.cbl" assertSuccess
-    , testCase "memset large const len" "memset-large-const-len.llvm.cbl" assertSuccess
-    , testCase "null read" "null-read.llvm.cbl" $ assertSpecificBug Bug.MustFail Nothing
-    , testCase "null write" "null-write.llvm.cbl" $ assertSpecificBug Bug.MustFail Nothing
-    , testCase "pointer add offset" "ptr-add-offset.llvm.cbl" assertSuccess
-    , testCase "pointer add large offset" "ptr-add-large-offset.llvm.cbl" assertSuccess
-    , testCase "skip non-void call" "skip-ptr.llvm.cbl" assertSuccess
-    , testCase "skip void call" "skip-void.llvm.cbl" assertSuccess
-    , testCase "store" "store.llvm.cbl" assertSuccess
-    , testCase "trap" "trap.llvm.cbl" $ assertSpecificBug Bug.MustFail Nothing
-    , testCase "user override" "user-override.llvm.cbl" assertSuccess
-    , testCase "user override defun" "user-override-defun.llvm.cbl" assertSuccess
-    , testCase "struct override" "struct-override-caller.llvm.cbl" assertSuccess
-    , testCase "declare in override" "declare-in-override/declare-in-override.llvm.cbl" assertSuccess
-    , testCase "startup override" "startup-override/test.llvm.cbl" assertSuccess
-    , testCase "Rust enum" "rust-enum.llvm.cbl" assertSuccess
-    ]
+llvmTests :: IO T.TestTree
+llvmTests = do
+  entries <- Dir.listDirectory dir
+  files <- Monad.filterM (Dir.doesFileExist . (dir </>)) entries
+  let cbls = List.filter ((== ".cbl") . FilePath.takeExtension) files
+  pure (T.testGroup "LLVM" (List.map testCase cbls))
   where
+    dir = "tests/llvm"
+
+    capture ::
+      MonadIO m =>
+      IORef.IORef [Diagnostic] ->
+      LJ.LogAction m Diagnostic
+    capture logRef =
+      LJ.LogAction (\msg -> liftIO (IORef.modifyIORef logRef (msg :)))
+
+    withCapturedLogs ::
+      (GreaseLogAction -> IO ()) ->
+      IO Text.Text
+    withCapturedLogs withLogAction = do
+      logRef <- IORef.newIORef []
+      withLogAction (capture logRef)
+      logs <- List.reverse <$> IORef.readIORef logRef
+      let logTxt = Text.unlines (map (Text.pack . show . PP.pretty) logs)
+      pure logTxt
+
     testCase ::
-      T.TestName ->
       FilePath ->
-      (BatchStatus -> IO ()) ->
       T.TestTree
-    testCase testName fileName assertCont =
-      T.U.testCase testName $ do
-        opts <- getNonExeTestOpts ("tests/llvm" </> fileName) []
-        res <- simulateLlvmSyntax opts la
-        assertCont $ getEntrypointResult opts res
+    testCase fileName =
+      T.U.testCase (FilePath.dropExtension (FilePath.dropExtension fileName)) $ do
+        let path = dir </> fileName
+        content <- Text.IO.readFile path
+        opts <- getNonExeTestOpts path []
+        logTxt <-
+          withCapturedLogs $ \la' -> do
+            res <- simulateLlvmSyntax opts la'
+            logResults la' res
+        let output = FileCheck.Output logTxt
+        let prefix = Nothing
+        let comment = "; "
+        (cmds, _) <- FileCheck.parseCommentsAndCheck' prefix comment (Just path) content output
+        T.U.assertBool "Test has some assertions" (not (List.null cmds))
+        pure ()
 
 llvmBcTests :: T.TestTree
 llvmBcTests =
@@ -618,4 +622,5 @@ main = do
 
       return (T.testGroup (ppArch arch) [propTests, refineTests, sanityTests])
 
-  T.defaultMain $ T.testGroup "Tests" (shapeTests:llvmTests:llvmBcTests:armCfgTests:ppc32CfgTests:x86CfgTests:archTests)
+  llTests <- llvmTests
+  T.defaultMain $ T.testGroup "Tests" (shapeTests:llTests:llvmBcTests:armCfgTests:ppc32CfgTests:x86CfgTests:archTests)

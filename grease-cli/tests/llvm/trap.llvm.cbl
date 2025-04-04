@@ -8,3 +8,5 @@
     (let h (load-handle Unit () g))
     (funcall h)
     (return ())))
+; CHECK: Likely bug: unavoidable error
+; CHECK: llvm.trap() called

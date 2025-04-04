@@ -7,3 +7,4 @@
     (let sz (ptr 64 0 (bv 64 4)))
     (let _ (funcall h dst src sz))
     (return ())))
+; CHECK: All goals passed!

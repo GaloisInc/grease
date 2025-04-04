@@ -1,0 +1,17 @@
+# CHECK: first
+# CHECK: fourth
+first
+second
+third
+# OUT: ✔️ CHECK at test-data/fail/check.txt:1:1-1:15 matched text at <out>:3:1-3:6
+# OUT: pattern:
+# OUT:   first
+# OUT: match:
+# OUT:   first
+# OUT: ❌ CHECK at test-data/fail/check.txt:2:1-2:16 did not match text at <out>:3:6
+# OUT: pattern:
+# OUT:   fourth
+# OUT: text:
+# OUT:   second
+# OUT:   third
+

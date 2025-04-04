@@ -1,0 +1,8 @@
+# CHECK: first
+# CHECK-EMPTY:
+# CHECK: second
+first
+
+second
+# OUT: ✔️ CHECK
+# OUT: ✔️ CHECK-EMPTY at test-data/pass/check-empty.txt:2:1-2:15 matched text at <out>:4:6-5:1

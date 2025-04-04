@@ -7,5 +7,9 @@
     (let blk0 (the Nat 1))
     (let off0 (bv 64 0))
     (let p0 (ptr 64 blk0 off0))
+    ; CHECK: `free` called on pointer that didn't point to a live region of the heap
     (funcall h p0)
     (return ())))
+; CHECK: Likely bug: unavoidable error
+; TODO: This error message could be improved
+; CHECK: The free function
