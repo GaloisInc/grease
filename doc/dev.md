@@ -22,7 +22,7 @@ git submodule update --init
 Then, build with `cabal`:
 
 ```sh
-cabal build
+cabal build exe:grease
 ```
 
 ## Docker
@@ -68,7 +68,7 @@ As always, see `--help` for more options.
 We treat a small number of hlint warnings as errors in CI. To run hlint locally, try:
 
 ```sh
-hlint main src tests
+hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/{main,src,tests} filecheck/{src,test}
 ```
 
 ## Source code
@@ -91,7 +91,7 @@ residing in its own top-level directory:
 To run the tests:
 
 ```sh
-$ cabal test
+$ cabal test pkg:grease-cli
 ```
 
 The tests reside in the `tests/` directory. We divide the tests into two
