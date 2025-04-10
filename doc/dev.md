@@ -22,7 +22,7 @@ git submodule update --init
 Then, build with `cabal`:
 
 ```sh
-cabal build
+cabal build exe:grease
 ```
 
 ## Docker
@@ -91,7 +91,7 @@ residing in its own top-level directory:
 To run the tests:
 
 ```sh
-$ cabal test
+$ cabal test pkg:grease-cli
 ```
 
 The tests reside in the `tests/` directory. We divide the tests into two
