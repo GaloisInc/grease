@@ -59,7 +59,7 @@ If the SMT solver fails to answer a query, GREASE reports this as a timeout and 
 
 ### Analyzing binaries
 
-GREASE operates on compiled code (binaries and LLVM). There may be bugs (e.g., undefined behavior) in the source program that the compiler has optimized away; GREASE has no means of finding such bugs.
+GREASE operates on compiled code (binaries and LLVM). There may be bugs (e.g., undefined behavior) in the source program that the compiler has optimized away; GREASE has no means of finding such bugs. See [Undefined behavior](undefined-behavior.md) for a more detailed discussion of which undefined behaviors GREASE can check for.
 
 ## Incidental limitations
 

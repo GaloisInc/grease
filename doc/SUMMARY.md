@@ -18,6 +18,7 @@
 - [Rust programs](./rust-programs.md)
 - [Shape DSL](./shape-dsl.md)
 - [Shared libraries](./shared-libraries.md)
+- [Undefined behavior](./undefined-behavior.md)
 
 # Developer documentation
 
