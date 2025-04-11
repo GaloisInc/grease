@@ -5,4 +5,4 @@
     (let one (bv 64 1))
     (let q (ptr-add-offset p one))
     (return q)))
-; CHECK: All goals passed!
+;; ok()

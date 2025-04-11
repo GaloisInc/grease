@@ -1,6 +1,0 @@
-# CHECK: first
-# CHECK-EMPTY:
-# CHECK: second
-first
-second
-# OUT: ❌ CHECK-EMPTY

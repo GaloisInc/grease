@@ -7,4 +7,4 @@
     (let a (ptr 32 0 (bv 32 97))) ; 'a'
     (funcall @memset buf a sz)
     (return ())))
-; CHECK: All goals passed!
+;; ok()

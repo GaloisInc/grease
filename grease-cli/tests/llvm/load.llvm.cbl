@@ -4,9 +4,11 @@
   (start start:
     (load none i8 p)
     (return ())))
-; CHECK: All goals passed!
-; CHECK: Final refined precondition:
-; CHECK-EMPTY:
-; CHECK: %0: 000000+0000000000000000
-; CHECK-EMPTY:
-; CHECK: 000000: XX
+;; ok()
+;; check [[
+;; Final refined precondition:
+;; 
+;; %0: 000000+0000000000000000
+;; 
+;; 000000: XX
+;; ]]

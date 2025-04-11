@@ -11,4 +11,4 @@
   (start start:
     (let b2 (funcall @id-bool b))
     (return b2)))
-; CHECK: All goals passed!
+;; ok()

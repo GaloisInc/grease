@@ -7,4 +7,4 @@
 	(let p (ptr 32 0 (bv 32 0)))
     (funcall h p)
     (return ())))
-; CHECK: All goals passed!
+;; ok()

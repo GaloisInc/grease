@@ -15,4 +15,4 @@
   (defblock else:
     (funcall $h)
     (return ())))
-; CHECK: Likely bug: at least one bug occurs
+;; check "Likely bug: at least one bug occurs"
