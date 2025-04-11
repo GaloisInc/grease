@@ -9,6 +9,6 @@
     (let h (load-handle Unit ((Ptr 64)) g))
     (funcall h a)
     (return ())))
-; CHECK: Likely bug: unavoidable error
+;; must_fail()
 ; TODO: This error message could be improved
-; CHECK: The free function
+;; check "The free function"

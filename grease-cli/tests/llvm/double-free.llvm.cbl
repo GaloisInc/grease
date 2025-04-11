@@ -7,6 +7,6 @@
     (funcall h p)
     (funcall h p)
     (return ())))
-; CHECK: Likely bug: unavoidable error
+;; must_fail()
 ; TODO: This error mesage is not great... it doesn't mention double-frees
-; CHECK: The free function
+;; check "The free function"

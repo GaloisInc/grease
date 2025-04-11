@@ -6,4 +6,4 @@
     ; CHECK: Invoking the 'skippable' function
     (let _ (funcall @skippable))
     (return b)))
-; CHECK: All goals passed!
+;; ok()

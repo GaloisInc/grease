@@ -13,6 +13,8 @@ description:
   See upstream docs for details.
 extra-doc-files:
   README.md
+extra-source-files:
+  src/FileCheck/filecheck.lua
 category: Testing
 
 source-repository head
@@ -124,15 +126,23 @@ library
   import: shared
   hs-source-dirs: src
   build-depends:
+    bytestring,
     containers,
+    exceptions,
+    file-embed,
+    hslua,
     text,
 
   exposed-modules:
     FileCheck
   other-modules:
-    FileCheck.Directive
-    FileCheck.Command
+    FileCheck.Exception
+    FileCheck.Extract
+    FileCheck.Lua
+    FileCheck.LuaApi
     FileCheck.Pos
+    FileCheck.Result
+    FileCheck.Traceback
 
 test-suite filecheck-tests
   import: shared
@@ -142,6 +152,7 @@ test-suite filecheck-tests
     filecheck
   main-is: Test.hs
   build-depends:
+    bytestring,
     directory,
     filepath,
     tasty,

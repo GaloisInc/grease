@@ -6,5 +6,5 @@
     (let h (load-handle Unit () g))
     (funcall h)
     (return ())))
-; CHECK: Likely bug: unavoidable error
-; CHECK: Call to abort
+;; must_fail()
+;; check "Call to abort"

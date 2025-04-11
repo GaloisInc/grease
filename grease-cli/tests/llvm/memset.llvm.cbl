@@ -16,4 +16,4 @@
     (assert! (equal? off (bv 8 0)) "offset numbers equal")
 
     (return ())))
-; CHECK: All goals passed!
+;; ok()

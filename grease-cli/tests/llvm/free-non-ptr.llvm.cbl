@@ -10,6 +10,6 @@
     ; CHECK: `free` called on pointer that didn't point to a live region of the heap
     (funcall h p0)
     (return ())))
-; CHECK: Likely bug: unavoidable error
+;; must_fail()
 ; TODO: This error message could be improved
-; CHECK: The free function
+;; check "The free function"

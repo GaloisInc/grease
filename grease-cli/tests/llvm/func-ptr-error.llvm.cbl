@@ -12,4 +12,4 @@
     (let h (load-handle Unit () p))
     (funcall h)
     (return ())))
-; CHECK: Unable to find a heuristic for any goal
+;; no_heuristic()

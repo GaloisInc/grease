@@ -6,5 +6,7 @@
     (let a (alloca none sz))
     (load none i8 a)
     (return ())))
-; CHECK: Likely bug: uninitialized stack read
-; CHECK-NEXT: Allocated at
+;; check [[
+;; Likely bug: uninitialized stack read at tests/llvm/uninit-stack.llvm.cbl:7:5
+;; Allocated at tests/llvm/uninit-stack.llvm.cbl:6:12
+;; ]]

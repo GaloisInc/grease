@@ -25,4 +25,4 @@
     (let p-offset (ptr-add-offset p eight))
     (let p-snd (load none i64 p-offset))
     (return ())))
-; CHECK: All goals passed!
+;; ok()

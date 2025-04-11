@@ -8,4 +8,4 @@
     (let s (funcall @struct-override-callee))
     (let ret (get-field 0 s))
     (return ret)))
-; CHECK: All goals passed!
+;; ok()
