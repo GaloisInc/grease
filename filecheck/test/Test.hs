@@ -3,14 +3,13 @@
 {-
 Test FileCheck, using FileCheck.
 
-The test suite reads text files from @test-data/{fail,pass}/@ and runs
-FileCheck on them /twice/. All of the commands are embedded in the text files,
-on lines that start with @#@. It first matches against the entire text file
-(specifically, the non-@#@ lines) using the unprefixed commands (e.g., @CHECK@).
-It then serializes the t'FC.Result' and matches /that/ against the commands
-using @v'FC.Prefix \"OUT\"@. This double-checking ensures that directives match
-(and don't match) where expected, and that FileCheck's output is readable and
-correct (which is non-trivial, especially source span tracking).
+The test suite reads text files from @test-data/{fail,pass}/@ and runs FileCheck
+on them /twice/. All of the Lua code is embedded in the text files, on lines
+that start with @#@. It first runs against the entire text file (specifically,
+the non-@#@ lines). It then serializes the t'FC.Result' and matches /that/
+against the commands that start with @;@. This double-checking ensures that
+directives match (and don't match) where expected, and that FileCheck's output
+is readable and correct (which is non-trivial, especially source span tracking).
 -}
 module Main (main) where
 
@@ -35,32 +34,6 @@ discover dir = do
       TTH.testCase file $ do
         let comment = "# "
 
-        -- White-out comments so that `CHECK` lines don't match themselves
-        let isComment = (comment `Text.isPrefixOf`)
-        let rmComment l = if isComment l then Text.replicate (Text.length l) " " else l
-        let clearComments out =
-              Text.lines out &
-              map rmComment &
-              Text.unlines &
-              FC.Output
-
-        let prefix = Nothing
-        let (cmds, result) = FC.parseCommentsAndCheck prefix comment (Just file) content (clearComments content)
-        let prefix' = Just (FC.Prefix "OUT")
-        let output' = FC.printResult cmds result
-        (_cmds, result') <- FC.parseCommentsAndCheck' prefix' comment (Just file) content (clearComments output')
-        TTH.assertBool file (length (FC.resultMatches result') > 0)
-
-discoverLua :: FilePath -> IO [TT.TestTree]
-discoverLua dir = do
-  entries <- map (dir </>) <$> Dir.listDirectory dir
-  files <- Monad.filterM Dir.doesFileExist entries
-  Monad.forM files $ \file -> do
-    content <- Text.IO.readFile file
-    pure $
-      TTH.testCase file $ do
-        let comment = "# "
-
         -- White-out comments so that checks don't match themselves
         let isComment = (comment `Text.isPrefixOf`)
         let rmComment l = if isComment l then Text.replicate (Text.length l) " " else l
@@ -70,17 +43,14 @@ discoverLua dir = do
               Text.unlines &
               FC.Output
 
-        result <- FC.parseCommentsAndCheckLua comment content (clearComments content)
-        -- let comment = "# OUT: "
-        -- let output' = FC.printResult cmds result
-        -- (_cmds, result') <- FC.parseCommentsAndCheck' comment' content (clearComments output')
-        case result of
-          Left {} -> pure ()
-          Right s -> TTH.assertBool file (not (null (FC.successMatches s)))
+        result <- FC.parseCommentsAndCheck comment content (clearComments content)
+        TTH.assertBool file (not (FC.resultNull result))
+        let comment' = "; "
+        let output' = FC.printResult result
+        FC.parseCommentsAndCheck' comment' content (clearComments output')
 
 main :: IO ()
 main = do
   f <- discover "test-data/fail"
   p <- discover "test-data/pass"
-  l <- discoverLua "test-data/lua"
-  TT.defaultMain (TT.testGroup "FileCheck tests" (f ++ p ++ l))
+  TT.defaultMain (TT.testGroup "FileCheck tests" (f ++ p))

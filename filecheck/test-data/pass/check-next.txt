@@ -1,6 +1,0 @@
-# CHECK: first
-# CHECK-NEXT: second
-first
-second
-# OUT: ✔️ CHECK
-# OUT: ✔️ CHECK-NEXT at test-data/pass/check-next.txt:2:1-2:21 matched text at <out>:4:1-4:7

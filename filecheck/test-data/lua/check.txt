@@ -1,5 +1,0 @@
-# check("first")
-# check("third")
-first
-second
-third

@@ -134,7 +134,9 @@ library
     FileCheck.Directive
     FileCheck.Command
     FileCheck.LuaApi
+    FileCheck.LuaApi.Func
     FileCheck.Pos
+    FileCheck.Result
 
 test-suite filecheck-tests
   import: shared

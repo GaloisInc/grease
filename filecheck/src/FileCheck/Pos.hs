@@ -9,6 +9,7 @@ module FileCheck.Pos
   , startLoc
   , endLoc
   , printSpan
+  , LuaLine(..)
   ) where
 
 import Data.List qualified as List
@@ -74,3 +75,6 @@ printSpan :: Span -> Text
 printSpan s =
   let p = Maybe.fromMaybe "<unknown file>" (spanPath s) in
   Text.pack p <> ":" <> printPos (spanStart s) <> "-" <> printPos (spanEnd s)
+
+-- | A line number from the Lua interpreter
+newtype LuaLine = LuaLine { getLuaLine :: Int }
