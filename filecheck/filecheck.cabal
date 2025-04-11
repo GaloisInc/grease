@@ -125,6 +125,7 @@ library
   hs-source-dirs: src
   build-depends:
     containers,
+    hslua,
     text,
 
   exposed-modules:
@@ -132,6 +133,7 @@ library
   other-modules:
     FileCheck.Directive
     FileCheck.Command
+    FileCheck.LuaApi
     FileCheck.Pos
 
 test-suite filecheck-tests

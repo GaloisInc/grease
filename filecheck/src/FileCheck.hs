@@ -17,19 +17,26 @@ module FileCheck
   , Pos(..)
   , FCP.Span(..)
   , FCC.Match(..)
+  , LuaCode(..)
+  , checkLua
+  , parseCommentsAndCheckLua
+  , FCLA.Failure(..)
+  , FCLA.Progress(..)
+  , FCLA.Success(..)
   ) where
 
 import Control.Exception qualified as X
 import Data.Foldable (foldl', toList)
 import Data.Maybe qualified as Maybe
-import Data.Sequence qualified as Seq
 import Data.Sequence (Seq)
-import Data.Text qualified as Text
+import Data.Sequence qualified as Seq
 import Data.Text (Text)
+import Data.Text qualified as Text
 import FileCheck.Command (Command, Match)
 import FileCheck.Command qualified as FCC
 import FileCheck.Directive (Prefix)
 import FileCheck.Directive qualified as FCD
+import FileCheck.LuaApi qualified as FCLA
 import FileCheck.Pos (Loc(..), Pos(..))
 import FileCheck.Pos qualified as FCP
 import GHC.Stack (HasCallStack)
@@ -122,24 +129,44 @@ printResult cmds r =
     [] -> printMatches (zip cmds (toList matches))
     (failed : _) -> Text.pack (show (FileCheckFailure cmds failed r))
 
+newtype LuaCode = LuaCode Text
+
+checkLua ::
+  LuaCode ->
+  Output ->
+  IO (Either FCLA.Failure FCLA.Success)
+checkLua (LuaCode codeTxt) (Output out) = FCLA.checkLua codeTxt out
+
+parseCommentsAndCheckLua ::
+  HasCallStack =>
+  -- | Start of line comment
+  Text ->
+  -- | Text containing comments with embedded commands
+  Text ->
+  Output ->
+  IO (Either FCLA.Failure FCLA.Success)
+parseCommentsAndCheckLua comment txt out =
+  let lua = Maybe.mapMaybe (Text.stripPrefix comment) (Text.lines txt) in
+  checkLua (LuaCode (Text.unlines lua)) out
+
 -- | Match text against a sequence of t'Command's.
 check ::
   [Command] ->
   Output ->
   Result
 check cmds (Output txt0) =
-  let loc0 = Loc (Just "<out>") (FCP.Pos 1 1) in
-  case foldl' go (Right (Result loc0 Seq.empty txt0)) cmds of
-    Left r -> r
-    Right r -> r
-  where
-  go (Right (Result loc ms txt)) cmd =
-    case FCC.match cmd loc txt of
-      Nothing -> Left (Result loc ms txt)
-      Just m ->
-        let loc' = FCP.endLoc (FCC.matchSpan m) in
-        Right (Result loc' (ms Seq.:|> m) (FCC.matchRemainder m))
-  go (Left r) _cmd = Left r
+ let loc0 = Loc (Just "<out>") (FCP.Pos 1 1) in
+ case foldl' go (Right (Result loc0 Seq.empty txt0)) cmds of
+   Left r -> r
+   Right r -> r
+ where
+ go (Right (Result loc ms txt)) cmd =
+   case FCC.match cmd loc txt of
+     Nothing -> Left (Result loc ms txt)
+     Just m ->
+       let loc' = FCP.endLoc (FCC.matchSpan m) in
+       Right (Result loc' (ms Seq.:|> m) (FCC.matchRemainder m))
+ go (Left r) _cmd = Left r
 
 -- | Helper, not exported
 checkResult ::
