@@ -26,7 +26,6 @@ import Data.Eq (Eq(..))
 import Data.Function (($), (&), (.))
 import Data.Functor ((<$>), fmap)
 import qualified Data.List as List
-import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (Maybe(..), fromMaybe, mapMaybe)
@@ -141,7 +140,7 @@ load la userEntrypoints perms elf = do
   let mem = Loader.memoryImage loaded
   when (Elf.headerType (Elf.header elf) == Elf.ET_REL) $
     throw $ GreaseException "Loading object files is not supported"
-  entrypoints <- NE.toList <$> Loader.entryPoints loaded
+  entrypoints <- Loader.entryPoints loaded
   let entrypointNamePairs =
         -- Use `mapMaybe` here, because `symbolFor` may return `Nothing` if an
         -- entry point lacks a corresponding function symbol. This is common
