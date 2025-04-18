@@ -1,9 +1,9 @@
-# check "first"
-# here "\nsecond\n"
+# checkln "first"
+# here "second\n"
 # here "third"
 first
 second
 third
-; check "✔️"; check (file() .. ":1")
-; check "✔️"; check (file() .. ":2")
-; check "✔️"; check (file() .. ":3")
+; match_on_line(4); match_from_line(1)
+; match_on_line(5); match_from_line(2)
+; match_on_line(6); match_from_line(3)

@@ -2,7 +2,9 @@
 
 # check "third"
 first
+; match_prev()
+; match_from_line(1)
 second
 third
-; check "✔️"; check (file() .. ":1")
-; check "✔️"; check (file() .. ":3")
+; match_prev()
+; match_from_line(3)
