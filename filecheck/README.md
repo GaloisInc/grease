@@ -194,11 +194,19 @@ code; such updates will be ignored by FileCheck.
 
 ### High-level API
 
+Checking functions:
+
 - `check(s: String)`: Find `s` in `text`. Seek to after the end of `s`. Like
   LLVM FileCheck's `CHECK`.
+- `checkln(s: String)`: `checkln(s)` is equivalent to `check(s .. "\n")`.
 - `here(s: String)`: Check that `text` beings with `s`. Seek to after the end
   of `s`.
-- `line(String)`: `line(s)` is equivalent to `here(s .. "\n")`.
+- `hereln(String)`: `hereln(s)` is equivalent to `here(s .. "\n")`.
+
+Other utilities:
+
+- `col() -> Int`: Returns the current line number of `text` in the output.
+- `line() -> Int`: Returns the current line number of `text` in the output.
 
 ### Low-level API
 

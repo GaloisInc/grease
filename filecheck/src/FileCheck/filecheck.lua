@@ -12,6 +12,10 @@ function check(needle)
   end
 end
 
+function checkln(needle)
+  check(needle .. "\n")
+end
+
 function here(needle)
   local l = needle:len()
   if string.sub(text, 1, l) == needle then
@@ -21,7 +25,7 @@ function here(needle)
   end
 end
 
-function line(needle)
+function hereln(needle)
   here(needle .. "\n")
 end
 

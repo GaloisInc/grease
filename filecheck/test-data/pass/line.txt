@@ -1,9 +1,5 @@
-# check "first\n"
-# line "second"
-# line "third"
-first
-second
-third
-; check "✔️"; check (file .. ":1")
-; check "✔️"; check (file .. ":2")
-; check "✔️"; check (file .. ":3")
+# check("On line")
+# check(string.format("%d", line()))
+On line 3
+; check "✔️"
+; check "✔️"

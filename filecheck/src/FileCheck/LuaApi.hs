@@ -41,12 +41,24 @@ withProgress stateRef f = do
   liftIO (IORef.writeIORef stateRef p')
   pure ()
 
+-- | Implementation of @col@. Not exported.
+col :: IORef Progress -> Lua.LuaE Exception Int
+col stateRef = do
+  p <- liftIO (IORef.readIORef stateRef)
+  pure (FCP.col (FCP.pos (FCR.progressLoc p)))
+
 -- | Implementation of @fail@. Not exported.
 fail_ :: SourceMap -> IORef Progress -> Lua.LuaE Exception ()
 fail_ sm stateRef =
   withProgress stateRef $ \p -> do
     tb <- FCT.getTraceback sm
     FCE.throwNoMatch (FCR.Failure p tb)
+
+-- | Implementation of @line@. Not exported.
+line :: IORef Progress -> Lua.LuaE Exception Int
+line stateRef = do
+  p <- liftIO (IORef.readIORef stateRef)
+  pure (FCP.line (FCP.pos (FCR.progressLoc p)))
 
 -- | Implementation of @match@. Not exported.
 match :: SourceMap -> IORef Progress -> Int -> Lua.LuaE Exception ()
@@ -96,8 +108,14 @@ luaSetup stateRef prog txt = do
 
   let sm = sourceMap prog
 
+  Lua.pushHaskellFunction (Lua.toHaskellFunction (col stateRef))
+  Lua.setglobal (Lua.Name "col_no")
+
   Lua.pushHaskellFunction (Lua.toHaskellFunction (fail_ sm stateRef))
   Lua.setglobal (Lua.Name "fail")
+
+  Lua.pushHaskellFunction (Lua.toHaskellFunction (line stateRef))
+  Lua.setglobal (Lua.Name "line")
 
   Lua.pushHaskellFunction (Lua.toHaskellFunction (match sm stateRef))
   Lua.setglobal (Lua.Name "match")
