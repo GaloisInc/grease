@@ -2,7 +2,7 @@
 # check("Affirmative, " .. name)
 # check("I'm sorry, " .. name)
 HAL: Affirmative, Dave. I read you.
+; match_prev()
 Dave: Open the pod bay doors, HAL.
 HAL: I'm sorry, Dave. I'm afraid I can't do that.
-; check("✔️")
-; check("✔️")
+; match_prev()
