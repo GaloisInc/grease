@@ -465,64 +465,69 @@ makeSanityTests arch d =
         BatchTimeout -> pure ()
         _ -> T.U.assertFailure "Timeout not exceeded"
 
+capture ::
+  MonadIO m =>
+  IORef.IORef [Diagnostic] ->
+  LJ.LogAction m Diagnostic
+capture logRef =
+  LJ.LogAction (\msg -> liftIO (IORef.modifyIORef logRef (msg :)))
+
+withCapturedLogs ::
+  (GreaseLogAction -> IO ()) ->
+  IO Text.Text
+withCapturedLogs withLogAction = do
+  logRef <- IORef.newIORef []
+  withLogAction (capture logRef)
+  logs <- List.reverse <$> IORef.readIORef logRef
+  let logTxt = Text.unlines (map (Text.pack . show . PP.pretty) logs)
+  pure logTxt
+
+-- | Make an "Oughta"-based test for an S-expression program
+oughta ::
+  (SimOpts -> GreaseLogAction -> IO Results) ->
+  -- | Directory
+  FilePath ->
+  -- | File
+  FilePath ->
+  T.TestTree
+oughta go dir fileName =
+  T.U.testCase (FilePath.dropExtension (FilePath.dropExtension fileName)) $ do
+    let path = dir </> fileName
+    content <- Text.IO.readFile path
+    opts <- getNonExeTestOpts path []
+    logTxt <-
+      withCapturedLogs $ \la' -> do
+        res <- go opts la'
+        logResults la' res
+    Text.IO.writeFile (FilePath.replaceExtension path "out") logTxt
+    let output = Ota.Output (Text.encodeUtf8 logTxt)
+    let prelude =
+          Text.unlines
+          [ "function ok() check 'All goals passed!' end"
+          , "function must_fail() check 'Likely bug: unavoidable error' end"
+          , "function next_line_must_fail()"
+          , "  must_fail()"
+          , "  check(string.format('%s:%d', file(), src_line(1) + 1))"
+          , "end"
+          , "function no_heuristic() check 'Unable to find a heuristic for any goal' end"
+          ]
+    let prog0 = Ota.fromLineComments path ";; " content
+    let prog = Ota.addPrefix prelude prog0
+    Ota.Result r <- Ota.check prog output
+    case r of
+      Left f -> throwIO f
+      Right s ->
+        let ms = Ota.successMatches s in
+        T.U.assertBool "Test has some assertions" (not (Seq.null ms))
+
 llvmTests :: IO T.TestTree
 llvmTests = do
+  let dir = "tests/llvm"
   entries <- Dir.listDirectory dir
   files <- Monad.filterM (Dir.doesFileExist . (dir </>)) entries
   let cbls = List.filter ((== ".cbl") . FilePath.takeExtension) files
-  pure (T.testGroup "LLVM" (List.map testCase cbls))
-  where
-    dir = "tests/llvm"
-
-    capture ::
-      MonadIO m =>
-      IORef.IORef [Diagnostic] ->
-      LJ.LogAction m Diagnostic
-    capture logRef =
-      LJ.LogAction (\msg -> liftIO (IORef.modifyIORef logRef (msg :)))
-
-    withCapturedLogs ::
-      (GreaseLogAction -> IO ()) ->
-      IO Text.Text
-    withCapturedLogs withLogAction = do
-      logRef <- IORef.newIORef []
-      withLogAction (capture logRef)
-      logs <- List.reverse <$> IORef.readIORef logRef
-      let logTxt = Text.unlines (map (Text.pack . show . PP.pretty) logs)
-      pure logTxt
-
-    testCase ::
-      FilePath ->
-      T.TestTree
-    testCase fileName =
-      T.U.testCase (FilePath.dropExtension (FilePath.dropExtension fileName)) $ do
-        let path = dir </> fileName
-        content <- Text.IO.readFile path
-        opts <- getNonExeTestOpts path []
-        logTxt <-
-          withCapturedLogs $ \la' -> do
-            res <- simulateLlvmSyntax opts la'
-            logResults la' res
-        Text.IO.writeFile (FilePath.replaceExtension path "out") logTxt
-        let output = Ota.Output (Text.encodeUtf8 logTxt)
-        let prelude =
-              Text.unlines
-              [ "function ok() check 'All goals passed!' end"
-              , "function must_fail() check 'Likely bug: unavoidable error' end"
-              , "function next_line_must_fail()"
-              , "  must_fail()"
-              , "  check(string.format('%s:%d', file(), src_line(1) + 1))"
-              , "end"
-              , "function no_heuristic() check 'Unable to find a heuristic for any goal' end"
-              ]
-        let prog0 = Ota.fromLineComments path ";; " content
-        let prog = Ota.addPrefix prelude prog0
-        Ota.Result r <- Ota.check prog output
-        case r of
-          Left f -> throwIO f
-          Right s ->
-            let ms = Ota.successMatches s in
-            T.U.assertBool "Test has some assertions" (not (Seq.null ms))
+  let mkTest = oughta simulateLlvmSyntax dir
+  pure (T.testGroup "LLVM CFG" (List.map mkTest cbls))
 
 llvmBcTests :: T.TestTree
 llvmBcTests =
@@ -547,25 +552,14 @@ llvmBcTests =
         res <- simulateLlvm Trans.defaultTranslationOptions opts la
         assertCont $ getEntrypointResult opts res
 
-armCfgTests :: T.TestTree
-armCfgTests =
-  T.testGroup "ARM CFG"
-    [ testCase "id" "id.armv7l.cbl" $ \_ -> pure ()
-    , testCase "user override" "user-override.armv7l.cbl" assertSuccess
-    , testCase "declare in override" "declare-in-override/declare-in-override.armv7l.cbl" assertSuccess
-    , testCase "startup override" "startup-override/test.armv7l.cbl" assertSuccess
-    ]
-  where
-    testCase ::
-      T.TestName ->
-      FilePath ->
-      (BatchStatus -> IO ()) ->
-      T.TestTree
-    testCase testName fileName assertCont =
-      T.U.testCase testName $ do
-        opts <- getNonExeTestOpts ("tests/arm" </> fileName) []
-        res <- simulateARMSyntax opts la
-        assertCont $ getEntrypointResult opts res
+armCfgTests :: IO T.TestTree
+armCfgTests = do
+  let dir = "tests/arm"
+  entries <- Dir.listDirectory dir
+  files <- Monad.filterM (Dir.doesFileExist . (dir </>)) entries
+  let cbls = List.filter ((== ".cbl") . FilePath.takeExtension) files
+  let mkTest = oughta simulateARMSyntax dir
+  pure (T.testGroup "ARM CFG" (List.map mkTest cbls))
 
 ppc32CfgTests :: T.TestTree
 ppc32CfgTests =
@@ -639,4 +633,5 @@ main = do
       return (T.testGroup (ppArch arch) [propTests, refineTests, sanityTests])
 
   llTests <- llvmTests
-  T.defaultMain $ T.testGroup "Tests" (shapeTests:llTests:llvmBcTests:armCfgTests:ppc32CfgTests:x86CfgTests:archTests)
+  armTests <- armCfgTests
+  T.defaultMain $ T.testGroup "Tests" (shapeTests:llTests:llvmBcTests:armTests:ppc32CfgTests:x86CfgTests:archTests)

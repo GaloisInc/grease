@@ -7,3 +7,4 @@
     (let p2 (funcall @id-ptr p))
     (let regs2 (set-reg r0 p2 regs))
     (return regs2)))
+;; ok()
