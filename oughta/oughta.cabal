@@ -154,6 +154,7 @@ test-suite oughta-tests
   build-depends:
     bytestring,
     directory,
+    file-embed,
     filepath,
     tasty,
     tasty-hunit,
