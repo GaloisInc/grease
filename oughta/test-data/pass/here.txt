@@ -4,6 +4,6 @@
 first
 second
 third
-; check "✔️"; check (file .. ":1")
-; check "✔️"; check (file .. ":2")
-; check "✔️"; check (file .. ":3")
+; check "✔️"; check (file() .. ":1")
+; check "✔️"; check (file() .. ":2")
+; check "✔️"; check (file() .. ":3")
