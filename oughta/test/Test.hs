@@ -46,6 +46,16 @@ test file = do
   let prelude =
         Text.unlines
         [ "name = 'Oughta'"
+        , "function match_on_line(i)"
+        , "  check(string.format('✔️ match at <out>:%d', i))"
+        , "end"
+        , "function match_prev()"
+        , "  match_on_line(src_line(1) - 1)"
+        , "end"
+        , "function match_from_line(i)"
+        , "  checkln 'stack trace:'"
+        , "  here(string.format('  %s:%d', file(), i))"
+        , "end"
         ]
   let prog0 = Ota.fromLineComments file comment content
   let prog = Ota.addPrefix prelude prog0
