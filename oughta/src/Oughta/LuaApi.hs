@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | The FileCheck Lua API
-module FileCheck.LuaApi
+-- | The Oughta Lua API
+module Oughta.LuaApi
   ( check
   ) where
 
@@ -14,14 +14,14 @@ import Data.IORef qualified as IORef
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import FileCheck.Exception (Exception)
-import FileCheck.Exception qualified as FCE
-import FileCheck.Extract (LuaProgram, SourceMap, lookupSourceMap, programText, sourceMap, sourceMapFile)
-import FileCheck.Lua qualified as FCL
-import FileCheck.Pos qualified as FCP
-import FileCheck.Result (Progress, Result)
-import FileCheck.Result qualified as FCR
-import FileCheck.Traceback qualified as FCT
+import Oughta.Exception (Exception)
+import Oughta.Exception qualified as OE
+import Oughta.Extract (LuaProgram, SourceMap, lookupSourceMap, programText, sourceMap, sourceMapFile)
+import Oughta.Lua qualified as OL
+import Oughta.Pos qualified as OP
+import Oughta.Result (Progress, Result)
+import Oughta.Result qualified as OR
+import Oughta.Traceback qualified as OT
 import HsLua qualified as Lua
 
 -- | Name of the @text@ global variable. Not exported.
@@ -39,7 +39,7 @@ withProgress :: IORef Progress -> (Progress -> Lua.LuaE Exception Progress) -> L
 withProgress stateRef f = do
   p <- liftIO (IORef.readIORef stateRef)
   p' <- f p
-  setText (FCR.progressRemainder p')
+  setText (OR.progressRemainder p')
   liftIO (IORef.writeIORef stateRef p')
   pure ()
 
@@ -47,14 +47,14 @@ withProgress stateRef f = do
 col :: IORef Progress -> Lua.LuaE Exception Int
 col stateRef = do
   p <- liftIO (IORef.readIORef stateRef)
-  pure (FCP.col (FCP.pos (FCR.progressLoc p)))
+  pure (OP.col (OP.pos (OR.progressLoc p)))
 
 -- | Implementation of @fail@. Not exported.
 fail_ :: SourceMap -> IORef Progress -> Lua.LuaE Exception ()
 fail_ sm stateRef =
   withProgress stateRef $ \p -> do
-    tb <- FCT.getTraceback sm
-    FCE.throwNoMatch (FCR.Failure p tb)
+    tb <- OT.getTraceback sm
+    OE.throwNoMatch (OR.Failure p tb)
 
 -- | Implementation of @file@. Not exported.
 file :: SourceMap -> Lua.LuaE Exception Text
@@ -64,39 +64,39 @@ file sm = pure (sourceMapFile sm)
 line :: IORef Progress -> Lua.LuaE Exception Int
 line stateRef = do
   p <- liftIO (IORef.readIORef stateRef)
-  pure (FCP.line (FCP.pos (FCR.progressLoc p)))
+  pure (OP.line (OP.pos (OR.progressLoc p)))
 
 -- | Implementation of @match@. Not exported.
 match :: SourceMap -> IORef Progress -> Int -> Lua.LuaE Exception ()
 match sm stateRef n =
   withProgress stateRef $ \p -> do
-    tb <- FCT.getTraceback sm
-    let txt = FCR.progressRemainder p
+    tb <- OT.getTraceback sm
+    let txt = OR.progressRemainder p
     let (matched, remainder) = BS.splitAt n txt
-    let loc = FCR.progressLoc p
-    let start = FCP.pos loc
-    let end = FCP.incPos (FCP.pos loc) (Text.decodeUtf8Lenient matched)
+    let loc = OR.progressLoc p
+    let start = OP.pos loc
+    let end = OP.incPos (OP.pos loc) (Text.decodeUtf8Lenient matched)
     let m =
-          FCR.Match
-          { FCR.matchRemainder = remainder
-          , FCR.matchSpan = FCP.Span (FCP.path loc) start end
-          , FCR.matchText = matched
-          , FCR.matchTraceback = tb
+          OR.Match
+          { OR.matchRemainder = remainder
+          , OR.matchSpan = OP.Span (OP.path loc) start end
+          , OR.matchText = matched
+          , OR.matchTraceback = tb
           }
-    pure (FCR.updateProgress m p)
+    pure (OR.updateProgress m p)
 
 -- | Implementation of @seek@. Not exported.
 seek :: IORef Progress -> Int -> Lua.LuaE Exception ()
 seek stateRef chars =
   withProgress stateRef $ \p -> do
-    let loc = FCR.progressLoc p
-    let txt = FCR.progressRemainder p
+    let loc = OR.progressLoc p
+    let txt = OR.progressRemainder p
     let (before, after) = BS.splitAt chars txt
-    let pos' = FCP.incPos (FCP.pos loc) (Text.decodeUtf8Lenient before)
+    let pos' = OP.incPos (OP.pos loc) (Text.decodeUtf8Lenient before)
     let p' =
           p
-          { FCR.progressLoc = loc { FCP.pos = pos' }
-          , FCR.progressRemainder = after
+          { OR.progressLoc = loc { OP.pos = pos' }
+          , OR.progressRemainder = after
           }
     pure p'
 
@@ -121,7 +121,7 @@ srcLine sm level = do
 
   pure (lookupSourceMap src l0 sm)
 
--- | Load user and FileCheck Lua code. Helper, not exported.
+-- | Load user and Oughta Lua code. Helper, not exported.
 luaSetup ::
   IORef Progress ->
   -- | User code
@@ -156,7 +156,7 @@ luaSetup stateRef prog txt = do
   Lua.pushHaskellFunction (Lua.toHaskellFunction (srcLine sm))
   Lua.setglobal (Lua.Name "src_line")
 
-  _ <- Lua.loadbuffer FCL.luaCode (Lua.Name "filecheck.lua")
+  _ <- Lua.loadbuffer OL.luaCode (Lua.Name "oughta.lua")
   Lua.call 0 0
 
   let nm = Lua.Name (Text.encodeUtf8 (sourceMapFile sm))
@@ -170,13 +170,13 @@ check ::
   ByteString ->
   IO Result
 check prog txt = do
-  let p0 = FCR.newProgress "<out>" txt
+  let p0 = OR.newProgress "<out>" txt
   stateRef <- IORef.newIORef p0
   result <- Lua.run (Lua.try (luaSetup stateRef prog txt))
   case result of
-    Left (FCE.LuaException e) -> X.throwIO e
-    Left (FCE.Failure noMatch) ->
-      FCR.Result . Left <$> FCE.noMatch noMatch
+    Left (OE.LuaException e) -> X.throwIO e
+    Left (OE.Failure noMatch) ->
+      OR.Result . Left <$> OE.noMatch noMatch
     Right () -> do
       state <- IORef.readIORef stateRef
-      pure (FCR.Result (Right (FCR.progressToSuccess state)))
+      pure (OR.Result (Right (OR.progressToSuccess state)))

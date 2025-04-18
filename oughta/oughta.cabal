@@ -1,26 +1,26 @@
 cabal-version: 2.4
-name: filecheck
+name: oughta
 version: 0.1.0.0
 author: Galois, Inc.
 maintainer: grease@galois.com
 copyright: Galois, Inc. 2025
 license: BSD-3-Clause
 license-file: LICENSE
-synopsis: Like LLVM's FileCheck tool, but as a Haskell library.
+synopsis: A library to test programs that output text.
 description:
-  Like LLVM's FileCheck tool, but as a Haskell library.
+  A library to test programs that output text.
 
-  See upstream docs for details.
+  See the README for details.
 extra-doc-files:
   README.md
 extra-source-files:
-  src/FileCheck/filecheck.lua
+  src/Oughta/oughta.lua
 category: Testing
 
 source-repository head
   type: git
   location: https://github.com/GaloisInc/grease
-  subdir: filecheck
+  subdir: oughta
 
 common shared
   default-language: GHC2021
@@ -134,23 +134,23 @@ library
     text,
 
   exposed-modules:
-    FileCheck
+    Oughta
   other-modules:
-    FileCheck.Exception
-    FileCheck.Extract
-    FileCheck.Lua
-    FileCheck.LuaApi
-    FileCheck.Pos
-    FileCheck.Result
-    FileCheck.Traceback
+    Oughta.Exception
+    Oughta.Extract
+    Oughta.Lua
+    Oughta.LuaApi
+    Oughta.Pos
+    Oughta.Result
+    Oughta.Traceback
 
-test-suite filecheck-tests
+test-suite oughta-tests
   import: shared
   type: exitcode-stdio-1.0
   hs-source-dirs: test
-  build-depends:
-    filecheck
   main-is: Test.hs
+  build-depends:
+    oughta
   build-depends:
     bytestring,
     directory,

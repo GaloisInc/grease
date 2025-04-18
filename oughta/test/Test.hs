@@ -1,14 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {-
-Test FileCheck, using FileCheck.
+Test Oughta, using Oughta.
 
-The test suite reads text files from @test-data/{fail,pass}/@ and runs FileCheck
+The test suite reads text files from @test-data/{fail,pass}/@ and runs Oughta
 on them /twice/. All of the Lua code is embedded in the text files, on lines
 that start with @#@. It first runs against the entire text file (specifically,
-the non-@#@ lines). It then serializes the t'FC.Result' and matches /that/
+the non-@#@ lines). It then serializes the t'Ota.Result' and matches /that/
 against the commands that start with @;@. This double-checking ensures that
-directives match (and don't match) where expected, and that FileCheck's output
+directives match (and don't match) where expected, and that Oughta's output
 is readable and correct (which is non-trivial, especially source span tracking).
 -}
 module Main (main) where
@@ -19,7 +19,7 @@ import Data.Function ((&))
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Text.IO qualified as Text.IO
-import FileCheck qualified as FC
+import Oughta qualified as Ota
 import Prelude hiding (lines)
 import System.Directory qualified as Dir
 import System.FilePath ((</>))
@@ -41,23 +41,23 @@ test file = do
         map rmComment &
         Text.unlines &
         Text.encodeUtf8 &
-        FC.Output
+        Ota.Output
 
   let prelude =
         Text.unlines
-        [ "name = 'FileCheck'"
+        [ "name = 'Oughta'"
         , "file = '" <> Text.pack file <> "'"
         ]
-  let prog0 = FC.fromLineComments file comment content
-  let prog = FC.addPrefix prelude prog0
-  result <- FC.check prog (clearComments content)
-  TTH.assertBool file (not (FC.resultNull result))
+  let prog0 = Ota.fromLineComments file comment content
+  let prog = Ota.addPrefix prelude prog0
+  result <- Ota.check prog (clearComments content)
+  TTH.assertBool file (not (Ota.resultNull result))
 
-  let prog0' = FC.fromLineComments file comment' content
-  let prog' = FC.addPrefix prelude prog0'
-  let output'@(FC.Output out) = clearComments (FC.printResult result)
+  let prog0' = Ota.fromLineComments file comment' content
+  let prog' = Ota.addPrefix prelude prog0'
+  let output'@(Ota.Output out) = clearComments (Ota.printResult result)
   BS.writeFile (FilePath.replaceExtension file "out") out
-  FC.check' prog' output'
+  Ota.check' prog' output'
 
 discover :: FilePath -> IO [TT.TestTree]
 discover dir = do
@@ -70,4 +70,4 @@ main :: IO ()
 main = do
   f <- discover "test-data/fail"
   p <- discover "test-data/pass"
-  TT.defaultMain (TT.testGroup "FileCheck tests" (f ++ p))
+  TT.defaultMain (TT.testGroup "Oughta tests" (f ++ p))

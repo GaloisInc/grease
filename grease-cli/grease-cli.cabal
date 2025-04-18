@@ -201,12 +201,12 @@ test-suite grease-tests
     , containers
     , crucible-llvm
     , directory
-    , filecheck
     , filepath
     , hedgehog
     , lumberjack
     , macaw-base
     , optparse-applicative
+    , oughta
     , parameterized-utils
     , prettyprinter
     , tasty

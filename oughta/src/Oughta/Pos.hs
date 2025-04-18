@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module FileCheck.Pos
+module Oughta.Pos
   ( Pos(..)
   , incPos
   , Loc(..)

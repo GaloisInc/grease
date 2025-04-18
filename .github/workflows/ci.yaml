@@ -67,19 +67,19 @@ jobs:
         (cd grease-cli && cabal check)
         (cd doc/diagrams && cabal check)
         (cd elf-edit-core-dump && cabal check)
-        (cd filecheck && cabal check)
+        (cd oughta && cabal check)
 
     - name: Configure build
       shell: bash
       run: cabal configure --enable-tests
 
-    - name: Build FileCheck
+    - name: Build Oughta
       shell: bash
-      run: cabal build pkg:filecheck
+      run: cabal build pkg:oughta
 
-    - name: Test FileCheck
+    - name: Test Oughta
       shell: bash
-      run: cabal test pkg:filecheck
+      run: cabal test pkg:oughta
 
     - name: Build grease-cli
       shell: bash
@@ -106,7 +106,7 @@ jobs:
       # identifiers from library dependencies. Since we are only building
       # Haddocks to ensure well-formedness, we consider this an acceptable
       # tradeoff.
-      run: cabal haddock --disable-documentation pkg:grease pkg:grease-cli pkg:elf-edit-core-dump pkg:filecheck
+      run: cabal haddock --disable-documentation pkg:grease pkg:grease-cli pkg:elf-edit-core-dump pkg:oughta
 
     - name: Save cache store cache
       uses: actions/cache/save@v4
