@@ -3,9 +3,9 @@
 (defun @test () (Ptr 8)
   (start start:
     (let p (ptr 64 0 (bv 64 0)))
+;; next_line_must_fail()
     (let b (load none i8 p))
     (return b)))
-;; must_fail()
 ;; check [[
 ;; No previous write to this location was found
 ;;   Attempting load at type: i8

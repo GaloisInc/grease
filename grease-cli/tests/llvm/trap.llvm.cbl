@@ -6,7 +6,7 @@
   (start start:
     (let g (resolve-global "llvm.trap"))
     (let h (load-handle Unit () g))
+;; next_line_must_fail()
     (funcall h)
     (return ())))
-;; must_fail()
 ;; check "llvm.trap() called"

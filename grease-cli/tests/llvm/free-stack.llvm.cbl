@@ -5,10 +5,10 @@
     (let sz (bv 64 1))
     (let a (alloca none sz))
     (let g (resolve-global "free"))
-    ; CHECK: `free` called on pointer that didn't point to a live region of the heap
     (let h (load-handle Unit ((Ptr 64)) g))
+;; check "`free` called on pointer that didn't point to a live region of the heap"
+;; next_line_must_fail()
     (funcall h a)
     (return ())))
-;; must_fail()
 ; TODO: This error message could be improved
 ;; check "The free function"
