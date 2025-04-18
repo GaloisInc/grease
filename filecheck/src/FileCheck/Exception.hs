@@ -13,11 +13,8 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import FileCheck.Result qualified as FCR
-import Foreign.Marshal qualified as Foreign
-import Foreign.Ptr as Foreign
 import Foreign.StablePtr (StablePtr)
 import Foreign.StablePtr qualified as Foreign
-import Foreign.Storable as Foreign
 import HsLua qualified as Lua
 import HsLua.Core.Utf8 qualified as Lua.Utf8
 
@@ -31,7 +28,7 @@ data Exception
   | Failure NoMatch
 
 -- | Wrapper for 'FCR.Failure'
-newtype NoMatch = NoMatch (Ptr (StablePtr FCR.Failure))
+newtype NoMatch = NoMatch (StablePtr FCR.Failure)
 
 instance Show NoMatch where
   -- can't do IO here, but this Show instance won't be used anyway
@@ -46,16 +43,12 @@ instance Show Exception where
 instance X.Exception Exception
 
 noMatch :: NoMatch -> IO FCR.Failure
-noMatch (NoMatch ptr) = do
-  sp <- Foreign.peek ptr
-  Foreign.deRefStablePtr sp
+noMatch (NoMatch sp) = Foreign.deRefStablePtr sp
 
 throwNoMatch :: FCR.Failure -> Lua.LuaE Exception a
 throwNoMatch failure = do
   sp <- liftIO (Foreign.newStablePtr failure)
-  ptr <- liftIO Foreign.malloc
-  liftIO (Foreign.poke ptr sp)
-  Catch.throwM (Failure (NoMatch ptr))
+  Catch.throwM (Failure (NoMatch sp))
 
 instance Lua.LuaError Exception where
   popException = do
@@ -69,12 +62,12 @@ instance Lua.LuaError Exception where
         case top' of
           Just ptr -> do
             Lua.pop 1
-            pure (Failure (NoMatch ptr))
+            pure (Failure (NoMatch (Foreign.castPtrToStablePtr ptr)))
           Nothing -> Lua.failLua "Bad exception!"
 
   pushException =
     \case
       LuaException (Lua.Exception msg) -> Lua.pushstring (Lua.Utf8.fromString msg)
-      Failure (NoMatch ptr) -> Lua.pushlightuserdata ptr
+      Failure (NoMatch sp) -> Lua.pushlightuserdata (Foreign.castStablePtrToPtr sp)
 
   luaException s = LuaException (Lua.luaException s)
