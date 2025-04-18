@@ -6,9 +6,9 @@
 
 (defun @test ((p (Ptr 64))) Unit
   (start start:
-    ; CHECK: Goal failed:
-    ; CHECK: Failed to load function handle
-    ; CHECK: Cannot resolve a symbolic pointer to a function handle
+;; check "Goal failed:"
+;; check "Failed to load function handle"
+;; check "Cannot resolve a symbolic pointer to a function handle"
     (let h (load-handle Unit () p))
     (funcall h)
     (return ())))

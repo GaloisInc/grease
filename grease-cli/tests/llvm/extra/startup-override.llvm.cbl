@@ -8,4 +8,3 @@
     (let buf (funcall @malloc sz))
     (let sz-ptr (ptr 64 0 sz))
     (return (struct buf sz-ptr))))
-; CHECK: All goals passed!
