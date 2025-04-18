@@ -6,7 +6,7 @@ packages:
   grease-x86/grease-x86.cabal
   doc/diagrams/grease-diagrams.cabal
   elf-edit-core-dump
-  filecheck/filecheck.cabal
+  oughta/oughta.cabal
 
   deps/macaw/base/
   deps/macaw/crucible-macaw-debug/

@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Extract Lua programs embedded in other files
-module FileCheck.Extract
+module Oughta.Extract
   ( SourceMap
   , sourceMapFile
   , lookupSourceMap

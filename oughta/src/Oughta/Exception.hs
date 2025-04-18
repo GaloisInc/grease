@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
-module FileCheck.Exception
+module Oughta.Exception
   ( Exception(..)
   , NoMatch
   , noMatch
@@ -12,7 +12,7 @@ import Control.Monad.Catch qualified as Catch
 import Control.Monad.IO.Class (liftIO)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import FileCheck.Result qualified as FCR
+import Oughta.Result qualified as OR
 import Foreign.StablePtr (StablePtr)
 import Foreign.StablePtr qualified as Foreign
 import HsLua qualified as Lua
@@ -27,12 +27,12 @@ data Exception
     -- | @fail@ was called.
   | Failure NoMatch
 
--- | Wrapper for 'FCR.Failure'
-newtype NoMatch = NoMatch (StablePtr FCR.Failure)
+-- | Wrapper for 'OR.Failure'
+newtype NoMatch = NoMatch (StablePtr OR.Failure)
 
 instance Show NoMatch where
   -- can't do IO here, but this Show instance won't be used anyway
-  show (NoMatch {}) = "filecheck: no match"
+  show (NoMatch {}) = "oughta: no match"
 
 instance Show Exception where
   show =
@@ -42,10 +42,10 @@ instance Show Exception where
 
 instance X.Exception Exception
 
-noMatch :: NoMatch -> IO FCR.Failure
+noMatch :: NoMatch -> IO OR.Failure
 noMatch (NoMatch sp) = Foreign.deRefStablePtr sp
 
-throwNoMatch :: FCR.Failure -> Lua.LuaE Exception a
+throwNoMatch :: OR.Failure -> Lua.LuaE Exception a
 throwNoMatch failure = do
   sp <- liftIO (Foreign.newStablePtr failure)
   Catch.throwM (Failure (NoMatch sp))

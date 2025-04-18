@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module FileCheck.Lua
+module Oughta.Lua
   ( luaCode
   ) where
 
@@ -8,4 +8,4 @@ import Data.ByteString (ByteString)
 import Data.FileEmbed (embedFile)
 
 luaCode :: ByteString
-luaCode = $(embedFile "src/FileCheck/filecheck.lua")
+luaCode = $(embedFile "src/Oughta/oughta.lua")

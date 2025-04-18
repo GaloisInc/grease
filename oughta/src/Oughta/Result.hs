@@ -1,8 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- | The result of running a FileCheck Lua program
-module FileCheck.Result
+-- | The result of running a Oughta Lua program
+module Oughta.Result
   ( Match(..)
   , Progress(..)
   , newProgress
@@ -23,10 +23,10 @@ import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import FileCheck.Pos (Loc, Span)
-import FileCheck.Pos qualified as FCP
-import FileCheck.Traceback (Traceback)
-import FileCheck.Traceback qualified as FCT
+import Oughta.Pos (Loc, Span)
+import Oughta.Pos qualified as OP
+import Oughta.Traceback (Traceback)
+import Oughta.Traceback qualified as OT
 
 -- | A successful match of an API call against some text
 data Match
@@ -52,10 +52,10 @@ printMatch m =
   Text.unlines
   [ Text.unwords
     [ "✔️ match at"
-    , FCP.printSpan (matchSpan m) <> ":"
+    , OP.printSpan (matchSpan m) <> ":"
     ]
   , indentLines (Text.decodeUtf8Lenient (matchText m))
-  , FCT.printTraceback (matchTraceback m)
+  , OT.printTraceback (matchTraceback m)
   ]
 
 -- | A sequence of successful matches of API calls against some text
@@ -72,17 +72,17 @@ data Progress
 printProgress :: Progress -> Text
 printProgress p = Text.unlines (map printMatch (toList (progressMatches p)))
 
--- | Create a new 'Progress' starting at position @'FCP.Pos' 1 1@.
+-- | Create a new 'Progress' starting at position @'OP.Pos' 1 1@.
 newProgress :: FilePath -> ByteString -> Progress
 newProgress path txt =
-  let loc0 = FCP.Loc (Just path) (FCP.Pos 1 1) in
+  let loc0 = OP.Loc (Just path) (OP.Pos 1 1) in
   Progress loc0 Seq.empty txt
 
 -- | Update 'Progress' with a new 'Match'
 updateProgress :: Match -> Progress -> Progress
 updateProgress m p =
   Progress
-  { progressLoc = (progressLoc p) { FCP.pos = FCP.spanEnd (matchSpan m) }
+  { progressLoc = (progressLoc p) { OP.pos = OP.spanEnd (matchSpan m) }
   , progressMatches = progressMatches p Seq.:|> m
   , progressRemainder = matchRemainder m
   }
@@ -116,10 +116,10 @@ instance Show Failure where
       , "Failing check:"
       , Text.unwords
         [ "❌ no match at"
-        , FCP.printLoc (progressLoc (failureProgress f)) <> ":"
+        , OP.printLoc (progressLoc (failureProgress f)) <> ":"
         ]
       , indentLines (trunc (Text.decodeUtf8Lenient (progressRemainder (failureProgress f))))
-      , FCT.printTraceback (failureTraceback f)
+      , OT.printTraceback (failureTraceback f)
       ]
 
 instance X.Exception Failure
@@ -135,7 +135,7 @@ data Success
    , successRemainder :: !ByteString
    }
 
--- | The result of running a FileCheck Lua program
+-- | The result of running a Oughta Lua program
 newtype Result = Result (Either Failure Success)
 
 -- | Does this 'Rusult' reflect running zero checks?

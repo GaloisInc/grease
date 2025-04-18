@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Get Lua stack traces
-module FileCheck.Traceback
+module Oughta.Traceback
   ( Traceback
   , getTraceback
   , printTraceback
@@ -9,8 +9,8 @@ module FileCheck.Traceback
 
 import Data.Int (Int64)
 import Data.Text (Text)
-import FileCheck.Extract (SourceMap)
-import FileCheck.Extract qualified as FCE
+import Oughta.Extract (SourceMap)
+import Oughta.Extract qualified as OE
 import HsLua qualified as Lua
 import qualified Data.Text as Text
 
@@ -76,7 +76,7 @@ getFrame sm level = do
     _ty <- Lua.getfield Lua.top "currentline"
     l0 <- Lua.peek @Int Lua.top
     Lua.pop 1
-    let l = FCE.lookupSourceMap src' l0 sm
+    let l = OE.lookupSourceMap src' l0 sm
 
     pure (Just (Frame l name src'))
 
@@ -86,7 +86,7 @@ getTraceback ::
   SourceMap ->
   Lua.LuaE e Traceback
 getTraceback sm =
-  Traceback . filter ((== FCE.sourceMapFile sm) . frameSource) . reverse <$> go 3 []
+  Traceback . filter ((== OE.sourceMapFile sm) . frameSource) . reverse <$> go 3 []
   where
     go level frames = do
       mf <- getFrame sm level

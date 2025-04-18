@@ -49,7 +49,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 
 import qualified Options.Applicative as Opt
 
-import FileCheck qualified as FileCheck
+import Oughta qualified as Ota
 import qualified Lumberjack as LJ
 
 import qualified Test.Tasty as T
@@ -504,7 +504,7 @@ llvmTests = do
             res <- simulateLlvmSyntax opts la'
             logResults la' res
         Text.IO.writeFile (FilePath.replaceExtension path "out") logTxt
-        let output = FileCheck.Output (Text.encodeUtf8 logTxt)
+        let output = Ota.Output (Text.encodeUtf8 logTxt)
         let prelude =
               Text.unlines
               [ "function ok() check 'All goals passed!' end"
@@ -515,13 +515,13 @@ llvmTests = do
               , "end"
               , "function no_heuristic() check 'Unable to find a heuristic for any goal' end"
               ]
-        let prog0 = FileCheck.fromLineComments path ";; " content
-        let prog = FileCheck.addPrefix prelude prog0
-        FileCheck.Result r <- FileCheck.check prog output
+        let prog0 = Ota.fromLineComments path ";; " content
+        let prog = Ota.addPrefix prelude prog0
+        Ota.Result r <- Ota.check prog output
         case r of
           Left f -> throwIO f
           Right s ->
-            let ms = FileCheck.successMatches s in
+            let ms = Ota.successMatches s in
             T.U.assertBool "Test has some assertions" (not (Seq.null ms))
 
 llvmBcTests :: T.TestTree
