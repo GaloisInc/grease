@@ -206,6 +206,7 @@ Checking functions:
 Other utilities:
 
 - `col() -> Int`: Get the current line number of `text` in the output.
+- `file() -> String`: Get the file name of the test case.
 - `line() -> Int`: Get the current line number of `text` in the output.
 - `src_line(n: Int) -> Int`: Get the line number of the Lua code at stack level
   `n`.

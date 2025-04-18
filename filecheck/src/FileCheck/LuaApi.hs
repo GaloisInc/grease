@@ -56,6 +56,10 @@ fail_ sm stateRef =
     tb <- FCT.getTraceback sm
     FCE.throwNoMatch (FCR.Failure p tb)
 
+-- | Implementation of @file@. Not exported.
+file :: SourceMap -> Lua.LuaE Exception Text
+file sm = pure (sourceMapFile sm)
+
 -- | Implementation of @line@. Not exported.
 line :: IORef Progress -> Lua.LuaE Exception Int
 line stateRef = do
@@ -136,6 +140,9 @@ luaSetup stateRef prog txt = do
 
   Lua.pushHaskellFunction (Lua.toHaskellFunction (fail_ sm stateRef))
   Lua.setglobal (Lua.Name "fail")
+
+  Lua.pushHaskellFunction (Lua.toHaskellFunction (file sm))
+  Lua.setglobal (Lua.Name "file")
 
   Lua.pushHaskellFunction (Lua.toHaskellFunction (line stateRef))
   Lua.setglobal (Lua.Name "line")

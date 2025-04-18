@@ -1,0 +1,3 @@
+# check(file)
+test-data/pass/file.txt
+; check "✔️"
