@@ -1,5 +1,4 @@
 # check("On line")
 # check(string.format("%d", line()))
 On line 3
-; check "✔️"
-; check "✔️"
+; match_prev(); match_prev()
