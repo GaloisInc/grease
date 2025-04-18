@@ -520,12 +520,16 @@ oughta go dir fileName =
         let ms = Ota.successMatches s in
         T.U.assertBool "Test has some assertions" (not (Seq.null ms))
 
+findCbls :: FilePath -> IO [FilePath]
+findCbls dir = do
+  entries <- Dir.listDirectory dir
+  files <- Monad.filterM (Dir.doesFileExist . (dir </>)) entries
+  pure (List.filter ((== ".cbl") . FilePath.takeExtension) files)
+
 llvmTests :: IO T.TestTree
 llvmTests = do
   let dir = "tests/llvm"
-  entries <- Dir.listDirectory dir
-  files <- Monad.filterM (Dir.doesFileExist . (dir </>)) entries
-  let cbls = List.filter ((== ".cbl") . FilePath.takeExtension) files
+  cbls <- findCbls dir
   let mkTest = oughta simulateLlvmSyntax dir
   pure (T.testGroup "LLVM CFG" (List.map mkTest cbls))
 
@@ -555,9 +559,7 @@ llvmBcTests =
 armCfgTests :: IO T.TestTree
 armCfgTests = do
   let dir = "tests/arm"
-  entries <- Dir.listDirectory dir
-  files <- Monad.filterM (Dir.doesFileExist . (dir </>)) entries
-  let cbls = List.filter ((== ".cbl") . FilePath.takeExtension) files
+  cbls <- findCbls dir
   let mkTest = oughta simulateARMSyntax dir
   pure (T.testGroup "ARM CFG" (List.map mkTest cbls))
 
