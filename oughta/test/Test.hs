@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 {-
 Test Oughta, using Oughta.
@@ -14,7 +15,9 @@ is readable and correct (which is non-trivial, especially source span tracking).
 module Main (main) where
 
 import Control.Monad qualified as Monad
+import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
+import Data.FileEmbed (embedFile)
 import Data.Function ((&))
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
@@ -26,6 +29,9 @@ import System.FilePath ((</>))
 import System.FilePath qualified as FilePath
 import Test.Tasty.HUnit qualified as TTH
 import Test.Tasty qualified as TT
+
+prelude :: ByteString
+prelude = $(embedFile "test/test.lua")
 
 test :: FilePath -> IO ()
 test file = do
@@ -43,27 +49,13 @@ test file = do
         Text.encodeUtf8 &
         Ota.Output
 
-  let prelude =
-        Text.unlines
-        [ "name = 'Oughta'"
-        , "function match_on_line(i)"
-        , "  check(string.format('✔️ match at <out>:%d', i))"
-        , "end"
-        , "function match_prev()"
-        , "  match_on_line(src_line(1) - 1)"
-        , "end"
-        , "function match_from_line(i)"
-        , "  checkln 'stack trace:'"
-        , "  here(string.format('  %s:%d', file(), i))"
-        , "end"
-        ]
   let prog0 = Ota.fromLineComments file comment content
-  let prog = Ota.addPrefix prelude prog0
+  let prog = Ota.addPrefix (Text.decodeUtf8Lenient prelude) prog0
   result <- Ota.check prog (clearComments content)
   TTH.assertBool file (not (Ota.resultNull result))
 
   let prog0' = Ota.fromLineComments file comment' content
-  let prog' = Ota.addPrefix prelude prog0'
+  let prog' = Ota.addPrefix (Text.decodeUtf8Lenient prelude) prog0'
   let output'@(Ota.Output out) = clearComments (Ota.printResult result)
   BS.writeFile (FilePath.replaceExtension file "out") out
   Ota.check' prog' output'
