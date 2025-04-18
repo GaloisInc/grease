@@ -46,7 +46,6 @@ test file = do
   let prelude =
         Text.unlines
         [ "name = 'Oughta'"
-        , "file = '" <> Text.pack file <> "'"
         ]
   let prog0 = Ota.fromLineComments file comment content
   let prog = Ota.addPrefix prelude prog0
