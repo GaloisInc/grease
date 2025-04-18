@@ -1,0 +1,7 @@
+# checkln(string.format("%d", src_line(0)))
+1
+# function f() return src_line(1) end
+# checkln(string.format("%d", f()))
+4
+; check "✔️"
+; check "✔️"

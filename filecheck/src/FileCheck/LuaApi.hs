@@ -11,10 +11,12 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.IORef (IORef)
 import Data.IORef qualified as IORef
+import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import FileCheck.Exception (Exception)
 import FileCheck.Exception qualified as FCE
-import FileCheck.Extract (LuaProgram, SourceMap, programText, sourceMap, sourceMapFile)
+import FileCheck.Extract (LuaProgram, SourceMap, lookupSourceMap, programText, sourceMap, sourceMapFile)
 import FileCheck.Lua qualified as FCL
 import FileCheck.Pos qualified as FCP
 import FileCheck.Result (Progress, Result)
@@ -94,6 +96,27 @@ seek stateRef chars =
           }
     pure p'
 
+-- | Implementation of @src_line@. Not exported.
+srcLine :: SourceMap -> Int -> Lua.LuaE Exception Int
+srcLine sm level = do
+  Lua.getglobal' "debug.getinfo"
+  -- Empirically, there are 3 levels of functions on the Lua stack between this
+  -- function and user Lua code.
+  Lua.pushinteger (Lua.Integer (fromIntegral level + 3))
+  Lua.pushstring "lnS"
+  Lua.call 2 1
+
+  _ty <- Lua.getfield Lua.top "currentline"
+  l0 <- Lua.peek @Int Lua.top
+  Lua.pop 1
+
+  _ty <- Lua.getfield Lua.top "short_src"
+  src0 <- Lua.peek @Text Lua.top
+  Lua.pop 1
+  let src = Text.drop (Text.length "[string \"") (Text.dropEnd (Text.length "\"]") src0)
+
+  pure (lookupSourceMap src l0 sm)
+
 -- | Load user and FileCheck Lua code. Helper, not exported.
 luaSetup ::
   IORef Progress ->
@@ -122,6 +145,9 @@ luaSetup stateRef prog txt = do
 
   Lua.pushHaskellFunction (Lua.toHaskellFunction (seek stateRef))
   Lua.setglobal (Lua.Name "seek")
+
+  Lua.pushHaskellFunction (Lua.toHaskellFunction (srcLine sm))
+  Lua.setglobal (Lua.Name "src_line")
 
   _ <- Lua.loadbuffer FCL.luaCode (Lua.Name "filecheck.lua")
   Lua.call 0 0
