@@ -511,7 +511,7 @@ llvmTests = do
               , "function must_fail() check 'Likely bug: unavoidable error' end"
               , "function next_line_must_fail()"
               , "  must_fail()"
-              , "  check(string.format('%d', src_line(1) + 1))"
+              , "  check(string.format('%s:%d', file(), src_line(1) + 1))"
               , "end"
               , "function no_heuristic() check 'Unable to find a heuristic for any goal' end"
               ]
