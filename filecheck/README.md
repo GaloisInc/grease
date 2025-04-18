@@ -205,8 +205,10 @@ Checking functions:
 
 Other utilities:
 
-- `col() -> Int`: Returns the current line number of `text` in the output.
-- `line() -> Int`: Returns the current line number of `text` in the output.
+- `col() -> Int`: Get the current line number of `text` in the output.
+- `line() -> Int`: Get the current line number of `text` in the output.
+- `src_line(n: Int) -> Int`: Get the line number of the Lua code at stack level
+  `n`.
 
 ### Low-level API
 
