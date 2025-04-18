@@ -3,3 +3,4 @@
 (defun @test ((regs AArch32Regs)) AArch32Regs
   (start start:
     (return regs)))
+;; ok()
