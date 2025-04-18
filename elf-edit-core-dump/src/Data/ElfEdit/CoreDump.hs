@@ -231,6 +231,15 @@ decodeUserRegSet cl d m buf =
       mkPpcUserRegSet <$>
         decodePpcUserRegs cl d (Elf.slice ppcUserRegsFileRange buf)
 
+-- | Decode a 'PrStatus' value from a 'BS.ByteString'.
+decodePrStatus ::
+  Elf.ElfClass w ->
+  Elf.ElfData ->
+  Elf.ElfMachine ->
+  BS.ByteString ->
+  Either NoteDecodeError PrStatus
+decodePrStatus cl d m buf = PrStatus <$> decodeUserRegSet cl d m buf
+
 -- | Compute the padding necessary to make a word value 4-byte aligned (if using
 -- 'Elf.ELFCLASS32') or 8-byte aligned (if using 'Elf.ELFCLASS64').
 notePadding ::
@@ -297,11 +306,8 @@ decodeNotes cl d m phdrContents =
            mbNoteDesc <-
              case Nhdr.nhdrType nhdr of
                Nhdr.NT_PRSTATUS -> do
-                 regs <- decodeUserRegSet cl d m descRaw
-                 pure $ Just $ NotePrStatus $
-                   PrStatus
-                     { prReg = regs
-                     }
+                 prs <- decodePrStatus cl d m descRaw
+                 pure $ Just $ NotePrStatus prs
                Nhdr.NT_FPREGSET -> pure $ Just $ NoteFpRegSet FpRegSet
                Nhdr.NT_PRPSINFO -> pure $ Just $ NotePrpsInfo PrpsInfo
                _                -> pure $ Nothing
