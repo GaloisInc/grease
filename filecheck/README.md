@@ -47,7 +47,7 @@ run tests:
 module Main (main) where
 
 import Control.Monad (filterM, forM)
-import ByteString qualified as BS
+import Data.ByteString qualified as BS
 import FileCheck qualified as FC
 import System.Directory qualified as Dir
 import Test.Tasty.HUnit qualified as TTH
@@ -181,7 +181,7 @@ num=string.find(text, "^%d+")
 check(string.format("Printing %d...", num))
 ```
 
-The above example borders on *too much* logic for a test-case. Use discretion
+The above example borders on *too much* logic for a test case. Use discretion
 when writing tests!
 
 ## API reference
@@ -226,7 +226,7 @@ post for considerable motivation and discussion.
 
 In comparison to golden testing, FileCheck-style tests are *coarser*. They only
 check particular parts of the program's output. This can cause less churn in
-the test-suite when the program output changes in ways that are not relevant
+the test suite when the program output changes in ways that are not relevant
 to the properties being tested. The fineness of golden testing can force
 devlopers to adopt [complex] [workarounds], these can sometimes be obviated by
 FileCheck-style testing.
