@@ -28,6 +28,12 @@ module Data.ElfEdit.CoreDump
 
     -- * Decoding
   , decodeHeaderNotes
+  , decodePrStatus
+  , decodeUserRegSet
+  , decodeArmUserRegs
+  , decodePpcUserRegs
+  , decodeX86_64UserRegs
+  , decodeNhdr
   , NoteDecodeError(..)
 
     -- * Analysis
