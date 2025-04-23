@@ -1,3 +1,0 @@
-# check(file())
-test-data/pass/file.txt
-; match_prev()

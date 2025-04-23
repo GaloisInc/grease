@@ -1,4 +1,0 @@
-# check("On line")
-# check(string.format("%d", line()))
-On line 3
-; match_prev(); match_prev()

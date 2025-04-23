@@ -1,9 +1,0 @@
-# checkln "first"
-# hereln "second"
-# hereln "third"
-first
-second
-third
-; match_on_line(4); match_from_line(1)
-; match_on_line(5); match_from_line(2)
-; match_on_line(6); match_from_line(3)

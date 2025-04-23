@@ -1,5 +1,0 @@
-# here "first"
-first
-second
-third
-; check "❌ no match"; check "here"
