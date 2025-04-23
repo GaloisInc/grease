@@ -68,7 +68,7 @@ As always, see `--help` for more options.
 We treat a small number of hlint warnings as errors in CI. To run hlint locally, try:
 
 ```sh
-hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/{main,src,tests} oughta/{src,test}
+hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/{main,src,tests}
 ```
 
 ## Source code
