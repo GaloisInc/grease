@@ -10,3 +10,5 @@ int test(void) {
     panic();
     return 0;
 }
+/// must_fail()
+/// check "Call to abort"

@@ -10,3 +10,4 @@ void test(void) {
     *p = 42;
     free(p);
 }
+/// ok()

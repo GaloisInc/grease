@@ -8,3 +8,4 @@
 void *test(void *dest) {
   return memset(dest, 0, 16);
 }
+/// ok()

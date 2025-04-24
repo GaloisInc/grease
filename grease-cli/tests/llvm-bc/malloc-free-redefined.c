@@ -13,3 +13,4 @@ void test() {
   free(x);
   free(x);
 }
+/// must_fail()
