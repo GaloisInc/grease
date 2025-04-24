@@ -478,6 +478,7 @@ withCapturedLogs ::
 withCapturedLogs withLogAction = do
   logRef <- IORef.newIORef []
   withLogAction (capture logRef)
+  -- Reverse the list so that logs appear chronologically
   logs <- List.reverse <$> IORef.readIORef logRef
   let logTxt = Text.unlines (map (Text.pack . show . PP.pretty) logs)
   pure logTxt
