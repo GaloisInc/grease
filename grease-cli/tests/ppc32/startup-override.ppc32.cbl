@@ -9,3 +9,4 @@
     (let sz (get-reg r4 regs))
     (funcall @memset buf a sz)
     (return regs)))
+;; ok()

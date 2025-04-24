@@ -7,3 +7,4 @@
     (let q (pointer-add p off))
     (let _ (pointer-read (Bitvector 64) be q))
     (return regs)))
+;; uninit_stack()
