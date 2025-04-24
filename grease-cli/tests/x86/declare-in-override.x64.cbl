@@ -16,3 +16,4 @@
     (pointer-write (Bitvector 64) le p forty-two)
     (funcall @free p)
     (return regs)))
+;; ok()

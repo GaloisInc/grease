@@ -8,3 +8,4 @@
     (let zero64 (bv 64 0))
     (pointer-write (Bitvector 64) le rax-ptr zero64)
     (return regs)))
+;; ok()

@@ -571,30 +571,12 @@ ppc32CfgTests = do
   let mkTest = oughta simulatePPC32Syntax dir
   pure (T.testGroup "PPC32 CFG" (List.map mkTest cbls))
 
-x86CfgTests :: T.TestTree
-x86CfgTests =
-  T.testGroup "x86_64 CFG"
-    [ testCase "id" "id.x64.cbl" $ \_ -> pure ()
-    , testCase "null-read" "null-read.x64.cbl" $ assertSpecificBug Bug.MustFail Nothing
-    , testCase "null-write" "null-write.x64.cbl" $ assertSpecificBug Bug.MustFail Nothing
-    , testCase "pos-stack-offset-read" "pos-stack-offset-read.x64.cbl" $ assertSpecificBug Bug.UninitStackRead Nothing
-    , testCase "pos-stack-offset-write" "pos-stack-offset-write.x64.cbl" $ assertSpecificBug Bug.MustFail Nothing
-    , testCase "user override" "user-override.x64.cbl" assertSuccess
-    , testCase "declare in override" "declare-in-override/declare-in-override.x64.cbl" assertSuccess
-    , testCase "startup override" "startup-override/test.x64.cbl" assertSuccess
-    , testCase "write to rax pointer" "write-to-rax-pointer.x64.cbl" assertSuccess
-    ]
-  where
-    testCase ::
-      T.TestName ->
-      FilePath ->
-      (BatchStatus -> IO ()) ->
-      T.TestTree
-    testCase testName fileName assertCont =
-      T.U.testCase testName $ do
-        opts <- getNonExeTestOpts ("tests/x86" </> fileName) []
-        res <- simulateX86Syntax opts la
-        assertCont $ getEntrypointResult opts res
+x86CfgTests :: IO T.TestTree
+x86CfgTests = do
+  let dir = "tests/x86"
+  cbls <- findCbls dir
+  let mkTest = oughta simulateX86Syntax dir
+  pure (T.testGroup "x86_64 CFG" (List.map mkTest cbls))
 
 main :: IO ()
 main = do
@@ -623,4 +605,5 @@ main = do
   llTests <- llvmTests
   armTests <- armCfgTests
   ppc32Tests <- ppc32CfgTests
-  T.defaultMain $ T.testGroup "Tests" (shapeTests:llTests:llvmBcTests:armTests:ppc32Tests:x86CfgTests:archTests)
+  x86Tests <- x86CfgTests
+  T.defaultMain $ T.testGroup "Tests" (shapeTests:llTests:llvmBcTests:armTests:ppc32Tests:x86Tests:archTests)
