@@ -6,3 +6,4 @@ void* f(void);
 void* test(void) {
   return f();
 }
+/// ok()

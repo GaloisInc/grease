@@ -59,8 +59,6 @@ import qualified Test.Tasty.HUnit as T.U
 -- crucible-llvm
 import qualified Lang.Crucible.LLVM.Translation as Trans
 
-import qualified Grease.Bug as Bug
-import qualified Grease.Bug.UndefinedBehavior as UB
 import Grease.Diagnostic (Diagnostic, GreaseLogAction)
 import Grease.Entrypoint (Entrypoint(..), EntrypointLocation(..), entrypointNoStartupOv)
 import Grease.Output (CheckStatus(..), BatchStatus (..))
@@ -382,18 +380,6 @@ assertPossibleBug =
     BatchCouldNotInfer {} -> T.U.assertFailure "Unexpected inference failure"
     BatchChecks {} -> T.U.assertFailure "Unexpected inference success"
 
-assertSpecificBug :: Bug.BugType -> Maybe UB.UBType -> BatchStatus -> IO ()
-assertSpecificBug t ub =
-  \case
-    BatchBug b -> do
-      T.U.assertEqual "bug types agree" t (Bug.bugType (Output.bugDesc b))
-      T.U.assertEqual "UB types agree" ub (UB.ubType <$> Bug.bugUb (Output.bugDesc b))
-    BatchCantRefine reason -> T.U.assertFailure ("Unexpected:" <> Text.unpack (pshow reason))
-    BatchTimeout -> T.U.assertFailure "Unexpected timeout"
-    BatchItersExceeded -> T.U.assertFailure "Refinement loop iterations exceeded"
-    BatchCouldNotInfer {} -> T.U.assertFailure "Unexpected inference failure"
-    BatchChecks {} -> T.U.assertFailure "Unexpected inference success"
-
 makeRefineTests :: Arch -> FilePath -> IO T.TestTree
 makeRefineTests arch d =
   let kind = takeBaseName d
@@ -483,7 +469,7 @@ withCapturedLogs withLogAction = do
   let logTxt = Text.unlines (map (Text.pack . show . PP.pretty) logs)
   pure logTxt
 
--- | Make an "Oughta"-based test for an S-expression program
+-- | Make an "Oughta"-based test for an S-expression or LLVM bitcode program
 oughta ::
   (SimOpts -> GreaseLogAction -> IO Results) ->
   FilePath ->
@@ -516,6 +502,7 @@ oughta go path prog0 = do
       let ms = Ota.successMatches s in
       T.U.assertBool "Test has some assertions" (not (Seq.null ms))
 
+-- | Make an "Oughta"-based test for an S-expression program
 oughtaSexp ::
   (SimOpts -> GreaseLogAction -> IO Results) ->
   -- | Directory
@@ -530,60 +517,60 @@ oughtaSexp go dir fileName =
     let prog = Ota.fromLineComments path ";; " content
     oughta go path prog
 
-findCbls :: FilePath -> IO [FilePath]
-findCbls dir = do
+findWithExt :: FilePath -> String -> IO [FilePath]
+findWithExt dir ext = do
   entries <- Dir.listDirectory dir
   files <- Monad.filterM (Dir.doesFileExist . (dir </>)) entries
-  pure (List.filter ((== ".cbl") . FilePath.takeExtension) files)
+  pure (List.filter ((== ext) . FilePath.takeExtension) files)
 
 llvmTests :: IO T.TestTree
 llvmTests = do
   let dir = "tests/llvm"
-  cbls <- findCbls dir
+  cbls <- findWithExt dir ".cbl"
   let mkTest = oughtaSexp simulateLlvmSyntax dir
   pure (T.testGroup "LLVM CFG" (List.map mkTest cbls))
 
-llvmBcTests :: T.TestTree
-llvmBcTests =
-  T.testGroup "LLVM bitcode"
-    [ testCase "malloc/free redefined" "malloc_free_redefined" $ assertSpecificBug Bug.MustFail (Just UB.DoubleFree)
-    , testCase "memset" "memset" assertSuccess
-    , testCase "skip" "skip" assertSuccess
-    , testCase "load-handle bc" "load_handle_bc" assertSuccess
-    , testCase "declare in override" "declare-in-override" assertSuccess
-    , testCase "startup override" "startup-override" assertSuccess
-    , testCase "multiple defines" "multiple_defines" $ assertSpecificBug Bug.MustFail Nothing
-    ]
-  where
-    testCase ::
-      T.TestName ->
-      FilePath ->
-      (BatchStatus -> IO ()) ->
-      T.TestTree
-    testCase testName dirName assertCont =
-      T.U.testCase testName $ do
-        opts <- getNonExeTestOpts ("tests/llvm-bc" </> dirName </> "test.bc") []
-        res <- simulateLlvm Trans.defaultTranslationOptions opts la
-        assertCont $ getEntrypointResult opts res
+-- | Make an "Oughta"-based test for an LLVM bitcode program
+oughtaBc ::
+  (SimOpts -> GreaseLogAction -> IO Results) ->
+  -- | Directory
+  FilePath ->
+  -- | File
+  FilePath ->
+  T.TestTree
+oughtaBc go dir fileName =
+  let dropped = FilePath.dropExtension fileName in
+  T.U.testCase dropped $ do
+    let path = dir </> FilePath.addExtension dropped  "c"
+    content <- Text.IO.readFile path
+    let prog = Ota.fromLineComments path "/// " content
+    oughta go (dir </> fileName) prog
+
+llvmBcTests :: IO T.TestTree
+llvmBcTests = do
+  let dir = "tests/llvm-bc"
+  bcs <- findWithExt dir ".bc"
+  let mkTest = oughtaBc (simulateLlvm Trans.defaultTranslationOptions) dir
+  pure (T.testGroup "LLVM bitcode" (List.map mkTest bcs))
 
 armCfgTests :: IO T.TestTree
 armCfgTests = do
   let dir = "tests/arm"
-  cbls <- findCbls dir
+  cbls <- findWithExt dir ".cbl"
   let mkTest = oughtaSexp simulateARMSyntax dir
   pure (T.testGroup "ARM CFG" (List.map mkTest cbls))
 
 ppc32CfgTests :: IO T.TestTree
 ppc32CfgTests = do
   let dir = "tests/ppc32"
-  cbls <- findCbls dir
+  cbls <- findWithExt dir ".cbl"
   let mkTest = oughtaSexp simulatePPC32Syntax dir
   pure (T.testGroup "PPC32 CFG" (List.map mkTest cbls))
 
 x86CfgTests :: IO T.TestTree
 x86CfgTests = do
   let dir = "tests/x86"
-  cbls <- findCbls dir
+  cbls <- findWithExt dir ".cbl"
   let mkTest = oughtaSexp simulateX86Syntax dir
   pure (T.testGroup "x86_64 CFG" (List.map mkTest cbls))
 
@@ -612,7 +599,8 @@ main = do
       return (T.testGroup (ppArch arch) [propTests, refineTests, sanityTests])
 
   llTests <- llvmTests
+  bcTests <- llvmBcTests
   armTests <- armCfgTests
   ppc32Tests <- ppc32CfgTests
   x86Tests <- x86CfgTests
-  T.defaultMain $ T.testGroup "Tests" (shapeTests:llTests:llvmBcTests:armTests:ppc32Tests:x86Tests:archTests)
+  T.defaultMain $ T.testGroup "Tests" (shapeTests:llTests:bcTests:armTests:ppc32Tests:x86Tests:archTests)

@@ -3,5 +3,7 @@
 extern int skippable(void);
 
 int test(void) {
+/// check "Invoking the 'skippable' function"
   return skippable();
 }
+/// ok()
