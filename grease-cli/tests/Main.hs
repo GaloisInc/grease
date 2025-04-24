@@ -510,6 +510,7 @@ oughta go dir fileName =
           , "  check(string.format('%s:%d', file(), src_line(1) + 1))"
           , "end"
           , "function no_heuristic() check 'Unable to find a heuristic for any goal' end"
+          , "function uninit_stack() check 'Likely bug: uninitialized stack read' end"
           ]
     let prog0 = Ota.fromLineComments path ";; " content
     let prog = Ota.addPrefix prelude prog0
@@ -563,27 +564,12 @@ armCfgTests = do
   let mkTest = oughta simulateARMSyntax dir
   pure (T.testGroup "ARM CFG" (List.map mkTest cbls))
 
-ppc32CfgTests :: T.TestTree
-ppc32CfgTests =
-  T.testGroup "PPC32 CFG"
-    [ testCase "id" "id.ppc32.cbl" $ \_ -> pure ()
-    , testCase "pos-stack-offset-read" "pos-stack-offset-read.ppc32.cbl" $ assertSpecificBug Bug.UninitStackRead Nothing
-    , testCase "pos-stack-offset-write" "pos-stack-offset-write.ppc32.cbl" $ assertSpecificBug Bug.MustFail Nothing
-    , testCase "user override" "user-override.ppc32.cbl" assertSuccess
-    , testCase "declare in override" "declare-in-override/declare-in-override.ppc32.cbl" assertSuccess
-    , testCase "startup override" "startup-override/test.ppc32.cbl" assertSuccess
-    ]
-  where
-    testCase ::
-      T.TestName ->
-      FilePath ->
-      (BatchStatus -> IO ()) ->
-      T.TestTree
-    testCase testName fileName assertCont =
-      T.U.testCase testName $ do
-        opts <- getNonExeTestOpts ("tests/ppc32" </> fileName) []
-        res <- simulatePPC32Syntax opts la
-        assertCont $ getEntrypointResult opts res
+ppc32CfgTests :: IO T.TestTree
+ppc32CfgTests = do
+  let dir = "tests/ppc32"
+  cbls <- findCbls dir
+  let mkTest = oughta simulatePPC32Syntax dir
+  pure (T.testGroup "PPC32 CFG" (List.map mkTest cbls))
 
 x86CfgTests :: T.TestTree
 x86CfgTests =
@@ -636,4 +622,5 @@ main = do
 
   llTests <- llvmTests
   armTests <- armCfgTests
-  T.defaultMain $ T.testGroup "Tests" (shapeTests:llTests:llvmBcTests:armTests:ppc32CfgTests:x86CfgTests:archTests)
+  ppc32Tests <- ppc32CfgTests
+  T.defaultMain $ T.testGroup "Tests" (shapeTests:llTests:llvmBcTests:armTests:ppc32Tests:x86CfgTests:archTests)
