@@ -5,3 +5,4 @@
     (let p (pointer-make-null))
     (pointer-read (Bitvector 8) le p)
     (return regs)))
+;; must_fail()

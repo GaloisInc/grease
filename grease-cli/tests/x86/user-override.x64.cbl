@@ -7,3 +7,4 @@
     (let p2 (funcall @id-ptr p))
     (let regs2 (set-field regs 0 p2))
     (return regs2)))
+;; ok()

@@ -5,3 +5,4 @@
     (let p (pointer-make-null))
     (pointer-write (Ptr 64) le p p)
     (return regs)))
+;; must_fail()
