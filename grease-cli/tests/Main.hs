@@ -486,41 +486,49 @@ withCapturedLogs withLogAction = do
 -- | Make an "Oughta"-based test for an S-expression program
 oughta ::
   (SimOpts -> GreaseLogAction -> IO Results) ->
+  FilePath ->
+  Ota.LuaProgram ->
+  IO ()
+oughta go path prog0 = do
+  opts <- getNonExeTestOpts path []
+  logTxt <-
+    withCapturedLogs $ \la' -> do
+      res <- go opts la'
+      logResults la' res
+  Text.IO.writeFile (FilePath.replaceExtension path "out") logTxt
+  let output = Ota.Output (Text.encodeUtf8 logTxt)
+  let prelude =
+        Text.unlines
+        [ "function ok() check 'All goals passed!' end"
+        , "function must_fail() check 'Likely bug: unavoidable error' end"
+        , "function next_line_must_fail()"
+        , "  must_fail()"
+        , "  check(string.format('%s:%d', file(), src_line(1) + 1))"
+        , "end"
+        , "function no_heuristic() check 'Unable to find a heuristic for any goal' end"
+        , "function uninit_stack() check 'Likely bug: uninitialized stack read' end"
+        ]
+  let prog = Ota.addPrefix prelude prog0
+  Ota.Result r <- Ota.check prog output
+  case r of
+    Left f -> throwIO f
+    Right s ->
+      let ms = Ota.successMatches s in
+      T.U.assertBool "Test has some assertions" (not (Seq.null ms))
+
+oughtaSexp ::
+  (SimOpts -> GreaseLogAction -> IO Results) ->
   -- | Directory
   FilePath ->
   -- | File
   FilePath ->
   T.TestTree
-oughta go dir fileName =
+oughtaSexp go dir fileName =
   T.U.testCase (FilePath.dropExtension (FilePath.dropExtension fileName)) $ do
     let path = dir </> fileName
     content <- Text.IO.readFile path
-    opts <- getNonExeTestOpts path []
-    logTxt <-
-      withCapturedLogs $ \la' -> do
-        res <- go opts la'
-        logResults la' res
-    Text.IO.writeFile (FilePath.replaceExtension path "out") logTxt
-    let output = Ota.Output (Text.encodeUtf8 logTxt)
-    let prelude =
-          Text.unlines
-          [ "function ok() check 'All goals passed!' end"
-          , "function must_fail() check 'Likely bug: unavoidable error' end"
-          , "function next_line_must_fail()"
-          , "  must_fail()"
-          , "  check(string.format('%s:%d', file(), src_line(1) + 1))"
-          , "end"
-          , "function no_heuristic() check 'Unable to find a heuristic for any goal' end"
-          , "function uninit_stack() check 'Likely bug: uninitialized stack read' end"
-          ]
-    let prog0 = Ota.fromLineComments path ";; " content
-    let prog = Ota.addPrefix prelude prog0
-    Ota.Result r <- Ota.check prog output
-    case r of
-      Left f -> throwIO f
-      Right s ->
-        let ms = Ota.successMatches s in
-        T.U.assertBool "Test has some assertions" (not (Seq.null ms))
+    let prog = Ota.fromLineComments path ";; " content
+    oughta go path prog
 
 findCbls :: FilePath -> IO [FilePath]
 findCbls dir = do
@@ -532,7 +540,7 @@ llvmTests :: IO T.TestTree
 llvmTests = do
   let dir = "tests/llvm"
   cbls <- findCbls dir
-  let mkTest = oughta simulateLlvmSyntax dir
+  let mkTest = oughtaSexp simulateLlvmSyntax dir
   pure (T.testGroup "LLVM CFG" (List.map mkTest cbls))
 
 llvmBcTests :: T.TestTree
@@ -562,21 +570,21 @@ armCfgTests :: IO T.TestTree
 armCfgTests = do
   let dir = "tests/arm"
   cbls <- findCbls dir
-  let mkTest = oughta simulateARMSyntax dir
+  let mkTest = oughtaSexp simulateARMSyntax dir
   pure (T.testGroup "ARM CFG" (List.map mkTest cbls))
 
 ppc32CfgTests :: IO T.TestTree
 ppc32CfgTests = do
   let dir = "tests/ppc32"
   cbls <- findCbls dir
-  let mkTest = oughta simulatePPC32Syntax dir
+  let mkTest = oughtaSexp simulatePPC32Syntax dir
   pure (T.testGroup "PPC32 CFG" (List.map mkTest cbls))
 
 x86CfgTests :: IO T.TestTree
 x86CfgTests = do
   let dir = "tests/x86"
   cbls <- findCbls dir
-  let mkTest = oughta simulateX86Syntax dir
+  let mkTest = oughtaSexp simulateX86Syntax dir
   pure (T.testGroup "x86_64 CFG" (List.map mkTest cbls))
 
 main :: IO ()
