@@ -49,7 +49,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 
 import qualified Options.Applicative as Opt
 
-import Oughta qualified as Ota
+import Oughta qualified
 import qualified Lumberjack as LJ
 
 import qualified Test.Tasty as T
@@ -473,7 +473,7 @@ withCapturedLogs withLogAction = do
 oughta ::
   (SimOpts -> GreaseLogAction -> IO Results) ->
   FilePath ->
-  Ota.LuaProgram ->
+  Oughta.LuaProgram ->
   IO ()
 oughta go path prog0 = do
   opts <- getNonExeTestOpts path []
@@ -482,7 +482,7 @@ oughta go path prog0 = do
       res <- go opts la'
       logResults la' res
   Text.IO.writeFile (FilePath.replaceExtension path "out") logTxt
-  let output = Ota.Output (Text.encodeUtf8 logTxt)
+  let output = Oughta.Output (Text.encodeUtf8 logTxt)
   let prelude =
         Text.unlines
         [ "function ok() check 'All goals passed!' end"
@@ -494,12 +494,12 @@ oughta go path prog0 = do
         , "function no_heuristic() check 'Unable to find a heuristic for any goal' end"
         , "function uninit_stack() check 'Likely bug: uninitialized stack read' end"
         ]
-  let prog = Ota.addPrefix prelude prog0
-  Ota.Result r <- Ota.check prog output
+  let prog = Oughta.addPrefix prelude prog0
+  Oughta.Result r <- Oughta.check prog output
   case r of
     Left f -> throwIO f
     Right s ->
-      let ms = Ota.successMatches s in
+      let ms = Oughta.successMatches s in
       T.U.assertBool "Test has some assertions" (not (Seq.null ms))
 
 -- | Make an "Oughta"-based test for an S-expression program
@@ -514,7 +514,7 @@ oughtaSexp go dir fileName =
   T.U.testCase (FilePath.dropExtension (FilePath.dropExtension fileName)) $ do
     let path = dir </> fileName
     content <- Text.IO.readFile path
-    let prog = Ota.fromLineComments path ";; " content
+    let prog = Oughta.fromLineComments path ";; " content
     oughta go path prog
 
 findWithExt :: FilePath -> String -> IO [FilePath]
@@ -543,7 +543,7 @@ oughtaBc go dir fileName =
   T.U.testCase dropped $ do
     let path = dir </> FilePath.addExtension dropped  "c"
     content <- Text.IO.readFile path
-    let prog = Ota.fromLineComments path "/// " content
+    let prog = Oughta.fromLineComments path "/// " content
     oughta go (dir </> fileName) prog
 
 llvmBcTests :: IO T.TestTree
