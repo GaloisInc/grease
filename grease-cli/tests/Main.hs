@@ -20,9 +20,11 @@ import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
 import qualified System.Directory as Dir
 
 import Data.FileEmbed (embedFile)
+import Data.Functor ((<&>))
 import qualified Data.IORef as IORef
 import qualified Data.List as List
 import qualified Data.Map as Map
+import qualified Data.Maybe as Maybe
 import qualified Data.Sequence as Seq
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -30,8 +32,8 @@ import qualified Data.Text.IO as Text.IO
 import Data.Traversable (for)
 import qualified Prettyprinter as PP
 
-import Control.Exception (SomeException, try, throwIO)
-import Control.Monad (filterM, forM, forM_, void)
+import qualified Control.Exception as X
+import Control.Monad (filterM, forM, forM_)
 import qualified Control.Monad as Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
@@ -398,50 +400,6 @@ makeRefineTests arch d =
     pass :: FilePath -> IO ()
     pass dir = sim arch dir allChecks >>= assertSuccess
 
-makeSanityTests :: Arch -> FilePath -> IO T.TestTree
-makeSanityTests arch d =
-  let kind = takeBaseName d
-  in if | kind == "pass" -> do
-            subds <- subdirs d
-            tests <- mapMaybeM (\subd -> exeTestCase arch subd (pass subd)) subds
-            return (T.testGroup d tests)
-        | kind == "xfail-iters" -> do
-            subds <- subdirs d
-            tests <- mapMaybeM (\subd -> exeTestCase arch subd (iters subd)) subds
-            return (T.testGroup d tests)
-        | kind == "xfail-timeout" -> do
-            subds <- subdirs d
-            tests <- mapMaybeM (\subd -> exeTestCase arch subd (timeout subd)) subds
-            return (T.testGroup d tests)
-        | kind == "xfail-panic" -> do
-            subds <- subdirs d
-            tests <- mapMaybeM (\subd -> exeTestCase arch subd (panic subd)) subds
-            return (T.testGroup d tests)
-        | otherwise -> putStrLn ("Unexpected directory " ++ d) >> exitFailure
-
-  where
-    pass :: FilePath -> IO ()
-    pass dir = void (sim arch dir allChecks)
-
-    panic :: FilePath -> IO ()
-    panic dir =
-      try (void (sim arch dir allChecks)) >>= \(res :: Either SomeException ()) ->
-        case res of
-          Right _ -> T.U.assertFailure "Test did not panic"
-          Left _ -> pure ()
-
-    iters :: FilePath -> IO ()
-    iters dir =
-      sim arch dir allChecks >>= \case
-        BatchItersExceeded -> pure ()
-        _ -> T.U.assertFailure "Iterations not exceeded"
-
-    timeout :: FilePath -> IO ()
-    timeout dir =
-      sim arch dir allChecks >>= \case
-        BatchTimeout -> pure ()
-        _ -> T.U.assertFailure "Timeout not exceeded"
-
 capture ::
   MonadIO m =>
   IORef.IORef [Diagnostic] ->
@@ -460,27 +418,83 @@ withCapturedLogs withLogAction = do
   let logTxt = Text.unlines (map (Text.pack . show . PP.pretty) logs)
   pure logTxt
 
--- | Make an "Oughta"-based test for an S-expression or LLVM bitcode program
+-- | Make an "Oughta"-based test
 oughta ::
-  (SimOpts -> GreaseLogAction -> IO Results) ->
+  (GreaseLogAction -> IO Results) ->
   FilePath ->
   Oughta.LuaProgram ->
   IO ()
 oughta go path prog0 = do
-  opts <- getNonExeTestOpts path []
+  let action =
+        withCapturedLogs $ \la' -> do
+          res <- go la'
+          logResults la' res
   logTxt <-
-    withCapturedLogs $ \la' -> do
-      res <- go opts la'
-      logResults la' res
+    X.try @X.SomeException action <&>
+      \case
+        Left e -> Text.pack ("Exception: " ++ show e)
+        Right t -> t
   Text.IO.writeFile (FilePath.replaceExtension path "out") logTxt
   let output = Oughta.Output (Text.encodeUtf8 logTxt)
   let prog = Oughta.addPrefix prelude prog0
   Oughta.Result r <- Oughta.check prog output
   case r of
-    Left f -> throwIO f
+    Left f -> X.throwIO f
     Right s ->
       let ms = Oughta.successMatches s in
       T.U.assertBool "Test has some assertions" (not (Seq.null ms))
+
+-- | Make a "Oughta"-based tests for binaries
+oughtaBin ::
+  (GreaseLogAction -> IO Results) ->
+  Arch ->
+  -- | Directory
+  FilePath ->
+  -- | File
+  FilePath ->
+  T.TestTree
+oughtaBin go arch dir fileName =
+  T.U.testCase (FilePath.takeBaseName dir) $ do
+    let drop1 = FilePath.dropExtension fileName
+    let drop2 = FilePath.dropExtension drop1
+    let path = dir </> FilePath.addExtension drop2 "c"
+    content <- Text.IO.readFile path
+    let isArchComment =
+          Text.stripPrefix $
+            case arch of
+              Armv7 -> "// arm: "
+              PPC32 -> "// ppc32: "
+              X64 -> "// x64: "
+    let isGenericComment = Text.stripPrefix "// all: "
+    let isLuaComment = isArchComment <> isGenericComment
+    let prog = Oughta.fromLines path isLuaComment content
+    oughta go (dir </> fileName) prog
+
+-- | Make a "Oughta"-based tests for binaries from a directory
+oughtaDir :: Arch -> [Requirement] -> FilePath -> IO T.TestTree
+oughtaDir arch rs d = do
+  subds <- subdirs d
+  tests <-
+    for subds $ \subd -> do
+      let binPath = testCaseBinPath subd arch
+      binPathExists <- doesFileExist binPath
+      if not binPathExists
+      then pure Nothing
+      else do
+        let go :: GreaseLogAction -> IO Results
+            go la' = do
+              opts <- getExeTestOpts binPath rs
+              case arch of
+                Armv7 -> simulateARM opts la'
+                PPC32 -> simulatePPC32 opts la'
+                X64 -> simulateX86 opts la'
+        let dir = takeDirectory binPath
+        let file = FilePath.takeFileName binPath
+        pure (Just (oughtaBin go arch dir file))
+  pure (T.testGroup (FilePath.takeBaseName d) (Maybe.catMaybes tests))
+
+makeSanityTests :: Arch -> FilePath -> IO T.TestTree
+makeSanityTests arch = oughtaDir arch []
 
 -- | Make an "Oughta"-based test for an S-expression program
 oughtaSexp ::
@@ -495,7 +509,8 @@ oughtaSexp go dir fileName =
     let path = dir </> fileName
     content <- Text.IO.readFile path
     let prog = Oughta.fromLineComments path ";; " content
-    oughta go path prog
+    opts <- getNonExeTestOpts path []
+    oughta (go opts) path prog
 
 findWithExt :: FilePath -> String -> IO [FilePath]
 findWithExt dir ext = do
@@ -512,25 +527,26 @@ llvmTests = do
 
 -- | Make an "Oughta"-based test for an LLVM bitcode program
 oughtaBc ::
-  (SimOpts -> GreaseLogAction -> IO Results) ->
   -- | Directory
   FilePath ->
   -- | File
   FilePath ->
   T.TestTree
-oughtaBc go dir fileName =
+oughtaBc dir fileName =
   let dropped = FilePath.dropExtension fileName in
   T.U.testCase dropped $ do
     let path = dir </> FilePath.addExtension dropped  "c"
     content <- Text.IO.readFile path
     let prog = Oughta.fromLineComments path "/// " content
-    oughta go (dir </> fileName) prog
+    opts <- getNonExeTestOpts (dir </> fileName) []
+    let go = simulateLlvm Trans.defaultTranslationOptions
+    oughta (go opts) (dir </> fileName) prog
 
 llvmBcTests :: IO T.TestTree
 llvmBcTests = do
   let dir = "tests/llvm-bc"
   bcs <- findWithExt dir ".bc"
-  let mkTest = oughtaBc (simulateLlvm Trans.defaultTranslationOptions) dir
+  let mkTest = oughtaBc dir
   pure (T.testGroup "LLVM bitcode" (List.map mkTest bcs))
 
 armCfgTests :: IO T.TestTree

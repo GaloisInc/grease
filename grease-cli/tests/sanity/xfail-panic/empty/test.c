@@ -2,3 +2,5 @@
 
 // This file does *not* have the expected `test` function.
 // See issue gitlab#41.
+
+// all: check [[Exception: Could not find entrypoint symbol "test"]]
