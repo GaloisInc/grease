@@ -62,36 +62,21 @@ testFunction = "test"
 testEntry :: Entrypoint
 testEntry = entrypointNoStartupOv $ EntrypointSymbolName testFunction
 
--- Compute the command-line options for an executable test case.
---
--- Changes to this function should be reflected in @doc/dev.md@.
-getExeTestOpts :: FilePath -> IO SimOpts
-getExeTestOpts = getTestOpts True
-
--- Compute the command-line options for a test case that involves a program that
--- is not an executable (e.g., LLVM bitcode or an S-expression program).
---
--- Changes to this function should be reflected in @doc/dev.md@.
-getNonExeTestOpts :: FilePath -> IO SimOpts
-getNonExeTestOpts = getTestOpts False
-
--- The workhorse for 'getExeTestOpts' and 'getNonExeTestOpts'.
+-- Compute the command-line options for a test case.
 --
 -- Changes to this function should be reflected in @doc/dev.md@.
 getTestOpts ::
-  -- | 'True' if this is a test case for an executable, 'False' otherwise. If
-  -- 'True', look for optional @test.<arch>.config@ files.
-  Bool ->
   -- | The path to the program being tested.
   FilePath ->
   IO SimOpts
-getTestOpts isExeTestCase binName = do
+getTestOpts binName = do
   -- Obtain the default command-line options by running the parser with no
   -- explicit arguments.
   defaultCliOpts <- parseOpts []
 
   -- Obtain the command-line options from the *.config files, if they exist.
   configArgs <- parseConfigFileArgs (replaceExtensions binName "config")
+  let isExeTestCase = ".elf" == FilePath.takeExtension binName
   archConfigArgs <-
     -- `test.<arch>.config` files only make sense for executable test cases, so
     -- don't bother looking for them with other types of test cases.
@@ -288,7 +273,7 @@ oughtaDir arch d = do
       else do
         let go :: GreaseLogAction -> IO Results
             go la' = do
-              opts <- getExeTestOpts binPath
+              opts <- getTestOpts binPath
               case arch of
                 Armv7 -> simulateARM opts la'
                 PPC32 -> simulatePPC32 opts la'
@@ -311,7 +296,7 @@ oughtaSexp go dir fileName =
     let path = dir </> fileName
     content <- Text.IO.readFile path
     let prog = Oughta.fromLineComments path ";; " content
-    opts <- getNonExeTestOpts path
+    opts <- getTestOpts path
     oughta (go opts) path prog
 
 findWithExt :: FilePath -> String -> IO [FilePath]
@@ -340,7 +325,7 @@ oughtaBc dir fileName =
     let path = dir </> FilePath.addExtension dropped  "c"
     content <- Text.IO.readFile path
     let prog = Oughta.fromLineComments path "/// " content
-    opts <- getNonExeTestOpts (dir </> fileName)
+    opts <- getTestOpts (dir </> fileName)
     let go = simulateLlvm Trans.defaultTranslationOptions
     oughta (go opts) (dir </> fileName) prog
 
