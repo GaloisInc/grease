@@ -8,3 +8,4 @@ unsigned int test(unsigned int n) {
   }
   return sum;
 }
+// all: could_not_infer()

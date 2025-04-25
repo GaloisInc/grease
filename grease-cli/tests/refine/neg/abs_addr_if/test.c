@@ -9,3 +9,4 @@ int test(int x) {
     return deref((int *)(void *)0xdeadbeef);
   return 0;
 }
+// all: could_not_infer()

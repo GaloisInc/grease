@@ -2,3 +2,4 @@
 
 #include <stdlib.h>
 void *test(void) { return malloc(1); }
+// all: ok()

@@ -19,3 +19,5 @@ int test(void) {
     __builtin_trap();
     return 0;
 }
+// all: must_fail()
+// all: check "Call to abort"

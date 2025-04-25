@@ -6,3 +6,4 @@
 void test(void) {
   getppid();
 }
+// all: ok()

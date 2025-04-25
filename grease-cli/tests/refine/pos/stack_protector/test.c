@@ -18,3 +18,4 @@ int test(void) {
 int main(void) {
   return test();
 }
+// all: ok()

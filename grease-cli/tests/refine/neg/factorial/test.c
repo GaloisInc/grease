@@ -7,3 +7,4 @@ unsigned int test(unsigned int x) {
   }
   return x * test(x - 1);
 }
+// all: could_not_infer()

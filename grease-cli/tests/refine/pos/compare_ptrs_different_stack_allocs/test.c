@@ -9,3 +9,4 @@ long test() {
   long y;
   return compare((long)&x, (long)&y);
 }
+// all: ok()

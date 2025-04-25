@@ -1,4 +1,6 @@
-function ok() check 'All goals passed!' end
+function ok() check 'All goals passed' end
+
+function could_not_infer() check 'Possible bug(s)' end
 
 function must_fail() check 'Likely bug: unavoidable error' end
 

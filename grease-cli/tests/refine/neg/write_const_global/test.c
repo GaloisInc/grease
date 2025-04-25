@@ -6,3 +6,8 @@ int test(int y) {
   make_it_five(&x);
   return y + x;
 }
+// arm: could_not_infer()
+// x64: could_not_infer()
+
+// TODO: https://github.com/GaloisInc/macaw/issues/418
+// ppc32: ok()

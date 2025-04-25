@@ -19,3 +19,4 @@ int main() {
   int r = rand();
   return test(r);
 }
+// all: uninit_stack()

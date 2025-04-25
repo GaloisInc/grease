@@ -16,3 +16,4 @@ int test(void) {
   free(p);
   return x;
 }
+// all: ok()

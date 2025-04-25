@@ -7,3 +7,4 @@
 int test(int *x) {
   return *x == 42;
 }
+// all: ok()

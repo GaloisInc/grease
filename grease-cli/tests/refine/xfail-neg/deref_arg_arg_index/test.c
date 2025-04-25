@@ -3,3 +3,7 @@
 // grease does not yet support this kind of precondition that depends on a
 // relation between two arguments
 int test(int *ptr, unsigned int idx) { return ptr[idx]; }
+// arm: could_not_infer()
+// TODO(#47):
+// ppc32: check "maximum iterations exceeded"
+// x64: check "maximum iterations exceeded"

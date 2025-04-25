@@ -2,3 +2,4 @@
 
 int glob = 4;
 int test() { return glob; }
+// all: ok()

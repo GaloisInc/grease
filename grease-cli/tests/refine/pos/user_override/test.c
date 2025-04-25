@@ -7,3 +7,4 @@ void shouldnt_loop(void) {
 void test(void) {
   shouldnt_loop();
 }
+// all: ok()

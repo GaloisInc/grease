@@ -11,3 +11,5 @@ __attribute__((noinline)) int f(int *in) { return *in; }
 int test(void) {
   return f(0);
 }
+// all: must_fail()
+// all: check "0x0"
