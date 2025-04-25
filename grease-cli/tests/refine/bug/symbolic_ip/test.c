@@ -15,3 +15,4 @@ void (*g)(void) = &f;
 void test(void) {
   g();
 }
+// all: uninit_stack()

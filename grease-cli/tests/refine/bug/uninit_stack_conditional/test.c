@@ -19,3 +19,7 @@ int main(int argc, char **argv) {
 
   return test(atoi(argv[1]));
 }
+// arm: uninit_stack()
+// TODO(#47):
+// ppc32: could_not_infer()
+// x64: could_not_infer()

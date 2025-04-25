@@ -6,3 +6,4 @@ typedef struct point {
 } point;
 
 int test(point *pt) { return pt->x; }
+// all: ok()

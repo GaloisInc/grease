@@ -10,3 +10,4 @@
 unsigned int test(unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned int e, unsigned int f, unsigned int g, unsigned int h, unsigned int i) {
   return i;
 }
+// all: ok()

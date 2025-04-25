@@ -7,3 +7,4 @@ int test(int *x) {
   free(y);
   return 0;
 }
+// all: ok()

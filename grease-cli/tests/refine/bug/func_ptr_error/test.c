@@ -5,3 +5,5 @@
 // interpret the call to the symbolif function pointer as a bug.
 
 int test(int (*fun_ptr)()) { return fun_ptr(); }
+// all: must_fail()
+// all: check "Cannot resolve a symbolic function address"

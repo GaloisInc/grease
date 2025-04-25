@@ -9,3 +9,4 @@
 void test(void) {
   printf("Blah: %d\n", 27);
 }
+// all: ok()

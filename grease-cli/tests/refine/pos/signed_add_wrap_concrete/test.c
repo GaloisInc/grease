@@ -10,3 +10,4 @@ int test(int x) {
   }
   return 0;
 }
+// all: ok()

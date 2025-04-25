@@ -30,3 +30,4 @@ void test(void) {
   void *p = malloc(8);
   foo(p, 0x01);
 }
+// all: ok()

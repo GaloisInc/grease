@@ -23,3 +23,4 @@ int main(int argc, char **argv) {
 
   return test(atoi(argv[1]));
 }
+// all: could_not_infer()

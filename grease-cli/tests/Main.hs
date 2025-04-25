@@ -56,7 +56,6 @@ import qualified Grease.Output as Output
 import Grease.Main (Results(..), simulateARM, simulateARMSyntax, simulatePPC32, simulatePPC32Syntax, simulateX86, simulateX86Syntax, simulateLlvm, simulateLlvmSyntax, SimOpts (..), optsToSimOpts, logResults)
 import Grease.Options (Opts, optsInfo)
 import Grease.Requirement (Requirement (..), parseReq)
-import Grease.Utility (pshow)
 
 import Shape (shapeTests)
 
@@ -255,27 +254,7 @@ sim arch dir rs = do
 xfail :: [(Arch, String)]
 xfail =
   [ -- Code discovery failuure (bug in Macaw): "TopV where PSTATE_T expected"
-    (Armv7, "tests/prop/in-text/pos/func_ptr"),
-    -- gitlab#240
-    (PPC32, "tests/refine/bug/assert_false"),
-    -- https://github.com/GaloisInc/macaw/issues/418
-    (PPC32, "tests/refine/neg/write_const_global"),
-    -- https://github.com/GaloisInc/grease/issues/47
-    (PPC32, "tests/refine/bug/uninit_stack_conditional"),
-    -- Division by zero using `divw` does not trap on PPC:
-    --
-    -- > If you try to divide by zero or (for divw) if you try to divide
-    -- > 0x80000000 by −1, then the results are garbage, and if you used the o
-    -- > version of the instruction, then the overflow flag is set. No trap is
-    -- > generated. (If you didn’t use the o version, then you get no indication
-    -- > that anything went wrong. You just get garbage.)
-    --
-    -- https://devblogs.microsoft.com/oldnewthing/20180808-00/?p=99445
-    (PPC32, "tests/refine/neg/libpng-cve-2018-13785"),
-    (X64,   "tests/refine/bug/uninit_stack_conditional"),
-    -- https://github.com/GaloisInc/grease/issues/11
-    (PPC32, "tests/refine/xfail-neg/deref_arg_arg_index"),
-    (X64,   "tests/refine/xfail-neg/deref_arg_arg_index")
+    (Armv7, "tests/prop/in-text/pos/func_ptr")
   ]
 
 -- | If a test binary exists, construct a test case for it (i.e., return a
@@ -345,60 +324,6 @@ assertAssertionFailure =
           forM_ cs $ \case
             CheckSuccess -> T.U.assertFailure "Assertion passed"
             CheckAssertionFailure _ -> pure ()
-
-assertCouldNotInfer :: BatchStatus -> IO ()
-assertCouldNotInfer =
-  \case
-    BatchBug {} -> T.U.assertFailure "Unexpected possible bug"
-    BatchCantRefine {} -> T.U.assertFailure "Unexpected refinement failure"
-    BatchTimeout -> T.U.assertFailure "Unexpected timeout"
-    BatchItersExceeded -> T.U.assertFailure "Refinement loop iterations exceeded"
-    BatchCouldNotInfer _ -> pure ()
-    b@(BatchChecks cs)
-      | Map.null cs ->
-          T.U.assertFailure "No assertions checked"
-      | otherwise ->
-          forM_ cs $ \case
-            CheckSuccess -> T.U.assertFailure "Assertion passed"
-            CheckAssertionFailure _ ->
-              T.U.assertFailure (show (PP.pretty b))
-
-assertPossibleBug :: BatchStatus -> IO ()
-assertPossibleBug =
-  \case
-    BatchBug {} -> pure ()
-    BatchCantRefine reason -> T.U.assertFailure ("Unexpected:" <> Text.unpack (pshow reason))
-    BatchTimeout -> T.U.assertFailure "Unexpected timeout"
-    BatchItersExceeded -> T.U.assertFailure "Refinement loop iterations exceeded"
-    BatchCouldNotInfer {} -> T.U.assertFailure "Unexpected inference failure"
-    BatchChecks {} -> T.U.assertFailure "Unexpected inference success"
-
-makeRefineTests :: Arch -> FilePath -> IO T.TestTree
-makeRefineTests arch d =
-  let kind = takeBaseName d
-  in if | kind == "pos" || kind == "xfail-pos" -> do
-            subds <- subdirs d
-            tests <- mapMaybeM (\subd -> exeTestCase arch subd (pass subd)) subds
-            return (T.testGroup d tests)
-        | kind == "neg" || kind == "xfail-neg" -> do
-            subds <- subdirs d
-            tests <- mapMaybeM (\subd -> exeTestCase arch subd (fail subd)) subds
-            return (T.testGroup d tests)
-        | kind == "bug" -> do
-            subds <- subdirs d
-            tests <- mapMaybeM (\subd -> exeTestCase arch subd (bug subd)) subds
-            return (T.testGroup d tests)
-        | otherwise -> putStrLn ("Unexpected directory " ++ d) >> exitFailure
-
-  where
-    bug :: FilePath -> IO ()
-    bug dir = sim arch dir allChecks >>= assertPossibleBug
-
-    fail :: FilePath -> IO ()
-    fail dir = sim arch dir allChecks >>= assertCouldNotInfer
-
-    pass :: FilePath -> IO ()
-    pass dir = sim arch dir allChecks >>= assertSuccess
 
 capture ::
   MonadIO m =>
@@ -492,6 +417,9 @@ oughtaDir arch rs d = do
         let file = FilePath.takeFileName binPath
         pure (Just (oughtaBin go arch dir file))
   pure (T.testGroup (FilePath.takeBaseName d) (Maybe.catMaybes tests))
+
+makeRefineTests :: Arch -> FilePath -> IO T.TestTree
+makeRefineTests arch = oughtaDir arch allChecks
 
 makeSanityTests :: Arch -> FilePath -> IO T.TestTree
 makeSanityTests arch = oughtaDir arch []

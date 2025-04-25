@@ -7,3 +7,4 @@ int glob[128] = {0};
 void test(void) {
     glob[0] = 42;
 }
+// all: ok()

@@ -8,3 +8,4 @@
 unsigned int test(unsigned int a, unsigned int b) {
   return a + b;
 }
+// all: ok()

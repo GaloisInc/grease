@@ -16,3 +16,4 @@ int test(void) {
   puts("Hello, World!\n");
   my_assert(1);
 }
+// all: ok()
