@@ -6,6 +6,7 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- See @doc/dev.md@ for a description of how tests are organized
 module Main (main) where
@@ -18,6 +19,7 @@ import System.FilePath qualified as FilePath
 import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
 import qualified System.Directory as Dir
 
+import Data.FileEmbed (embedFile)
 import qualified Data.IORef as IORef
 import qualified Data.List as List
 import qualified Data.Map as Map
@@ -55,6 +57,9 @@ import Grease.Requirement (Requirement (..), parseReq)
 import Grease.Utility (pshow)
 
 import Shape (shapeTests)
+
+prelude :: Text.Text
+prelude = Text.decodeUtf8 $(embedFile "tests/test.lua")
 
 -- We silence all diagnostic messages while running the test suite to keep
 -- the output relatively concise.
@@ -469,17 +474,6 @@ oughta go path prog0 = do
       logResults la' res
   Text.IO.writeFile (FilePath.replaceExtension path "out") logTxt
   let output = Oughta.Output (Text.encodeUtf8 logTxt)
-  let prelude =
-        Text.unlines
-        [ "function ok() check 'All goals passed!' end"
-        , "function must_fail() check 'Likely bug: unavoidable error' end"
-        , "function next_line_must_fail()"
-        , "  must_fail()"
-        , "  check(string.format('%s:%d', file(), src_line(1) + 1))"
-        , "end"
-        , "function no_heuristic() check 'Unable to find a heuristic for any goal' end"
-        , "function uninit_stack() check 'Likely bug: uninitialized stack read' end"
-        ]
   let prog = Oughta.addPrefix prelude prog0
   Oughta.Result r <- Oughta.check prog output
   case r of
