@@ -173,11 +173,12 @@ will be combined. If a command-line option is not explicitly mentioned in a
 
 ### LLVM bitcode and S-expression test cases
 
-Test cases that do not involve binaries fall into this category. Unlike binary
-test cases, the test suite will not automatically discover these test cases, so
-it is the developer's responsibility to define expectations for them in the
-Haskell test code. These test cases are organized into different
+Test cases that do not involve binaries fall into this category. These tests
+are written using [Oughta][oughta]. They are automatically discovered by the
+test harness based on their file name.  They are organized into different
 subdirectories:
+
+[oughta]: https://github.com/GaloisInc/oughta
 
 1. `llvm/`: LLVM CFGs (via crucible-llvm-syntax). Each of these test cases has
    the file extension `*.llvm.cbl`.
