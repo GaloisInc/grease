@@ -13,7 +13,7 @@ module Main (main) where
 
 import Prelude hiding (fail)
 
-import System.FilePath ((</>), replaceExtension, replaceExtensions, takeDirectory)
+import System.FilePath ((</>), replaceExtension, replaceExtensions)
 import System.FilePath qualified as FilePath
 import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
 import qualified System.Directory as Dir
@@ -22,7 +22,6 @@ import Data.FileEmbed (embedFile)
 import Data.Functor ((<&>))
 import qualified Data.IORef as IORef
 import qualified Data.List as List
-import qualified Data.Maybe as Maybe
 import qualified Data.Sequence as Seq
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -31,7 +30,6 @@ import Data.Traversable (for)
 import qualified Prettyprinter as PP
 
 import qualified Control.Exception as X
-import Control.Monad (filterM, forM)
 import qualified Control.Monad as Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
@@ -160,12 +158,6 @@ getTestOpts binName = do
         , maxIters = specificMaxIters
         }
 
-subdirs :: FilePath -> IO [FilePath]
-subdirs dir = do
-  entries <- listDirectory dir
-  let absEntries = map (dir </>) entries
-  filterM doesDirectoryExist absEntries
-
 -- Arbitrary, fairly low value. Making this higher makes the xfail-iter tests
 -- take longer, making it lower may cause other tests to start exceeding this
 -- bound.
@@ -175,20 +167,10 @@ maxRefinementIters = 128
 data Arch = Armv7 | PPC32 | X64
   deriving Eq
 
-arches :: [Arch]
-arches = [Armv7, PPC32, X64]
-
 ppArch :: Arch -> String
 ppArch Armv7 = "armv7l"
 ppArch PPC32 = "ppc32"
 ppArch X64 = "x86_64"
-
-testCaseBinPath :: FilePath -> Arch -> FilePath
-testCaseBinPath dir arch =
-  case arch of
-    Armv7 -> dir </> "test.armv7l.elf"
-    PPC32 -> dir </> "test.ppc32.elf"
-    X64   -> dir </> "test.x64.elf"
 
 capture ::
   MonadIO m =>
@@ -244,7 +226,7 @@ oughtaBin ::
   FilePath ->
   T.TestTree
 oughtaBin go arch dir fileName =
-  T.U.testCase (FilePath.takeBaseName dir) $ do
+  T.U.testCase (ppArch arch) $ do
     let drop1 = FilePath.dropExtension fileName
     let drop2 = FilePath.dropExtension drop1
     let path = dir </> FilePath.addExtension drop2 "c"
@@ -259,29 +241,6 @@ oughtaBin go arch dir fileName =
     let isLuaComment = isArchComment <> isGenericComment
     let prog = Oughta.fromLines path isLuaComment content
     oughta go (dir </> fileName) prog
-
--- | Make a "Oughta"-based tests for binaries from a directory
-oughtaDir :: Arch -> FilePath -> IO T.TestTree
-oughtaDir arch d = do
-  subds <- subdirs d
-  tests <-
-    for subds $ \subd -> do
-      let binPath = testCaseBinPath subd arch
-      binPathExists <- doesFileExist binPath
-      if not binPathExists
-      then pure Nothing
-      else do
-        let go :: GreaseLogAction -> IO Results
-            go la' = do
-              opts <- getTestOpts binPath
-              case arch of
-                Armv7 -> simulateARM opts la'
-                PPC32 -> simulatePPC32 opts la'
-                X64 -> simulateX86 opts la'
-        let dir = takeDirectory binPath
-        let file = FilePath.takeFileName binPath
-        pure (Just (oughtaBin go arch dir file))
-  pure (T.testGroup (FilePath.takeBaseName d) (Maybe.catMaybes tests))
 
 -- | Make an "Oughta"-based test for an S-expression program
 oughtaSexp ::
@@ -357,33 +316,45 @@ x86CfgTests = do
   let mkTest = oughtaSexp simulateX86Syntax dir
   pure (T.testGroup "x86_64 CFG" (List.map mkTest cbls))
 
+-- | Recursively walk a directory tree, discovering @.elf@ tests
+discoverBinTests :: FilePath -> IO T.TestTree
+discoverBinTests d = do
+  entries <- listDirectory d
+  fmap (T.testGroup (FilePath.takeBaseName d) . List.concat) $
+    for entries $ \ent -> do
+      let path = d </> ent
+      if FilePath.takeExtension ent == ".elf"
+      then do
+        let arch =
+              case FilePath.takeExtension (FilePath.dropExtension ent) of
+                ".armv7l" -> Armv7
+                ".ppc32" -> PPC32
+                ".x64" -> X64
+                _ -> error ("Unknown architecture for file " ++ ent)
+        let go :: GreaseLogAction -> IO Results
+            go la' = do
+              opts <- getTestOpts path
+              case arch of
+                Armv7 -> simulateARM opts la'
+                PPC32 -> simulatePPC32 opts la'
+                X64 -> simulateX86 opts la'
+        let file = FilePath.takeFileName ent
+        pure [oughtaBin go arch d file]
+      else do
+        isDir <- doesDirectoryExist path
+        if isDir
+        then do
+          tests <- discoverBinTests path
+          pure [tests]
+        else pure []
+
 main :: IO ()
 main = do
-  archTests <-
-    for arches $ \arch -> do
-      props <- subdirs "tests/prop"
-      propTestGroups <-
-        forM props $ \prop -> do
-          dirs <- subdirs prop
-          tests <- mapM (oughtaDir arch) dirs
-          return (T.testGroup prop tests)
-      let propTests = T.testGroup "prop" propTestGroups
-
-      refineTests <- do
-        dirs <- subdirs "tests/refine"
-        tests <- mapM (oughtaDir arch) dirs
-        return (T.testGroup "refine" tests)
-
-      sanityTests <- do
-        dirs <- subdirs "tests/sanity"
-        tests <- mapM (oughtaDir arch) dirs
-        return (T.testGroup "sanity" tests)
-
-      return (T.testGroup (ppArch arch) [propTests, refineTests, sanityTests])
-
+  elfTests <-
+    mapM discoverBinTests ["tests/prop", "tests/refine", "tests/sanity"]
   llTests <- llvmTests
   bcTests <- llvmBcTests
   armTests <- armCfgTests
   ppc32Tests <- ppc32CfgTests
   x86Tests <- x86CfgTests
-  T.defaultMain $ T.testGroup "Tests" (shapeTests:llTests:bcTests:armTests:ppc32Tests:x86Tests:archTests)
+  T.defaultMain $ T.testGroup "Tests" (shapeTests:llTests:bcTests:armTests:ppc32Tests:x86Tests:elfTests)
