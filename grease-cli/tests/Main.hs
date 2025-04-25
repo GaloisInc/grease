@@ -13,8 +13,7 @@ module Main (main) where
 
 import Prelude hiding (fail)
 
-import System.Exit (exitFailure)
-import System.FilePath ((</>), replaceExtension, replaceExtensions, takeBaseName, takeDirectory)
+import System.FilePath ((</>), replaceExtension, replaceExtensions, takeDirectory)
 import System.FilePath qualified as FilePath
 import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
 import qualified System.Directory as Dir
@@ -23,7 +22,6 @@ import Data.FileEmbed (embedFile)
 import Data.Functor ((<&>))
 import qualified Data.IORef as IORef
 import qualified Data.List as List
-import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Sequence as Seq
 import qualified Data.Text as Text
@@ -33,7 +31,7 @@ import Data.Traversable (for)
 import qualified Prettyprinter as PP
 
 import qualified Control.Exception as X
-import Control.Monad (filterM, forM, forM_)
+import Control.Monad (filterM, forM)
 import qualified Control.Monad as Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
@@ -43,7 +41,6 @@ import Oughta qualified
 import qualified Lumberjack as LJ
 
 import qualified Test.Tasty as T
-import qualified Test.Tasty.ExpectedFailure as T
 import qualified Test.Tasty.HUnit as T.U
 
 -- crucible-llvm
@@ -51,21 +48,13 @@ import qualified Lang.Crucible.LLVM.Translation as Trans
 
 import Grease.Diagnostic (Diagnostic, GreaseLogAction)
 import Grease.Entrypoint (Entrypoint(..), EntrypointLocation(..), entrypointNoStartupOv)
-import Grease.Output (CheckStatus(..), BatchStatus (..))
-import qualified Grease.Output as Output
 import Grease.Main (Results(..), simulateARM, simulateARMSyntax, simulatePPC32, simulatePPC32Syntax, simulateX86, simulateX86Syntax, simulateLlvm, simulateLlvmSyntax, SimOpts (..), optsToSimOpts, logResults)
 import Grease.Options (Opts, optsInfo)
-import Grease.Requirement (Requirement (..), parseReq)
 
 import Shape (shapeTests)
 
 prelude :: Text.Text
 prelude = Text.decodeUtf8 $(embedFile "tests/test.lua")
-
--- We silence all diagnostic messages while running the test suite to keep
--- the output relatively concise.
-la :: GreaseLogAction
-la = LJ.LogAction $ \_ -> pure ()
 
 testFunction :: Text.Text
 testFunction = "test"
@@ -76,14 +65,14 @@ testEntry = entrypointNoStartupOv $ EntrypointSymbolName testFunction
 -- Compute the command-line options for an executable test case.
 --
 -- Changes to this function should be reflected in @doc/dev.md@.
-getExeTestOpts :: FilePath -> [Requirement] -> IO SimOpts
+getExeTestOpts :: FilePath -> IO SimOpts
 getExeTestOpts = getTestOpts True
 
 -- Compute the command-line options for a test case that involves a program that
 -- is not an executable (e.g., LLVM bitcode or an S-expression program).
 --
 -- Changes to this function should be reflected in @doc/dev.md@.
-getNonExeTestOpts :: FilePath -> [Requirement] -> IO SimOpts
+getNonExeTestOpts :: FilePath -> IO SimOpts
 getNonExeTestOpts = getTestOpts False
 
 -- The workhorse for 'getExeTestOpts' and 'getNonExeTestOpts'.
@@ -95,10 +84,8 @@ getTestOpts ::
   Bool ->
   -- | The path to the program being tested.
   FilePath ->
-  -- | 'Requirement's to test.
-  [Requirement] ->
   IO SimOpts
-getTestOpts isExeTestCase binName rs = do
+getTestOpts isExeTestCase binName = do
   -- Obtain the default command-line options by running the parser with no
   -- explicit arguments.
   defaultCliOpts <- parseOpts []
@@ -174,9 +161,8 @@ getTestOpts isExeTestCase binName rs = do
     -- While the test suite inherits most of the default test options, there are
     -- a handful of places where we override the defaults:
     --
-    -- * The `binPath` and `reqs` are always derived from the subdirectory where
-    --   the test executable resides. (These cannot be overriden, even in
-    --   *.config files.)
+    -- * The `binPath` is always derived from the subdirectory where the test
+    --   executable resides. (This cannot be overriden, even in *.config files.)
     --
     -- * Unless otherwise specified in *.config files, the values of
     --   `entryPoints` and `maxIters` are overridden (see `testEntrypoints` and
@@ -185,37 +171,15 @@ getTestOpts isExeTestCase binName rs = do
     testSpecificOptions specificEntryPoints specificMaxIters opts =
       opts
         { binPath = binName
-        , reqs = rs
         , entryPoints = specificEntryPoints
         , maxIters = specificMaxIters
         }
-
-getEntrypointResult :: SimOpts -> Results -> BatchStatus
-getEntrypointResult opts (Results resultMap) =
-  case Map.lookup (getEntrypoint (entryPoints opts)) resultMap of
-    Nothing -> error "Couldn't find result for expected entrypoint"
-    Just bs -> Output.batchStatus bs
-  where
-    -- Currently, all test cases are expected to have exactly one entrypoint.
-    getEntrypoint :: [Entrypoint] -> Entrypoint
-    getEntrypoint [] = error "No entrypoints given"
-    getEntrypoint [x] = x
-    getEntrypoint entries = error ("Too many entry points given: " ++ show entries)
-
-allChecks :: [Requirement]
-allChecks = [minBound .. maxBound]
 
 subdirs :: FilePath -> IO [FilePath]
 subdirs dir = do
   entries <- listDirectory dir
   let absEntries = map (dir </>) entries
   filterM doesDirectoryExist absEntries
-
--- | Taken from the @extra@ library, which is BSD-3–licensed.
-mapMaybeM :: Monad m => (a -> m (Maybe b)) -> [a] -> m [b]
-{-# INLINE mapMaybeM #-}
-mapMaybeM op = foldr f (pure [])
-    where f x xs = do mbY <- op x; case mbY of Nothing -> xs; Just y -> do ys <- xs; pure $ y:ys
 
 -- Arbitrary, fairly low value. Making this higher makes the xfail-iter tests
 -- take longer, making it lower may cause other tests to start exceeding this
@@ -240,90 +204,6 @@ testCaseBinPath dir arch =
     Armv7 -> dir </> "test.armv7l.elf"
     PPC32 -> dir </> "test.ppc32.elf"
     X64   -> dir </> "test.x64.elf"
-
-sim :: Arch -> FilePath -> [Requirement] -> IO BatchStatus
-sim arch dir rs = do
-  opts <- getExeTestOpts bin rs
-  case arch of
-    Armv7 -> getEntrypointResult opts <$> simulateARM opts la
-    PPC32 -> getEntrypointResult opts <$> simulatePPC32 opts la
-    X64 -> getEntrypointResult opts <$> simulateX86 opts la
-  where
-    bin = testCaseBinPath dir arch
-
-xfail :: [(Arch, String)]
-xfail =
-  [ -- Code discovery failuure (bug in Macaw): "TopV where PSTATE_T expected"
-    (Armv7, "tests/prop/in-text/pos/func_ptr")
-  ]
-
--- | If a test binary exists, construct a test case for it (i.e., return a
--- 'Just'). Otherwise, skip the test (i.e., return a 'Nothing').
-exeTestCase :: Arch -> String -> IO () -> IO (Maybe T.TestTree)
-exeTestCase arch name test = do
-  binPathExists <- doesFileExist (testCaseBinPath name arch)
-  pure $ if binPathExists
-         then Just testTree
-         else Nothing
-  where
-    testTree :: T.TestTree
-    testTree =
-      if (arch, name) `List.elem` xfail
-      then T.expectFail (T.U.testCase name test)
-      else T.U.testCase name test
-
-makePropTests :: Arch -> FilePath -> IO T.TestTree
-makePropTests arch d =
-  let kind = takeBaseName d
-  in if | kind == "pos" || kind == "xfail-pos" -> do
-            subds <- subdirs d
-            tests <- mapMaybeM (\subd -> exeTestCase arch subd (oneFail subd)) subds
-            return (T.testGroup d tests)
-        | kind == "neg" || kind == "xfail-neg" -> do
-            subds <- subdirs d
-            tests <- mapMaybeM (\subd -> exeTestCase arch subd (allPass subd)) subds
-            return (T.testGroup d tests)
-        | otherwise -> putStrLn ("Unexpected directory " ++ d) >> exitFailure
-
-  where
-    oneFail :: FilePath -> IO ()
-    oneFail dir = do
-      let reqName = Text.pack (takeBaseName (takeDirectory (takeDirectory dir)))
-      check <- parseReq reqName
-      sim arch dir [check] >>= assertAssertionFailure
-
-    allPass :: FilePath -> IO ()
-    allPass dir = sim arch dir allChecks >>= assertSuccess
-
-assertSuccess :: BatchStatus -> IO ()
-assertSuccess =
-  \case
-    BatchBug {} -> T.U.assertFailure "Unexpected possible bug"
-    BatchCantRefine {} -> T.U.assertFailure "Unexpected refinement failure"
-    BatchTimeout -> T.U.assertFailure "Unexpected timeout"
-    BatchItersExceeded -> T.U.assertFailure "Refinement loop iterations exceeded"
-    BatchCouldNotInfer _ -> T.U.assertFailure "Failed to infer preconditions"
-    -- NB: This treats not checking any assertions at all as success.
-    b@(BatchChecks cs) -> forM_ cs $ \case
-      CheckSuccess -> pure ()
-      CheckAssertionFailure _ ->
-        T.U.assertFailure (show (PP.pretty b))
-
-assertAssertionFailure :: BatchStatus -> IO ()
-assertAssertionFailure =
-  \case
-    BatchBug {} -> T.U.assertFailure "Unexpected possible bug"
-    BatchCantRefine {} -> T.U.assertFailure "Unexpected refinement failure"
-    BatchTimeout -> T.U.assertFailure "Unexpected timeout"
-    BatchItersExceeded -> T.U.assertFailure "Refinement loop iterations exceeded"
-    BatchCouldNotInfer _ -> T.U.assertFailure "Failed to infer preconditions"
-    BatchChecks cs
-      | Map.null cs ->
-          T.U.assertFailure "No assertions checked"
-      | otherwise ->
-          forM_ cs $ \case
-            CheckSuccess -> T.U.assertFailure "Assertion passed"
-            CheckAssertionFailure _ -> pure ()
 
 capture ::
   MonadIO m =>
@@ -396,8 +276,8 @@ oughtaBin go arch dir fileName =
     oughta go (dir </> fileName) prog
 
 -- | Make a "Oughta"-based tests for binaries from a directory
-oughtaDir :: Arch -> [Requirement] -> FilePath -> IO T.TestTree
-oughtaDir arch rs d = do
+oughtaDir :: Arch -> FilePath -> IO T.TestTree
+oughtaDir arch d = do
   subds <- subdirs d
   tests <-
     for subds $ \subd -> do
@@ -408,7 +288,7 @@ oughtaDir arch rs d = do
       else do
         let go :: GreaseLogAction -> IO Results
             go la' = do
-              opts <- getExeTestOpts binPath rs
+              opts <- getExeTestOpts binPath
               case arch of
                 Armv7 -> simulateARM opts la'
                 PPC32 -> simulatePPC32 opts la'
@@ -417,12 +297,6 @@ oughtaDir arch rs d = do
         let file = FilePath.takeFileName binPath
         pure (Just (oughtaBin go arch dir file))
   pure (T.testGroup (FilePath.takeBaseName d) (Maybe.catMaybes tests))
-
-makeRefineTests :: Arch -> FilePath -> IO T.TestTree
-makeRefineTests arch = oughtaDir arch allChecks
-
-makeSanityTests :: Arch -> FilePath -> IO T.TestTree
-makeSanityTests arch = oughtaDir arch []
 
 -- | Make an "Oughta"-based test for an S-expression program
 oughtaSexp ::
@@ -437,7 +311,7 @@ oughtaSexp go dir fileName =
     let path = dir </> fileName
     content <- Text.IO.readFile path
     let prog = Oughta.fromLineComments path ";; " content
-    opts <- getNonExeTestOpts path []
+    opts <- getNonExeTestOpts path
     oughta (go opts) path prog
 
 findWithExt :: FilePath -> String -> IO [FilePath]
@@ -466,7 +340,7 @@ oughtaBc dir fileName =
     let path = dir </> FilePath.addExtension dropped  "c"
     content <- Text.IO.readFile path
     let prog = Oughta.fromLineComments path "/// " content
-    opts <- getNonExeTestOpts (dir </> fileName) []
+    opts <- getNonExeTestOpts (dir </> fileName)
     let go = simulateLlvm Trans.defaultTranslationOptions
     oughta (go opts) (dir </> fileName) prog
 
@@ -506,18 +380,18 @@ main = do
       propTestGroups <-
         forM props $ \prop -> do
           dirs <- subdirs prop
-          tests <- mapM (makePropTests arch) dirs
+          tests <- mapM (oughtaDir arch) dirs
           return (T.testGroup prop tests)
       let propTests = T.testGroup "prop" propTestGroups
 
       refineTests <- do
         dirs <- subdirs "tests/refine"
-        tests <- mapM (makeRefineTests arch) dirs
+        tests <- mapM (oughtaDir arch) dirs
         return (T.testGroup "refine" tests)
 
       sanityTests <- do
         dirs <- subdirs "tests/sanity"
-        tests <- mapM (makeSanityTests arch) dirs
+        tests <- mapM (oughtaDir arch) dirs
         return (T.testGroup "sanity" tests)
 
       return (T.testGroup (ppArch arch) [propTests, refineTests, sanityTests])

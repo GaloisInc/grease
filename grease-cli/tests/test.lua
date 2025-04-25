@@ -11,4 +11,6 @@ end
 
 function no_heuristic() check 'Unable to find a heuristic for any goal' end
 
+function req_failed() check 'One or more assertions failed' end
+
 function uninit_stack() check 'Likely bug: uninitialized stack read' end

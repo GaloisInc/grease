@@ -9,3 +9,5 @@ int test() {
   mprotect((void *)func, sizeof(func), PROT_READ | PROT_EXEC);
   return 1;
 }
+// all: req_failed()
+// all: check "Cannot call mprotect"
