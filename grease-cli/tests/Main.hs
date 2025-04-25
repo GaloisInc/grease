@@ -10,40 +10,26 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 -- See @doc/dev.md@ for a description of how tests are organized
 module Main (main) where
 
-import Prelude (Bounded(..), (==), (||), otherwise, error)
+import Prelude hiding (fail)
 
 import System.Exit (exitFailure)
-import System.IO (IO, putStrLn)
-import System.FilePath ((</>), FilePath, replaceExtension, replaceExtensions, takeBaseName, takeDirectory)
+import System.FilePath ((</>), replaceExtension, replaceExtensions, takeBaseName, takeDirectory)
 import System.FilePath qualified as FilePath
 import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
 import qualified System.Directory as Dir
 
-import Data.Bool (Bool(..), not)
-import Data.Eq (Eq)
-import Data.Either (Either(..))
-import Data.Foldable (foldr)
-import Data.Function (($), (.))
-import Data.Functor ((<$>))
-import Data.Int (Int)
-import Data.List ((++), map)
 import qualified Data.IORef as IORef
 import qualified Data.List as List
 import qualified Data.Map as Map
-import Data.Maybe (Maybe(..))
 import qualified Data.Sequence as Seq
-import Data.Semigroup ((<>))
-import Data.String (String)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text.IO
 import Data.Traversable (for)
-import Text.Show (show)
 import qualified Prettyprinter as PP
 
-import Control.Applicative (pure)
 import Control.Exception (SomeException, try, throwIO)
-import Control.Monad (Monad((>>), (>>=), return), filterM, forM, mapM, forM_, void)
+import Control.Monad (filterM, forM, forM_, void)
 import qualified Control.Monad as Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
