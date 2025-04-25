@@ -10,3 +10,5 @@ int test(int x) {
   }
   return dec(x);
 }
+// all: req_failed()
+// all: check ".text"

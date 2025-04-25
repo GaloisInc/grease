@@ -214,7 +214,6 @@ test-suite grease-tests
     , parameterized-utils
     , prettyprinter
     , tasty
-    , tasty-expected-failure
     , tasty-hedgehog
     , tasty-hunit
     , text
