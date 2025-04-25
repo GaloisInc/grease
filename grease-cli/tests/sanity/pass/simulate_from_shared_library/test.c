@@ -6,4 +6,10 @@
 // shared library.
 
 int deref(int *x) { return *x; }
+// arm: check "Calling a PLT stub (deref)"
+// x64: check "Calling a PLT stub (deref)"
 int test(int *x) { return deref(x); }
+// TODO: Why does PPC fail here?
+// arm: ok()
+// ppc32: check "Could not identify block at 0x10000220"
+// x64: ok()

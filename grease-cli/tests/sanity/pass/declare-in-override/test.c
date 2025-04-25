@@ -10,3 +10,7 @@ void test(void) {
     *p = 42;
     free(p);
 }
+// arm: ok()
+// TODO: Why does PPC fail here?
+// ppc32: check "PPCInvalidInstruction"
+// x64: ok()

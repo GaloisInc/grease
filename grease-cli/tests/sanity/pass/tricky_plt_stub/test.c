@@ -18,3 +18,5 @@ int b(void) {
 int test(void) {
   return b();
 }
+
+// all: ok()
