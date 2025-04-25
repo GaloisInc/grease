@@ -13,6 +13,8 @@ description:
   under-constrained symbolic execution.
 extra-doc-files:
   README.md
+extra-source-files:
+  tests/test.lua
 category: Static Analysis
 
 source-repository head
@@ -198,9 +200,11 @@ test-suite grease-tests
       grease-cli
     , grease
     , bv-sized
+    , bytestring
     , containers
     , crucible-llvm
     , directory
+    , file-embed
     , filepath
     , hedgehog
     , lumberjack
