@@ -94,16 +94,21 @@ To run the tests:
 $ cabal test pkg:grease-cli
 ```
 
-The tests reside in the `tests/` directory. We divide the tests into two
-general categories: (1) tests involving binaries, and (2) tests involving LLVM
-bitcode or S-expression files.
+The tests reside in the `grease-cli/tests/` directory. They are automatically
+discovered by the test harness based on their file name. They are written using
+[Oughta][oughta].
+
+[oughta]: https://github.com/GaloisInc/oughta
+
+We divide the tests into two general categories: (1) tests involving binaries,
+and (2) tests involving LLVM bitcode or S-expression files.
 
 ### Binary test cases
 
 These test `grease`'s machine code frontend by ingesting binaries. These test
 cases are organized into different subdirectories:
 
-1. `prop/`: Tests that exercise particular property assertions (i.e., requirements). This directory has sub-directories for each property supported by grease. Within each property-specific directory, there are up to four additional directories:
+1. `prop/`: Tests that exercise particular property assertions (i.e., requirements). This directory has sub-directories for each property supported by grease. Within each property-specific directory, there can be several directories:
 
     a. `pos/`: "true positives", tests that should trigger (fail) the assertion, and do
 
@@ -113,7 +118,7 @@ cases are organized into different subdirectories:
 
     d. `xfail-neg/`: "false negatives", i.e., type II error, tests that should trigger the assertion, but don't
 
-2. `refine/`: Tests that exercise the precondition refinement process but are not particularly relevant to any property assertions. This directory also has four subdirectories:
+2. `refine/`: Tests that exercise the precondition refinement process but are not particularly relevant to any property assertions. Subdirectories:
 
     a. `bug/`: tests that encounter an error that grease can't work around that might be a bug
 
@@ -125,7 +130,7 @@ cases are organized into different subdirectories:
 
     e. `xfail-neg/`: "false negatives", i.e., type II error, tests that have some sufficient precondition for successful execution, but grease can't find it
 
-3. `sanity/`: Tests that exercise earlier or more fundamental parts of `grease`, such as disassembly or machine code semantics. For these tests, we don't particularly care whether `grease` finds a refined precondition. This directory has two subdirectories:
+3. `sanity/`: Tests that exercise earlier or more fundamental parts of `grease`, such as disassembly or machine code semantics. For these tests, we don't particularly care whether `grease` finds a refined precondition. This directory has a few subdirectories:
 
     a. `pass/`, for tests that don't cause any issues
 
@@ -147,7 +152,7 @@ By default, each test will be run as though `grease` were invoked with the
 following command-line options:
 
 * The entrypoint is set to `--symbol test`.
-* `--iters` is set to `32` to ensure that the `xfail-iters` tests
+* `--iters` is set to `128` to ensure that the `xfail-iters` tests
   complete in a somewhat reasonable amount of time.
 * All other command-line options inherit their default values.
 
@@ -173,12 +178,8 @@ will be combined. If a command-line option is not explicitly mentioned in a
 
 ### LLVM bitcode and S-expression test cases
 
-Test cases that do not involve binaries fall into this category. These tests
-are written using [Oughta][oughta]. They are automatically discovered by the
-test harness based on their file name.  They are organized into different
-subdirectories:
-
-[oughta]: https://github.com/GaloisInc/oughta
+Test cases that do not involve binaries fall into this category. They are
+organized into different subdirectories:
 
 1. `llvm/`: LLVM CFGs (via crucible-llvm-syntax). Each of these test cases has
    the file extension `*.llvm.cbl`.
