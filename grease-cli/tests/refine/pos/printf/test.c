@@ -4,6 +4,9 @@
 // a buggy override for `printf`. The current approach is that `grease` will
 // not register a built-in override for `printf` at all, instead skipping any
 // calls to `printf` during simulation.
+
+// flag(ppc32): --plt-stub 0x10000220:printf
+
 #include <stdio.h>
 
 void test(void) {

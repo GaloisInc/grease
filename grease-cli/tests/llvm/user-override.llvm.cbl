@@ -1,5 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
+; flag: --overrides tests/llvm/id-bool.llvm.cbl
+
 (declare @id-bool ((p (Ptr 1))) (Ptr 1))
 (defun @test ((b (Ptr 1))) (Ptr 1)
   (start start:

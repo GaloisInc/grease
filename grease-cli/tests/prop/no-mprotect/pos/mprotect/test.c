@@ -1,5 +1,8 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// flag: --req no-mprotect
+// flag(ppc32): --plt-stub 0x10000230:mprotect
+
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/mman.h>

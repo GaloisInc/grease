@@ -1,5 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
+; flag: --symbol-startup-override test:tests/llvm/extra/startup-override.llvm.cbl
+
 (declare @memset ((s (Ptr 64)) (c (Ptr 32)) (n (Ptr 64))) (Ptr 64))
 
 (defun @test ((buf (Ptr 64)) (sz (Ptr 64))) Unit

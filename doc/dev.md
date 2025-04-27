@@ -156,25 +156,24 @@ following command-line options:
   complete in a somewhat reasonable amount of time.
 * All other command-line options inherit their default values.
 
-If you wish to override these options, you can do so by adding one of the
-following files alongside the executables:
+If you wish to override these options, you can do so by adding a line that
+begins with `// flag: ` to the corresponding C program, like so:
 
-* `test.config`: This file should contain a list of command-line options, with
-  each one separated by whitespace, e.g.,
+```c
+// flag: --symbol foo --stack-argument-slots 5
+```
 
-  ```
-  --symbol foo --stack-argument-slots 5
-  ```
+You can also add architecture-specific flags like so:
 
-  These command-line options are applied to all `test.<arch>.elf` executables,
-  regardless of what `<arch>` is being used.
-* `test.<arch>.config`: This is like a `test.config` file, except that the
-  options in this file are only applied to `test.<arch>.elf`, making these
-  options architecture-specific.
+```c
+// flag(arm): --address 0x10074
+// flag(ppc32): --address 0x10000074
+// flag(x64): --address 0x401000
+```
 
-If both types of `*.config` files are present, then the options from both files
-will be combined. If a command-line option is not explicitly mentioned in a
-`*.config` file, then it will inherit its default value as described above.
+All applicable comments will be combined into a single configuration. If a
+command-line option is not explicitly mentioned in a `flag` comment, then it
+will inherit its default value as described above.
 
 ### LLVM bitcode and S-expression test cases
 
@@ -196,11 +195,9 @@ organized into different subdirectories:
 5. `x86`: x86-64 machine-code CFGs (via `macaw-x86-syntax`). Each of these test
    cases has the file exension `*.x64.cbl`.
 
-Each test case can optionally supply a `<name>.config` file (in the same
-subdirectory as the test case) that overrides the default command-line options.
-The `<name>` in `<name>.config` file must match the name of the test case
-without its file extensions. For instance, a file named `foo.config` will apply
-to a test case named `foo.llvm.cbl`, but it would _not_ apply to
-`bar.llvm.cbl`.
+These test-cases may override the default command-line options using
+specially-formatted comments. For LLVM bitcode programs, add a line beginning
+with `// flag: ` to the corresponding C program. For S-expression programs, add
+a line beginning with `; flag: `.
 
 <!-- Copyright (c) Galois, Inc. 2024. -->

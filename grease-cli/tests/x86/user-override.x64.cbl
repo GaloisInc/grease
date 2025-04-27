@@ -1,5 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
+; flag: --overrides tests/x86/extra/id-ptr.x64.cbl
+
 (declare @id-ptr ((p (Ptr 64))) (Ptr 64))
 (defun @test ((regs X86Regs)) X86Regs
   (start start:

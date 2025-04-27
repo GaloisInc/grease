@@ -1,5 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
+; flag: --overrides tests/ppc32/extra/id-ptr.ppc32.cbl
+
 (declare @id-ptr ((p (Ptr 32))) (Ptr 32))
 (defun @test ((regs PPC32Regs)) PPC32Regs
   (start start:

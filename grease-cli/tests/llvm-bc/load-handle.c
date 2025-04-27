@@ -1,6 +1,9 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
 // A regression test for gitlab#158.
+
+// flag: --overrides tests/llvm-bc/extra/f.cbl
+
 void* f(void);
 
 void* test(void) {

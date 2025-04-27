@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// flag: --symbol-startup-override test:tests/llvm-bc/extra/startup-override.llvm.cbl
+
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>

@@ -3,6 +3,9 @@
 // A regression test for gitlab#179. We reference the `malloc` function by way
 // of a function pointer so that there will be a PLT stub for `malloc` in the
 // `.plt.got` section (at least, on x86-64).
+
+// flag(ppc32): --plt-stub 0x310:malloc
+
 #include <stdlib.h>
 
 extern int a1, a2;

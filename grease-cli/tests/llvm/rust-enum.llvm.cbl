@@ -5,6 +5,8 @@
 ; that we can load from uninitialized memory without crashing when the --rust
 ; flag is enabled.
 
+; flag: --rust
+
 (defun @test () Unit
   (start start:
     ; First, allocate a pointer to a chunk of memory that is 16 bytes in size.
