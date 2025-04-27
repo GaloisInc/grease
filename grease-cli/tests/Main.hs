@@ -218,14 +218,18 @@ oughta go path prog0 = do
 
 -- | Make a "Oughta"-based tests for binaries
 oughtaBin ::
-  (GreaseLogAction -> IO Results) ->
-  Arch ->
   -- | Directory
   FilePath ->
   -- | File
   FilePath ->
   T.TestTree
-oughtaBin go arch dir fileName =
+oughtaBin dir fileName = do
+  let arch =
+        case FilePath.takeExtension (FilePath.dropExtension fileName) of
+          ".armv7l" -> Armv7
+          ".ppc32" -> PPC32
+          ".x64" -> X64
+          _ -> error ("Unknown architecture for file " ++ fileName)
   T.U.testCase (ppArch arch) $ do
     let drop1 = FilePath.dropExtension fileName
     let drop2 = FilePath.dropExtension drop1
@@ -240,6 +244,13 @@ oughtaBin go arch dir fileName =
     let isGenericComment = Text.stripPrefix "// all: "
     let isLuaComment = isArchComment <> isGenericComment
     let prog = Oughta.fromLines path isLuaComment content
+    let go :: GreaseLogAction -> IO Results
+        go la' = do
+          opts <- getTestOpts (dir </> fileName)
+          case arch of
+            Armv7 -> simulateARM opts la'
+            PPC32 -> simulatePPC32 opts la'
+            X64 -> simulateX86 opts la'
     oughta go (dir </> fileName) prog
 
 -- | Make an "Oughta"-based test for an S-expression program
@@ -324,22 +335,7 @@ discoverBinTests d = do
     for entries $ \ent -> do
       let path = d </> ent
       if FilePath.takeExtension ent == ".elf"
-      then do
-        let arch =
-              case FilePath.takeExtension (FilePath.dropExtension ent) of
-                ".armv7l" -> Armv7
-                ".ppc32" -> PPC32
-                ".x64" -> X64
-                _ -> error ("Unknown architecture for file " ++ ent)
-        let go :: GreaseLogAction -> IO Results
-            go la' = do
-              opts <- getTestOpts path
-              case arch of
-                Armv7 -> simulateARM opts la'
-                PPC32 -> simulatePPC32 opts la'
-                X64 -> simulateX86 opts la'
-        let file = FilePath.takeFileName ent
-        pure [oughtaBin go arch d file]
+      then pure [oughtaBin d ent]
       else do
         isDir <- doesDirectoryExist path
         if isDir
