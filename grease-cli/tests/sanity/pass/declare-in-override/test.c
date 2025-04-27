@@ -1,5 +1,9 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// flag(arm): --overrides tests/sanity/pass/declare-in-override/my_malloc.aux.armv7l.cbl
+// flag(ppc32): --overrides tests/sanity/pass/declare-in-override/my_malloc.aux.ppc32.cbl
+// flag(x64): --overrides tests/sanity/pass/declare-in-override/my_malloc.aux.x86_64.cbl
+
 #include <stdint.h>
 
 extern void* my_malloc(void);

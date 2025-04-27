@@ -7,6 +7,10 @@
 // uninitialized stack read errors, we need to use the --stack-argument-slots
 // command-line option.
 
+// flag(arm): --stack-argument-slots 5
+// flag(ppc32): --stack-argument-slots 1
+// flag(x64): --stack-argument-slots 3
+
 unsigned int test(unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned int e, unsigned int f, unsigned int g, unsigned int h, unsigned int i) {
   return i;
 }

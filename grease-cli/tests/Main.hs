@@ -13,7 +13,7 @@ module Main (main) where
 
 import Prelude hiding (fail)
 
-import System.FilePath ((</>), replaceExtension, replaceExtensions)
+import System.FilePath ((</>))
 import System.FilePath qualified as FilePath
 import qualified System.Directory as Dir
 
@@ -21,6 +21,7 @@ import Data.FileEmbed (embedFile)
 import Data.Functor ((<&>))
 import qualified Data.IORef as IORef
 import qualified Data.List as List
+import qualified Data.Maybe as Maybe
 import qualified Data.Sequence as Seq
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -62,46 +63,36 @@ testEntry = entrypointNoStartupOv $ EntrypointSymbolName testFunction
 --
 -- Changes to this function should be reflected in @doc/dev.md@.
 getTestOpts ::
-  -- | The path to the program being tested.
+  Maybe Arch ->
+  -- | The content of the file potentially containing flags.
+  Text.Text ->
+  -- | The path to the program to be simulated.
   FilePath ->
   IO SimOpts
-getTestOpts binName = do
+getTestOpts mArch content binName = do
   -- Obtain the default command-line options by running the parser with no
   -- explicit arguments.
   defaultCliOpts <- parseOpts []
 
-  -- Obtain the command-line options from the *.config files, if they exist.
-  configArgs <- parseConfigFileArgs (replaceExtensions binName "config")
-  let isExeTestCase = ".elf" == FilePath.takeExtension binName
-  archConfigArgs <-
-    -- `test.<arch>.config` files only make sense for executable test cases, so
-    -- don't bother looking for them with other types of test cases.
-    if isExeTestCase
-      then parseConfigFileArgs (replaceExtension binName "config")
-      else pure []
-  let allConfigArgs = configArgs ++ archConfigArgs
-
-  -- If there are no command-line options from the *.config files, then use the
-  -- default command-line options (plus some test suite-specific tweaks).
-  -- Otherwise, use the overridden command-line options from the *.config files.
+  -- If there are no command-line options embedded in the files, then use
+  -- the default command-line options (plus some test suite-specific tweaks).
+  -- Otherwise, use the overridden command-line options.
   let defaultSimOpts = optsToSimOpts defaultCliOpts
       defaultEntryPoints = entryPoints defaultSimOpts
       defaultMaxIters = maxIters defaultSimOpts
-  if List.null allConfigArgs
+  if List.null parsedFlags
   then pure $ testSpecificOptions testEntrypoints testMaxIters defaultSimOpts
-  else do configCliOpts <- parseOpts allConfigArgs
+  else do configCliOpts <- parseOpts parsedFlags
           let configSimOpts = optsToSimOpts configCliOpts
               configEntryPoints = entryPoints configSimOpts
               configMaxIters = maxIters configSimOpts
-              -- While we want to inherit most of the default values obtained
-              -- from parsing the options in the *.config files, we do _not_
-              -- want to inherit the entrypoint or max-iterations values if the
-              -- *.config files did not explicitly set them, as we give them
-              -- test-specific defaults that are different from the `grease`
-              -- executable's defaults. We check whether the options were
-              -- explicitly set or not by comparing the parsed options to the
-              -- *.config options and seeing if they differ. (Admittedly, this
-              -- is rather clunky.)
+              -- While we want to inherit most of the default values, we do
+              -- _not_ want to inherit the entrypoint or max-iterations values
+              -- if they were not explicitly set, as we give them test-specific
+              -- defaults that are different from the `grease` executable's
+              -- defaults. We check whether the options were explicitly set or
+              -- not by comparing the default values to the parsed options and
+              -- seeing if they differ. (Admittedly, this is rather clunky.)
               testEntrypoints' =
                 if defaultEntryPoints == configEntryPoints
                   then testEntrypoints
@@ -112,15 +103,22 @@ getTestOpts binName = do
                   else configMaxIters
           pure $ testSpecificOptions testEntrypoints' testMaxIters' configSimOpts
   where
-    -- Parse the command-line options in a *.config file as a list of Strings,
+    -- Parse the command-line options embedded in a file as a list of Strings,
     -- which is the format expected by optparse-applicative.
-    parseConfigFileArgs :: FilePath -> IO [String]
-    parseConfigFileArgs fp = do
-      exists <- Dir.doesFileExist fp
-      if exists
-        then do contents <- Text.IO.readFile fp
-                pure $ List.words $ Text.unpack contents
-        else pure []
+    parsedFlags :: [String]
+    parsedFlags =
+      let ls = Text.lines content
+          isConfigComment =
+            mconcat
+            [ Text.stripPrefix "; flag: "
+            , Text.stripPrefix "// flag: "
+            , case mArch of
+                Nothing -> const Nothing
+                Just arch -> Text.stripPrefix ("// flag(" <> archComment arch <> "):")
+            ]
+          configLines = Maybe.mapMaybe isConfigComment ls
+          args = List.concatMap Text.words configLines
+      in map Text.unpack args
 
     -- Invoke the `optsInfo` optparse-applicative parser using the path to the
     -- test executable (which is mandatory) plus the additional supplied
@@ -143,11 +141,10 @@ getTestOpts binName = do
     -- a handful of places where we override the defaults:
     --
     -- * The `binPath` is always derived from the subdirectory where the test
-    --   executable resides. (This cannot be overriden, even in *.config files.)
+    --   executable resides. (This cannot be overriden.)
     --
-    -- * Unless otherwise specified in *.config files, the values of
-    --   `entryPoints` and `maxIters` are overridden (see `testEntrypoints` and
-    --   `testMaxIters`).
+    -- * Unless explicitly specified, the values of `entryPoints` and `maxIters`
+    --   are overridden (see `testEntrypoints` and `testMaxIters`).
     testSpecificOptions :: [Entrypoint] -> Maybe Int -> SimOpts -> SimOpts
     testSpecificOptions specificEntryPoints specificMaxIters opts =
       opts
@@ -176,6 +173,14 @@ parseArch s =
      | s == ppArch PPC32 -> PPC32
      | s == ppArch X64 -> X64
      | otherwise -> error ("Unknown architecture: " ++ s)
+
+-- Format for architecture-specific directives in comments in test files
+archComment :: Arch -> Text.Text
+archComment =
+  \case
+    Armv7 -> "arm"
+    PPC32 -> "ppc32"
+    X64 -> "x64"
 
 capture ::
   MonadIO m =>
@@ -236,18 +241,13 @@ oughtaBin dir fileName = do
   T.U.testCase (ppArch arch) $ do
     let c = dir </> FilePath.addExtension drop2 "c"
     content <- Text.IO.readFile c
-    let isArchComment =
-          Text.stripPrefix $
-            case arch of
-              Armv7 -> "// arm: "
-              PPC32 -> "// ppc32: "
-              X64 -> "// x64: "
+    let isArchComment = Text.stripPrefix ("// " <> archComment arch <> ":")
     let isGenericComment = Text.stripPrefix "// all: "
     let isLuaComment = isArchComment <> isGenericComment
     let prog = Oughta.fromLines c isLuaComment content
     let go :: GreaseLogAction -> IO Results
         go la' = do
-          opts <- getTestOpts (dir </> fileName)
+          opts <- getTestOpts (Just arch) content (dir </> fileName)
           case arch of
             Armv7 -> simulateARM opts la'
             PPC32 -> simulatePPC32 opts la'
@@ -267,7 +267,7 @@ oughtaSexp go dir fileName =
     let path = dir </> fileName
     content <- Text.IO.readFile path
     let prog = Oughta.fromLineComments path ";; " content
-    opts <- getTestOpts path
+    opts <- getTestOpts Nothing content path
     oughta (go opts) path prog
 
 -- | Make an "Oughta"-based test for an LLVM bitcode program
@@ -280,10 +280,10 @@ oughtaBc ::
 oughtaBc dir fileName =
   let dropped = FilePath.dropExtension fileName in
   T.U.testCase dropped $ do
-    let path = dir </> FilePath.addExtension dropped  "c"
-    content <- Text.IO.readFile path
-    let prog = Oughta.fromLineComments path "/// " content
-    opts <- getTestOpts (dir </> fileName)
+    let c = dir </> FilePath.addExtension dropped  "c"
+    content <- Text.IO.readFile c
+    let prog = Oughta.fromLineComments c "/// " content
+    opts <- getTestOpts Nothing content (dir </> fileName)
     let go = simulateLlvm Trans.defaultTranslationOptions
     oughta (go opts) (dir </> fileName) prog
 
