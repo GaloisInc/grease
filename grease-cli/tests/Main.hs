@@ -15,7 +15,6 @@ import Prelude hiding (fail)
 
 import System.FilePath ((</>), replaceExtension, replaceExtensions)
 import System.FilePath qualified as FilePath
-import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
 import qualified System.Directory as Dir
 
 import Data.FileEmbed (embedFile)
@@ -30,7 +29,6 @@ import Data.Traversable (for)
 import qualified Prettyprinter as PP
 
 import qualified Control.Exception as X
-import qualified Control.Monad as Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
 import qualified Options.Applicative as Opt
@@ -118,7 +116,7 @@ getTestOpts binName = do
     -- which is the format expected by optparse-applicative.
     parseConfigFileArgs :: FilePath -> IO [String]
     parseConfigFileArgs fp = do
-      exists <- doesFileExist fp
+      exists <- Dir.doesFileExist fp
       if exists
         then do contents <- Text.IO.readFile fp
                 pure $ List.words $ Text.unpack contents
@@ -170,7 +168,14 @@ data Arch = Armv7 | PPC32 | X64
 ppArch :: Arch -> String
 ppArch Armv7 = "armv7l"
 ppArch PPC32 = "ppc32"
-ppArch X64 = "x86_64"
+ppArch X64 = "x64"
+
+parseArch :: String -> Arch
+parseArch s =
+  if | s == ppArch Armv7 -> Armv7
+     | s == ppArch PPC32 -> PPC32
+     | s == ppArch X64 -> X64
+     | otherwise -> error ("Unknown architecture: " ++ s)
 
 capture ::
   MonadIO m =>
@@ -224,17 +229,13 @@ oughtaBin ::
   FilePath ->
   T.TestTree
 oughtaBin dir fileName = do
-  let arch =
-        case FilePath.takeExtension (FilePath.dropExtension fileName) of
-          ".armv7l" -> Armv7
-          ".ppc32" -> PPC32
-          ".x64" -> X64
-          _ -> error ("Unknown architecture for file " ++ fileName)
+  let drop1 = FilePath.dropExtension fileName
+  let drop2 = FilePath.dropExtension drop1
+  let archName = List.drop 1 (FilePath.takeExtension drop1)
+  let arch = parseArch archName
   T.U.testCase (ppArch arch) $ do
-    let drop1 = FilePath.dropExtension fileName
-    let drop2 = FilePath.dropExtension drop1
-    let path = dir </> FilePath.addExtension drop2 "c"
-    content <- Text.IO.readFile path
+    let c = dir </> FilePath.addExtension drop2 "c"
+    content <- Text.IO.readFile c
     let isArchComment =
           Text.stripPrefix $
             case arch of
@@ -243,7 +244,7 @@ oughtaBin dir fileName = do
               X64 -> "// x64: "
     let isGenericComment = Text.stripPrefix "// all: "
     let isLuaComment = isArchComment <> isGenericComment
-    let prog = Oughta.fromLines path isLuaComment content
+    let prog = Oughta.fromLines c isLuaComment content
     let go :: GreaseLogAction -> IO Results
         go la' = do
           opts <- getTestOpts (dir </> fileName)
@@ -269,19 +270,6 @@ oughtaSexp go dir fileName =
     opts <- getTestOpts path
     oughta (go opts) path prog
 
-findWithExt :: FilePath -> String -> IO [FilePath]
-findWithExt dir ext = do
-  entries <- Dir.listDirectory dir
-  files <- Monad.filterM (Dir.doesFileExist . (dir </>)) entries
-  pure (List.filter ((== ext) . FilePath.takeExtension) files)
-
-llvmTests :: IO T.TestTree
-llvmTests = do
-  let dir = "tests/llvm"
-  cbls <- findWithExt dir ".cbl"
-  let mkTest = oughtaSexp simulateLlvmSyntax dir
-  pure (T.testGroup "LLVM CFG" (List.map mkTest cbls))
-
 -- | Make an "Oughta"-based test for an LLVM bitcode program
 oughtaBc ::
   -- | Directory
@@ -299,58 +287,51 @@ oughtaBc dir fileName =
     let go = simulateLlvm Trans.defaultTranslationOptions
     oughta (go opts) (dir </> fileName) prog
 
-llvmBcTests :: IO T.TestTree
-llvmBcTests = do
-  let dir = "tests/llvm-bc"
-  bcs <- findWithExt dir ".bc"
-  let mkTest = oughtaBc dir
-  pure (T.testGroup "LLVM bitcode" (List.map mkTest bcs))
+-- | Create a test from a file, depending on the extension
+fileTest :: FilePath -> FilePath -> [T.TestTree]
+fileTest d f =
+  let (f', ext) = FilePath.splitExtension f in
+  case ext of
+    ".bc" -> [oughtaBc d f]
+    ".cbl" ->
+      case FilePath.takeExtension f' of
+        ".armv7l" -> [oughtaSexp simulateARMSyntax d f]
+        ".llvm" -> [oughtaSexp simulateLlvmSyntax d f]
+        ".ppc32" -> [oughtaSexp simulatePPC32Syntax d f]
+        ".x64" -> [oughtaSexp simulateX86Syntax d f]
+        _ -> []
+    ".elf" -> [oughtaBin d f]
+    _ -> []
 
-armCfgTests :: IO T.TestTree
-armCfgTests = do
-  let dir = "tests/arm"
-  cbls <- findWithExt dir ".cbl"
-  let mkTest = oughtaSexp simulateARMSyntax dir
-  pure (T.testGroup "ARM CFG" (List.map mkTest cbls))
-
-ppc32CfgTests :: IO T.TestTree
-ppc32CfgTests = do
-  let dir = "tests/ppc32"
-  cbls <- findWithExt dir ".cbl"
-  let mkTest = oughtaSexp simulatePPC32Syntax dir
-  pure (T.testGroup "PPC32 CFG" (List.map mkTest cbls))
-
-x86CfgTests :: IO T.TestTree
-x86CfgTests = do
-  let dir = "tests/x86"
-  cbls <- findWithExt dir ".cbl"
-  let mkTest = oughtaSexp simulateX86Syntax dir
-  pure (T.testGroup "x86_64 CFG" (List.map mkTest cbls))
-
--- | Recursively walk a directory tree, discovering @.elf@ tests
-discoverBinTests :: FilePath -> IO T.TestTree
-discoverBinTests d = do
-  entries <- listDirectory d
+-- | Recursively walk a directory tree, discovering tests
+discoverTests :: FilePath -> IO T.TestTree
+discoverTests d = do
+  entries <- Dir.listDirectory d
   fmap (T.testGroup (FilePath.takeBaseName d) . List.concat) $
     for entries $ \ent -> do
-      let path = d </> ent
-      if FilePath.takeExtension ent == ".elf"
-      then pure [oughtaBin d ent]
+      -- skip test support files
+      if ent == "extra" || ".aux" `List.isInfixOf` ent
+      then pure []
       else do
-        isDir <- doesDirectoryExist path
+        let path = d </> ent
+        isDir <- Dir.doesDirectoryExist path
         if isDir
         then do
-          tests <- discoverBinTests path
+          tests <- discoverTests path
           pure [tests]
-        else pure []
+        else pure (fileTest d ent)
 
 main :: IO ()
 main = do
-  elfTests <-
-    mapM discoverBinTests ["tests/prop", "tests/refine", "tests/sanity"]
-  llTests <- llvmTests
-  bcTests <- llvmBcTests
-  armTests <- armCfgTests
-  ppc32Tests <- ppc32CfgTests
-  x86Tests <- x86CfgTests
-  T.defaultMain $ T.testGroup "Tests" (shapeTests:llTests:bcTests:armTests:ppc32Tests:x86Tests:elfTests)
+  -- Each entry in this list should be documented in doc/dev.md
+  let dirs =
+        [ "llvm"
+        , "llvm-bc"
+        , "ppc32"
+        , "prop"
+        , "refine"
+        , "sanity"
+        , "x86"
+        ]
+  tests <- mapM discoverTests (map ("tests" </>) dirs)
+  T.defaultMain $ T.testGroup "Tests" (shapeTests:tests)
