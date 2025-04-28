@@ -3,9 +3,9 @@
 ; A regression test for gitlab#177. This distills the essence of the Rust test
 ; case down to the equivalent S-expression statements. Namely, we want to ensure
 ; that we can load from uninitialized memory without crashing when the --rust
-; flag is enabled.
+; flags is enabled.
 
-; flag: --rust
+; flags: --rust
 
 (defun @test () Unit
   (start start:

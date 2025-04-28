@@ -9,7 +9,7 @@
 // code path for function overrides that overriding functions defined in the
 // same binary.
 
-// flag(ppc32): --plt-stub 0x10000260:malloc --plt-stub 0x10000270:free
+// flags(ppc32): --plt-stub 0x10000260:malloc --plt-stub 0x10000270:free
 
 int test(void) {
   int* p = malloc(sizeof(int));

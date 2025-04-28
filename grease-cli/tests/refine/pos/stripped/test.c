@@ -5,9 +5,9 @@
 // grease supply an address in order to discover the `test` function. This also
 // serves as a regression test for gitlab#110.
 
-// flag(arm): --address 0x10074
-// flag(ppc32): --address 0x10000074
-// flag(x64): --address 0x401000
+// flags(arm): --address 0x10074
+// flags(ppc32): --address 0x10000074
+// flags(x64): --address 0x401000
 
 int test(int *x) {
   return *x == 42;

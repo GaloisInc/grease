@@ -1,6 +1,6 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flag: --req in-text
+// flags: --req in-text
 
 // The correct precondition for this function is complex... Not clear if it's
 // worth it to bake this logic into grease.

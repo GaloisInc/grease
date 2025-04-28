@@ -157,22 +157,22 @@ following command-line options:
 * All other command-line options inherit their default values.
 
 If you wish to override these options, you can do so by adding a line that
-begins with `// flag: ` to the corresponding C program, like so:
+begins with `// flags: ` to the corresponding C program, like so:
 
 ```c
-// flag: --symbol foo --stack-argument-slots 5
+// flags: --symbol foo --stack-argument-slots 5
 ```
 
 You can also add architecture-specific flags like so:
 
 ```c
-// flag(arm): --address 0x10074
-// flag(ppc32): --address 0x10000074
-// flag(x64): --address 0x401000
+// flags(arm): --address 0x10074
+// flags(ppc32): --address 0x10000074
+// flags(x64): --address 0x401000
 ```
 
 All applicable comments will be combined into a single configuration. If a
-command-line option is not explicitly mentioned in a `flag` comment, then it
+command-line option is not explicitly mentioned in a `flags` comment, then it
 will inherit its default value as described above.
 
 ### LLVM bitcode and S-expression test cases
@@ -197,7 +197,7 @@ organized into different subdirectories:
 
 These test-cases may override the default command-line options using
 specially-formatted comments. For LLVM bitcode programs, add a line beginning
-with `// flag: ` to the corresponding C program. For S-expression programs, add
-a line beginning with `; flag: `.
+with `// flags: ` to the corresponding C program. For S-expression programs, add
+a line beginning with `; flags: `.
 
 <!-- Copyright (c) Galois, Inc. 2024. -->

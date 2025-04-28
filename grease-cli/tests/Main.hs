@@ -110,11 +110,11 @@ getTestOpts mArch content binName = do
       let ls = Text.lines content
           isConfigComment =
             mconcat
-            [ Text.stripPrefix "; flag: "
-            , Text.stripPrefix "// flag: "
+            [ Text.stripPrefix "; flags: "
+            , Text.stripPrefix "// flags: "
             , case mArch of
                 Nothing -> const Nothing
-                Just arch -> Text.stripPrefix ("// flag(" <> archComment arch <> "):")
+                Just arch -> Text.stripPrefix ("// flags(" <> archComment arch <> "):")
             ]
           configLines = Maybe.mapMaybe isConfigComment ls
           args = List.concatMap Text.words configLines
