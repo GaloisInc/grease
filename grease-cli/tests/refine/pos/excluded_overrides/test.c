@@ -4,7 +4,7 @@
 // overrides to Macaw overrides that do not work well with macaw-symbolic's
 // lazy memory model.
 
-// flag(ppc32): --plt-stub 0x10000300:putchar --plt-stub 0x10000310:puts --plt-stub 0x10000320:__assert_fail
+// flags(ppc32): --plt-stub 0x10000300:putchar --plt-stub 0x10000310:puts --plt-stub 0x10000320:__assert_fail
 
 #include <assert.h>
 #include <stdio.h>

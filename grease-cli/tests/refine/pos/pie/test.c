@@ -1,6 +1,6 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flag(ppc32): --plt-stub 0x270:malloc --plt-stub 0x280:free
+// flags(ppc32): --plt-stub 0x270:malloc --plt-stub 0x280:free
 
 #include <stdlib.h>
 

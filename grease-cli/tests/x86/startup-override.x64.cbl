@@ -1,6 +1,6 @@
 ; Copyright (c) Galois, Inc. 2024
 
-; flag: --symbol-startup-override test:tests/x86/extra/startup-override.x64.cbl
+; flags: --symbol-startup-override test:tests/x86/extra/startup-override.x64.cbl
 
 (declare @memset ((s (Ptr 64)) (c (Bitvector 32)) (n (Ptr 64))) (Ptr 64))
 

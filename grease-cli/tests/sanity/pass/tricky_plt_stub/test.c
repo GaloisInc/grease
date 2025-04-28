@@ -4,7 +4,7 @@
 // of a function pointer so that there will be a PLT stub for `malloc` in the
 // `.plt.got` section (at least, on x86-64).
 
-// flag(ppc32): --plt-stub 0x310:malloc
+// flags(ppc32): --plt-stub 0x310:malloc
 
 #include <stdlib.h>
 

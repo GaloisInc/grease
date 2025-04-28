@@ -3,7 +3,7 @@
 ; A test case that demonstrates that forward declarations can be used in both
 ; Macaw S-expression programs and their overrides (gitlab#159).
 
-; flag: --overrides tests/ppc32/extra/my-malloc.ppc32.cbl
+; flags: --overrides tests/ppc32/extra/my-malloc.ppc32.cbl
 
 ; A forward declaration to a built-in override.
 (declare @free ((ptr (Ptr 32))) Unit)
