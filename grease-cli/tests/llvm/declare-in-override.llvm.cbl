@@ -3,6 +3,7 @@
 ; A test case that demonstrates that forward declarations can be used in both
 ; LLVM S-expression programs and their overrides (gitlab#159).
 
+; flags: --symbol test
 ; flags: --overrides tests/llvm/extra/my-malloc.llvm.cbl
 
 ; A forward declaration to a built-in override.

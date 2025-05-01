@@ -44,7 +44,6 @@ import qualified Test.Tasty.HUnit as T.U
 import qualified Lang.Crucible.LLVM.Translation as Trans
 
 import Grease.Diagnostic (Diagnostic, GreaseLogAction)
-import Grease.Entrypoint (Entrypoint(..), EntrypointLocation(..), entrypointNoStartupOv)
 import Grease.Main (Results(..), simulateARM, simulateARMSyntax, simulatePPC32, simulatePPC32Syntax, simulateX86, simulateX86Syntax, simulateLlvm, simulateLlvmSyntax, SimOpts (..), optsToSimOpts, logResults)
 import Grease.Options (Opts, optsInfo)
 
@@ -52,12 +51,6 @@ import Shape (shapeTests)
 
 prelude :: Text.Text
 prelude = Text.decodeUtf8 $(embedFile "tests/test.lua")
-
-testFunction :: Text.Text
-testFunction = "test"
-
-testEntry :: Entrypoint
-testEntry = entrypointNoStartupOv $ EntrypointSymbolName testFunction
 
 -- Compute the command-line options for a test case.
 --
@@ -69,39 +62,7 @@ getTestOpts ::
   -- | The path to the program to be simulated.
   FilePath ->
   IO SimOpts
-getTestOpts mArch content binName = do
-  -- Obtain the default command-line options by running the parser with no
-  -- explicit arguments.
-  defaultCliOpts <- parseOpts []
-
-  -- If there are no command-line options embedded in the files, then use
-  -- the default command-line options (plus some test suite-specific tweaks).
-  -- Otherwise, use the overridden command-line options.
-  let defaultSimOpts = optsToSimOpts defaultCliOpts
-      defaultEntryPoints = entryPoints defaultSimOpts
-      defaultMaxIters = maxIters defaultSimOpts
-  if List.null parsedFlags
-  then pure $ testSpecificOptions testEntrypoints testMaxIters defaultSimOpts
-  else do configCliOpts <- parseOpts parsedFlags
-          let configSimOpts = optsToSimOpts configCliOpts
-              configEntryPoints = entryPoints configSimOpts
-              configMaxIters = maxIters configSimOpts
-              -- While we want to inherit most of the default values, we do
-              -- _not_ want to inherit the entrypoint or max-iterations values
-              -- if they were not explicitly set, as we give them test-specific
-              -- defaults that are different from the `grease` executable's
-              -- defaults. We check whether the options were explicitly set or
-              -- not by comparing the default values to the parsed options and
-              -- seeing if they differ. (Admittedly, this is rather clunky.)
-              testEntrypoints' =
-                if defaultEntryPoints == configEntryPoints
-                  then testEntrypoints
-                  else configEntryPoints
-              testMaxIters' =
-                if defaultMaxIters == configMaxIters
-                  then testMaxIters
-                  else configMaxIters
-          pure $ testSpecificOptions testEntrypoints' testMaxIters' configSimOpts
+getTestOpts mArch content binName = optsToSimOpts <$> parseOpts parsedFlags
   where
     -- Parse the command-line options embedded in a file as a list of Strings,
     -- which is the format expected by optparse-applicative.
@@ -127,37 +88,6 @@ getTestOpts mArch content binName = do
     parseOpts args =
       Opt.handleParseResult $
       Opt.execParserPure Opt.defaultPrefs optsInfo (binName : args)
-
-    -- If not otherwise specified, default to `--symbol test` as the entrypoint.
-    testEntrypoints :: [Entrypoint]
-    testEntrypoints = [testEntry]
-
-    -- If not otherwise specified, default to `--iters 32` as the maximum number
-    -- of iterations.
-    testMaxIters :: Maybe Int
-    testMaxIters = Just maxRefinementIters
-
-    -- While the test suite inherits most of the default test options, there are
-    -- a handful of places where we override the defaults:
-    --
-    -- * The `binPath` is always derived from the subdirectory where the test
-    --   executable resides. (This cannot be overriden.)
-    --
-    -- * Unless explicitly specified, the values of `entryPoints` and `maxIters`
-    --   are overridden (see `testEntrypoints` and `testMaxIters`).
-    testSpecificOptions :: [Entrypoint] -> Maybe Int -> SimOpts -> SimOpts
-    testSpecificOptions specificEntryPoints specificMaxIters opts =
-      opts
-        { binPath = binName
-        , entryPoints = specificEntryPoints
-        , maxIters = specificMaxIters
-        }
-
--- Arbitrary, fairly low value. Making this higher makes the xfail-iter tests
--- take longer, making it lower may cause other tests to start exceeding this
--- bound.
-maxRefinementIters :: Int
-maxRefinementIters = 128
 
 data Arch = Armv7 | PPC32 | X64
   deriving Eq

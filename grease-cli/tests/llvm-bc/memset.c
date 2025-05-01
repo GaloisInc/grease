@@ -3,6 +3,9 @@
 // Regression test for gitlab#170, test that "polymorphic" LLVM overrides such
 // as `memset` are properly handled; and for gitlab#186, test that the
 // heuristics handle `memset` by allocating enough space.
+
+// flags: --symbol test
+
 #include <string.h>
 
 void *test(void *dest) {

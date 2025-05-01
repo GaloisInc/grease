@@ -8,6 +8,9 @@
 // an error just before a trap, and we'd still like to report that error to the
 // user. As such, we want to ensure that the call to `abort` in this program
 // occurs without being superseded by the `ud2` instruction.
+
+// flags: --symbol test
+
 void abort(void) {}
 
 void panic(void) {

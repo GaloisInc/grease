@@ -1,5 +1,6 @@
 ; Copyright (c) Galois, Inc. 2024
 
+; flags: --symbol test
 ; flags: --overrides tests/x86/extra/id-ptr.x64.cbl
 
 (declare @id-ptr ((p (Ptr 64))) (Ptr 64))

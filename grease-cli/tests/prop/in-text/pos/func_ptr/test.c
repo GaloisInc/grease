@@ -1,5 +1,6 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// flags: --symbol test
 // flags: --req in-text
 
 // The correct precondition for this function is complex... Not clear if it's

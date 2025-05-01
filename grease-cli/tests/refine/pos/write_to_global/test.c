@@ -2,6 +2,8 @@
 
 // A regression test for gitlab#202.
 
+// flags: --symbol test
+
 int glob[128] = {0};
 
 void test(void) {

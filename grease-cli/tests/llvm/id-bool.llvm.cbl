@@ -1,5 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
+; flags: --symbol test
+
 ; This definition is used as an override in the user-override.llvm.cbl
 ; test case.
 (defun @id-bool ((b (Ptr 1))) (Ptr 1)

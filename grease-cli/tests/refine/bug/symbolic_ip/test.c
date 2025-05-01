@@ -4,6 +4,9 @@
 // of g's definition will be stored in the global address space, which will
 // appear (at first glance) as a symbolic address. We must consult an SMT
 // solver to conclude that the address is in fact concrete.
+
+// flags: --symbol test
+
 #include <stdbool.h>
 
 void f(void) {

@@ -11,6 +11,8 @@
 // this program with -static.) We do not support these checks in PowerPC at all
 // at the moment.
 
+// flags: --symbol test
+
 int test(void) {
   return 0;
 }
