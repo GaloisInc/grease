@@ -147,7 +147,7 @@ To add a new test, add a new directory under the appropriate directory above. It
 - An x86_64 executable named `test.x64.elf`.
 
 By default, each test will be run as though `grease` were invoked with the
-binary as its only argument. Tests may provide further command-line  flags by
+binary as its only argument. Tests may provide further command-line flags by
 adding a line that begins with `// flags: ` to the corresponding C program,
 like so:
 
