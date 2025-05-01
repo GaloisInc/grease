@@ -196,4 +196,13 @@ specially-formatted comments. For LLVM bitcode programs, add a line beginning
 with `// flags: ` to the corresponding C program. For S-expression programs, add
 a line beginning with `; flags: `.
 
+### Writing good tests
+
+The Rust Compiler Development Guide has some [helpful guidance] on writing
+high-quality tests. The GREASE test suite is generally quite similar in
+structure to that of rustc, so almost all of the advice there applies *mutatis
+mutandis*.
+
+[helpful guidance]: (https://github.com/rust-lang/rust/blob/3350c1eb3fd8fe1bee1ed4c76944d707bd256876/src/doc/rustc-dev-guide/src/tests/best-practices.md)
+
 <!-- Copyright (c) Galois, Inc. 2024. -->
