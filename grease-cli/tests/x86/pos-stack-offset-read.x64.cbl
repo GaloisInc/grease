@@ -1,5 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
+; flags: --symbol test
+
 (defun @test ((regs X86Regs)) X86Regs
   (start start:
     (let p (get-field 5 regs))  ;; rsp, stack pointer

@@ -1,5 +1,6 @@
 ; Copyright (c) Galois, Inc. 2024
 
+; flags: --symbol test
 ; flags: --overrides tests/llvm/id-bool.llvm.cbl
 
 (declare @id-bool ((p (Ptr 1))) (Ptr 1))

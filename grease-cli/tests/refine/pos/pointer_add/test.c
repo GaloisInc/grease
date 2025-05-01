@@ -5,6 +5,8 @@
 // addition below (which macaw-symbolic interprets as a PtrAdd statement)
 // should not fail.
 
+// flags: --symbol test
+
 unsigned int test(unsigned int a, unsigned int b) {
   return a + b;
 }

@@ -1,5 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
+; flags: --symbol test
+
 (defun @test ((dst (Ptr 64)) (src (Ptr 64))) Unit
   (start start:
     (let g (resolve-global "memcpy"))

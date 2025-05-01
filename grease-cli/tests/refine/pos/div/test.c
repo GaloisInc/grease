@@ -6,6 +6,9 @@
 // occur when invoking `foo`, this should not happen when analyzing `test` as an
 // entrypoint, as the concrete arguments it passes to `foo` should avoid any
 // code paths that would use `free` on `p` twice.
+
+// flags: --symbol test
+
 #include <stddef.h>
 
 // Redefine `malloc` and `free`. We won't actually use these implementations

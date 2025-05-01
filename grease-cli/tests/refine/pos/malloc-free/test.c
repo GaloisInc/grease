@@ -1,10 +1,13 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-#include <stddef.h>
-
 // A basic test that ensures the malloc and free overrides work as expected.
 // The implementations of malloc and free below don't matter, since they will
 // ultimately be overridden.
+
+// flags: --symbol test
+
+#include <stddef.h>
+
 void* malloc(size_t size) {
   return 0;
 }

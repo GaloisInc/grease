@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// flags: --symbol test
+
 #include <assert.h>
 #include <stdbool.h>
 void test() { assert(false); }

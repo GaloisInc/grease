@@ -1,5 +1,6 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// flags: --symbol test
 // flags: --overrides tests/refine/pos/user_override/shouldnt_loop.cbl
 
 void shouldnt_loop(void) {

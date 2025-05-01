@@ -1,5 +1,6 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// flags: --symbol test
 // flags: --req in-text
 
 __attribute__((section(".data"))) int inc(int x) { return x + 1; }

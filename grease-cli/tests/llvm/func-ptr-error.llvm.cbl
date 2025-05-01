@@ -4,6 +4,7 @@
 ; --error-symbolic-fun-calls such that the call to a symbolic function handle
 ; should raise an error.
 
+; flags: --symbol test
 ; flags: --error-symbolic-fun-calls
 
 (defun @test ((p (Ptr 64))) Unit

@@ -1,5 +1,6 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// flags: --symbol test
 // flags: --req no-mprotect
 // flags(ppc32): --plt-stub 0x10000230:mprotect
 

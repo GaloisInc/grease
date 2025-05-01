@@ -2,6 +2,7 @@
 
 // A regression test for gitlab#158.
 
+// flags: --symbol test
 // flags: --overrides tests/llvm-bc/extra/f.cbl
 
 void* f(void);

@@ -1,5 +1,6 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// flags: --symbol test
 // flags: --overrides tests/llvm-bc/extra/my_malloc.llvm.cbl
 
 #include <stdint.h>

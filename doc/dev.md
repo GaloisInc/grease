@@ -146,18 +146,10 @@ To add a new test, add a new directory under the appropriate directory above. It
 - A 32-bit PowerPC ELF executable named `test.ppc32.elf`. (At the moment, we don't include 64-bit PowerPC executables, but we could if the need arose.)
 - An x86_64 executable named `test.x64.elf`.
 
-Each executable should contain an entrypoint symbol named `test`.
-
 By default, each test will be run as though `grease` were invoked with the
-following command-line options:
-
-* The entrypoint is set to `--symbol test`.
-* `--iters` is set to `128` to ensure that the `xfail-iters` tests
-  complete in a somewhat reasonable amount of time.
-* All other command-line options inherit their default values.
-
-If you wish to override these options, you can do so by adding a line that
-begins with `// flags: ` to the corresponding C program, like so:
+binary as its only argument. Tests may provide further command-line  flags by
+adding a line that begins with `// flags: ` to the corresponding C program,
+like so:
 
 ```c
 // flags: --symbol foo --stack-argument-slots 5
@@ -171,9 +163,13 @@ You can also add architecture-specific flags like so:
 // flags(x64): --address 0x401000
 ```
 
-All applicable comments will be combined into a single configuration. If a
-command-line option is not explicitly mentioned in a `flags` comment, then it
-will inherit its default value as described above.
+It is common (though not necessary) to define a function named `test` and to
+specify it as the only entrypoint:
+```c
+// flags: --symbol test
+
+void test(/* ... */) { /* ... */ }
+```
 
 ### LLVM bitcode and S-expression test cases
 

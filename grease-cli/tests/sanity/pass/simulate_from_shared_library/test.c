@@ -5,6 +5,8 @@
 // that grease can resolve PLT calls to functions that occur within the same
 // shared library.
 
+// flags: --symbol test
+
 int deref(int *x) { return *x; }
 // arm: check "Calling a PLT stub (deref)"
 // x64: check "Calling a PLT stub (deref)"

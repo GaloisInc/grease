@@ -1,5 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
+; flags: --symbol test
+
 ; Ensure that GREASE properly overrides `llvm.trap`, causing inference failure.
 ; If it were instead skipped, then inference would succeed.
 (defun @test ((p (Ptr 64))) Unit

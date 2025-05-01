@@ -1,5 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
+; flags: --symbol test
+
 (defun @test () (Ptr 8)
   (start start:
     (let p (ptr 64 0 (bv 64 0)))

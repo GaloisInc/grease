@@ -5,6 +5,7 @@
 ; that we can load from uninitialized memory without crashing when the --rust
 ; flags is enabled.
 
+; flags: --symbol test
 ; flags: --rust
 
 (defun @test () Unit

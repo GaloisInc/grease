@@ -1,5 +1,6 @@
 ; Copyright (c) Galois, Inc. 2024
 
+; flags: --symbol test
 ; flags: --overrides tests/arm/extra/id-ptr.armv7l.cbl
 
 (declare @id-ptr ((p (Ptr 32))) (Ptr 32))

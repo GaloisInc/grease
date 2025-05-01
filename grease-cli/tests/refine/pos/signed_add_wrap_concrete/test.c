@@ -1,6 +1,9 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
 // UB at the source level; no problem at the binary level.
+
+// flags: --symbol test
+
 __attribute__((noinline)) int add_max_int_minus_one(int x) {
   return x + 2147483646; // 2^32 - 2
 }

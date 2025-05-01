@@ -1,6 +1,8 @@
 ; This test-case branches on data in its arguments. In both branches, it calls
 ; `abort`. This pattern should be recognized by the "one must fail" heuristic.
 
+; flags: --symbol test
+
 (defun @test ((b Bool)) Unit
   (registers
     ($h (-> Unit)))

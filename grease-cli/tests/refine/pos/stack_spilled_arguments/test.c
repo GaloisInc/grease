@@ -7,6 +7,7 @@
 // uninitialized stack read errors, we need to use the --stack-argument-slots
 // command-line option.
 
+// flags: --symbol test
 // flags(arm): --stack-argument-slots 5
 // flags(ppc32): --stack-argument-slots 1
 // flags(x64): --stack-argument-slots 3

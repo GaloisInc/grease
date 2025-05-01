@@ -2,6 +2,8 @@
 
 ; A test case that writes to a pointer stored in %rax.
 
+; flags: --symbol test
+
 (defun @test ((regs X86Regs)) X86Regs
   (start start:
     (let rax-ptr (get-reg rax regs))
