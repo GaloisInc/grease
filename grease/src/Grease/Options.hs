@@ -14,6 +14,7 @@ module Grease.Options
   , allMutableGlobalStates
   , ExtraStackSlots(..)
   , ErrorSymbolicFunCalls(..)
+  , SimOpts(..)
   , Opts(..)
   ) where
 
@@ -32,6 +33,10 @@ defaultLoopBound = 32
 
 newtype Milliseconds = Milliseconds Int
   deriving Show
+
+-- | 30 seconds in milliseconds
+defaultTimeout :: Int
+defaultTimeout = 30000
 
 data MutableGlobalState
   = Initialized
@@ -68,28 +73,52 @@ Similar considerations apply for derived Show instances, which also have
 different behavior when `stock`-derived.
 -}
 
-data Opts = Opts
-  { optsBinaryPath :: FilePath
-  , optsDebug :: Bool
-  , optsEntrypoints :: [Entrypoint]
-  , optsGlobals :: MutableGlobalState
-  , optsIterations :: Maybe Int
-  , optsLoopBound :: LoopBound
-  , optsNoHeuristics :: Bool
-  , optsOverrides :: [FilePath]
-  , optsTimeout :: Milliseconds
-  , optsRequirement :: [Requirement]
-  , optsJSON :: Bool
-  , optsVerbosity :: Severity
-  , optsRust :: Bool
-  , optsPltStubs :: [PltStub]
-  , optsPrecond :: Maybe FilePath
-  , optsProfileTo :: Maybe FilePath
-  , optsStackArgumentSlots :: ExtraStackSlots
-  , optsSolver :: Solver
-  , optsErrorSymbolicFunCalls :: ErrorSymbolicFunCalls
-  } deriving Show
+-- | Options that affect simulation
+data SimOpts
+  = SimOpts
+    { -- | Run the debugger execution feature
+      simDebug :: Bool
+      -- | Names or addresss of function to simulate
+    , simEntryPoints :: [Entrypoint]
+      -- | Default: 'False'.
+    , simErrorSymbolicFunCalls :: ErrorSymbolicFunCalls
+      -- | Path containing initial function preconditions in shapes DSL
+    , simInitialPreconditions :: Maybe FilePath
+      -- | Maximum number of iterations of each program loop/maximum number of
+      -- recursive calls to the same function
+    , simLoopBound :: LoopBound
+      -- | Maxmimum number of iterations of the refinement loop
+    , simMaxIters :: Maybe Int
+      -- | How to initialize mutable globals
+    , simMutGlobs :: MutableGlobalState
+      -- | Disable heuristics
+    , simNoHeuristics :: Bool
+      -- | User-specified overrides in Crucible S-expression syntax
+    , simOverrides :: [FilePath]
+      -- | Path to program to simulate
+    , simProgPath :: FilePath
+      -- | User-specified PLT stubs to consider in addition to the stubs that
+      -- @grease@ discovers via heuristics.
+    , simPltStubs :: [PltStub]
+      -- | Optional directory to write profiler-related files to.
+    , simProfileTo :: Maybe FilePath
+      -- | Requirements to check
+    , simReqs :: [Requirement]
+      -- | Use simulator settings that are more likely to work for Rust programs
+    , simRust :: Bool
+      -- | Default: 0.
+    , simStackArgumentSlots :: ExtraStackSlots
+      -- | Default: 'Yices'.
+    , simSolver :: Solver
+      -- | Timeout (implemented using 'timeout')
+    , simTimeout :: Milliseconds
+    }
+  deriving Show
 
--- | 30 seconds in milliseconds
-defaultTimeout :: Int
-defaultTimeout = 30000
+data Opts
+  = Opts
+    { optsJSON :: Bool
+    , optsSimOpts :: SimOpts
+    , optsVerbosity :: Severity
+    }
+  deriving Show
