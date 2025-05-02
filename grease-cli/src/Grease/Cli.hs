@@ -54,10 +54,6 @@ boundedEnumMetavar _ = Opt.metavar $ varShowS ""
       List.intersperse (showChar '|') $
       List.map shows [minBound @a .. maxBound @a]
 
--- | 30 seconds in milliseconds
-defaultTimeout :: Int
-defaultTimeout = 30000
-
 entrypointParser :: Opt.Parser Entrypoint
 entrypointParser =
     addressParser Opt.<|> symbolParser Opt.<|> coreDumpParser Opt.<|>
@@ -121,15 +117,34 @@ opts = do
               <> Opt.metavar "REQS"
               <> Opt.completeWith allRequirementStrs))
   optsJSON <- Opt.switch (Opt.long "json" <> Opt.help "output JSON")
-  optsIterations <- optional $ Opt.option Opt.auto (Opt.long "iters" <> Opt.help "maximum number of iterations of the refinement loop" <> Opt.metavar "N")
-  optsLoopBound <- GO.LoopBound <$> Opt.option Opt.auto (Opt.long "loop-bound" <> Opt.help "maximum number of executions of each loop in the program" <> Opt.metavar "N" <> Opt.value GO.defaultLoopBound)
+  optsIterations <-
+    optional $
+    Opt.option Opt.auto
+    ( Opt.long "iters"
+    <> Opt.help "limit maximum number of iterations of the refinement loop"
+    <> Opt.metavar "N")
+  optsLoopBound <-
+    GO.LoopBound <$>
+    Opt.option Opt.auto
+      ( Opt.long "loop-bound"
+      <> Opt.help "maximum number of executions of each loop in the program"
+      <> Opt.metavar "N"
+      <> Opt.showDefault
+      <> Opt.value GO.defaultLoopBound)
   optsNoHeuristics <- Opt.switch (Opt.long "no-heuristics" <> Opt.help "disable heuristics")
   optsOverrides <-
     Opt.many (Opt.strOption ( Opt.long "overrides"
                               <> Opt.metavar "FILE"
                               <> Opt.help "function overrides, in Crucible S-expression syntax"
                               ))
-  optsTimeout <- GO.Milliseconds <$> Opt.option Opt.auto (Opt.long "timeout" <> Opt.help "timeout (in milliseconds, default 30000)" <> Opt.metavar "MILLIS" <> Opt.value defaultTimeout)
+  optsTimeout <-
+    GO.Milliseconds <$>
+    Opt.option Opt.auto
+      ( Opt.long "timeout"
+      <> Opt.help "timeout (in milliseconds)"
+      <> Opt.metavar "MILLIS"
+      <> Opt.showDefault
+      <> Opt.value GO.defaultTimeout)
   let minSeverity = Sev.severityToNat Sev.Info
   -- count the `-v`s
   optsVerbosity <-
