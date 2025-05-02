@@ -140,6 +140,7 @@ library
     , filepath
     , lens
     , lumberjack >= 1.0 && < 1.1
+    , megaparsec
     , optparse-applicative
     , safe-exceptions
     , text
@@ -176,6 +177,7 @@ library
     , stubs-common
 
   exposed-modules:
+    Grease.Cli
     Grease.Main
 
   other-modules:
@@ -209,7 +211,6 @@ test-suite grease-tests
     , hedgehog
     , lumberjack
     , macaw-base
-    , optparse-applicative
     , oughta
     , parameterized-utils
     , prettyprinter

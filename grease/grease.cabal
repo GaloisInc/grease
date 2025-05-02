@@ -139,7 +139,6 @@ library
     , lumberjack >= 1.0 && < 1.1
     , megaparsec
     , mtl
-    , optparse-applicative
     , panic >= 0.3
     , safe-exceptions
     , text
@@ -210,6 +209,7 @@ library
     Grease.MustFail
     Grease.Options
     Grease.Output
+    Grease.Panic
     Grease.Pretty
     Grease.Refine
     Grease.Refine.Diagnostic
@@ -237,5 +237,4 @@ library
     Paths_grease
   other-modules:
     Grease.GitRev
-    Grease.Panic
     Paths_grease
