@@ -23,6 +23,7 @@ module Grease.Main
   , simulateX86Syntax
   , simulateLlvm
   , simulateLlvmSyntax
+  , simulateFile
   , Results(..)
   , SimOpts(..)
   , optsToSimOpts
@@ -1530,22 +1531,22 @@ simulateElf simOpts la = do
     Left _ -> throw (GreaseException ("User error: expected ELF binary, but found non-ELF file at " <> Text.pack (binPath simOpts)))
 
 simulateFile ::
-  FilePath ->
   SimOpts ->
   GreaseLogAction ->
   IO Results
-simulateFile path =
-  if | ".armv7l.elf" `List.isSuffixOf` path -> simulateARM
-     | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32
-     | ".ppc64.elf" `List.isSuffixOf` path -> simulatePPC64
-     | ".x64.elf" `List.isSuffixOf` path -> simulateX86
-     | ".bc" `List.isSuffixOf` path -> simulateLlvm Trans.defaultTranslationOptions
-     | ".armv7l.cbl" `List.isSuffixOf` path -> simulateARMSyntax
-     | ".ppc32.cbl" `List.isSuffixOf` path -> simulatePPC32Syntax
-     | ".ppc64.cbl" `List.isSuffixOf` path -> simulatePPC64Syntax
-     | ".x64.cbl" `List.isSuffixOf` path -> simulateX86Syntax
-     | ".llvm.cbl" `List.isSuffixOf` path -> simulateLlvmSyntax
-     | otherwise -> simulateElf
+simulateFile opts =
+  let path = binPath opts in
+  if | ".armv7l.elf" `List.isSuffixOf` path -> simulateARM opts
+     | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32 opts
+     | ".ppc64.elf" `List.isSuffixOf` path -> simulatePPC64 opts
+     | ".x64.elf" `List.isSuffixOf` path -> simulateX86 opts
+     | ".bc" `List.isSuffixOf` path -> simulateLlvm Trans.defaultTranslationOptions opts
+     | ".armv7l.cbl" `List.isSuffixOf` path -> simulateARMSyntax opts
+     | ".ppc32.cbl" `List.isSuffixOf` path -> simulatePPC32Syntax opts
+     | ".ppc64.cbl" `List.isSuffixOf` path -> simulatePPC64Syntax opts
+     | ".x64.cbl" `List.isSuffixOf` path -> simulateX86Syntax opts
+     | ".llvm.cbl" `List.isSuffixOf` path -> simulateLlvmSyntax opts
+     | otherwise -> simulateElf opts
 
 -- | Also used in the test suite
 logResults :: GreaseLogAction -> Results -> IO ()
@@ -1560,12 +1561,11 @@ main :: IO ()
 main = do
   parsedOpts <- optsFromArgs
   let simOpts = optsToSimOpts parsedOpts
-      path = optsBinaryPath parsedOpts
 
       la :: GreaseLogAction
       la = logAction (optsVerbosity parsedOpts)
   rs@(Results results) <-
-    simulateFile path simOpts la
+    simulateFile simOpts la
   if optsJSON parsedOpts
     then forM_ (Map.elems results) $ putStrLn . renderJSON
     else logResults la rs

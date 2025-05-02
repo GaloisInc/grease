@@ -38,12 +38,9 @@ import qualified Lumberjack as LJ
 import qualified Test.Tasty as T
 import qualified Test.Tasty.HUnit as T.U
 
--- crucible-llvm
-import qualified Lang.Crucible.LLVM.Translation as Trans
-
 import Grease.Cli (optsFromList)
 import Grease.Diagnostic (Diagnostic, GreaseLogAction)
-import Grease.Main (Results(..), simulateARM, simulateARMSyntax, simulatePPC32, simulatePPC32Syntax, simulateX86, simulateX86Syntax, simulateLlvm, simulateLlvmSyntax, SimOpts (..), optsToSimOpts, logResults)
+import Grease.Main (simulateFile, SimOpts (..), optsToSimOpts, logResults)
 
 import Shape (shapeTests)
 
@@ -117,14 +114,14 @@ withCapturedLogs withLogAction = do
 
 -- | Make an "Oughta"-based test
 oughta ::
-  (GreaseLogAction -> IO Results) ->
+  SimOpts ->
   FilePath ->
   Oughta.LuaProgram ->
   IO ()
-oughta go path prog0 = do
+oughta opts path prog0 = do
   let action =
         withCapturedLogs $ \la' -> do
-          res <- go la'
+          res <- simulateFile opts la'
           logResults la' res
   logTxt <-
     X.try @X.SomeException action <&>
@@ -160,30 +157,23 @@ oughtaBin dir fileName = do
     let isGenericComment = Text.stripPrefix "// all: "
     let isLuaComment = isArchComment <> isGenericComment
     let prog = Oughta.fromLines c isLuaComment content
-    let go :: GreaseLogAction -> IO Results
-        go la' = do
-          opts <- getTestOpts (Just arch) content (dir </> fileName)
-          case arch of
-            Armv7 -> simulateARM opts la'
-            PPC32 -> simulatePPC32 opts la'
-            X64 -> simulateX86 opts la'
-    oughta go (dir </> fileName) prog
+    opts <- getTestOpts (Just arch) content (dir </> fileName)
+    oughta opts (dir </> fileName) prog
 
 -- | Make an "Oughta"-based test for an S-expression program
 oughtaSexp ::
-  (SimOpts -> GreaseLogAction -> IO Results) ->
   -- | Directory
   FilePath ->
   -- | File
   FilePath ->
   T.TestTree
-oughtaSexp go dir fileName =
+oughtaSexp dir fileName =
   T.U.testCase (FilePath.dropExtension (FilePath.dropExtension fileName)) $ do
     let path = dir </> fileName
     content <- Text.IO.readFile path
     let prog = Oughta.fromLineComments path ";; " content
     opts <- getTestOpts Nothing content path
-    oughta (go opts) path prog
+    oughta opts path prog
 
 -- | Make an "Oughta"-based test for an LLVM bitcode program
 oughtaBc ::
@@ -199,22 +189,14 @@ oughtaBc dir fileName =
     content <- Text.IO.readFile c
     let prog = Oughta.fromLineComments c "/// " content
     opts <- getTestOpts Nothing content (dir </> fileName)
-    let go = simulateLlvm Trans.defaultTranslationOptions
-    oughta (go opts) (dir </> fileName) prog
+    oughta opts (dir </> fileName) prog
 
 -- | Create a test from a file, depending on the extension
 fileTest :: FilePath -> FilePath -> [T.TestTree]
 fileTest d f =
-  let (f', ext) = FilePath.splitExtension f in
-  case ext of
+  case FilePath.takeExtension f of
     ".bc" -> [oughtaBc d f]
-    ".cbl" ->
-      case FilePath.takeExtension f' of
-        ".armv7l" -> [oughtaSexp simulateARMSyntax d f]
-        ".llvm" -> [oughtaSexp simulateLlvmSyntax d f]
-        ".ppc32" -> [oughtaSexp simulatePPC32Syntax d f]
-        ".x64" -> [oughtaSexp simulateX86Syntax d f]
-        _ -> []
+    ".cbl" -> [oughtaSexp d f]
     ".elf" -> [oughtaBin d f]
     _ -> []
 
