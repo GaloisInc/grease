@@ -99,31 +99,30 @@ entrypointParser =
           <> Opt.help "name of entrypoint symbol, and the path to its startup override (in Crucible S-expression syntax)"
         )
 
-opts :: Opt.Parser GO.Opts
-opts = do
-  optsBinaryPath <- Opt.strArgument (Opt.help "filename of binary" <> Opt.metavar "FILENAME" )
-  optsDebug <- Opt.switch (Opt.long "debug" <> Opt.help "run the debugger")
-  optsEntrypoints <- Opt.many entrypointParser
-  optsGlobals <-
+simOpts :: Opt.Parser GO.SimOpts
+simOpts = do
+  simProgPath <- Opt.strArgument (Opt.help "filename of binary" <> Opt.metavar "FILENAME" )
+  simDebug  <- Opt.switch (Opt.long "debug" <> Opt.help "run the debugger")
+  simEntryPoints <- Opt.many entrypointParser
+  simMutGlobs <-
     Opt.option Opt.auto ( Opt.long "globals"
                           <> Opt.help ("how to initialize mutable global variables " List.++ describeOptions allMutableGlobalStateStrs)
                           <> Opt.value GO.Initialized
                           <> Opt.showDefault
                           <> Opt.completeWith allMutableGlobalStateStrs)
-  optsRequirement <-
+  simReqs <-
     Opt.many (Opt.option (megaparsecReader reqParser)
              (Opt.long "req"
               <> Opt.help ("names of requirements to test " List.++ describeOptions allRequirementStrs)
               <> Opt.metavar "REQS"
               <> Opt.completeWith allRequirementStrs))
-  optsJSON <- Opt.switch (Opt.long "json" <> Opt.help "output JSON")
-  optsIterations <-
+  simMaxIters <-
     optional $
     Opt.option Opt.auto
     ( Opt.long "iters"
     <> Opt.help "limit maximum number of iterations of the refinement loop"
     <> Opt.metavar "N")
-  optsLoopBound <-
+  simLoopBound <-
     GO.LoopBound <$>
     Opt.option Opt.auto
       ( Opt.long "loop-bound"
@@ -131,13 +130,13 @@ opts = do
       <> Opt.metavar "N"
       <> Opt.showDefault
       <> Opt.value GO.defaultLoopBound)
-  optsNoHeuristics <- Opt.switch (Opt.long "no-heuristics" <> Opt.help "disable heuristics")
-  optsOverrides <-
+  simNoHeuristics <- Opt.switch (Opt.long "no-heuristics" <> Opt.help "disable heuristics")
+  simOverrides <-
     Opt.many (Opt.strOption ( Opt.long "overrides"
                               <> Opt.metavar "FILE"
                               <> Opt.help "function overrides, in Crucible S-expression syntax"
                               ))
-  optsTimeout <-
+  simTimeout <-
     GO.Milliseconds <$>
     Opt.option Opt.auto
       ( Opt.long "timeout"
@@ -145,28 +144,19 @@ opts = do
       <> Opt.metavar "MILLIS"
       <> Opt.showDefault
       <> Opt.value GO.defaultTimeout)
-  let minSeverity = Sev.severityToNat Sev.Info
-  -- count the `-v`s
-  optsVerbosity <-
-    Sev.natToSeverity . (+ minSeverity) . fromIntegral . List.length <$>
-      Opt.many (Opt.flag' () (Opt.short 'v'))
-  optsRust <-
-    Opt.switch ( Opt.long "rust"
-                 <> Opt.help "Use simulator settings that are more likely to work for Rust programs"
-               )
-  optsPltStubs <-
+  simPltStubs <-
     Opt.many $
     Opt.option (megaparsecReader pltStubParser)
                ( Opt.long "plt-stub"
                  <> Opt.metavar "ADDR:NAME"
                  <> Opt.help "PLT stubs to consider, in addition to those discovered via heuristics"
                  )
-  optsPrecond <-
+  simInitialPreconditions <-
     Opt.optional $
     Opt.strOption ( Opt.long "initial-precondition"
                  <> Opt.metavar "FILE"
                  <> Opt.help "Initial precondition for use in refinement")
-  optsProfileTo <-
+  simProfileTo <-
     Opt.optional $
     Opt.strOption ( Opt.long "profile-to"
                  <> Opt.metavar "DIR"
@@ -174,20 +164,20 @@ opts = do
                       [ "Periodically log symbolic execution profiles to DIR."
                       , "Open 'DIR/profile.html' to view an HTML report of the profiles."
                       ]))
-  optsStackArgumentSlots <-
+  simStackArgumentSlots <-
     Opt.option Opt.auto ( Opt.long "stack-argument-slots"
                           <> Opt.metavar "NUM"
                           <> Opt.value 0
                           <> Opt.help "Reserve NUM slots above the stack frame for stack-spilled arguments"
                         )
-  optsSolver <-
+  simSolver <-
     Opt.option Opt.auto ( Opt.long "solver"
                           <> boundedEnumMetavar (Proxy @Solver)
                           <> Opt.value Yices
                           <> Opt.showDefault
                           <> Opt.help "The SMT solver to use for solving proof goals"
                         )
-  optsErrorSymbolicFunCalls <-
+  simErrorSymbolicFunCalls <-
     GO.ErrorSymbolicFunCalls <$>
     Opt.switch ( Opt.long "error-symbolic-fun-calls"
                  <> Opt.help
@@ -195,7 +185,11 @@ opts = do
                         [ "Throw an error if attempting to call a symbolic function handle or pointer"
                         , "(by default, these calls will be skipped)"
                         ]))
-  pure GO.Opts{..}
+  simRust <-
+    Opt.switch ( Opt.long "rust"
+                 <> Opt.help "Use simulator settings that are more likely to work for Rust programs"
+               )
+  pure GO.SimOpts{..}
     where
       allMutableGlobalStateStrs :: [String]
       allMutableGlobalStateStrs = List.map show GO.allMutableGlobalStates
@@ -230,6 +224,28 @@ opts = do
       unsnoc :: forall a. [a] -> Maybe ([a], a)
       unsnoc = List.foldr (\x -> Just . maybe ([], x) (\(~(a, b)) -> (x : a, b))) Nothing
       {-# INLINABLE unsnoc #-}
+
+processSimOpts :: GO.SimOpts -> GO.SimOpts
+processSimOpts sOpts =
+  sOpts
+  { GO.simTimeout =
+      -- TODO(#37): Fully disable timeout if --debug is passed
+      if GO.simDebug sOpts
+      then GO.Milliseconds maxBound
+      else GO.simTimeout sOpts
+  }
+
+opts :: Opt.Parser GO.Opts
+opts = do
+  optsJSON <- Opt.switch (Opt.long "json" <> Opt.help "output JSON")
+  optsSimOpts <- processSimOpts <$> simOpts
+
+  let minSeverity = Sev.severityToNat Sev.Info
+  -- count the `-v`s
+  optsVerbosity <-
+    Sev.natToSeverity . (+ minSeverity) . fromIntegral . List.length <$>
+      Opt.many (Opt.flag' () (Opt.short 'v'))
+  pure GO.Opts{..}
 
 -- | Parse 'Opts'
 optsInfo :: Opt.ParserInfo GO.Opts

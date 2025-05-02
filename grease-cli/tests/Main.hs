@@ -40,7 +40,8 @@ import qualified Test.Tasty.HUnit as T.U
 
 import Grease.Cli (optsFromList)
 import Grease.Diagnostic (Diagnostic, GreaseLogAction)
-import Grease.Main (simulateFile, SimOpts (..), optsToSimOpts, logResults)
+import Grease.Main (simulateFile, logResults)
+import Grease.Options (SimOpts(..), optsSimOpts)
 
 import Shape (shapeTests)
 
@@ -69,7 +70,7 @@ getTestOpts mArch content binName = do
         ]
   let configLines = Maybe.mapMaybe isConfigComment ls
   let args = List.concatMap Text.words configLines
-  optsToSimOpts <$> optsFromList (binName : map Text.unpack args)
+  optsSimOpts <$> optsFromList (binName : map Text.unpack args)
 
 data Arch = Armv7 | PPC32 | X64
   deriving Eq

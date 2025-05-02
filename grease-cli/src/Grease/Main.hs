@@ -25,15 +25,13 @@ module Grease.Main
   , simulateLlvmSyntax
   , simulateFile
   , Results(..)
-  , SimOpts(..)
-  , optsToSimOpts
   , logResults
   ) where
 
 import System.IO (IO)
 import System.FilePath (FilePath)
 
-import Prelude (Num(..), fromIntegral, Integral, Bounded(maxBound))
+import Prelude (Num(..), fromIntegral, Integral)
 
 import Control.Applicative (pure)
 import Control.Concurrent.Async (cancel)
@@ -51,7 +49,6 @@ import Data.Function (($), (.), (&), id, const)
 import Data.Functor ((<$>), fmap, (<&>))
 import qualified Data.Functor.Const as Const
 import Data.Functor.Const (Const(..))
-import Data.Int (Int)
 import Data.IORef (newIORef, modifyIORef)
 import Data.Ord ((<=))
 import Data.Proxy (Proxy(..))
@@ -235,7 +232,7 @@ import qualified Grease.Shape as Shape
 import Grease.Shape.NoTag (NoTag(NoTag))
 import qualified Grease.Shape.Parse as Parse
 import Grease.Shape.Pointer (PtrShape)
-import Grease.Solver (Solver(..), withSolverOnlineBackend)
+import Grease.Solver (withSolverOnlineBackend)
 import Grease.Syntax (parseProgram, parsedProgramCfgMap)
 import Grease.Syscall
 import Grease.Time (time)
@@ -319,73 +316,6 @@ withMemOptions opts k =
           , Mem.noSatisfyingWriteFreshConstant = False
           }
   in k
-
-data SimOpts
-  = SimOpts
-    { -- | Path to binary to simulate
-      binPath :: FilePath
-      -- | Names or addresss of function to simulate
-    , entryPoints :: [Entrypoint]
-      -- | Maximum number of iterations of each program loop/maximum number of
-      -- recursive calls to the same function
-    , loopBound :: LoopBound
-      -- | Requirements to check
-    , reqs :: [Requirement]
-      -- | Maxmimum number of iterations of the refinement loop
-    , maxIters :: Maybe Int
-      -- | How to initialize mutable globals
-    , mutGlobs :: MutableGlobalState
-      -- | Run the debugger execution feature
-    , simDebug :: Bool
-      -- | Disable heuristics
-    , simNoHeuristics :: Bool
-      -- | User-specified overrides in Crucible S-expression syntax
-    , simOverrides :: [FilePath]
-      -- | Timeout (implemented using 'timeout')
-    , simTimeout :: Milliseconds
-      -- | Use simulator settings that are more likely to work for Rust programs
-    , simRust :: Bool
-      -- | Path containing initial function preconditions in shapes DSL
-    , simInitialPreconditions :: Maybe FilePath
-      -- | User-specified PLT stubs to consider in addition to the stubs that
-      -- @grease@ discovers via heuristics.
-    , simPltStubs :: [PltStub]
-      -- | Optional directory to write profiler-related files to.
-    , simProfileTo :: Maybe FilePath
-      -- | Default: 0.
-    , simStackArgumentSlots :: ExtraStackSlots
-      -- | Default: 'Yices'.
-    , simSolver :: Solver
-      -- | Default: 'False'.
-    , simErrorSymbolicFunCalls :: ErrorSymbolicFunCalls
-    }
-
--- | Convert an 'Opts' value to a 'SimOpts' value.
-optsToSimOpts :: Opts -> SimOpts
-optsToSimOpts opts =
-  SimOpts
-  { binPath = optsBinaryPath opts
-  , entryPoints = optsEntrypoints opts
-  , loopBound = optsLoopBound opts
-  , reqs = optsRequirement opts
-  , maxIters = optsIterations opts
-  , mutGlobs = optsGlobals opts
-  , simDebug = optsDebug opts
-  , simInitialPreconditions = optsPrecond opts
-  , simNoHeuristics = optsNoHeuristics opts
-  , simOverrides = optsOverrides opts
-  , simTimeout =
-      -- TODO(#37): Fully disable timeout if --debug is passed
-      if optsDebug opts
-      then Milliseconds maxBound
-      else optsTimeout opts
-  , simRust = optsRust opts
-  , simPltStubs = optsPltStubs opts
-  , simProfileTo = optsProfileTo opts
-  , simStackArgumentSlots = optsStackArgumentSlots opts
-  , simSolver = optsSolver opts
-  , simErrorSymbolicFunCalls = optsErrorSymbolicFunCalls opts
-  }
 
 loadInitialPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
@@ -583,7 +513,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let errorSymbolicFunCalls = simErrorSymbolicFunCalls simOpts
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
-  (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory (mutGlobs simOpts) relocs
+  (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory (simMutGlobs simOpts) relocs
   let ?ptrWidth = knownNat @(MC.ArchAddrWidth arch)
 
   let (tyCtxErrs, tyCtx) = TCtx.mkTypeContext dl IntMap.empty []
@@ -683,7 +613,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         initState bak la macawExtImpl halloc mvar mem' C.emptyGlobals archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa'
 
   doLog la (Diag.TargetCFG ssaCfg)
-  result <- refinementLoop la (maxIters simOpts) (simTimeout simOpts) rNamesAssign' initArgs $ \argShapes -> do
+  result <- refinementLoop la (simMaxIters simOpts) (simTimeout simOpts) rNamesAssign' initArgs $ \argShapes -> do
     (args, setupMem, setupAnns) <- setup la bak dl rNameAssign regTypes argShapes initMem
     regs' <- liftIO (overrideRegs (argVals args))
     bbMapRef <- liftIO (newIORef Map.empty)
@@ -699,7 +629,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
           if simNoHeuristics simOpts
           then []
           else macawHeuristics la rNames List.++ [mustFailHeuristic]
-    execAndRefine bak (simSolver simOpts) fm la setupAnns initMem heuristics argNames argShapes args bbMapRef (loopBound simOpts) execFeats st `catches`
+    execAndRefine bak (simSolver simOpts) fm la setupAnns initMem heuristics argNames argShapes args bbMapRef (simLoopBound simOpts) execFeats st `catches`
       [ Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
           pure $ ProveCantRefine $ MissingSemantics $ pshow ex
       , Handler (\(ex :: AArch32Symbolic.AArch32Exception) ->
@@ -736,7 +666,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
       let assertNoMprotect = case mprotectAddr of
             Just badAddr -> addNoDynJumpAssertion knownNat pcReg memory badAddr
             _ -> id
-      let rs = reqs simOpts
+      let rs = simReqs simOpts
       asserts <- fmap (Map.fromList . List.zip rs) . forM rs $ \case
         InText -> pure assertInText
         NoMprotect -> pure assertNoMprotect
@@ -751,7 +681,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
               modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
         let assertingSsa = C.toSSA assertingCfg
         st <- mkInitState regs' setupMem assertingSsa
-        new <- execAndRefine bak (simSolver simOpts) fm la setupAnns initMem (macawHeuristics la rNames) argNames argShapes args bbMapRef (loopBound simOpts) execFeats st
+        new <- execAndRefine bak (simSolver simOpts) fm la setupAnns initMem (macawHeuristics la rNames) argNames argShapes args bbMapRef (simLoopBound simOpts) execFeats st
         case new of
           ProveBug {} ->
             throw (GreaseException "CFG rewriting introduced a bug!")
@@ -946,9 +876,9 @@ simulateMacawSyntax ::
   IO Results
 simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
   let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
-  prog <- parseProgram halloc (binPath simOpts)
+  prog <- parseProgram halloc (simProgPath simOpts)
   CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
-  cfgs <- entrypointCfgMap la halloc prog (entryPoints simOpts)
+  cfgs <- entrypointCfgMap la halloc prog (simEntryPoints simOpts)
   let cfgs' = Map.map (\cfg -> MacawEntrypointCfgs cfg Nothing) cfgs
   let memory = MC.emptyMemory (archCtx ^. archInfo . to MI.archAddrWidth)
   let dl = DataLayout.defaultDataLayout
@@ -1046,14 +976,14 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
   let mprotectAddr = Map.lookup "mprotect" pltStubNameToSegOffMap
 
   entries <-
-    if List.null (entryPoints simOpts)
+    if List.null (simEntryPoints simOpts)
     then do
       doLog la Diag.NoEntrypoints
       pure (List.map
              (\(k, v) -> (entrypointFromBytestring v, k))
              (Map.toList (progSymMap loadedProg)))
     else
-      forM (entryPoints simOpts) $ \entry -> do
+      forM (simEntryPoints simOpts) $ \entry -> do
         case Map.lookup entry (progEntrypointAddrs loadedProg) of
           Nothing -> throw . GreaseException $ "Impossible: entrypoint not in map"
           Just a -> pure (entry, a)
@@ -1148,7 +1078,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   result <- withMemOptions simOpts $
-            refinementLoop la (maxIters simOpts) (simTimeout simOpts) argNames initArgs $ \argShapes -> do
+            refinementLoop la (simMaxIters simOpts) (simTimeout simOpts) argNames initArgs $ \argShapes -> do
     let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
     let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
     let dl = TCtx.llvmDataLayout typeCtx
@@ -1184,7 +1114,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
           if simNoHeuristics simOpts
           then []
           else llvmHeuristics la List.++ [mustFailHeuristic]
-    execAndRefine bak (simSolver simOpts) fm la setupAnns initMem heuristics argNames argShapes args bbMapRef (loopBound simOpts) execFeats st
+    execAndRefine bak (simSolver simOpts) fm la setupAnns initMem heuristics argNames argShapes args bbMapRef (simLoopBound simOpts) execFeats st
 
   res <- case result of
     RefinementBug b _ -> do
@@ -1272,9 +1202,9 @@ simulateLlvmSyntax simOpts la = do
   let mkMem = \_ -> InitialMem <$> Mem.emptyMem DataLayout.LittleEndian
   let ?ptrWidth = knownNat @64
   let ?parserHooks = llvmParserHooks emptyParserHooks mvar
-  prog <- parseProgram halloc (binPath simOpts)
+  prog <- parseProgram halloc (simProgPath simOpts)
   CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
-  regCfgs <- entrypointCfgMap la halloc prog (entryPoints simOpts)
+  regCfgs <- entrypointCfgMap la halloc prog (simEntryPoints simOpts)
   let cfgs = Map.map (fmap toSsaAnyCfg) regCfgs
   let dl = DataLayout.defaultDataLayout
   let (_errs, tyCtx) = TCtx.mkTypeContext dl IntMap.empty []
@@ -1324,7 +1254,7 @@ simulateLlvm ::
   IO Results
 simulateLlvm transOpts simOpts la = do
   llvmMod <-
-    parseBitCodeFromFile (binPath simOpts) >>=
+    parseBitCodeFromFile (simProgPath simOpts) >>=
       \case
         Left _err -> throw $ GreaseException "Could not parse LLVM module"
         Right m -> pure m
@@ -1335,13 +1265,13 @@ simulateLlvm transOpts simOpts la = do
     Trans.translateModule halloc mvar llvmMod
 
   entries <-
-    if List.null (entryPoints simOpts)
+    if List.null (simEntryPoints simOpts)
     then do
       doLog la Diag.NoEntrypoints
       let convertSymbol (L.Symbol s) =
             entrypointNoStartupOv $ EntrypointSymbolName $ Text.pack s
       pure (List.map (convertSymbol . L.defName) (L.modDefines llvmMod))
-    else pure (entryPoints simOpts)
+    else pure (simEntryPoints simOpts)
 
   let llvmCtxt = trans ^. Trans.transContext
   Trans.llvmPtrWidth llvmCtxt $ \ptrW -> Mem.withPtrWidth ptrW $ do
@@ -1352,7 +1282,7 @@ simulateLlvm transOpts simOpts la = do
           in withMemOptions simOpts $ do
             unpopulated <- CLLVM.initializeAllMemory bak llvmCtxt llvmMod
             initMem <-
-              case mutGlobs simOpts of
+              case simMutGlobs simOpts of
                 Initialized ->
                   CLLVM.populateAllGlobals bak (trans ^. Trans.globalInitMap) unpopulated
                 Symbolic ->
@@ -1424,10 +1354,10 @@ simulateARM :: SimOpts -> GreaseLogAction -> IO Results
 simulateARM simOpts la = do
   let ?ptrWidth = knownNat @32
   let proxy = Proxy @ARM.ARM
-  (perms, elf) <- readElfHeaderInfo proxy (binPath simOpts)
+  (perms, elf) <- readElfHeaderInfo proxy (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- load la (entryPoints simOpts) perms elf
+    loadedProg <- load la (simEntryPoints simOpts) perms elf
     txtBounds@(starttext, _) <- textBounds (progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- armCtx halloc (Just starttext) (simStackArgumentSlots simOpts)
@@ -1461,10 +1391,10 @@ simulatePPC32 :: SimOpts -> GreaseLogAction -> IO Results
 simulatePPC32 simOpts la = do
   let ?ptrWidth = knownNat @32
   let proxy = Proxy @PPC.PPC32
-  (perms, elf) <- readElfHeaderInfo proxy (binPath simOpts)
+  (perms, elf) <- readElfHeaderInfo proxy (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- load la (entryPoints simOpts) perms elf
+    loadedProg <- load la (simEntryPoints simOpts) perms elf
     txtBounds@(starttext, _) <- textBounds (progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- ppc32Ctx (Just starttext) (simStackArgumentSlots simOpts)
@@ -1477,10 +1407,10 @@ simulatePPC64 :: SimOpts -> GreaseLogAction -> IO Results
 simulatePPC64 simOpts la = do
   let ?ptrWidth = knownNat @64
   let proxy = Proxy @PPC.PPC64
-  (perms, elf) <- readElfHeaderInfo proxy (binPath simOpts)
+  (perms, elf) <- readElfHeaderInfo proxy (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- load la (entryPoints simOpts) perms elf
+    loadedProg <- load la (simEntryPoints simOpts) perms elf
     txtBounds@(starttext, _) <- textBounds (progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- ppc64Ctx (Just starttext) (simStackArgumentSlots simOpts) (progLoadedBinary loadedProg)
@@ -1505,10 +1435,10 @@ simulateX86 :: SimOpts -> GreaseLogAction -> IO Results
 simulateX86 simOpts la = do
   let ?ptrWidth = knownNat @64
   let proxy = Proxy @X86.X86_64
-  (perms, elf) <- readElfHeaderInfo proxy (binPath simOpts)
+  (perms, elf) <- readElfHeaderInfo proxy (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- load la (entryPoints simOpts) perms elf
+    loadedProg <- load la (simEntryPoints simOpts) perms elf
     txtBounds@(startText, _) <- textBounds (progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- x86Ctx halloc (Just startText) (simStackArgumentSlots simOpts)
@@ -1519,7 +1449,7 @@ simulateElf ::
   GreaseLogAction ->
   IO Results
 simulateElf simOpts la = do
-  bs <- liftIO $ BS.readFile (binPath simOpts)
+  bs <- liftIO $ BS.readFile (simProgPath simOpts)
   case Elf.decodeElfHeaderInfo bs of
     Right (Elf.SomeElf hdr) ->
       case (Elf.headerClass (Elf.header hdr), Elf.headerMachine (Elf.header hdr)) of
@@ -1528,14 +1458,14 @@ simulateElf simOpts la = do
         (Elf.ELFCLASS64, Elf.EM_PPC64) -> simulatePPC64 simOpts la
         (Elf.ELFCLASS64, Elf.EM_X86_64) -> simulateX86 simOpts la
         (_, mach) -> throw $ GreaseException $ "User error: unsupported ELF architecture: " <> tshow mach
-    Left _ -> throw (GreaseException ("User error: expected ELF binary, but found non-ELF file at " <> Text.pack (binPath simOpts)))
+    Left _ -> throw (GreaseException ("User error: expected ELF binary, but found non-ELF file at " <> Text.pack (simProgPath simOpts)))
 
 simulateFile ::
   SimOpts ->
   GreaseLogAction ->
   IO Results
 simulateFile opts =
-  let path = binPath opts in
+  let path = simProgPath opts in
   if | ".armv7l.elf" `List.isSuffixOf` path -> simulateARM opts
      | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32 opts
      | ".ppc64.elf" `List.isSuffixOf` path -> simulatePPC64 opts
@@ -1560,7 +1490,7 @@ logResults la (Results results) =
 main :: IO ()
 main = do
   parsedOpts <- optsFromArgs
-  let simOpts = optsToSimOpts parsedOpts
+  let simOpts = optsSimOpts parsedOpts
 
       la :: GreaseLogAction
       la = logAction (optsVerbosity parsedOpts)
