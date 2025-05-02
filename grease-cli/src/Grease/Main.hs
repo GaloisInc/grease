@@ -80,8 +80,6 @@ import qualified Lumberjack as LJ
 
 import Text.Show (Show(..))
 
-import qualified Options.Applicative as Opt
-
 import Data.LLVM.BitCode (parseBitCodeFromFile)
 import qualified Text.LLVM as L
 
@@ -195,6 +193,7 @@ import qualified Stubs.FunctionOverride as Stubs
 import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import qualified Grease.Bug as Bug
+import Grease.Cli (optsFromArgs)
 import Grease.Concretize (ConcArgs(..), concArgs, printConcArgs)
 import Grease.Concretize.JSON (concArgsToJson)
 import Grease.Cursor.Pointer ()
@@ -1559,7 +1558,7 @@ logResults la (Results results) =
 
 main :: IO ()
 main = do
-  parsedOpts <- Opt.execParser optsInfo
+  parsedOpts <- optsFromArgs
   let simOpts = optsToSimOpts parsedOpts
       path = optsBinaryPath parsedOpts
 

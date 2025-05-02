@@ -32,8 +32,6 @@ import qualified Prettyprinter as PP
 import qualified Control.Exception as X
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
-import qualified Options.Applicative as Opt
-
 import Oughta qualified
 import qualified Lumberjack as LJ
 
@@ -43,9 +41,9 @@ import qualified Test.Tasty.HUnit as T.U
 -- crucible-llvm
 import qualified Lang.Crucible.LLVM.Translation as Trans
 
+import Grease.Cli (optsFromList)
 import Grease.Diagnostic (Diagnostic, GreaseLogAction)
 import Grease.Main (Results(..), simulateARM, simulateARMSyntax, simulatePPC32, simulatePPC32Syntax, simulateX86, simulateX86Syntax, simulateLlvm, simulateLlvmSyntax, SimOpts (..), optsToSimOpts, logResults)
-import Grease.Options (Opts, optsInfo)
 
 import Shape (shapeTests)
 
@@ -62,32 +60,19 @@ getTestOpts ::
   -- | The path to the program to be simulated.
   FilePath ->
   IO SimOpts
-getTestOpts mArch content binName = optsToSimOpts <$> parseOpts parsedFlags
-  where
-    -- Parse the command-line options embedded in a file as a list of Strings,
-    -- which is the format expected by optparse-applicative.
-    parsedFlags :: [String]
-    parsedFlags =
-      let ls = Text.lines content
-          isConfigComment =
-            mconcat
-            [ Text.stripPrefix "; flags: "
-            , Text.stripPrefix "// flags: "
-            , case mArch of
-                Nothing -> const Nothing
-                Just arch -> Text.stripPrefix ("// flags(" <> archComment arch <> "):")
-            ]
-          configLines = Maybe.mapMaybe isConfigComment ls
-          args = List.concatMap Text.words configLines
-      in map Text.unpack args
-
-    -- Invoke the `optsInfo` optparse-applicative parser using the path to the
-    -- test executable (which is mandatory) plus the additional supplied
-    -- arguments.
-    parseOpts :: [String] -> IO Opts
-    parseOpts args =
-      Opt.handleParseResult $
-      Opt.execParserPure Opt.defaultPrefs optsInfo (binName : args)
+getTestOpts mArch content binName = do
+  let ls = Text.lines content
+  let isConfigComment =
+        mconcat
+        [ Text.stripPrefix "; flags: "
+        , Text.stripPrefix "// flags: "
+        , case mArch of
+            Nothing -> const Nothing
+            Just arch -> Text.stripPrefix ("// flags(" <> archComment arch <> "):")
+        ]
+  let configLines = Maybe.mapMaybe isConfigComment ls
+  let args = List.concatMap Text.words configLines
+  optsToSimOpts <$> optsFromList (binName : map Text.unpack args)
 
 data Arch = Armv7 | PPC32 | X64
   deriving Eq
