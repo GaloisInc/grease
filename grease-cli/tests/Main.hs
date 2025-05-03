@@ -95,6 +95,9 @@ withCapturedLogs withLogAction = do
 go :: String -> Lua ()
 go prog = do
   strOpts <- getArgs
+  Lua.newtable
+  Lua.setglobal argsGlobal
+
   opts <- liftIO (optsSimOpts <$> optsFromList (prog : strOpts))
   let action =
         withCapturedLogs $ \la' -> do
