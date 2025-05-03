@@ -11,42 +11,35 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 -- See @doc/dev.md@ for a description of how tests are organized
 module Main (main) where
 
-import Prelude hiding (fail)
-
-import System.FilePath ((</>))
-import System.FilePath qualified as FilePath
-import qualified System.Directory as Dir
-
-import Data.FileEmbed (embedFile)
-import Data.Functor ((<&>))
-import qualified Data.IORef as IORef
-import qualified Data.List as List
-import qualified Data.Maybe as Maybe
-import qualified Data.Sequence as Seq
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
-import qualified Data.Text.IO as Text.IO
-import Data.Traversable (for)
-import qualified Prettyprinter as PP
-
-import qualified Control.Exception as X
+import Control.Exception qualified as X
 import Control.Monad (forM, forM_)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-
-import Oughta qualified
-import qualified Lumberjack as LJ
-
-import qualified Test.Tasty as T
-import qualified Test.Tasty.HUnit as T.U
-
+import Data.FileEmbed (embedFile)
+import Data.Functor ((<&>))
+import Data.IORef qualified as IORef
+import Data.List qualified as List
+import Data.Maybe qualified as Maybe
+import Data.Sequence qualified as Seq
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
+import Data.Text.IO qualified as Text.IO
+import Data.Traversable (for)
 import Grease.Cli (optsFromList)
 import Grease.Diagnostic (Diagnostic, GreaseLogAction)
 import Grease.Main (simulateFile, logResults)
 import Grease.Options (SimOpts(..), optsSimOpts)
-
-import Shape (shapeTests)
 import HsLua (Lua)
 import HsLua qualified as Lua
+import Lumberjack qualified as LJ
+import Oughta qualified
+import Prelude hiding (fail)
+import Prettyprinter qualified as PP
+import Shape (shapeTests)
+import System.Directory qualified as Dir
+import System.FilePath ((</>))
+import System.FilePath qualified as FilePath
+import Test.Tasty qualified as T
+import Test.Tasty.HUnit qualified as T.U
 
 prelude :: Text.Text
 prelude = Text.decodeUtf8 $(embedFile "tests/test.lua")
