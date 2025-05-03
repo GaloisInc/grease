@@ -7,10 +7,11 @@
 // uninitialized stack read errors, we need to use the --stack-argument-slots
 // command-line option.
 
-// flags: --symbol test
-// flags(arm): --stack-argument-slots 5
-// flags(ppc32): --stack-argument-slots 1
-// flags(x64): --stack-argument-slots 3
+// all: flags {"--symbol", "test"}
+// arm: flags {"--stack-argument-slots", "5"}
+// ppc32: flags {"--stack-argument-slots", "1"}
+// x64: flags {"--stack-argument-slots", "3"}
+// all: go(prog)
 
 unsigned int test(unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned int e, unsigned int f, unsigned int g, unsigned int h, unsigned int i) {
   return i;

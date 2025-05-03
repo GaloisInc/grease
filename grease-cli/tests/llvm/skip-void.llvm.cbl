@@ -1,6 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
-; flags: --symbol test
+;; flags {"--symbol", "test"}
+;; go(prog)
 
 (declare @skippable () Unit)
 (defun @test ((b (Ptr 1))) (Ptr 1)

@@ -1,6 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
-; flags: --symbol test
+;; flags {"--symbol", "test"}
+;; go(prog)
 
 (defun @test () (Ptr 8)
   (start start:

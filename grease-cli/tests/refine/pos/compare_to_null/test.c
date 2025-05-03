@@ -1,6 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 int test(int *ptr) { return ptr == 0; }
 // all: ok()

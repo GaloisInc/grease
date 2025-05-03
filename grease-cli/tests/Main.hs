@@ -30,6 +30,7 @@ import Data.Traversable (for)
 import qualified Prettyprinter as PP
 
 import qualified Control.Exception as X
+import Control.Monad (forM, forM_)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
 import Oughta qualified
@@ -44,33 +45,11 @@ import Grease.Main (simulateFile, logResults)
 import Grease.Options (SimOpts(..), optsSimOpts)
 
 import Shape (shapeTests)
+import HsLua (Lua)
+import HsLua qualified as Lua
 
 prelude :: Text.Text
 prelude = Text.decodeUtf8 $(embedFile "tests/test.lua")
-
--- Compute the command-line options for a test case.
---
--- Changes to this function should be reflected in @doc/dev.md@.
-getTestOpts ::
-  Maybe Arch ->
-  -- | The content of the file potentially containing flags.
-  Text.Text ->
-  -- | The path to the program to be simulated.
-  FilePath ->
-  IO SimOpts
-getTestOpts mArch content binName = do
-  let ls = Text.lines content
-  let isConfigComment =
-        mconcat
-        [ Text.stripPrefix "; flags: "
-        , Text.stripPrefix "// flags: "
-        , case mArch of
-            Nothing -> const Nothing
-            Just arch -> Text.stripPrefix ("// flags(" <> archComment arch <> "):")
-        ]
-  let configLines = Maybe.mapMaybe isConfigComment ls
-  let args = List.concatMap Text.words configLines
-  optsSimOpts <$> optsFromList (binName : map Text.unpack args)
 
 data Arch = Armv7 | PPC32 | X64
   deriving Eq
@@ -113,26 +92,82 @@ withCapturedLogs withLogAction = do
   let logTxt = Text.unlines (map (Text.pack . show . PP.pretty) logs)
   pure logTxt
 
--- | Make an "Oughta"-based test
-oughta ::
-  SimOpts ->
-  FilePath ->
-  Oughta.LuaProgram ->
-  IO ()
-oughta opts path prog0 = do
+go :: String -> Lua ()
+go prog = do
+  strOpts <- getArgs
+  opts <- liftIO (optsSimOpts <$> optsFromList (prog : strOpts))
   let action =
         withCapturedLogs $ \la' -> do
           res <- simulateFile opts la'
           logResults la' res
   logTxt <-
-    X.try @X.SomeException action <&>
-      \case
-        Left e -> Text.pack ("Exception: " ++ show e)
-        Right t -> t
-  Text.IO.writeFile (FilePath.replaceExtension path "out") logTxt
-  let output = Oughta.Output (Text.encodeUtf8 logTxt)
+    liftIO $
+      X.try @X.SomeException action <&>
+        \case
+          Left e -> Text.pack ("Exception: " ++ show e)
+          Right t -> t
+  let path = simProgPath opts
+  liftIO (Text.IO.writeFile (FilePath.replaceExtension path "out") logTxt)
+
+  Lua.getglobal' "reset"
+  Lua.pushstring "<out>"
+  Lua.pushstring (Text.encodeUtf8 logTxt)
+  Lua.call 2 0
+
+argsGlobal :: Lua.Name
+argsGlobal = Lua.Name "_grease_args"
+
+-- Get the arguments stored in 'argsGlobal'
+getArgs :: Lua [String]
+getArgs = do
+  _ty <- Lua.getglobal argsGlobal
+  l <- fromIntegral <$> Lua.rawlen Lua.top
+  forM [1..l] $ \i -> do
+    Lua.pushinteger i
+    _ty <- Lua.gettable (Lua.nth 2)
+    flag <- Lua.tostring Lua.top
+    Lua.pop 1
+    let err = error "getArgs: Expected a string"
+    let toStr = Text.unpack . Text.decodeUtf8Lenient
+    return (toStr (Maybe.fromMaybe err flag))
+
+-- Append a list of 'String's to a Lua array-style (int-keyed) table that is on
+-- top of the stack.
+appendStringArray :: [String] -> Lua ()
+appendStringArray strs = do
+  l <- fromIntegral <$> Lua.rawlen Lua.top
+  forM_ (zip [1..] strs) $ \(i, s) -> do
+    Lua.pushinteger (l + i)
+    Lua.pushstring (Text.encodeUtf8 (Text.pack s))
+    Lua.settable (Lua.nth 3)
+
+flags :: [String] -> Lua ()
+flags fs = do
+  _ty <- Lua.getglobal argsGlobal
+  appendStringArray fs
+  Lua.pop 1
+
+preHook :: FilePath -> Lua ()
+preHook bin = do
+  Lua.newtable
+  Lua.setglobal argsGlobal
+
+  Lua.pushstring (Text.encodeUtf8 (Text.pack bin))
+  Lua.setglobal (Lua.Name "prog")
+
+  Lua.pushHaskellFunction (Lua.toHaskellFunction flags)
+  Lua.setglobal (Lua.Name "flags")
+
+  Lua.pushHaskellFunction (Lua.toHaskellFunction go)
+  Lua.setglobal (Lua.Name "go")
+
+-- | Make an "Oughta"-based test
+oughta :: FilePath -> Oughta.LuaProgram -> IO ()
+oughta bin prog0 = do
+  let output = Oughta.Output ""  -- set by `go`
   let prog = Oughta.addPrefix prelude prog0
-  Oughta.Result r <- Oughta.check prog output
+  let hooks = Oughta.defaultHooks { Oughta.preHook = preHook bin }
+  Oughta.Result r <- Oughta.check hooks prog output
   case r of
     Left f -> X.throwIO f
     Right s ->
@@ -158,8 +193,7 @@ oughtaBin dir fileName = do
     let isGenericComment = Text.stripPrefix "// all: "
     let isLuaComment = isArchComment <> isGenericComment
     let prog = Oughta.fromLines c isLuaComment content
-    opts <- getTestOpts (Just arch) content (dir </> fileName)
-    oughta opts (dir </> fileName) prog
+    oughta (dir </> fileName) prog
 
 -- | Make an "Oughta"-based test for an S-expression program
 oughtaSexp ::
@@ -173,8 +207,7 @@ oughtaSexp dir fileName =
     let path = dir </> fileName
     content <- Text.IO.readFile path
     let prog = Oughta.fromLineComments path ";; " content
-    opts <- getTestOpts Nothing content path
-    oughta opts path prog
+    oughta (dir </> fileName) prog
 
 -- | Make an "Oughta"-based test for an LLVM bitcode program
 oughtaBc ::
@@ -189,8 +222,7 @@ oughtaBc dir fileName =
     let c = dir </> FilePath.addExtension dropped  "c"
     content <- Text.IO.readFile c
     let prog = Oughta.fromLineComments c "/// " content
-    opts <- getTestOpts Nothing content (dir </> fileName)
-    oughta opts (dir </> fileName) prog
+    oughta (dir </> fileName) prog
 
 -- | Create a test from a file, depending on the extension
 fileTest :: FilePath -> FilePath -> [T.TestTree]

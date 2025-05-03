@@ -5,8 +5,9 @@
 // not register a built-in override for `printf` at all, instead skipping any
 // calls to `printf` during simulation.
 
-// flags: --symbol test
-// flags(ppc32): --plt-stub 0x10000220:printf
+// all: flags {"--symbol", "test"}
+// ppc32: flags {"--plt-stub", "0x10000220:printf"}
+// all: go(prog)
 
 #include <stdio.h>
 

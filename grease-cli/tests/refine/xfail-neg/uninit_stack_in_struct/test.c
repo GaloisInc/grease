@@ -1,6 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 #include <stdio.h>
 #include <stdlib.h>

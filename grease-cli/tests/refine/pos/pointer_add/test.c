@@ -5,7 +5,8 @@
 // addition below (which macaw-symbolic interprets as a PtrAdd statement)
 // should not fail.
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 unsigned int test(unsigned int a, unsigned int b) {
   return a + b;

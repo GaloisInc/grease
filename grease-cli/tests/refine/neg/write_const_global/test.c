@@ -1,6 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 const int x = 4;
 __attribute__((noinline)) void make_it_five(int *ptr) { *ptr = 5; }

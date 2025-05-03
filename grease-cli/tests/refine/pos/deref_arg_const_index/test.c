@@ -2,7 +2,8 @@
 
 // Should be easy to deduce the precondition for this function
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 int test(int *ptr) { return ptr[8]; }
 // all: ok()

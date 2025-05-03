@@ -11,7 +11,8 @@
 // this program with -static.) We do not support these checks in PowerPC at all
 // at the moment.
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 int test(void) {
   return 0;

@@ -2,8 +2,9 @@
 
 ; A regression test for gitlab#157.
 
-; flags: --symbol test
-; flags: --overrides tests/llvm/extra/struct-override-callee.llvm.cbl
+;; flags {"--symbol", "test"}
+;; flags {"--overrides", "tests/llvm/extra/struct-override-callee.llvm.cbl"}
+;; go(prog)
 
 (declare @struct-override-callee () (Struct (Bitvector 32) (Bitvector 64)))
 

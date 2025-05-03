@@ -2,7 +2,8 @@
 
 // gitlab#38
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 int inc(int x) { return x + 1; }
 int test(int **x) { return inc(**x); }

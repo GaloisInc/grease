@@ -4,7 +4,8 @@
 // as `memset` are properly handled; and for gitlab#186, test that the
 // heuristics handle `memset` by allocating enough space.
 
-// flags: --symbol test
+/// flags {"--symbol", "test"}
+/// go(prog)
 
 #include <string.h>
 

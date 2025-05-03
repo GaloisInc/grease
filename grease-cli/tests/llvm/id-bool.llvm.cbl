@@ -1,6 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
-; flags: --symbol test
+;; flags {"--symbol", "test"}
+;; go(prog)
 
 ; This definition is used as an override in the user-override.llvm.cbl
 ; test case.

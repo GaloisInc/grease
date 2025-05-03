@@ -6,8 +6,9 @@
 // code path for function overrides that overriding functions defined in the
 // same binary.
 
-// flags: --symbol test
-// flags(ppc32): --plt-stub 0x10000260:malloc --plt-stub 0x10000270:free
+// all: flags {"--symbol", "test"}
+// ppc32: flags {"--plt-stub", "0x10000260:malloc", "--plt-stub", "0x10000270:free"}
+// all: go(prog)
 
 #include <stddef.h>
 #include <stdlib.h>

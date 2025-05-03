@@ -3,7 +3,8 @@
 // A simple test that does nothing but call alarm(), which performs a syscall.
 // Currently, GREASE will treat all syscalls as no-ops.
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 #include <unistd.h>
 

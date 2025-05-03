@@ -5,8 +5,9 @@
 ; that we can load from uninitialized memory without crashing when the --rust
 ; flags is enabled.
 
-; flags: --symbol test
-; flags: --rust
+;; flags {"--symbol", "test"}
+;; flags {"--rust"}
+;; go(prog)
 
 (defun @test () Unit
   (start start:

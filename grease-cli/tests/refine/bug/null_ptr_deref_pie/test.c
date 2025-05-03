@@ -6,7 +6,8 @@
 // must load the memory at address 0x0 to virtual addresses with a constant
 // offset to ensure that the two do not overlap in the virtual address space.
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 __attribute__((noinline)) int f(int *in) { return *in; }
 

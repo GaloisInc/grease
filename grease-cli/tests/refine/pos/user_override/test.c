@@ -1,7 +1,8 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flags: --symbol test
-// flags: --overrides tests/refine/pos/user_override/shouldnt_loop.aux.cbl
+// all: flags {"--symbol", "test"}
+// all: flags {"--overrides", "tests/refine/pos/user_override/shouldnt_loop.aux.cbl"}
+// all: go(prog)
 
 void shouldnt_loop(void) {
   while (1) {}

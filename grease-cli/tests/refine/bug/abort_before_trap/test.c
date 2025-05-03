@@ -9,7 +9,8 @@
 // user. As such, we want to ensure that the call to `abort` in this program
 // occurs without being superseded by the `ud2` instruction.
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 void abort(void) {}
 

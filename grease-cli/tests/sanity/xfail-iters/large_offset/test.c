@@ -1,9 +1,10 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
 
 // Set --iters low to keep this test fast
-// flags: --iters 8
+// all: flags {"--iters", "8"}
+// all: go(prog)
 
 int test(int *x) {
   return x[4096];

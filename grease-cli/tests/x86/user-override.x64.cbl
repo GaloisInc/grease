@@ -1,7 +1,8 @@
 ; Copyright (c) Galois, Inc. 2024
 
-; flags: --symbol test
-; flags: --overrides tests/x86/extra/id-ptr.x64.cbl
+;; flags {"--symbol", "test"}
+;; flags {"--overrides", "tests/x86/extra/id-ptr.x64.cbl"}
+;; go(prog)
 
 (declare @id-ptr ((p (Ptr 64))) (Ptr 64))
 (defun @test ((regs X86Regs)) X86Regs

@@ -3,7 +3,8 @@
 // grease does not (yet) execute functions marked `__attribute__
 // ((constructor))` before analysis.
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 int g = 0;
 int *g_ptr;

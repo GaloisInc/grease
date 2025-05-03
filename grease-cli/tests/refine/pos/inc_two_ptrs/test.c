@@ -2,7 +2,8 @@
 
 // Test multiple arguments
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 int inc(int x) { return x + 1; }
 

@@ -1,7 +1,8 @@
 ; Copyright (c) Galois, Inc. 2024
 
-; flags: --symbol test
-; flags: --overrides tests/ppc32/extra/id-ptr.ppc32.cbl
+;; flags {"--symbol", "test"}
+;; flags {"--overrides", "tests/ppc32/extra/id-ptr.ppc32.cbl"}
+;; go(prog)
 
 (declare @id-ptr ((p (Ptr 32))) (Ptr 32))
 (defun @test ((regs PPC32Regs)) PPC32Regs

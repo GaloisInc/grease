@@ -4,7 +4,8 @@
 // The implementations of malloc and free below don't matter, since they will
 // ultimately be overridden.
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 #include <stddef.h>
 

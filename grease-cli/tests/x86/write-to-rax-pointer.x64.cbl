@@ -2,7 +2,8 @@
 
 ; A test case that writes to a pointer stored in %rax.
 
-; flags: --symbol test
+;; flags {"--symbol", "test"}
+;; go(prog)
 
 (defun @test ((regs X86Regs)) X86Regs
   (start start:

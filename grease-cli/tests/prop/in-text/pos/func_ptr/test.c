@@ -1,7 +1,8 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flags: --symbol test
-// flags: --req in-text
+// all: flags {"--symbol", "test"}
+// all: flags {"--req", "in-text"}
+// all: go(prog)
 
 // The correct precondition for this function is complex... Not clear if it's
 // worth it to bake this logic into grease.

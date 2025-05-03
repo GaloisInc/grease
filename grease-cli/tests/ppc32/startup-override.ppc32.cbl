@@ -1,6 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
-; flags: --symbol-startup-override test:tests/ppc32/extra/startup-override.ppc32.cbl
+;; flags {"--symbol-startup-override", "test:tests/ppc32/extra/startup-override.ppc32.cbl"}
+;; go(prog)
 
 (declare @memset ((s (Ptr 32)) (c (Bitvector 32)) (n (Ptr 32))) (Ptr 32))
 

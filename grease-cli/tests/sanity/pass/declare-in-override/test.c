@@ -1,9 +1,10 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flags: --symbol test
-// flags(arm): --overrides tests/sanity/pass/declare-in-override/my_malloc.aux.armv7l.cbl
-// flags(ppc32): --overrides tests/sanity/pass/declare-in-override/my_malloc.aux.ppc32.cbl
-// flags(x64): --overrides tests/sanity/pass/declare-in-override/my_malloc.aux.x86_64.cbl
+// all: flags {"--symbol", "test"}
+// arm: flags {"--overrides", "tests/sanity/pass/declare-in-override/my_malloc.aux.armv7l.cbl"}
+// ppc32: flags {"--overrides", "tests/sanity/pass/declare-in-override/my_malloc.aux.ppc32.cbl"}
+// x64: flags {"--overrides", "tests/sanity/pass/declare-in-override/my_malloc.aux.x86_64.cbl"}
+// all: go(prog)
 
 #include <stdint.h>
 

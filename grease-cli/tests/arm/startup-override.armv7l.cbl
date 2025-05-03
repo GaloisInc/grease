@@ -1,6 +1,7 @@
 ; Copyright (c) Galois, Inc. 2024
 
-; flags: --symbol-startup-override test:tests/arm/extra/startup-override.armv7l.cbl
+;; flags {"--symbol-startup-override", "test:tests/arm/extra/startup-override.armv7l.cbl"}
+;; go(prog)
 
 (declare @memset ((s (Ptr 32)) (c (Bitvector 32)) (n (Ptr 32))) (Ptr 32))
 

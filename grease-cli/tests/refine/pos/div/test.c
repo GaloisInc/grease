@@ -7,7 +7,8 @@
 // entrypoint, as the concrete arguments it passes to `foo` should avoid any
 // code paths that would use `free` on `p` twice.
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 #include <stddef.h>
 
