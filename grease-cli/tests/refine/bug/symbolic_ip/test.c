@@ -5,7 +5,8 @@
 // appear (at first glance) as a symbolic address. We must consult an SMT
 // solver to conclude that the address is in fact concrete.
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 #include <stdbool.h>
 

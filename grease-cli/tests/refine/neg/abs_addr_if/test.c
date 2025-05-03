@@ -2,7 +2,8 @@
 
 // This is a regression test for gitlab#239
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 int __attribute__((noinline)) deref(int *p) { return *p; }
 

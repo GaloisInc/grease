@@ -1,6 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flags: --symbol test
+/// flags {"--symbol", "test"}
+/// go(prog)
 
 extern int skippable(void);
 

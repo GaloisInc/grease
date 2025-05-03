@@ -4,8 +4,9 @@
 ; --error-symbolic-fun-calls such that the call to a symbolic function handle
 ; should raise an error.
 
-; flags: --symbol test
-; flags: --error-symbolic-fun-calls
+;; flags {"--symbol", "test"}
+;; flags {"--error-symbolic-fun-calls"}
+;; go(prog)
 
 (defun @test ((p (Ptr 64))) Unit
   (start start:

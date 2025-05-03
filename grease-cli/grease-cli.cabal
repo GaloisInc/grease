@@ -209,9 +209,10 @@ test-suite grease-tests
     , file-embed
     , filepath
     , hedgehog
+    , hslua
     , lumberjack
     , macaw-base
-    , oughta >= 0.1 && < 0.2
+    , oughta ^>= 0.2
     , parameterized-utils
     , prettyprinter
     , tasty

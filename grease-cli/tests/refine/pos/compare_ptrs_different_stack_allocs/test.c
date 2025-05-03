@@ -2,7 +2,8 @@
 
 // This is undefined behavior at the source level, but is fine in a binary
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 #include <stddef.h>
 

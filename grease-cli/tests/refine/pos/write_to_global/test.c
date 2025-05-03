@@ -2,7 +2,8 @@
 
 // A regression test for gitlab#202.
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 int glob[128] = {0};
 

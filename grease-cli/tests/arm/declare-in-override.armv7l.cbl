@@ -3,8 +3,9 @@
 ; A test case that demonstrates that forward declarations can be used in both
 ; Macaw S-expression programs and their overrides (gitlab#159).
 
-; flags: --symbol test
-; flags: --overrides tests/arm/extra/my-malloc.armv7l.cbl
+;; flags {"--symbol", "test"}
+;; flags {"--overrides", "tests/arm/extra/my-malloc.armv7l.cbl"}
+;; go(prog)
 
 ; A forward declaration to a built-in override.
 (declare @free ((ptr (Ptr 32))) Unit)

@@ -3,8 +3,9 @@
 ; A variant of user-override.llvm.cbl where @id-bool is defun'd rather than
 ; declare'd. This serves as a regression test for gitlab#156.
 
-; flags: --symbol test
-; flags: --overrides tests/llvm/id-bool.llvm.cbl
+;; flags {"--symbol", "test"}
+;; flags {"--overrides", "tests/llvm/id-bool.llvm.cbl"}
+;; go(prog)
 
 (defun @id-bool ((b (Ptr 1))) (Ptr 1)
   (start start:

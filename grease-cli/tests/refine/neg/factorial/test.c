@@ -2,7 +2,8 @@
 
 // gitlab#47
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 unsigned int test(unsigned int x) {
   if (x == 0) {

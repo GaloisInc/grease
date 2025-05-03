@@ -2,7 +2,8 @@
 
 // A regression test for gitlab#156.
 
-// flags: --symbol test
+/// flags {"--symbol", "test"}
+/// go(prog)
 
 #include <stddef.h>
 

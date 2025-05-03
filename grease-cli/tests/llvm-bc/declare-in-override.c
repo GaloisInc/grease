@@ -1,7 +1,8 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flags: --symbol test
-// flags: --overrides tests/llvm-bc/extra/my_malloc.llvm.cbl
+/// flags {"--symbol", "test"}
+/// flags {"--overrides", "tests/llvm-bc/extra/my_malloc.llvm.cbl"}
+/// go(prog)
 
 #include <stdint.h>
 

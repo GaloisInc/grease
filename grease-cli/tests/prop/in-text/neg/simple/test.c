@@ -1,7 +1,8 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flags: --symbol test
-// flags: --req in-text
+// all: flags {"--symbol", "test"}
+// all: flags {"--req", "in-text"}
+// all: go(prog)
 
 int __attribute__((noinline)) inc(int x) { return x + 1; }
 

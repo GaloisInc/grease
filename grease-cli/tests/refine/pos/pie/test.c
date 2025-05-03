@@ -1,7 +1,8 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flags: --symbol test
-// flags(ppc32): --plt-stub 0x270:malloc --plt-stub 0x280:free
+// all: flags {"--symbol", "test"}
+// ppc32: flags {"--plt-stub", "0x270:malloc", "--plt-stub", "0x280:free"}
+// all: go(prog)
 
 #include <stdlib.h>
 

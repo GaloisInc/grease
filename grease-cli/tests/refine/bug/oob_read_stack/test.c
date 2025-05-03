@@ -1,6 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
+// all: go(prog)
 
 __attribute__((noinline)) int dereferences_argument_16(int *ptr) {
   return ptr[16];

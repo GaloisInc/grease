@@ -4,8 +4,9 @@
 // grease is invoked with --error-symbolic-fun-calls, which causes grease to
 // interpret the call to the symbolif function pointer as a bug.
 
-// flags: --symbol test
-// flags: --error-symbolic-fun-calls
+// all: flags {"--symbol", "test"}
+// all: flags {"--error-symbolic-fun-calls"}
+// all: go(prog)
 
 int test(int (*fun_ptr)()) { return fun_ptr(); }
 // all: must_fail()

@@ -3,10 +3,11 @@
 // grease does not yet support this kind of precondition that depends on a
 // relation between two arguments
 
-// flags: --symbol test
+// all: flags {"--symbol", "test"}
 
 // Set --iters low to keep this test fast
-// flags: --iters 8
+// all: flags {"--iters", "8"}
+// all: go(prog)
 
 int test(int *ptr, unsigned int idx) { return ptr[idx]; }
 // arm: could_not_infer()

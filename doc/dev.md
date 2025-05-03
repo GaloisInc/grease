@@ -146,31 +146,6 @@ To add a new test, add a new directory under the appropriate directory above. It
 - A 32-bit PowerPC ELF executable named `test.ppc32.elf`. (At the moment, we don't include 64-bit PowerPC executables, but we could if the need arose.)
 - An x86_64 executable named `test.x64.elf`.
 
-By default, each test will be run as though `grease` were invoked with the
-binary as its only argument. Tests may provide further command-line flags by
-adding a line that begins with `// flags: ` to the corresponding C program,
-like so:
-
-```c
-// flags: --symbol foo --stack-argument-slots 5
-```
-
-You can also add architecture-specific flags like so:
-
-```c
-// flags(arm): --address 0x10074
-// flags(ppc32): --address 0x10000074
-// flags(x64): --address 0x401000
-```
-
-It is common (though not necessary) to define a function named `test` and to
-specify it as the only entrypoint:
-```c
-// flags: --symbol test
-
-void test(/* ... */) { /* ... */ }
-```
-
 ### LLVM bitcode and S-expression test cases
 
 Test cases that do not involve binaries fall into this category. They are
@@ -191,10 +166,26 @@ organized into different subdirectories:
 5. `x86`: x86-64 machine-code CFGs (via `macaw-x86-syntax`). Each of these test
    cases has the file exension `*.x64.cbl`.
 
-These test-cases may override the default command-line options using
-specially-formatted comments. For LLVM bitcode programs, add a line beginning
-with `// flags: ` to the corresponding C program. For S-expression programs, add
-a line beginning with `; flags: `.
+### Lua API
+
+The test harness provides the following Lua API, which enriches that of Oughta
+with GREASE-specific functionality. The API is presented with Haskell-style
+type signatures:
+
+- `prog :: String`: The name of the program under test, e.g., `test.llvm.cbl`.
+- `go :: String -> ()`: Run GREASE with the given string as the name of the
+  program. Frequently, `prog` is passed as the argument, e.g., `go(prog)`.
+- `flags :: [String] -> ()`: Append the given flags to the arguments passed to
+  GREASE when `go` is invoked.
+
+It is common (though not necessary) to define a function named `test` and to
+specify it as the only entrypoint:
+```c
+// all: flags {"--symbol", "test"}
+// all: go(prog)
+
+void test(/* ... */) { /* ... */ }
+```
 
 ### Writing good tests
 
