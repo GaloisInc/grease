@@ -125,6 +125,9 @@ common shared
 library
   import: shared
   hs-source-dirs: src
+  -- Use Markdown in Literate Haskell (.lhs) files
+  ghc-options: -pgmL markdown-unlit
+  build-tool-depends: markdown-unlit:markdown-unlit
   build-depends:
       aeson >= 2
     , bytestring
@@ -137,6 +140,7 @@ library
     , lens
     , libBF
     , lumberjack >= 1.0 && < 1.1
+    , markdown-unlit ^>= 0.6
     , megaparsec
     , mtl
     , panic >= 0.3
