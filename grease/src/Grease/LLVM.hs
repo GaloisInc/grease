@@ -18,6 +18,7 @@ import Control.Lens ((^.))
 
 -- parameterized-utils
 import qualified Data.Parameterized.Context as Ctx
+import qualified Data.Parameterized.Map as MapF
 
 -- what4
 import qualified What4.Expr as W4
@@ -79,6 +80,8 @@ initState ::
   bak ->
   GreaseLogAction ->
   C.ExtensionImpl () sym LLVM ->
+  -- | Additional Crucible intrinsic types to use.
+  C.IntrinsicTypes sym ->
   C.HandleAllocator ->
   ErrorSymbolicFunCalls ->
   SetupMem sym ->
@@ -92,14 +95,14 @@ initState ::
   -- | The CFG of the user-requested entrypoint function.
   C.SomeCFG LLVM argTys retTy ->
   m (C.ExecState () sym LLVM (C.RegEntry sym retTy))
-initState bak la llvmExtImpl halloc errorSymbolicFunCalls mem globs llvmCtx setupHook initArgs mbStartupOvCfg (C.SomeCFG cfg) = do
+initState bak la llvmExtImpl iTypes halloc errorSymbolicFunCalls mem globs llvmCtx setupHook initArgs mbStartupOvCfg (C.SomeCFG cfg) = do
   let dl = TCtx.llvmDataLayout (llvmCtx ^. Trans.llvmTypeCtx)
   let extImpl = greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls llvmExtImpl
   let bindings = C.FnBindings
         $ C.insertHandleMap (C.cfgHandle cfg) (C.UseCFG cfg $ C.postdomInfo cfg) C.emptyHandleMap
   let ctx = C.initSimContext
         bak
-        CLLVM.llvmIntrinsicTypes
+        (CLLVM.llvmIntrinsicTypes `MapF.union` iTypes)
         halloc
         printHandle
         bindings
