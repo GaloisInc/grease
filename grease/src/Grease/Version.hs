@@ -11,7 +11,7 @@ module Grease.Version (verStr) where
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
-import Data.FileEmbed (embedFile)
+import Data.FileEmbed (embedFileRelative)
 import Data.List (intersperse)
 import qualified Data.Text as Text
 import Data.Version (showVersion)
@@ -88,7 +88,7 @@ unknown = "UNKNOWN"
 --
 -- See Note [grease.buildinfo.json]
 buildinfo :: BS.ByteString
-buildinfo = $(embedFile "grease.buildinfo.json")
+buildinfo = $(embedFileRelative "grease.buildinfo.json")
 
 {-
 Note [grease.buildinfo.json]
