@@ -71,11 +71,11 @@ import qualified Lang.Crucible.Simulator as C
 import qualified Lang.Crucible.Simulator.GlobalState as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.DataLayout as Mem
 import qualified Lang.Crucible.LLVM.MemModel as Mem
 import qualified Lang.Crucible.LLVM.Intrinsics as Mem
 
 -- macaw-base
+import qualified Data.Macaw.Architecture.Info as MI
 import qualified Data.Macaw.CFG as MC
 import qualified Data.Macaw.Discovery as Discovery
 import qualified Data.Macaw.Memory as MM
@@ -158,7 +158,7 @@ emptyMacawMem bak arch macawMem mutGlobs relocs = do
       (globalMemoryHooks arch relocs)
       (Proxy @arch)
       bak
-      (arch ^. archEndianness)
+      (arch ^. archInfo . to (Symbolic.toCrucibleEndian . MI.archEndianness))
       globs
       macawMem
   pure (InitialMem initMem, ptrTable)
@@ -308,12 +308,12 @@ globalMemoryHooks arch relocs = Symbolic.GlobalMemoryHooks {
           -- appropriate size and endianness.
           relocAbsBaseAddrBs :: BSL.ByteString
           relocAbsBaseAddrBs =
-            case arch ^. archEndianness of
-              Mem.LittleEndian ->
+            case arch ^. archInfo . to MI.archEndianness of
+              MM.LittleEndian ->
                 BSL.take relocSizeInt64 $
                 Builder.toLazyByteString $
                 Builder.word64LE relocAbsBaseAddrWord64
-              Mem.BigEndian ->
+              MM.BigEndian ->
                 BSL.takeEnd relocSizeInt64 $
                 Builder.toLazyByteString $
                 Builder.word64BE relocAbsBaseAddrWord64

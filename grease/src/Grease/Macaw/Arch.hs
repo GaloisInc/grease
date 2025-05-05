@@ -14,7 +14,6 @@ module Grease.Macaw.Arch
   , ArchResult
   , ArchReloc
   , ArchContext(..)
-  , archEndianness
   , archGetIP
   , archInfo
   , archPcReg
@@ -58,7 +57,6 @@ import qualified Lang.Crucible.CFG.Reg as C.Reg
 import qualified Lang.Crucible.Simulator as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.DataLayout as Mem
 import qualified Lang.Crucible.LLVM.MemModel as Mem
 
 -- macaw-base
@@ -107,7 +105,6 @@ type family ArchReloc arch :: Type
 -- to warrant being a separate data type.
 data ArchContext arch = ArchContext
   { _archInfo :: MI.ArchitectureInfo arch
-  , _archEndianness :: Mem.EndianForm
   , _archGetIP ::
       forall sym.
       C.IsSymInterface sym =>
