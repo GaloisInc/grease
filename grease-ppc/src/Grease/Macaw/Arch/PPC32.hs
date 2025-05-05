@@ -27,7 +27,6 @@ import qualified Lang.Crucible.Simulator.RegValue as C
 
 -- crucible-llvm
 import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.DataLayout as Mem
 
 -- elf-edit
 import qualified Data.ElfEdit as EE
@@ -84,7 +83,6 @@ ppc32Ctx mbReturnAddr stackArgSlots = do
   return
     ArchContext
       { _archInfo = PPC.ppc32_linux_info
-      , _archEndianness = Mem.BigEndian
       , _archGetIP = \regs -> do
           C.RV (Mem.LLVMPointer _base off) <- PPC.Symbolic.Regs.lookupReg PPC.PPC_IP regs
           pure off

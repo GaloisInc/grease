@@ -27,7 +27,6 @@ import qualified Lang.Crucible.Simulator as C
 
 -- crucible-llvm
 import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.DataLayout as Mem
 
 -- elf-edit
 import qualified Data.ElfEdit as EE
@@ -85,7 +84,6 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
   return
     ArchContext
       { _archInfo = X86.x86_64_linux_info
-      , _archEndianness = Mem.LittleEndian
       , _archVals = avals
       , _archRelocSupported = x64RelocSupported
       , _archGetIP = \regs -> do

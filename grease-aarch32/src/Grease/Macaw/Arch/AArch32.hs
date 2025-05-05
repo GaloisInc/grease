@@ -28,7 +28,6 @@ import qualified Lang.Crucible.Simulator.RegValue as C
 
 -- crucible-llvm
 import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.DataLayout as Mem
 
 -- elf-edit
 import qualified Data.ElfEdit as EE
@@ -83,7 +82,6 @@ armCtx halloc mbReturnAddr stackArgSlots = do
   return
     ArchContext
       { _archInfo = ARM.arm_linux_info
-      , _archEndianness = Mem.LittleEndian
       , _archGetIP = \regs -> do
           let C.RV (Mem.LLVMPointer _base off) = ARM.Symbolic.lookupReg ARM.pc regs
           pure off

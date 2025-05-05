@@ -47,9 +47,7 @@ import Text.Read (readMaybe)
 import qualified Lang.Crucible.CFG.Core as C
 
 -- crucible-llvm
-import           Lang.Crucible.LLVM.DataLayout (DataLayout)
 import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.DataLayout as Mem
 
 -- elf-edit
 import qualified Data.ElfEdit as Elf
@@ -84,8 +82,7 @@ doLog la diag = LJ.writeLog la (LoadDiagnostic diag)
 
 data LoadedProgram arch
   = LoadedProgram
-    { progDataLayout :: DataLayout
-    , progLoadedBinary :: Loader.LoadedBinary arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
+    { progLoadedBinary :: Loader.LoadedBinary arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
     , progLoadOptions :: LC.LoadOptions
     , progSymMap :: Map.Map (MC.ArchSegmentOff arch) BS.ByteString
       -- ^ A map of all function addresses to their symbol names. Note that it
@@ -169,7 +166,6 @@ load la userEntrypoints perms elf = do
           (entry,) <$>
           resolveCoreDumpEntrypointAddress la loadOpts mem elf symMap coreDumpPath
   let entryAddrMap = Map.fromList entryAddrs
-  let dl = Mem.defaultDataLayout
 
   let dynFuns = dynamicFunAddrs loadOpts elf
   dynFunSegOffs <-
@@ -196,8 +192,7 @@ load la userEntrypoints perms elf = do
 
   return
     LoadedProgram
-    { progDataLayout = dl
-    , progLoadedBinary = loaded
+    { progLoadedBinary = loaded
     , progLoadOptions = loadOpts
     , progSymMap = symMap
     , progDynFunMap = dynFunMap

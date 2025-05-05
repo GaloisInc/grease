@@ -16,7 +16,7 @@ module Grease.FunctionOverride
   , builtinLLVMOverrides
   ) where
 
-import Control.Lens ((^.))
+import Control.Lens ((^.), to)
 import Data.Bool (Bool(..))
 import Data.Maybe (Maybe(..), mapMaybe)
 import qualified Data.Vector as Vec
@@ -67,18 +67,18 @@ import qualified Lang.Crucible.LLVM.TypeContext as TCtx
 import qualified What4.Interface as W4
 import qualified What4.FunctionName as W4
 
--- macaw
+-- macaw-base
+import qualified Data.Macaw.Architecture.Info as MI
 import qualified Data.Macaw.CFG as MC
 import qualified Data.Macaw.Memory as MM
 
 -- macaw-symbolic
 import qualified Data.Macaw.Symbolic as Symbolic
-import qualified Data.Macaw.Symbolic.Memory.Lazy as Symbolic
 
 -- stubs
 import qualified Stubs.FunctionOverride as Stubs
 
-import Grease.Macaw.Arch (ArchContext, archEndianness)
+import Grease.Macaw.Arch (ArchContext, archInfo)
 import Grease.Macaw.Memory (loadConcreteString)
 import qualified Grease.Panic as Panic
 import Grease.Utility (OnlineSolverAndBackend, llvmOverrideName)
@@ -370,7 +370,7 @@ callAssert ::
 callAssert bak mvar mmConf archCtx _pfn _pfile _pline ptxt = do
   let sym = C.backendGetSym bak
   st0 <- get
-  let endian = Symbolic.fromCrucibleEndian (archCtx ^. archEndianness)
+  let endian = archCtx ^. archInfo . to MI.archEndianness
   let maxSize = Nothing
   (txt, st1) <- liftIO $ loadConcreteString bak mvar mmConf endian ptxt maxSize st0
   put st1
@@ -452,7 +452,7 @@ callPrintf ::
 callPrintf bak mvar mmConf archCtx formatStrPtr gva = do
   let sym = C.backendGetSym bak
   st0 <- get
-  let endian = Symbolic.fromCrucibleEndian (archCtx ^. archEndianness)
+  let endian = archCtx ^. archInfo . to MI.archEndianness
   let maxSize = Nothing
   -- Read format string
   (formatStr, st1) <- liftIO $
@@ -567,7 +567,7 @@ callPuts ::
 callPuts bak mvar mmConf archCtx (C.regValue -> strPtr) = do
   let sym = C.backendGetSym bak
   st0 <- get
-  let endian = Symbolic.fromCrucibleEndian (archCtx ^. archEndianness)
+  let endian = archCtx ^. archInfo . to MI.archEndianness
   let strEntry = C.RegEntry Mem.PtrRepr strPtr
   let maxSize = Nothing
   (str, st1) <- liftIO $ loadConcreteString bak mvar mmConf endian strEntry maxSize st0
