@@ -31,6 +31,7 @@ import tempfile
 
 from java.awt import Color
 
+from ghidra.app.plugin.core.analysis.rust.RustUtilities import isRustProgram
 from ghidra.app.util.opinion import ElfLoader
 
 
@@ -50,36 +51,6 @@ TIMEOUT_MS = 60000
 
 
 ### UTILITY FUNCTIONS ###
-
-
-def isRustBinary(program):
-    """Return true if this appears to be a Rust program.
-
-    This takes the approach used by the Mandiant CAPA tool, which is to search
-    the binary for substrings found in binaries produced by the rust compiler,
-    returning true if any are found.
-
-    https://github.com/mandiant/capa
-    https://github.com/mandiant/capa-rules/blob/e63c454fbb9df14967a67479fee1e1615d54f4d6/compiler/rust/compiled-with-rust.yml
-    """
-    RUST_FEATURES = [
-        "run with `RUST_BACKTRACE=1` environment variable",
-        "called `Option::unwrap()` on a `None` value",
-        "called `Result::unwrap()` on an `Err` value",
-    ]
-
-    mem = program.getMemory()
-    minAddr = currentProgram.getMinAddress()
-    for feature in RUST_FEATURES:
-        if mem.findBytes(
-            minAddr,
-            feature,
-            None,  # mask (None means check all bytes)
-            True,  # search in forward direction
-            None,  # monitor
-        ):
-            return True
-    return False
 
 
 def addPlateComment(address, comment):
@@ -893,7 +864,7 @@ try:
         )
         print("==> GREASE Optional Requirements Selected: {}".format(requirements))
 
-    isRust = isRustBinary(currentProgram)
+    isRust = isRustProgram(currentProgram)
 
     for fn in userSelectedFunctions():
         print("==> GREASE analyzing function '{}'...".format(fn))
