@@ -9,8 +9,11 @@ user interface.
 ## Prerequisites
 
 You will need to [download
-Ghidra](https://github.com/NationalSecurityAgency/ghidra/releases). You will
-also need to build a `grease` binary from source as described in the
+Ghidra](https://github.com/NationalSecurityAgency/ghidra/releases). We require
+Ghidra version or 11.0 or later, as this is when Ghidra introduced initial
+support for Rust binaries.
+
+You will also need to build a `grease` binary from source as described in the
 [developers' guide](./dev.md).
 
 You may optionally specify the path to your `grease` binary by setting the
