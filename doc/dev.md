@@ -172,11 +172,12 @@ The test harness provides the following Lua API, which enriches that of Oughta
 with GREASE-specific functionality. The API is presented with Haskell-style
 type signatures:
 
-- `prog :: String`: The name of the program under test, e.g., `test.llvm.cbl`.
-- `go :: String -> ()`: Run GREASE with the given string as the name of the
-  program. Frequently, `prog` is passed as the argument, e.g., `go(prog)`.
-- `flags :: [String] -> ()`: Append the given flags to the arguments passed to
-  GREASE when `go` is invoked.
+- `prog`: The name of the program under test, e.g., `"test.llvm.cbl"`.
+- `go(prog_name)`: Run GREASE with the given string as the name of the program.
+  Frequently, `prog` is passed as the argument, e.g., `go(prog)`. `go` may be
+  called multiple times per test, see `func-ptr.llvm.cbl` for an example.
+- `flags(fs)`: Append the given flags to the arguments passed to GREASE when
+  `go` is invoked. The flags are cleared after `go` is run.
 
 It is common (though not necessary) to define a function named `test` and to
 specify it as the only entrypoint:
