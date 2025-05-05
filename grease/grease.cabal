@@ -131,7 +131,7 @@ library
     , containers
     , directory
     , exceptions
-    , file-embed
+    , file-embed >= 0.0.16
     , filepath
     , gitrev
     , lens
