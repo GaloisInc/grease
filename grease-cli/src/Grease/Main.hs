@@ -154,6 +154,7 @@ import qualified Data.Macaw.Symbolic.Debug as MDebug
 
 -- macaw-symbolic
 import qualified Data.Macaw.Symbolic as Symbolic
+import qualified Data.Macaw.Symbolic.Memory.Lazy as Symbolic
 
 -- macaw-symbolic-syntax
 import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
@@ -423,6 +424,15 @@ data MacawCfgConfig arch = MacawCfgConfig
   , mcElf :: Maybe (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
     -- ^ 'Just' the ELF of the target binary if it exists, and 'Nothing' otherwise
   }
+
+-- | Create a 'DataLayout' suitable for @macaw-symbolic@'s needs. Currently,
+-- this simply overrides the 'DataLayout.defaultDataLayout' with a reasonable
+-- endianness value based on the architecture.
+macawDataLayout :: ArchContext arch -> DataLayout
+macawDataLayout archCtx =
+  DataLayout.defaultDataLayout
+    & DataLayout.intLayout .~
+        (archCtx ^. archInfo . to (Symbolic.toCrucibleEndian . MI.archEndianness))
 
 -- | Integer argument registers
 interestingRegs :: Set String
@@ -881,7 +891,7 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
   cfgs <- entrypointCfgMap la halloc prog (simEntryPoints simOpts)
   let cfgs' = Map.map (\cfg -> MacawEntrypointCfgs cfg Nothing) cfgs
   let memory = MC.emptyMemory (archCtx ^. archInfo . to MI.archAddrWidth)
-  let dl = DataLayout.defaultDataLayout
+  let dl = macawDataLayout archCtx
   let setupHook :: forall sym. SetupHook sym
       setupHook = Macaw.SetupHook $ \bak mvar funOvs -> do
         -- Register overrides, both user-defined ones and ones that are
@@ -943,7 +953,7 @@ simulateMacaw ::
   IO Results
 simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts parserHooks = do
   let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
-  let dl = progDataLayout loadedProg
+  let dl = macawDataLayout archCtx
   let memory = Loader.memoryImage $ progLoadedBinary loadedProg
   let loadOpts = progLoadOptions loadedProg
   let symMap = progSymMap loadedProg
