@@ -251,7 +251,8 @@ main :: IO ()
 main = do
   -- Each entry in this list should be documented in doc/dev.md
   let dirs =
-        [ "llvm"
+        [ "arm"
+        , "llvm"
         , "llvm-bc"
         , "ppc32"
         , "prop"
