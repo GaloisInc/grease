@@ -1314,7 +1314,7 @@ simulateLlvm transOpts simOpts la = do
                 pure (entry, entrypointCfgs)
               Nothing -> throw $ GreaseException $ "Could not find function: " <> nm
 
-    let dl = DataLayout.defaultDataLayout
+    let dl = TCtx.llvmDataLayout (llvmCtxt ^. Trans.llvmTypeCtx)
     let setupHook :: forall sym. LLVM.SetupHook sym
         setupHook = LLVM.SetupHook $ \bak halloc' llvmCtx -> do
           -- Register defined functions...
