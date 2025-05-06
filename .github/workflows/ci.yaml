@@ -17,6 +17,7 @@ env:
 
 jobs:
   build:
+    name: GREASE - GHC v${{ matrix.ghc }} - ${{ matrix.cache-key-prefix }}
     runs-on: ${{ matrix.os }}
     strategy:
       # complete all jobs
@@ -28,6 +29,30 @@ jobs:
         haddock: [true]  # see `include` below
         os: [ubuntu-22.04]
         pre-hook: [""]  # see `include` below
+        include:
+        # Include a single build (with latest Linux OS and latest GHC version)
+        # using `cabal-force-upper-bounds` to verify that we actually build
+        # against the upper bounds in the Cabal `build-depends`.
+        - cabal: "3.14.1.1"
+          cache-key-prefix: upper-bounds
+          ghc: 9.8.4
+          haddock: false
+          os: ubuntu-22.04
+          pre-hook: |
+            curl \
+              --fail \
+              --location \
+              --proto '=https' \
+              --show-error \
+              --silent \
+              --tlsv1.2 \
+              https://github.com/nomeata/cabal-force-upper-bound/releases/download/0.1/cabal-force-upper-bound.linux.gz | \
+              gunzip > \
+              /usr/local/bin/cabal-force-upper-bound
+            chmod +x /usr/local/bin/cabal-force-upper-bound
+            for f in ./grease*/grease*.cabal; do
+              cabal-force-upper-bound --cabal-project "${f}" >> cabal.project
+            done
     steps:
     - name: Checkout
       uses: actions/checkout@v4
