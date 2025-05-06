@@ -49,7 +49,7 @@ doLog la diag = LJ.writeLog la (SimulatorHooksDiagnostic diag)
 -- operations.
 --
 -- Wraps around a base ExtensionImpl that is invoked in cases where
--- greaseMacawExtImpl does not override the default beahvior.
+-- greaseMacawExtImpl does not override the default behavior.
 --
 -- We override several pointer operations because their implementations
 -- in "Data.Macaw.Symbolic.MemOps" invent fresh symbolic constants via

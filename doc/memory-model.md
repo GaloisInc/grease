@@ -50,7 +50,7 @@ Mutable global variables are tricky:
   trigger the bug isn't actually feasible at any of the callsites to the
   function under analysis.
 - On the other hand, if GREASE doesn't initialize global variables at all, any
-  loads from them (that aren't preceeded by writes made by the function under
+  loads from them (that aren't preceded by writes made by the function under
   analysis or its callees) will fail. As mutable global variables are pervasive,
   this would lead to a significant lack of coverage.
 

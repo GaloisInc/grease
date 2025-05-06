@@ -335,7 +335,7 @@ growPtrTarget ::
   PtrTarget wptr tag
 growPtrTarget = growPtrTargetBy (Bytes.toBytes (1 :: Integer))
 
--- | Inintialize all uninitialized parts of an allocation
+-- | Initialize all uninitialized parts of an allocation
 initializePtrTarget ::
   Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
   -- | Tag for newly-initialized bytes
@@ -345,7 +345,7 @@ initializePtrTarget ::
 initializePtrTarget tag (PtrTarget ms) =
   ptrTarget (fmap (initializeMemShape tag) ms)
 
--- | Inintialize all uninitialized parts of an allocation, or if it is already
+-- | Initialize all uninitialized parts of an allocation, or if it is already
 -- fully initialized, grow it by one uninitialized byte.
 initializeOrGrowPtrTarget ::
   Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>

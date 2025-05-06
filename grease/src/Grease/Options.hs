@@ -78,7 +78,7 @@ data SimOpts
   = SimOpts
     { -- | Run the debugger execution feature
       simDebug :: Bool
-      -- | Names or addresss of function to simulate
+      -- | Names or address of function to simulate
     , simEntryPoints :: [Entrypoint]
       -- | Default: 'False'.
     , simErrorSymbolicFunCalls :: ErrorSymbolicFunCalls
@@ -87,7 +87,7 @@ data SimOpts
       -- | Maximum number of iterations of each program loop/maximum number of
       -- recursive calls to the same function
     , simLoopBound :: LoopBound
-      -- | Maxmimum number of iterations of the refinement loop
+      -- | Maximum number of iterations of the refinement loop
     , simMaxIters :: Maybe Int
       -- | How to initialize mutable globals
     , simMutGlobs :: MutableGlobalState

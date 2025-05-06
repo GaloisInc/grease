@@ -32,7 +32,7 @@ Where:
 - `uninit N` represents `N` uninitialized bytes of memory
 - `init N` represents `N` bytes of memory initialized to symbolic bytes
 - `exactly byte+` represents a concrete sequence of bytes
-- `memptr` represents a pointer to a futher allocation
+- `memptr` represents a pointer to a further allocation
 
 At certain verbosity levels, GREASE may output these preconditions in its logs.
 It does so using a concrete syntax described below.
