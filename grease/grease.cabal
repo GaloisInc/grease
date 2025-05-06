@@ -138,7 +138,7 @@ library
     , githash ^>=0.1.7.0
     , lens ^>= 5.3
     , libBF ^>= 0.6.8
-    , lumberjack ^>= { 1.0, 1.1 }
+    , lumberjack ^>= 1.0
     , megaparsec ^>= 9.6
     , mtl ^>= { 2.3.1, 2.2.2 }
     , panic ^>= 0.4
