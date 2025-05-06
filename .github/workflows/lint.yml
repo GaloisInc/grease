@@ -23,3 +23,9 @@ jobs:
           tar xvf hlint.tar.gz
 
           ./hlint-3.8/hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/{main,src,tests}
+
+      - name: Find stale TODOs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/lint/stale-todo.py grease*
