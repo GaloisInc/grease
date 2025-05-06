@@ -140,7 +140,7 @@ library
     , file-embed ^>= 0.0.16
     , filepath ^>= 1.4.2.2
     , lens ^>= 5.3
-    , lumberjack ^>= { 1.0, 1.1 }
+    , lumberjack ^>= 1.0
     , megaparsec ^>= 9.6
     , optparse-applicative
     , safe-exceptions ^>= 0.1.7.4
@@ -217,7 +217,7 @@ test-suite grease-tests
     , filepath ^>= 1.4.2.2
     , hedgehog ^>= 1.5
     , hslua ^>= 2.3.1
-    , lumberjack ^>= { 1.0, 1.1 }
+    , lumberjack ^>= 1.0
     , oughta ^>= 0.2
     , parameterized-utils ^>= 2.1.10
     , prettyprinter ^>= 1.7.1
