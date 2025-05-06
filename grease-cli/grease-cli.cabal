@@ -131,6 +131,7 @@ library
     , grease-ppc
     , grease-x86
 
+    -- Hackage dependencies
     , aeson ^>= 2.2
     , async ^>= 2.2.5
     , bytestring ^>= { 0.11.5, 0.12.1 }
@@ -145,36 +146,40 @@ library
     , safe-exceptions ^>= 0.1.7.4
     , text ^>= { 2.0, 2.1 }
     , vector ^>= 0.13.2
-
     , prettyprinter ^>= 1.7.1
     , parameterized-utils ^>= 2.1.10
-    , what4 ^>= 1.6
-    , llvm-pretty ^>= 0.12
-    , llvm-pretty-bc-parser
-    , crucible ^>= 0.7.1
-    , crucible-debug ^>= 0.1
+
+    -- Submodules
+    --
+    -- No version bounds are needed, as Cabal will always choose the versions
+    -- specified in `cabal.project`, namely, the version in the submodule.
+    , crucible
+    , crucible-debug
+    , crucible-llvm
     , crucible-llvm-debug
-    , crucible-llvm ^>= 0.7
     , crucible-llvm-syntax
     , crucible-macaw-debug
-    , crucible-syntax ^>= 0.4
+    , crucible-syntax
     , elf-edit
-    , macaw-loader
-    , macaw-loader-aarch32
-    , macaw-loader-x86
-    , macaw-base
-    , macaw-symbolic
-    , macaw-symbolic-syntax
+    , llvm-pretty
+    , llvm-pretty-bc-parser
     , macaw-aarch32
     , macaw-aarch32-symbolic
     , macaw-aarch32-syntax
+    , macaw-base
+    , macaw-loader
+    , macaw-loader-aarch32
+    , macaw-loader-x86
     , macaw-ppc
     , macaw-ppc-symbolic
     , macaw-ppc-syntax
+    , macaw-symbolic
+    , macaw-symbolic-syntax
     , macaw-x86
     , macaw-x86-symbolic
     , macaw-x86-syntax
     , stubs-common
+    , what4
 
   exposed-modules:
     Grease.Cli
@@ -201,17 +206,17 @@ test-suite grease-tests
   build-depends:
       grease-cli
     , grease
+
+    -- Hackage dependencies
     , bv-sized ^>= 1.0.6
     , bytestring ^>= { 0.11.5, 0.12.1 }
     , containers ^>= 0.6.7
     , directory ^>= 1.3.7.1
-    , crucible-llvm ^>= 0.7
     , file-embed ^>= 0.0.16
     , filepath ^>= 1.4.2.2
     , hedgehog ^>= 1.5
     , hslua ^>= 2.3.1
     , lumberjack ^>= { 1.0, 1.1 }
-    , macaw-base
     , oughta ^>= 0.2
     , parameterized-utils ^>= 2.1.10
     , prettyprinter ^>= 1.7.1
@@ -219,3 +224,7 @@ test-suite grease-tests
     , tasty-hedgehog ^>= 1.4.0.2
     , tasty-hunit ^>= 0.10.2
     , text ^>= { 2.0, 2.1 }
+
+    -- Submodules
+    , crucible-llvm
+    , macaw-base
