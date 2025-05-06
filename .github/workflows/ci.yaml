@@ -30,6 +30,16 @@ jobs:
         os: [ubuntu-22.04]
         pre-hook: [""]  # see `include` below
         include:
+        # Include a single build (with latest Linux OS and oldest GHC version)
+        # using `--prefer-oldest` to verify that we still build against the
+        # lower bounds in the Cabal `build-depends`.
+        - cabal: "3.14.1.1"
+          cache-key-prefix: prefer-oldest
+          ghc: 9.4.8
+          haddock: false
+          os: ubuntu-22.04
+          pre-hook: |
+            echo 'prefer-oldest: True' >> cabal.project
         # Include a single build (with latest Linux OS and latest GHC version)
         # using `cabal-force-upper-bounds` to verify that we actually build
         # against the upper bounds in the Cabal `build-depends`.
