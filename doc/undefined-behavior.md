@@ -14,7 +14,7 @@ In the C abstract machine, such behavior is clearly undefined.
 However, if the program is compiled in a straightforward way into machine code, the distinction between different stack variables is lost.
 The resulting code simply performs several innocuous-looking writes to the stack.
 Similarly, adding two signed integers in C might result in an undefined signed overflow.
-At the machine code level, there is no distinction betwen signed and unsigned integers, and arithmetic operations generally have a well-defined semantics for all inputs (e.g., based on a two's complement representation).
+At the machine code level, there is no distinction between signed and unsigned integers, and arithmetic operations generally have a well-defined semantics for all inputs (e.g., based on a two's complement representation).
 
 GREASE aims to be pragmatic in what it calls a bug.
 It uses a C-like memory model, and reports behaviors of binaries that would likely constitute undefined behavior in C.

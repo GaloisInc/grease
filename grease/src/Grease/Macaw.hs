@@ -505,7 +505,7 @@ assertRelocSupported arch (Mem.LLVMPointer _base offset) relocs =
                  ") at address " <> tshow addr <> "."
                , "This may be due to a PLT stub that grease did not detect."
                , "If so, try passing --plt-stub <ADDR>:<NAME>, where"
-               , "<ADDR> and <NAME> can be obtained by diassembling the"
+               , "<ADDR> and <NAME> can be obtained by disassembling the"
                , "relevant PLT section of the binary"
                , "(.plt, .plt.got, .plt.sec, etc.)."
                ]

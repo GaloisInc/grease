@@ -15,7 +15,7 @@ data Grease = Grease
 --   arise due to a programming error. It will exit the program
 --   and print a message asking users to open a ticket.
 panic :: HasCallStack =>
-  String {- ^ Short name of where the error occured -} ->
+  String {- ^ Short name of where the error occurred -} ->
   [String] {- ^ More detailed description of the error  -} ->
   a
 panic = Panic.panic Grease

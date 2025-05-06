@@ -11,5 +11,5 @@
 ;; next_line_must_fail()
     (funcall h p)
     (return ())))
-; TODO: This error mesage is not great... it doesn't mention double-frees
+; TODO: This error message is not great... it doesn't mention double-frees
 ;; check "The free function"

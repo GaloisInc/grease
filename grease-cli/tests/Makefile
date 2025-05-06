@@ -58,7 +58,7 @@ STRIPPED_STATIC_ARM_EXES   = $(addsuffix /test.armv7l.elf,$(STRIPPED_STATIC_DIRS
 STRIPPED_STATIC_X64_EXES   = $(addsuffix /test.x64.elf,$(STRIPPED_STATIC_DIRS))
 STRIPPED_STATIC_PPC32_EXES = $(addsuffix /test.ppc32.elf,$(STRIPPED_STATIC_DIRS))
 
-# Thest test cases depend on libc, but rely on static linking to ensure that
+# These test cases depend on libc, but rely on static linking to ensure that
 # all of the relevant code from libc is inlined into the binary.
 #
 # For instance, the sanity/pass/syscall test case crucially relies

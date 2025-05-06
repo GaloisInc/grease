@@ -24,6 +24,13 @@ jobs:
 
           ./hlint-3.8/hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/{main,src,tests}
 
+      - name: Spell check docs
+        # We pin a specific version because updates can come with additional
+        # typo fixes. These could break CI unexpectedly if we just pinned @v1.
+        uses: crate-ci/typos@v1.32.0
+        with:
+          files: doc/
+
       - name: Find stale TODOs
         shell: bash
         env:

@@ -108,7 +108,7 @@ evalPrinter cfg p =
 
 printerAlloc :: Printer w (PP.Doc Void) -> Printer w BlockId
 printerAlloc computeDoc = do
-  -- The seqencing of block number allocations is important for legibility: It's
+  -- The sequencing of block number allocations is important for legibility: It's
   -- nicer when pointers have lower block numbers than the pointers inside the
   -- allocation that they point to, because then allocation numbers increase
   -- while reading right-to-left, top-to-bottom.

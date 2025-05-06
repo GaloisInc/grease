@@ -158,13 +158,13 @@ organized into different subdirectories:
    test cases has the file extension `*.bc`.
 
 3. `arm`: AArch32 machine-code CFGs (via `macaw-aarch32-syntax`). Each of these
-   test cases has the file exension `*.armv7l.cbl`.
+   test cases has the file extension `*.armv7l.cbl`.
 
 4. `ppc32`: PPC32 machine-code CFGs (via `macaw-ppc-syntax`). Each of these test
-   cases has the file exension `*.ppc32.cbl`.
+   cases has the file extension `*.ppc32.cbl`.
 
 5. `x86`: x86-64 machine-code CFGs (via `macaw-x86-syntax`). Each of these test
-   cases has the file exension `*.x64.cbl`.
+   cases has the file extension `*.x64.cbl`.
 
 ### Lua API
 

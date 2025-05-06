@@ -93,7 +93,7 @@ doLog la diag = LJ.writeLog la (ResolveCallDiagnostic diag)
 regStructRepr :: ArchContext arch -> C.TypeRepr (Symbolic.ArchRegStruct arch)
 regStructRepr arch = C.StructRepr . Symbolic.crucArchRegTypes $ arch ^. archVals . to Symbolic.archFunctions
 
--- | Create a new override that post-composes an 'OverrideSim' action wtih an existing one.
+-- | Create a new override that post-composes an 'OverrideSim' action with an existing one.
 useComposedOverride ::
   C.HandleAllocator ->
   ArchContext arch ->

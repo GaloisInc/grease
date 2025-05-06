@@ -347,7 +347,7 @@ registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx decls = do
       Just ov -> registerOv ov
 
   -- Note the order again: user overrides (registered later) will take
-  -- precendence over built-in overrides (registered here).
+  -- precedence over built-in overrides (registered here).
   let ovs = Foldable.toList builtinOvs
   builtinOvs' <- CLLVM.register_llvm_overrides_ llvmCtx ovs allDecls
   builtinOvs'' <-

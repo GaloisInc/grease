@@ -37,7 +37,7 @@ relocation type associated with the PLT stub, e.g.,
 grease: Attempted to read from an unsupported relocation type (R_X86_64_GLOB_DAT) at address 0x3ff0.
 This may be due to a PLT stub that grease did not detect.
 If so, try passing --plt-stub <ADDR>:<NAME>, where
-<ADDR> and <NAME> can be obtained by diassembling the
+<ADDR> and <NAME> can be obtained by disassembling the
 relevant PLT section of the binary
 (.plt, .plt.got, .plt.sec, etc.).
 ```
