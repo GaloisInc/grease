@@ -28,25 +28,6 @@ jobs:
         haddock: [true]  # see `include` below
         os: [ubuntu-22.04]
         pre-hook: [""]  # see `include` below
-        include:
-        # Include a build (with latest Linux OS) against Stackage LTS package
-        # sets for each supported version of GHC that has one to verify that we
-        # support building against these widely-used package sets.
-        - cabal: "3.14.1.1"
-          cache-key-prefix: stackage
-          ghc: 9.8.4
-          haddock: false
-          os: ubuntu-22.04
-          pre-hook: |
-            echo 'import: https://www.stackage.org/lts-23.19/cabal.config' >> cabal.project
-        - cabal: "3.14.1.1"
-          cache-key-prefix: stackage
-          ghc: 9.4.8
-          haddock: false
-          os: ubuntu-22.04
-          pre-hook: |
-            echo 'import: https://www.stackage.org/lts-21.25/cabal.config' >> cabal.project
-    name: GREASE - GHC v${{ matrix.ghc }} - ${{ cache-key-prefix }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
