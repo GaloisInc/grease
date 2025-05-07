@@ -6,6 +6,10 @@ on:
     - main
   pull_request:
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   lint:
     runs-on: ubuntu-22.04
@@ -16,7 +20,18 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      - shell: bash
+      - name: Check for trailing whitespace
+        run: python3 scripts/lint/whitespace.py grease*/**/*.hs doc/**/*.md
+
+      - name: Lint the linters with ruff
+        uses: astral-sh/ruff-action@v3
+        with:
+          src: scripts/lint/
+
+      - name: Ensure linters are formatted
+        run: ruff format --check --diff scripts/lint
+
+      - name: Run hlint
         run: |
           curl \
             --fail \
@@ -37,7 +52,6 @@ jobs:
           files: doc/
 
       - name: Find stale TODOs
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/lint/stale-todo.py grease*
