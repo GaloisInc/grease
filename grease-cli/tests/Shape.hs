@@ -251,7 +251,7 @@ shapeTests =
   , testPrint
     "Print ShapeStruct"
     "{bool, unit}"
-    (Shape.ShapeStruct 
+    (Shape.ShapeStruct
      NoTag
      (Ctx.Empty Ctx.:> Shape.ShapeBool NoTag Ctx.:> Shape.ShapeUnit NoTag))
   , testPrint

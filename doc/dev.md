@@ -65,11 +65,41 @@ As always, see `--help` for more options.
 
 ## Linting
 
+### Generic scripts
+
+We have a few Python scripts in `scripts/lint/` that perform one-off
+checks. They generally take some number of paths as arguments, check
+`.github/workflows/lint.yml` to see how they are invoked in CI.
+
+### hlint
+
 We treat a small number of hlint warnings as errors in CI. To run hlint locally, try:
 
 ```sh
 hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/{main,src,tests}
 ```
+
+### ruff
+
+We lint and format the Python linting scripts with [ruff].
+
+```sh
+ruff format scripts/lint
+ruff check scripts/lint
+```
+
+[ruff]: https://docs.astral.sh/ruff/
+
+### typos
+
+We run [typos] on `doc/` to spell-check the documentation. To run it locally,
+try:
+
+```bash
+typos doc/
+```
+
+[typos]: https://github.com/crate-ci/typos
 
 ## Source code
 

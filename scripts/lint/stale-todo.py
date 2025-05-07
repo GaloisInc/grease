@@ -8,17 +8,19 @@ from re import compile
 from subprocess import run
 from sys import argv, exit
 
+
 def die(msg):
     print(msg)
     exit(1)
+
 
 @cache
 def status(no):
     """Get the status (OPEN or CLOSED) of a GitHub issue using the `gh` CLI"""
     result = run(
-        ['gh', 'issue', 'view', no, '--json', 'state', '--jq', '.state'],
+        ["gh", "issue", "view", no, "--json", "state", "--jq", ".state"],
         capture_output=True,
-        text=True
+        text=True,
     )
     out = result.stdout.strip()
     err = result.stderr.strip()
@@ -26,9 +28,10 @@ def status(no):
         die(f"Error retrieving issue {no}: {out} {err}")
     return out
 
+
 r = compile(r"TODO\(#(\d+)\)")
 for dir in argv[1:]:
-    for file in Path(dir).rglob('*'):
+    for file in Path(dir).rglob("*"):
         if not file.is_file():
             continue
         try:
