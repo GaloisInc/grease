@@ -2,11 +2,12 @@
 
 # Use the GitHub CLI to find stale TODOs of the form `TODO(#N)`
 
+from argparse import ArgumentParser
 from functools import cache
 from pathlib import Path
 from re import compile
 from subprocess import run
-from sys import argv, exit
+from sys import exit
 
 
 def die(msg):
@@ -30,17 +31,26 @@ def status(no):
 
 
 r = compile(r"TODO\(#(\d+)\)")
-for dir in argv[1:]:
-    for file in Path(dir).rglob("*"):
-        if not file.is_file():
-            continue
-        try:
-            t = file.read_text()
-        except UnicodeDecodeError:
-            continue
-        for m in r.finditer(t):
-            no = m.group(1)
-            s = status(no)
-            print(f"{file} TODO(#{no}): {s}")
-            if s != "OPEN":
-                die(f"Stale TODO for {no}!")
+
+
+def check(dirs):
+    for dir in dirs:
+        for file in dir.rglob("*"):
+            if not file.is_file():
+                continue
+            try:
+                t = file.read_text()
+            except UnicodeDecodeError:
+                continue
+            for m in r.finditer(t):
+                no = m.group(1)
+                s = status(no)
+                print(f"{file} TODO(#{no}): {s}")
+                if s != "OPEN":
+                    die(f"Stale TODO for {no}!")
+
+
+parser = ArgumentParser()
+parser.add_argument("dirs", nargs="+", type=Path)
+args = parser.parse_args()
+check(args.dirs)
