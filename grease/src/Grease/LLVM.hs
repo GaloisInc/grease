@@ -17,12 +17,8 @@ import Control.Exception.Safe (MonadThrow)
 import Control.Lens ((^.))
 
 -- parameterized-utils
-<<<<<<< HEAD
 import Data.Parameterized.Context qualified as Ctx
-=======
-import qualified Data.Parameterized.Context as Ctx
-import qualified Data.Parameterized.Map as MapF
->>>>>>> main
+import Data.Parameterized.Map qualified as MapF
 
 -- what4
 import What4.Expr qualified as W4
@@ -37,18 +33,11 @@ import Lang.Crucible.Simulator.GlobalState qualified as C
 
 -- crucible-llvm
 import Lang.Crucible.LLVM.Extension (ArchWidth, LLVM)
-<<<<<<< HEAD
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
+import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.LLVM.Translation qualified as Trans
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
-=======
-import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.Intrinsics as CLLVM
-import qualified Lang.Crucible.LLVM.SymIO as SymIO
-import qualified Lang.Crucible.LLVM.Translation as Trans
-import qualified Lang.Crucible.LLVM.TypeContext as TCtx
->>>>>>> main
 
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.LLVM.SimulatorHooks (greaseLlvmExtImpl)

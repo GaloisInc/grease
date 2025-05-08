@@ -55,24 +55,14 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Simulator qualified as C
 
 -- crucible-llvm
-<<<<<<< HEAD
 import Lang.Crucible.LLVM.Intrinsics qualified as Mem
 import Lang.Crucible.LLVM.Intrinsics.Cast qualified as Cast
 import Lang.Crucible.LLVM.Intrinsics.Libc qualified as Libc
 import Lang.Crucible.LLVM.Intrinsics.LLVM qualified as LLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.Printf qualified as Printf
+import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
-=======
-import qualified Lang.Crucible.LLVM.Intrinsics as Mem
-import qualified Lang.Crucible.LLVM.Intrinsics.Cast as Cast
-import qualified Lang.Crucible.LLVM.Intrinsics.Libc as Libc
-import qualified Lang.Crucible.LLVM.Intrinsics.LLVM as LLVM
-import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.Printf as Printf
-import qualified Lang.Crucible.LLVM.SymIO as SymIO
-import qualified Lang.Crucible.LLVM.TypeContext as TCtx
->>>>>>> main
 
 -- what4
 import What4.Interface qualified as W4

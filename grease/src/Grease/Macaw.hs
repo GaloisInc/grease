@@ -51,14 +51,9 @@ import Data.BitVector.Sized qualified as BV
 
 -- parameterized-utils
 import Data.Parameterized.Classes (TestEquality(..))
-<<<<<<< HEAD
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.List qualified as P.List
-=======
-import qualified Data.Parameterized.Context as Ctx
-import qualified Data.Parameterized.List as P.List
-import qualified Data.Parameterized.Map as MapF
->>>>>>> main
+import Data.Parameterized.Map qualified as MapF
 
 -- what4
 import What4.Expr qualified as W4
@@ -77,14 +72,9 @@ import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.GlobalState qualified as C
 
 -- crucible-llvm
-<<<<<<< HEAD
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.Intrinsics qualified as Mem
-=======
-import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.Intrinsics as Mem
-import qualified Lang.Crucible.LLVM.SymIO as SymIO
->>>>>>> main
+import Lang.Crucible.LLVM.SymIO qualified as SymIO
 
 -- macaw-base
 import Data.Macaw.Architecture.Info qualified as MI

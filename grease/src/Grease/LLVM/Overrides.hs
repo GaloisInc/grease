@@ -66,16 +66,10 @@ import Lang.Crucible.Simulator qualified as C
 
 -- crucible-llvm
 import Lang.Crucible.LLVM.DataLayout as CLLVM
-<<<<<<< HEAD
 import Lang.Crucible.LLVM.Functions qualified as CLLVM
 import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
-=======
-import qualified Lang.Crucible.LLVM.Functions as CLLVM
-import qualified Lang.Crucible.LLVM.Intrinsics as CLLVM
-import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.SymIO as SymIO
->>>>>>> main
+import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.LLVM.Translation (LLVMContext)
 import Lang.Crucible.LLVM.Translation qualified as CLLVM
 import Lang.Crucible.LLVM.TypeContext (TypeContext(..))
