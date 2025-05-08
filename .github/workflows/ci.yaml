@@ -14,22 +14,64 @@ env:
   # a valid version of the "happy" tool).
   CACHE_VERSION: 1
 
+
 jobs:
   build:
+    name: GREASE - GHC v${{ matrix.ghc }} - ${{ matrix.cache-key-prefix }}
     runs-on: ${{ matrix.os }}
     strategy:
-      matrix:
-        ghc: ["9.4.8", "9.6.6", "9.8.4"]
-        cabal: ["3.14.1.1"]
-        os: [ubuntu-22.04]
       # complete all jobs
       fail-fast: false
-    name: GREASE - GHC v${{ matrix.ghc }}
+      matrix:
+        cabal: ["3.14.1.1"]
+        cache-key-prefix: [""]  # see `include` below
+        ghc: ["9.4.8", "9.6.6", "9.8.4"]
+        haddock: [true]  # see `include` below
+        os: [ubuntu-22.04]
+        pre-hook: [""]  # see `include` below
+        include:
+        # Include a single build (with latest Linux OS and oldest GHC version)
+        # using `--prefer-oldest` to verify that we still build against the
+        # lower bounds in the Cabal `build-depends`.
+        - cabal: "3.14.1.1"
+          cache-key-prefix: prefer-oldest
+          ghc: 9.4.8
+          haddock: false
+          os: ubuntu-22.04
+          pre-hook: |
+            echo 'prefer-oldest: True' >> cabal.project
+        # Include a single build (with latest Linux OS and latest GHC version)
+        # using `cabal-force-upper-bounds` to verify that we actually build
+        # against the upper bounds in the Cabal `build-depends`.
+        - cabal: "3.14.1.1"
+          cache-key-prefix: upper-bounds
+          ghc: 9.8.4
+          haddock: false
+          os: ubuntu-22.04
+          pre-hook: |
+            curl \
+              --fail \
+              --location \
+              --proto '=https' \
+              --show-error \
+              --silent \
+              --tlsv1.2 \
+              https://github.com/nomeata/cabal-force-upper-bound/releases/download/0.1/cabal-force-upper-bound.linux.gz | \
+              gunzip > \
+              /usr/local/bin/cabal-force-upper-bound
+            chmod +x /usr/local/bin/cabal-force-upper-bound
+            for f in ./grease*/grease*.cabal; do
+              cabal-force-upper-bound --cabal-project "${f}" >> cabal.project
+            done
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
         submodules: true
+
+    - name: Run pre-hook
+      shell: bash
+      run: ${{ matrix.pre-hook }}
 
     - name: Setup Haskell
       uses: haskell-actions/setup@v2
@@ -40,13 +82,14 @@ jobs:
 
     - name: Restore cabal store cache
       uses: actions/cache/restore@v4
+      id: cache
       with:
         path: |
           ${{ steps.setup-haskell.outputs.cabal-store }}
           dist-newstyle
-        key: ${{ env.CACHE_VERSION }}-cabal-${{ matrix.os }}-${{ matrix.ghc }}-${{ github.sha }}
+        key: ${{ matrix.cache-key-prefix }}-${{ env.CACHE_VERSION }}-cabal-${{ matrix.os }}-${{ matrix.ghc }}-${{ github.sha }}
         restore-keys: |
-          ${{ env.CACHE_VERSION }}-cabal-${{ matrix.os }}-${{ matrix.ghc }}-
+          ${{ matrix.cache-key-prefix }}-${{ env.CACHE_VERSION }}-cabal-${{ matrix.os }}-${{ matrix.ghc }}-
 
     - name: Install solvers
       shell: bash
@@ -86,6 +129,7 @@ jobs:
       run: cabal run exe:grease-diagrams -- --output doc/mem.svg --width 400 --height 400
 
     - name: Haddock
+      if: ${{ matrix.haddock }}
       shell: bash
       # Build the Haddocks to ensure that they are well formed. Somewhat
       # counterintuitively, we run this with the --disable-documentation flag.
@@ -106,5 +150,4 @@ jobs:
         path: |
           ${{ steps.setup-haskell.outputs.cabal-store }}
           dist-newstyle
-        key: ${{ env.CACHE_VERSION }}-cabal-${{ matrix.os }}-${{ matrix.ghc }}-${{ github.sha }}
-          ${{ env.CACHE_VERSION }}-cabal-${{ matrix.os }}-${{ matrix.ghc }}-
+        key: ${{ steps.cache.outputs.cache-primary-key }}
