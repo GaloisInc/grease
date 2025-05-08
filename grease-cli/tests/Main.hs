@@ -14,7 +14,7 @@ module Main (main) where
 import Control.Exception qualified as X
 import Control.Monad (forM, forM_)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.FileEmbed (embedFile)
+import Data.FileEmbed (embedFileRelative)
 import Data.Functor ((<&>))
 import Data.IORef qualified as IORef
 import Data.List qualified as List
@@ -42,7 +42,7 @@ import Test.Tasty qualified as T
 import Test.Tasty.HUnit qualified as T.U
 
 prelude :: Text.Text
-prelude = Text.decodeUtf8 $(embedFile "tests/test.lua")
+prelude = Text.decodeUtf8 $(embedFileRelative "tests/test.lua")
 
 data Arch = Armv7 | PPC32 | X64
   deriving Eq
