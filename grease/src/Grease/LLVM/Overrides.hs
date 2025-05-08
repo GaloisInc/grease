@@ -69,6 +69,7 @@ import Lang.Crucible.LLVM.DataLayout as CLLVM
 import qualified Lang.Crucible.LLVM.Functions as CLLVM
 import qualified Lang.Crucible.LLVM.Intrinsics as CLLVM
 import qualified Lang.Crucible.LLVM.MemModel as Mem
+import qualified Lang.Crucible.LLVM.SymIO as SymIO
 import Lang.Crucible.LLVM.Translation (LLVMContext)
 import qualified Lang.Crucible.LLVM.Translation as CLLVM
 import Lang.Crucible.LLVM.TypeContext (TypeContext(..))
@@ -311,13 +312,14 @@ registerLLVMOverrides ::
   bak ->
   C.HandleAllocator ->
   LLVMContext arch ->
+  SymIO.LLVMFileSystem 64 ->
   -- | @declare@s in the target program
   [L.Declare] ->
   C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
   -- ^ Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
-registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx decls = do
+registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx fs decls = do
   let mvar = CLLVM.llvmMemVar llvmCtx
   userOvs <- liftIO (loadOverrides paths halloc mvar)
 
@@ -326,7 +328,7 @@ registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx decls = do
   let basicDecls =
         List.map
           (\(CLLVM.SomeLLVMOverride ov) -> CLLVM.llvmOverride_declare ov)
-          (Foldable.toList basicLLVMOverrides)
+          (Foldable.toList (basicLLVMOverrides fs))
   let fwdDeclLLVMDecls =
         List.concatMap (\(_, lfo) -> forwardDeclDecls (lfoForwardDeclarations lfo)) userOvs
   let allDecls = decls List.++ basicDecls List.++ fwdDeclLLVMDecls
@@ -402,14 +404,15 @@ registerLLVMSexpOverrides ::
   bak ->
   C.HandleAllocator ->
   LLVMContext arch ->
+  SymIO.LLVMFileSystem 64 ->
   CSyn.ParsedProgram CLLVM.LLVM ->
   C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
   -- ^ Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
-registerLLVMSexpOverrides la builtinOvs paths bak halloc llvmCtx prog = do
+registerLLVMSexpOverrides la builtinOvs paths bak halloc llvmCtx fs prog = do
   let decls = forwardDeclDecls (CSyn.parsedProgForwardDecs prog)
-  registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx decls
+  registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx fs decls
 
 -- | For an LLVM module, register function overrides and return a 'Map.Map' of
 -- override names to their corresponding 'CLLVM.SomeLLVMOverride's, suitable
@@ -433,14 +436,15 @@ registerLLVMModuleOverrides ::
   bak ->
   C.HandleAllocator ->
   LLVMContext arch ->
+  SymIO.LLVMFileSystem 64 ->
   L.Module ->
   C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
   -- ^ Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
-registerLLVMModuleOverrides la builtinOvs paths bak halloc llvmCtx mod = do
+registerLLVMModuleOverrides la builtinOvs paths bak halloc llvmCtx fs mod = do
   let decls = L.modDeclares mod
-  registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx decls
+  registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx fs decls
 
 -- | Redirect handles for forward declarations in an LLVM S-expression program
 -- to call the corresponding LLVM overrides. Treat any calls to unresolved

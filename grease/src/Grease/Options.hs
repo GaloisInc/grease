@@ -112,6 +112,8 @@ data SimOpts
     , simSolver :: Solver
       -- | Timeout (implemented using 'timeout')
     , simTimeout :: Milliseconds
+      -- | File system root
+    , simFsRoot :: Maybe FilePath
     }
   deriving Show
 
