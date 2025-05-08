@@ -11,6 +11,7 @@
 
 # Reference
 
+- [Built-in overrides](./builtins.md)
 - [Limitations](./limitations.md)
 - [Memory model](./memory-model.md)
 - [Refinement](./refinement.md)
