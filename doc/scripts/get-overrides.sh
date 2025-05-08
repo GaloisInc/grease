@@ -21,6 +21,7 @@ function print_overrides() {
 
 function libc_overrides() {
   print_overrides "${CRUCIBLE_LLVM_DIR}/src/Lang/Crucible/LLVM/Intrinsics/Libc.hs"
+  print_overrides "${CRUCIBLE_LLVM_DIR}/src/Lang/Crucible/LLVM/SymIO.hs"
 }
 
 function llvm_overrides() {

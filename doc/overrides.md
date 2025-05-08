@@ -246,6 +246,10 @@ signatures:
 - `i64 @labs( i64 )`
 - `i64 @llabs( i64 )`
 - `i32 @__cxa_atexit( void (i8*)*, i8*, i8* )`
+- `i32 @open( i8*, i32 )`
+- `i32 @close( i32 )`
+- `ssize_t @read( i32, i8*, size_t )`
+- `ssize_t @write( i32, i8*, size_t )`
 
 For LLVM programs (but not binaries), the following built-in overrides are also
 available:
@@ -338,6 +342,7 @@ schema:
 - `<<LANES> x i<N>>`: (there is no syntax for this Crucible type)
 - `ptr`: `(Ptr <word-size>)`
 - `size_t`: `(Ptr <word-size>)`
+- `ssize_t`: `(Ptr <word-size>)`
 - `<T>*`: `(Ptr <word-size>)`
 - `void`: `Unit`
 
@@ -368,6 +373,16 @@ The following overrides merit a bit of discussion:
   Allocate a fresh pointer of the given size in the underlying
   [memory model](./memory-model.md). This pointer is assumed not to alias with
   any pointers allocated by previous calls to `malloc`.
+
+- `open`, `close`, `read`, and `write`
+
+  These overrides leverage Crucible's experimental symbolic I/O capabilities.
+  In particular, these overrides require the use of a symbolic filesystem,
+  which must be specified with `--fs-root <path-to-filesystem-root>` when
+  invoking `grease`. See [symbolic I/O] for a more detailed description of what
+  the contents of the symbolic filesystem should look like.
+
+  [symbolic I/O]: https://github.com/GaloisInc/crucible/tree/master/crux-llvm#symbolic-io-experimental
 
 ## Startup overrides
 

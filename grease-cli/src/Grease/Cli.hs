@@ -189,6 +189,13 @@ simOpts = do
     Opt.switch ( Opt.long "rust"
                  <> Opt.help "Use simulator settings that are more likely to work for Rust programs"
                )
+  simFsRoot <-
+    Opt.optional
+          ( Opt.strOption
+            (  Opt.long "fs-root"
+            <> Opt.metavar "PATH"
+            <> Opt.help "The path to the symbolic filesystem"
+            ))
   pure GO.SimOpts{..}
     where
       allMutableGlobalStateStrs :: [String]
