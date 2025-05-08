@@ -25,3 +25,4 @@
 
 - [Development](./dev.md)
 - [Profiling](./profiling.md)
+- [Test suite](./tests.md)
