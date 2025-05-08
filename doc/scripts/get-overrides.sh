@@ -9,8 +9,9 @@
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 CRUCIBLE_LLVM_DIR=${SCRIPT_DIR}/../../deps/crucible/crucible-llvm
 
-function libc_overrides() {
-  < "${CRUCIBLE_LLVM_DIR}/src/Lang/Crucible/LLVM/Intrinsics/Libc.hs" \
+function print_overrides() {
+    DIR="$1"
+  < "${DIR}" \
       grep -E 'llvmOvr.+@' \
     | grep -Eo '\|.+\|' \
     | tr -d '|' \
@@ -18,21 +19,15 @@ function libc_overrides() {
     | sed "s/.*/- \`&\`/"
 }
 
+function libc_overrides() {
+  print_overrides "${CRUCIBLE_LLVM_DIR}/src/Lang/Crucible/LLVM/Intrinsics/Libc.hs"
+}
+
 function llvm_overrides() {
   # First, print all of the excluded libc overrides...
-  < "${CRUCIBLE_LLVM_DIR}/src/Lang/Crucible/LLVM/Intrinsics/Libc.hs" \
-      grep -E 'llvmOvr.+@' \
-    | grep -Eo '\|.+\|' \
-    | tr -d '|' \
-    | awk '{$1=$1};1' \
-    | sed "s/.*/- \`&\`/"
+  print_overrides "${CRUCIBLE_LLVM_DIR}/src/Lang/Crucible/LLVM/Intrinsics/Libc.hs"
   # ...then print all of the LLVM overrides.
-  < "${CRUCIBLE_LLVM_DIR}/src/Lang/Crucible/LLVM/Intrinsics/LLVM.hs" \
-      grep -E 'llvmOvr.+@' \
-    | grep -Eo '\|.+\|' \
-    | tr -d '|' \
-    | awk '{$1=$1};1' \
-    | sed "s/.*/- \`&\`/"
+  print_overrides "${CRUCIBLE_LLVM_DIR}/src/Lang/Crucible/LLVM/Intrinsics/LLVM.hs"
 }
 
 case $1 in
