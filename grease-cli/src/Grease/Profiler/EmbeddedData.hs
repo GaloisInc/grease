@@ -11,7 +11,7 @@ module Grease.Profiler.EmbeddedData
 
 import Data.Bifunctor (Bifunctor(..))
 import Data.ByteString (ByteString)
-import Data.FileEmbed (embedDir, embedFile)
+import Data.FileEmbed (embedDir, embedFileRelative, makeRelativeToProject)
 import System.FilePath ((</>))
 
 import Grease.Profiler.Paths (profilerDir, profileHtmlPath)
@@ -21,9 +21,9 @@ import Grease.Profiler.Paths (profilerDir, profileHtmlPath)
 -- Template Haskell file dependency tracking.
 profilerDataFiles :: [(FilePath, ByteString)]
 profilerDataFiles =
-  let cssFiles = map (first ("css" </>)) ($(embedDir $ profilerDir </> "css"))
-      jsFiles  = map (first ("js"  </>)) ($(embedDir $ profilerDir </> "js"))
-      tsFiles  = map (first ("ts"  </>)) ($(embedDir $ profilerDir </> "ts"))
-      profileHtmlContents = $(embedFile $ profilerDir </> profileHtmlPath)
+  let cssFiles = map (first ("css" </>)) ($(makeRelativeToProject (profilerDir </> "css") >>= embedDir))
+      jsFiles  = map (first ("js"  </>)) ($(makeRelativeToProject (profilerDir </> "js") >>= embedDir))
+      tsFiles  = map (first ("ts"  </>)) ($(makeRelativeToProject (profilerDir </> "ts") >>= embedDir))
+      profileHtmlContents = $(embedFileRelative (profilerDir </> profileHtmlPath))
   in (profileHtmlPath, profileHtmlContents)
    : concat @[] [cssFiles, jsFiles, tsFiles]
