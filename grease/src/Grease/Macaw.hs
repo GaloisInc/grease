@@ -51,8 +51,14 @@ import Data.BitVector.Sized qualified as BV
 
 -- parameterized-utils
 import Data.Parameterized.Classes (TestEquality(..))
+<<<<<<< HEAD
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.List qualified as P.List
+=======
+import qualified Data.Parameterized.Context as Ctx
+import qualified Data.Parameterized.List as P.List
+import qualified Data.Parameterized.Map as MapF
+>>>>>>> main
 
 -- what4
 import What4.Expr qualified as W4
@@ -71,8 +77,14 @@ import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.GlobalState qualified as C
 
 -- crucible-llvm
+<<<<<<< HEAD
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.Intrinsics qualified as Mem
+=======
+import qualified Lang.Crucible.LLVM.MemModel as Mem
+import qualified Lang.Crucible.LLVM.Intrinsics as Mem
+import qualified Lang.Crucible.LLVM.SymIO as SymIO
+>>>>>>> main
 
 -- macaw-base
 import Data.Macaw.Architecture.Info qualified as MI
@@ -535,6 +547,7 @@ initState ::
   C.GlobalVar Mem.Mem ->
   SetupMem sym ->
   C.SymGlobalState sym ->
+  SymIO.SomeOverrideSim sym () ->
   ArchContext arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   SetupHook sym ->
@@ -549,7 +562,7 @@ initState ::
   -- | The 'C.CFG' of the user-requested entrypoint function.
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch) ->
   m (C.ExecState p sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch))))
-initState bak la macawExtImpl halloc mvar mem0 globs0 arch ptrTable setupHook initialPersonality initialRegs funOvs mbStartupOvCfg (C.SomeCFG cfg) = do
+initState bak la macawExtImpl halloc mvar mem0 globs0 (SymIO.SomeOverrideSim initFsOv) arch ptrTable setupHook initialPersonality initialRegs funOvs mbStartupOvCfg (C.SomeCFG cfg) = do
   let sym = C.backendGetSym bak
   (mem1, globs1) <- liftIO $ (arch ^. archInitGlobals) (Stubs.Sym sym bak) (getSetupMem mem0) globs0
   let globs2 = C.insertGlobal mvar mem1 globs1
@@ -560,7 +573,7 @@ initState bak la macawExtImpl halloc mvar mem0 globs0 arch ptrTable setupHook in
         $ C.insertHandleMap cfgHdl (C.UseCFG cfg $ C.postdomInfo cfg) C.emptyHandleMap
   let ctx = C.initSimContext
         bak
-        Mem.llvmIntrinsicTypes
+        (Mem.llvmIntrinsicTypes `MapF.union` SymIO.llvmSymIOIntrinsicTypes)
         halloc
         printHandle
         bindings
@@ -578,6 +591,7 @@ initState bak la macawExtImpl halloc mvar mem0 globs0 arch ptrTable setupHook in
       $ do
         let SetupHook hook = setupHook
         hook bak mvar funOvs
+        initFsOv
         let args = Ctx.singleton $ C.RegEntry sRepr initialRegs
         r <-
           case mbStartupOvCfg of

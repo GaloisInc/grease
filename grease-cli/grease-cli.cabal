@@ -159,6 +159,7 @@ library
     , crucible-llvm-debug
     , crucible-llvm-syntax
     , crucible-macaw-debug
+    , crucible-symio
     , crucible-syntax
     , elf-edit
     , llvm-pretty

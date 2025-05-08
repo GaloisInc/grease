@@ -118,11 +118,16 @@ import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.LLVM.Globals qualified as CLLVM
+import Lang.Crucible.LLVM.SymIO qualified as CLLVM.SymIO
 import Lang.Crucible.LLVM.Translation qualified as Trans
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 
 -- crucible-llvm-syntax
 import Lang.Crucible.LLVM.Syntax (llvmParserHooks, emptyParserHooks)
+
+-- crucible-symio
+import qualified Lang.Crucible.SymIO as SymIO
+import qualified Lang.Crucible.SymIO.Loader as SymIO.Loader
 
 -- crucible-syntax
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
@@ -487,6 +492,29 @@ interestingConcretizedShapes names initArgs (ConcArgs cArgs) =
     names
     (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgs')
 
+-- | Helper, not exported
+--
+-- Initialize the symbolic file system.
+initialLlvmFileSystem ::
+  ( C.IsSymInterface sym
+  , Mem.HasPtrWidth ptrW
+  ) =>
+  C.HandleAllocator ->
+  sym ->
+  SimOpts ->
+  IO ( CLLVM.SymIO.LLVMFileSystem ptrW
+     , C.SymGlobalState sym
+     , CLLVM.SymIO.SomeOverrideSim sym ()
+     )
+initialLlvmFileSystem halloc sym simOpts = do
+  fileContents <-
+    case simFsRoot simOpts of
+      Nothing -> pure SymIO.emptyInitialFileSystemContents
+      Just fsRoot -> SymIO.Loader.loadInitialFiles sym fsRoot
+  -- We currently don't mirror stdout or stderr
+  let mirroredOutputs = []
+  CLLVM.SymIO.initialLLVMFileSystem halloc sym ?ptrWidth fileContents mirroredOutputs C.emptyGlobals
+
 simulateMacawCfg ::
   forall sym bak arch solver scope st fm.
   ( C.IsSymBackend sym bak
@@ -607,7 +635,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         m (C.ExecState (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch))))
       mkInitState regs' mem' ssa'@(C.SomeCFG ssaCfg') = do
         mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
-        let builtinOvs = builtinStubsOverrides bak mvar memCfg0 archCtx
+        (fs, globals, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
+        let builtinOvs = builtinStubsOverrides bak mvar memCfg0 archCtx fs
         fnOvsMap <- liftIO $ Macaw.mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
         let memCfg1 = memConfigWithHandles bak la halloc archCtx memory symMap pltStubs dynFunMap fnOvsMap builtinGenericSyscalls errorSymbolicFunCalls memCfg0
         evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @arch (archCtx ^. archVals) sym pure
@@ -620,7 +649,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         -- use an empty map instead. (See gitlab#118 for more discussion on this point.)
         let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` ssaCfgHdl) mbCfgAddr
         let personality = emptyGreaseSimulatorState & discoveredFnHandles .~ discoveredHdls
-        initState bak la macawExtImpl halloc mvar mem' C.emptyGlobals archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa'
+        initState bak la macawExtImpl halloc mvar mem' globals initFsOv archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa'
 
   doLog la (Diag.TargetCFG ssaCfg)
   result <- refinementLoop la (simMaxIters simOpts) (simTimeout simOpts) rNamesAssign' initArgs $ \argShapes -> do
@@ -1067,6 +1096,8 @@ simulateLlvmCfg ::
   C.SomeCFG CLLVM.LLVM argTys ret ->
   IO BatchStatus
 simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCfg scfg@(C.SomeCFG cfg) = do
+  let sym = C.backendGetSym bak
+
   doLog la (Diag.TargetCFG cfg)
 
   profFeatLog <-
@@ -1097,7 +1128,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
     let ?recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
           modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
     let llvmExtImpl = CLLVM.llvmExtensionImpl ?memOpts
-    st <- LLVM.initState bak la llvmExtImpl halloc (simErrorSymbolicFunCalls simOpts) setupMem C.emptyGlobals llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
+    (fs, globals, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
+    st <- LLVM.initState bak la llvmExtImpl halloc (simErrorSymbolicFunCalls simOpts) setupMem fs globals initFsOv llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
     let cmdExt = Debug.llvmCommandExt
     debuggerFeat <-
       liftIO $
@@ -1228,10 +1260,10 @@ simulateLlvmSyntax simOpts la = do
         , Trans.llvmFunctionAliases = Map.empty
         }
   let setupHook :: forall sym. LLVM.SetupHook sym
-      setupHook = LLVM.SetupHook $ \bak halloc' llvmCtx' -> do
+      setupHook = LLVM.SetupHook $ \bak halloc' llvmCtx' fs -> do
         -- Register built-in and user overrides.
         funOvs <-
-          LLVM.registerLLVMSexpOverrides la builtinLLVMOverrides (simOverrides simOpts) bak halloc' llvmCtx' prog
+          LLVM.registerLLVMSexpOverrides la (builtinLLVMOverrides fs) (simOverrides simOpts) bak halloc' llvmCtx' fs prog
 
         -- In addition to binding function handles for the user overrides,
         -- we must also redirect function handles resulting from parsing
@@ -1326,7 +1358,7 @@ simulateLlvm transOpts simOpts la = do
 
     let dl = TCtx.llvmDataLayout (llvmCtxt ^. Trans.llvmTypeCtx)
     let setupHook :: forall sym. LLVM.SetupHook sym
-        setupHook = LLVM.SetupHook $ \bak halloc' llvmCtx -> do
+        setupHook = LLVM.SetupHook $ \bak halloc' llvmCtx fs -> do
           -- Register defined functions...
           let handleTranslationWarning warn = doLog la (Diag.LLVMTranslationWarning warn)
           Trans.llvmPtrWidth llvmCtxt $ \ptrW' -> Mem.withPtrWidth ptrW' $
@@ -1335,7 +1367,7 @@ simulateLlvm transOpts simOpts la = do
           -- registering defined functions so that overrides take precedence over
           -- defined functions.
           funOvs <-
-            LLVM.registerLLVMModuleOverrides la builtinLLVMOverrides (simOverrides simOpts) bak halloc' llvmCtx llvmMod
+            LLVM.registerLLVMModuleOverrides la (builtinLLVMOverrides fs) (simOverrides simOpts) bak halloc' llvmCtx fs llvmMod
           -- If a startup override exists and it contains forward declarations,
           -- redirect then we redirect the function handles to actually call the
           -- respective overrides.
