@@ -24,9 +24,6 @@ function libc_overrides() {
 }
 
 function llvm_overrides() {
-  # First, print all of the excluded libc overrides...
-  print_overrides "${CRUCIBLE_LLVM_DIR}/src/Lang/Crucible/LLVM/Intrinsics/Libc.hs"
-  # ...then print all of the LLVM overrides.
   print_overrides "${CRUCIBLE_LLVM_DIR}/src/Lang/Crucible/LLVM/Intrinsics/LLVM.hs"
 }
 
