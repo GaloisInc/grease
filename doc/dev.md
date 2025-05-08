@@ -25,6 +25,8 @@ Then, build with `cabal`:
 cabal build exe:grease
 ```
 
+See [Test suite](tests.md) for how to run the tests.
+
 ## Docker
 
 GREASE also offers a nightly Docker image that gets built after each commit to
