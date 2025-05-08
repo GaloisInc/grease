@@ -28,15 +28,15 @@ import Control.Lens (Lens, lens, (.~))
 import Control.Lens.TH (makeLenses)
 import Data.Function ((&))
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
 -- parameterized-utils
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
 
-import qualified What4.FunctionName as W4
+import What4.FunctionName qualified as W4
 
 import Grease.Cursor (Cursor(..), CursorExt, ppCursor)
 import Grease.Cursor.Pointer (ppDereference)

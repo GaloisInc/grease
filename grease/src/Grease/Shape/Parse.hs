@@ -12,7 +12,6 @@ See @doc/shape-dsl.md@ for a description of the syntax.
 -}
 
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneKindSignatures #-}

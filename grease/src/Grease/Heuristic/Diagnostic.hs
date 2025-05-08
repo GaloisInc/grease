@@ -14,9 +14,9 @@ module Grease.Heuristic.Diagnostic
 
 import Control.Lens ((^.))
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
-import qualified Data.Macaw.CFG as MC
+import Data.Macaw.CFG qualified as MC
 
 import Grease.Cursor (CursorExt, ppCursor)
 import Grease.Cursor.Pointer (Dereference, ppDereference)

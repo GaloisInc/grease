@@ -25,14 +25,14 @@ import Text.Show (Show)
 import Data.Parameterized.Nonce (NonceGenerator)
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.Backend.Online as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Online qualified as C
 
 -- what4
-import qualified What4.Expr as W4
-import qualified What4.ProblemFeatures as W4
-import qualified What4.Protocol.Online as W4
-import qualified What4.Solver as W4
+import What4.Expr qualified as W4
+import What4.ProblemFeatures qualified as W4
+import What4.Protocol.Online qualified as W4
+import What4.Solver qualified as W4
 
 -- | The SMT solver to use for solving proof goals.
 data Solver

@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 
 -- | ELF core note information that is specific to x86-64. Much of this
 -- information was inspired by the @elfutils@ source code:
@@ -12,10 +13,10 @@ module Data.ElfEdit.CoreDump.X86_64
   , x86_64PrRegOffset
   ) where
 
-import qualified Data.Binary.Get as Get
+import Data.Binary.Get qualified as Get
 import Data.Word (Word64)
 
-import qualified Data.ElfEdit as Elf
+import Data.ElfEdit qualified as Elf
 
 -- | General-purpose x86-64 user registers.
 data X86_64UserRegs = X86_64UserRegs

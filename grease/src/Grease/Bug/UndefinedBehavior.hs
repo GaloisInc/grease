@@ -16,18 +16,18 @@ module Grease.Bug.UndefinedBehavior
   , makeUb
   ) where
 
-import qualified Data.Aeson as Aeson
+import Data.Aeson qualified as Aeson
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import qualified Prettyprinter as PP
-import qualified Prettyprinter.Render.Text as PP
+import Prettyprinter qualified as PP
+import Prettyprinter.Render.Text qualified as PP
 
 import Lang.Crucible.LLVM.Errors.UndefinedBehavior (UndefinedBehavior)
-import qualified Lang.Crucible.LLVM.Errors.UndefinedBehavior as UB
+import Lang.Crucible.LLVM.Errors.UndefinedBehavior qualified as UB
 import Lang.Crucible.LLVM.Errors.Poison (Poison)
-import qualified Lang.Crucible.LLVM.Errors.Poison as Poison
-import qualified Lang.Crucible.Simulator.RegValue as C
-import qualified What4.Interface as W4
+import Lang.Crucible.LLVM.Errors.Poison qualified as Poison
+import Lang.Crucible.Simulator.RegValue qualified as C
+import What4.Interface qualified as W4
 
 -- | A simplified, serializable version of 'UndefinedBehavior'
 data UB

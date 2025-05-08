@@ -16,16 +16,16 @@ import Control.Lens ((^.))
 import Control.Monad.IO.Class (MonadIO)
 import Prelude hiding (pred)
 
-import qualified Lumberjack as LJ
+import Lumberjack qualified as LJ
 
-import qualified What4.Interface as W4
+import What4.Interface qualified as W4
 
-import qualified Lang.Crucible.Simulator.CallFrame as C
-import qualified Lang.Crucible.Simulator.EvalStmt as C
-import qualified Lang.Crucible.Simulator.ExecutionTree as C
+import Lang.Crucible.Simulator.CallFrame qualified as C
+import Lang.Crucible.Simulator.EvalStmt qualified as C
+import Lang.Crucible.Simulator.ExecutionTree qualified as C
 
 import Grease.Diagnostic (GreaseLogAction, Diagnostic(BranchTracerDiagnostic))
-import qualified Grease.BranchTracer.Diagnostic as Diag
+import Grease.BranchTracer.Diagnostic qualified as Diag
 
 -- | 'IO' action to run upon reaching a symbolic branch.
 newtype BranchTracer p sym ext

@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 
 -- | Note headers.
 module Data.ElfEdit.Prim.Nhdr
@@ -13,7 +14,7 @@ module Data.ElfEdit.Prim.Nhdr
   , pattern NT_PRPSINFO
   ) where
 
-import qualified Data.Map as Map
+import Data.Map qualified as Map
 import Data.Word (Word32)
 import Numeric (showHex)
 

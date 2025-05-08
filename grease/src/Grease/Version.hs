@@ -8,15 +8,15 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 
 module Grease.Version (verStr) where
 
-import qualified Data.Aeson as Aeson
-import qualified Data.Aeson.KeyMap as KeyMap
-import qualified Data.ByteString as BS
+import Data.Aeson qualified as Aeson
+import Data.Aeson.KeyMap qualified as KeyMap
+import Data.ByteString qualified as BS
 import Data.FileEmbed (embedFileRelative)
 import Data.List (intersperse)
-import qualified Data.Text as Text
+import Data.Text qualified as Text
 import Data.Version (showVersion)
 
-import qualified Grease.GitRev as GitRev
+import Grease.GitRev qualified as GitRev
 import Paths_grease (version)
 
 -- | The GREASE version and @git@ commit, formatted for displaying with the

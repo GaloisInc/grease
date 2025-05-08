@@ -22,7 +22,7 @@ module Grease.Macaw.Memory
 import Control.Applicative (pure)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Bool (otherwise)
-import qualified Data.ByteString as BS
+import Data.ByteString qualified as BS
 import Data.Eq (Eq(..))
 import Data.Function (($), id)
 import Data.Functor ((<$>))
@@ -31,31 +31,31 @@ import Data.Maybe (Maybe(..))
 import Data.Traversable (Traversable(..))
 import Data.Word (Word8)
 import Prelude (Num(..), subtract)
-import qualified GHC.Stack as Stack
+import GHC.Stack qualified as Stack
 import System.IO (IO)
 
 -- bv-sized
-import qualified Data.BitVector.Sized as BV
+import Data.BitVector.Sized qualified as BV
 
 -- what4
-import qualified What4.Interface as W4
+import What4.Interface qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.CFG.Core as C
-import qualified Lang.Crucible.Simulator as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.Simulator qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.MemModel as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem
 
 -- macaw-base
-import qualified Data.Macaw.CFG as MC
-import qualified Data.Macaw.Memory as MM
+import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Memory qualified as MM
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
-import qualified Data.Macaw.Symbolic.Backend as Symbolic
-import qualified Data.Macaw.Symbolic.Concretize as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Macaw.Symbolic.Backend qualified as Symbolic
+import Data.Macaw.Symbolic.Concretize qualified as Symbolic
 
 import Grease.Utility (OnlineSolverAndBackend)
 

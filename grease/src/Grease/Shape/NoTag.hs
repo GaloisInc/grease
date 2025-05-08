@@ -15,9 +15,9 @@ import Data.Kind (Type)
 
 import Data.Parameterized.Classes (ShowF(showF))
 
-import qualified Lang.Crucible.Types as C
+import Lang.Crucible.Types qualified as C
 
-import qualified Data.Macaw.CFG as MC
+import Data.Macaw.CFG qualified as MC
 
 -- | A @tag@ to annotate 'Grease.Shape.Shape'
 type NoTag :: C.CrucibleType -> Type

@@ -39,38 +39,38 @@ import Data.Map (Map)
 import Data.Text (Text)
 
 -- bv-sized
-import qualified Data.BitVector.Sized as BV
+import Data.BitVector.Sized qualified as BV
 
 -- parameterized-utils
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 
 -- what4
-import qualified What4.Expr as W4
-import qualified What4.Interface as W4
-import qualified What4.Protocol.Online as W4
+import What4.Expr qualified as W4
+import What4.Interface qualified as W4
+import What4.Protocol.Online qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.Backend.Online as C
-import qualified Lang.Crucible.CFG.Core as C
-import qualified Lang.Crucible.CFG.Reg as C.Reg
-import qualified Lang.Crucible.Simulator as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Online qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Reg qualified as C.Reg
+import Lang.Crucible.Simulator qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.MemModel as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem
 
 -- macaw-base
-import qualified Data.Macaw.Architecture.Info as MI
-import qualified Data.Macaw.CFG as MC
+import Data.Macaw.Architecture.Info qualified as MI
+import Data.Macaw.CFG qualified as MC
 import           Data.Macaw.Types (BVType)
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
-import qualified Data.Macaw.Memory as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Macaw.Memory qualified as Symbolic
 
 -- stubs
-import qualified Stubs.Common as Stubs
-import qualified Stubs.FunctionOverride as Stubs
+import Stubs.Common qualified as Stubs
+import Stubs.FunctionOverride qualified as Stubs
 
 import Grease.Macaw.Load.Relocation (RelocType)
 import Grease.Macaw.RegName (RegName)

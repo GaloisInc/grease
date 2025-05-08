@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 
 -- | Extract ELF notes from a core dump file and print various information
 -- related to the core dump.
@@ -8,14 +9,14 @@ module Main (main) where
 
 import Control.Applicative ((<**>))
 import Control.Monad (unless)
-import qualified Options.Applicative as Opt
+import Options.Applicative qualified as Opt
 import Text.Show.Pretty (pPrint)
 
 import Numeric (showHex)
 
-import qualified Data.ByteString as BS
-import qualified Data.ElfEdit as Elf
-import qualified Data.ElfEdit.CoreDump as CoreDump
+import Data.ByteString qualified as BS
+import Data.ElfEdit qualified as Elf
+import Data.ElfEdit.CoreDump qualified as CoreDump
 
 -- | Decode an ELF file and pass it to a continuation.
 withElfHeader :: BS.ByteString -> (forall w. Elf.ElfHeaderInfo w -> r) -> r

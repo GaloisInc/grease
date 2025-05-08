@@ -19,7 +19,7 @@ import Data.Word (Word64)
 import GHC.Clock (getMonotonicTimeNSec)
 import System.IO (IO)
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
 newtype Nanoseconds = Nanoseconds Word64
 

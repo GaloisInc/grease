@@ -4,6 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 
 -- | ELF core note information that is specific to PPC. Much of this
 -- information was inspired by the @elfutils@ source code:
@@ -17,9 +18,9 @@ module Data.ElfEdit.CoreDump.PPC
   , ppcPrRegOffset
   ) where
 
-import qualified Data.Binary.Get as Get
+import Data.Binary.Get qualified as Get
 
-import qualified Data.ElfEdit as Elf
+import Data.ElfEdit qualified as Elf
 
 -- | General-purpose PPC user registers.
 data PpcUserRegs w = PpcUserRegs

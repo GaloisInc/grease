@@ -15,19 +15,19 @@ module Grease.Macaw.RegName
 
 import Control.Lens ((^.), to)
 import Data.Functor.Const (Const(..))
-import qualified Data.List as List
-import qualified Data.Maybe as Maybe
+import Data.List qualified as List
+import Data.Maybe qualified as Maybe
 
 -- parameterized-utils
 import Data.Parameterized.Classes (IxedF'(ixF'))
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (toListFC)
 
 -- macaw-base
-import qualified Data.Macaw.CFG as MC
+import Data.Macaw.CFG qualified as MC
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
 
 newtype RegName = RegName String
   deriving (Eq, Ord, Show)

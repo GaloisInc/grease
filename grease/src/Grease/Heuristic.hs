@@ -32,76 +32,76 @@ import Prelude (div, fromIntegral)
 import Control.Applicative (Alternative((<|>)), Const(..), pure)
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens (Lens', (^.), (.~))
-import qualified Data.BitVector.Sized as BV
-import qualified Data.Bool as Bool
+import Data.BitVector.Sized qualified as BV
+import Data.Bool qualified as Bool
 import Data.Eq ((==), (/=))
 import Data.Functor ((<$>))
 import Data.Function (($), (.), (&))
 import Data.Maybe (Maybe(..))
-import qualified Data.Maybe as Maybe
-import qualified Data.Parameterized.Context as Ctx
+import Data.Maybe qualified as Maybe
+import Data.Parameterized.Context qualified as Ctx
 import Data.Semigroup (Semigroup((<>)))
 import Data.String (String)
 import Data.Text (Text)
-import qualified Data.Text as Text
-import qualified Data.Tuple as Tuple
+import Data.Text qualified as Text
+import Data.Tuple qualified as Tuple
 import Data.Type.Equality (type (~), (:~:)(Refl), testEquality)
 import Numeric.Natural (Natural)
 import System.IO (IO)
 
-import qualified Lumberjack as LJ
+import Lumberjack qualified as LJ
 
-import qualified Text.LLVM.AST as L
+import Text.LLVM.AST qualified as L
 
 -- parameterized-utils
 import Data.Parameterized.Classes (IxedF'(..))
-import qualified Data.Parameterized.NatRepr as NatRepr
+import Data.Parameterized.NatRepr qualified as NatRepr
 
 -- what4
-import qualified What4.Interface as W4
-import qualified What4.Expr as W4
-import qualified What4.LabeledPred as W4
-import qualified What4.ProgramLoc as W4
+import What4.Interface qualified as W4
+import What4.Expr qualified as W4
+import What4.LabeledPred qualified as W4
+import What4.ProgramLoc qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Simulator as C
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.CFG.Core as C
-import qualified Lang.Crucible.CFG.Extension as C
+import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Extension qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.Bytes as Bytes
+import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import           Lang.Crucible.LLVM.Extension (LLVM)
-import qualified Lang.Crucible.LLVM.MemModel.CallStack as Mem
-import qualified Lang.Crucible.LLVM.MemModel as Mem hiding (Mem)
-import qualified Lang.Crucible.LLVM.MemModel.Generic as Mem
-import qualified Lang.Crucible.LLVM.MemModel.Partial as Mem
-import qualified Lang.Crucible.LLVM.MemModel.Pointer as Mem
-import qualified Lang.Crucible.LLVM.Errors as Mem
-import qualified Lang.Crucible.LLVM.Errors.MemoryError as Mem
-import qualified Lang.Crucible.LLVM.Errors.UndefinedBehavior as Mem
+import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem hiding (Mem)
+import Lang.Crucible.LLVM.MemModel.Generic qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.LLVM.Errors qualified as Mem
+import Lang.Crucible.LLVM.Errors.MemoryError qualified as Mem
+import Lang.Crucible.LLVM.Errors.UndefinedBehavior qualified as Mem
 
 -- macaw-base
-import qualified Data.Macaw.CFG as MC
+import Data.Macaw.CFG qualified as MC
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
 
-import qualified Grease.Bug as Bug
-import qualified Grease.Bug.UndefinedBehavior as UB
-import qualified Grease.Cursor as Cursor
+import Grease.Bug qualified as Bug
+import Grease.Bug.UndefinedBehavior qualified as UB
+import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer (Dereference)
 import Grease.Diagnostic
 import Grease.Heuristic.Result
-import qualified Grease.Heuristic.Diagnostic as Diag
+import Grease.Heuristic.Diagnostic qualified as Diag
 import Grease.Macaw.RegName (RegNames, getRegName, mkRegName)
-import qualified Grease.MustFail as MustFail
+import Grease.MustFail qualified as MustFail
 import Grease.Shape
 import Grease.Shape.NoTag (NoTag(NoTag))
 import Grease.Shape.Pointer
 import Grease.Shape.Selector
 import Grease.Setup
-import qualified Grease.Setup.Annotations as Anns
+import Grease.Setup.Annotations qualified as Anns
 import Grease.Utility (GreaseException(..), OnlineSolverAndBackend, ppProgramLoc, tshow)
 
 doLog :: GreaseLogAction -> Diag.Diagnostic -> IO ()

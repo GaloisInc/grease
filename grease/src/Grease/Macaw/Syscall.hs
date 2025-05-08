@@ -18,24 +18,24 @@ import Control.Monad.IO.Class (MonadIO(..))
 import Data.Type.Equality (type (~))
 
 -- parameterized-utils
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC)
 
 -- what4
-import qualified What4.Expr as W4
-import qualified What4.Protocol.Online as W4
+import What4.Expr qualified as W4
+import What4.Protocol.Online qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.Backend.Online as C
-import qualified Lang.Crucible.CFG.Core as C
-import qualified Lang.Crucible.Simulator as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Online qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.Simulator qualified as C
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
 
 -- stubs-common
-import qualified Stubs.Syscall as Stubs
+import Stubs.Syscall qualified as Stubs
 
 import Grease.Macaw.Arch
 

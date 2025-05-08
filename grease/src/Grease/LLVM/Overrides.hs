@@ -28,54 +28,54 @@ import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Bool (Bool(..))
 import Data.Either (Either(..))
 import Data.Eq ((==))
-import qualified Data.Foldable as Foldable
+import Data.Foldable qualified as Foldable
 import Data.Function (($))
 import Data.Functor ((<$>))
-import qualified Data.List as List
-import qualified Data.Map as Map
+import Data.List qualified as List
+import Data.Map qualified as Map
 import Data.Maybe (Maybe(..))
 import Data.Semigroup ((<>))
-import qualified Data.Sequence as Seq
+import Data.Sequence qualified as Seq
 import Data.Text (Text)
-import qualified Data.Text as Text
+import Data.Text qualified as Text
 import Data.Traversable (traverse)
 import Data.String (String)
 import System.IO (FilePath, IO)
 import System.FilePath (dropExtensions, takeBaseName)
 
-import qualified Lumberjack as LJ
+import Lumberjack qualified as LJ
 
-import qualified Text.LLVM.AST as L
+import Text.LLVM.AST qualified as L
 
 -- parameterized-utils
-import qualified Data.Parameterized.Context as Ctx
-import qualified Data.Parameterized.NatRepr as NatRepr
-import qualified Data.Parameterized.Some as Some
+import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.NatRepr qualified as NatRepr
+import Data.Parameterized.Some qualified as Some
 import           Data.Parameterized.TraversableFC (toListFC)
 
 -- what4
-import qualified What4.FunctionName as W4
+import What4.FunctionName qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.CFG.Core as C
-import qualified Lang.Crucible.CFG.Reg as C.Reg
-import qualified Lang.Crucible.CFG.SSAConversion as C
-import qualified Lang.Crucible.FunctionHandle as C
-import qualified Lang.Crucible.Simulator as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Reg qualified as C.Reg
+import Lang.Crucible.CFG.SSAConversion qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.Simulator qualified as C
 
 -- crucible-llvm
 import Lang.Crucible.LLVM.DataLayout as CLLVM
-import qualified Lang.Crucible.LLVM.Functions as CLLVM
-import qualified Lang.Crucible.LLVM.Intrinsics as CLLVM
-import qualified Lang.Crucible.LLVM.MemModel as Mem
+import Lang.Crucible.LLVM.Functions qualified as CLLVM
+import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
+import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.Translation (LLVMContext)
-import qualified Lang.Crucible.LLVM.Translation as CLLVM
+import Lang.Crucible.LLVM.Translation qualified as CLLVM
 import Lang.Crucible.LLVM.TypeContext (TypeContext(..))
 
 -- crucible-syntax
-import qualified Lang.Crucible.Syntax.Concrete as CSyn
-import qualified Lang.Crucible.Syntax.Prog as CSyn
+import Lang.Crucible.Syntax.Concrete qualified as CSyn
+import Lang.Crucible.Syntax.Prog qualified as CSyn
 
 -- crucible-llvm-syntax
 import Lang.Crucible.LLVM.Syntax (llvmParserHooks, emptyParserHooks)

@@ -12,42 +12,42 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Arch.AArch32 (armCtx) where
 
 import Control.Exception.Safe (throw)
-import qualified Data.Map as Map
+import Data.Map qualified as Map
 import Data.Proxy (Proxy(..))
 import Data.Word (Word32)
 
 -- bv-sized
-import qualified Data.BitVector.Sized as BV
+import Data.BitVector.Sized qualified as BV
 
 -- parameterized-utils
 import Data.Parameterized.NatRepr (knownNat)
 
 -- crucible
-import qualified Lang.Crucible.FunctionHandle as C
-import qualified Lang.Crucible.Simulator.RegValue as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.Simulator.RegValue qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.MemModel as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem
 
 -- elf-edit
-import qualified Data.ElfEdit as EE
+import Data.ElfEdit qualified as EE
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
 
 -- macaw-aarch32
-import qualified Data.Macaw.ARM as ARM
-import qualified Data.Macaw.ARM.ARMReg as ARM
+import Data.Macaw.ARM qualified as ARM
+import Data.Macaw.ARM.ARMReg qualified as ARM
 import Data.Macaw.ARM.ARMReg ()
 
 -- macaw-aarch32-symbolic
-import qualified Data.Macaw.AArch32.Symbolic as ARM.Symbolic
+import Data.Macaw.AArch32.Symbolic qualified as ARM.Symbolic
 
 -- stubs
-import qualified Stubs.FunctionOverride.AArch32.Linux as Stubs
-import qualified Stubs.Memory.AArch32.Linux as Stubs
-import qualified Stubs.Syscall.AArch32.Linux as Stubs
-import qualified Stubs.Syscall.Names.AArch32.Linux as Stubs
+import Stubs.FunctionOverride.AArch32.Linux qualified as Stubs
+import Stubs.Memory.AArch32.Linux qualified as Stubs
+import Stubs.Syscall.AArch32.Linux qualified as Stubs
+import Stubs.Syscall.Names.AArch32.Linux qualified as Stubs
 
 import Grease.Macaw.Arch (ArchContext(..), ArchReloc)
 import Grease.Macaw.Load.Relocation (RelocType(..))

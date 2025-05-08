@@ -20,14 +20,14 @@ import Control.Applicative (Applicative(..), empty)
 import Control.Exception.Safe (throw)
 import Data.Bool (Bool(..), (&&))
 import Data.Eq (Eq(..))
-import qualified Data.Foldable as Foldable
+import Data.Foldable qualified as Foldable
 import Data.Function (($), (.))
 import Data.List (map)
-import qualified Data.Map as Map
+import Data.Map qualified as Map
 import Data.Maybe (Maybe(..), fromMaybe, listToMaybe)
 import Data.Ord (Ord(..))
 import Data.Semigroup ((<>))
-import qualified Data.Sequence as Seq
+import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Traversable (traverse)
 import Data.Tuple (fst)
@@ -36,22 +36,22 @@ import Data.Void (Void)
 import Data.Word (Word64)
 import Prelude (Num(..), fromInteger, fromIntegral)
 import System.IO (IO)
-import qualified Text.Megaparsec as TM
-import qualified Text.Megaparsec.Char as TMC
-import qualified Text.Megaparsec.Char.Lexer as TMCL
+import Text.Megaparsec qualified as TM
+import Text.Megaparsec.Char qualified as TMC
+import Text.Megaparsec.Char.Lexer qualified as TMCL
 import Text.Show (Show)
 
 -- elf-edit
-import qualified Data.ElfEdit as Elf
+import Data.ElfEdit qualified as Elf
 
 -- what4
-import qualified What4.FunctionName as W4
+import What4.FunctionName qualified as W4
 
 -- macaw-base
-import qualified Data.Macaw.CFG as MC
-import qualified Data.Macaw.Memory as MM
-import qualified Data.Macaw.Memory.ElfLoader.PLTStubs as PLT
-import qualified Data.Macaw.Memory.LoadCommon as LC
+import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
+import Data.Macaw.Memory.LoadCommon qualified as LC
 
 -- macaw-loader
 import Data.Macaw.BinaryLoader.ELF as Loader

@@ -11,19 +11,19 @@ module Grease.Main.Diagnostic
   , severity
   ) where
 
-import qualified Data.List as List
-import qualified Data.Text as Text
+import Data.List qualified as List
+import Data.Text qualified as Text
 import Data.Void (Void, absurd)
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
-import qualified Text.LLVM.AST as L
+import Text.LLVM.AST qualified as L
 
-import qualified Lang.Crucible.Analysis.Postdom as C
-import qualified Lang.Crucible.CFG.Core as C
-import qualified Lang.Crucible.CFG.Extension as C
+import Lang.Crucible.Analysis.Postdom qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Extension qualified as C
 
-import qualified Lang.Crucible.LLVM.Translation as Trans
+import Lang.Crucible.LLVM.Translation qualified as Trans
 
 import Grease.Diagnostic.Severity (Severity(Debug, Info, Warn))
 import Grease.Entrypoint (Entrypoint, EntrypointLocation)

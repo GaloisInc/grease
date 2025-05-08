@@ -11,14 +11,14 @@ module Grease.Macaw.SkippedCall (SkippedCall(..)) where
 
 import Data.Text (Text)
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
 -- what4
-import qualified What4.FunctionName as W4
-import qualified What4.Interface as W4
+import What4.FunctionName qualified as W4
+import What4.Interface qualified as W4
 
 -- macaw-base
-import qualified Data.Macaw.CFG.Core as MC
+import Data.Macaw.CFG.Core qualified as MC
 import Data.Macaw.Memory (MemSegmentOff, MemWidth)
 
 -- | The reasons that GREASE might skip a function call

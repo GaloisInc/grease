@@ -9,16 +9,16 @@ module Grease.Profiler.Feature
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (Async, async)
-import qualified Data.ByteString as BS
-import qualified Data.Foldable as Foldable
+import Data.ByteString qualified as BS
+import Data.Foldable qualified as Foldable
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>), takeDirectory)
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.CFG.Extension as C
-import qualified Lang.Crucible.Simulator as C
-import qualified Lang.Crucible.Simulator.Profiling as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator.Profiling qualified as C
 
 -- grease
 import Grease.Profiler.EmbeddedData (profilerDataFiles)

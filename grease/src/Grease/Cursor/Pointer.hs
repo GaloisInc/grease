@@ -24,26 +24,26 @@ module Grease.Cursor.Pointer
 
 import Data.Type.Equality ((:~:)(Refl), testEquality)
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
 -- parameterized-utils
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 
 -- crucible
-import qualified Lang.Crucible.Types as C
+import Lang.Crucible.Types qualified as C
 
 -- crucible-llvm
 import Lang.Crucible.LLVM.Extension (LLVM)
-import qualified Lang.Crucible.LLVM.MemModel as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem
 
 -- macaw-base
-import qualified Data.Macaw.CFG as MC
+import Data.Macaw.CFG qualified as MC
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
 
 import Grease.Cursor (Cursor, CursorExt)
-import qualified Grease.Cursor as Cursor
+import Grease.Cursor qualified as Cursor
 
 -- | An extension to 'Cursor' for LLVM pointer types
 data Dereference ext w (ts :: [C.CrucibleType]) where

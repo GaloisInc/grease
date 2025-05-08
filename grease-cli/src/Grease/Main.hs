@@ -40,99 +40,99 @@ import Control.Monad ((>>=), forM, forM_, mapM_, when)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Exception.Safe (MonadThrow, Handler(..), catches, throw)
 
-import qualified Data.Aeson as Aeson
+import Data.Aeson qualified as Aeson
 import Data.Bool (Bool(..), (&&), otherwise, not)
-import qualified Data.ByteString as BS
+import Data.ByteString qualified as BS
 import Data.Eq ((==))
 import Data.Foldable (traverse_)
 import Data.Function (($), (.), (&), id, const)
 import Data.Functor ((<$>), fmap, (<&>))
-import qualified Data.Functor.Const as Const
+import Data.Functor.Const qualified as Const
 import Data.Functor.Const (Const(..))
 import Data.IORef (newIORef, modifyIORef)
 import Data.Ord ((<=))
 import Data.Proxy (Proxy(..))
 import Data.Maybe (Maybe(..), fromMaybe, catMaybes)
-import qualified Data.Maybe as Maybe
+import Data.Maybe qualified as Maybe
 import Data.Semigroup ((<>))
 import Data.Set (Set)
-import qualified Data.Set as Set
+import Data.Set qualified as Set
 import Data.Either (Either(..))
-import qualified Data.List as List
-import qualified Data.List.NonEmpty as NE
+import Data.List qualified as List
+import Data.List.NonEmpty qualified as NE
 import Data.String (String)
 import Data.Text.IO (putStrLn)
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text.IO
+import Data.Text qualified as Text
+import Data.Text.IO qualified as Text.IO
 import Data.Traversable (for, traverse)
 import Data.Tuple (fst, snd)
 import Data.Type.Equality (type (~), (:~:)(Refl), testEquality)
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
-import qualified Data.IntMap as IntMap
-import qualified Data.Vector as Vec
-import qualified Prettyprinter as PP
+import Data.Map.Strict qualified as Map
+import Data.IntMap qualified as IntMap
+import Data.Vector qualified as Vec
+import Prettyprinter qualified as PP
 import System.Directory (Permissions, getPermissions)
 
-import qualified Lumberjack as LJ
+import Lumberjack qualified as LJ
 
 import Text.Show (Show(..))
 
 import Data.LLVM.BitCode (parseBitCodeFromFile)
-import qualified Text.LLVM as L
+import Text.LLVM qualified as L
 
 -- parameterized-utils
 import Data.Parameterized.Classes (IxedF'(ixF'))
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Nonce (globalNonceGenerator)
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
 import Data.Parameterized.TraversableFC.WithIndex (imapFC)
 
 -- what4
-import qualified What4.Interface as W4
-import qualified What4.FunctionName as W4
-import qualified What4.ProgramLoc as W4
-import qualified What4.Protocol.Online as W4
-import qualified What4.Expr as W4
+import What4.Interface qualified as W4
+import What4.FunctionName qualified as W4
+import What4.ProgramLoc qualified as W4
+import What4.Protocol.Online qualified as W4
+import What4.Expr qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Analysis.Postdom as C (postdomInfo)
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.Backend.Online as C
-import qualified Lang.Crucible.CFG.Core as C
-import qualified Lang.Crucible.CFG.Reg as C.Reg
-import qualified Lang.Crucible.CFG.Extension as C
-import qualified Lang.Crucible.CFG.SSAConversion as C
-import qualified Lang.Crucible.FunctionHandle as C
-import qualified Lang.Crucible.Simulator as C
-import qualified Lang.Crucible.Simulator.SimError as C
+import Lang.Crucible.Analysis.Postdom qualified as C (postdomInfo)
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Online qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Reg qualified as C.Reg
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.CFG.SSAConversion qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator.SimError qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM as CLLVM
+import Lang.Crucible.LLVM qualified as CLLVM
 import           Lang.Crucible.LLVM.DataLayout (DataLayout)
-import qualified Lang.Crucible.LLVM.DataLayout as DataLayout
-import qualified Lang.Crucible.LLVM.Debug as Debug
-import qualified Lang.Crucible.LLVM.Extension as CLLVM
-import qualified Lang.Crucible.LLVM.Intrinsics as CLLVM
-import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.MemModel.Partial as Mem
-import qualified Lang.Crucible.LLVM.Globals as CLLVM
-import qualified Lang.Crucible.LLVM.Translation as Trans
-import qualified Lang.Crucible.LLVM.TypeContext as TCtx
+import Lang.Crucible.LLVM.DataLayout qualified as DataLayout
+import Lang.Crucible.LLVM.Debug qualified as Debug
+import Lang.Crucible.LLVM.Extension qualified as CLLVM
+import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
+import Lang.Crucible.LLVM.Globals qualified as CLLVM
+import Lang.Crucible.LLVM.Translation qualified as Trans
+import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 
 -- crucible-llvm-syntax
 import Lang.Crucible.LLVM.Syntax (llvmParserHooks, emptyParserHooks)
 
 -- crucible-syntax
-import qualified Lang.Crucible.Syntax.Concrete as CSyn
-import qualified Lang.Crucible.Syntax.Prog as CSyn
+import Lang.Crucible.Syntax.Concrete qualified as CSyn
+import Lang.Crucible.Syntax.Prog qualified as CSyn
 
 -- elf-edit
-import qualified Data.ElfEdit as Elf
+import Data.ElfEdit qualified as Elf
 
 -- macaw-loader
-import qualified Data.Macaw.BinaryLoader as Loader
+import Data.Macaw.BinaryLoader qualified as Loader
 
 -- macaw-loader-aarch32
 import Data.Macaw.BinaryLoader.AArch32 ()
@@ -141,70 +141,70 @@ import Data.Macaw.BinaryLoader.AArch32 ()
 import Data.Macaw.BinaryLoader.X86 ()
 
 -- macaw-base
-import qualified Data.Macaw.Architecture.Info as MI
-import qualified Data.Macaw.CFG as MC
-import qualified Data.Macaw.Discovery as Discovery
-import qualified Data.Macaw.Memory as MM
-import qualified Data.Macaw.Memory.ElfLoader.PLTStubs as PLT
-import qualified Data.Macaw.Memory.LoadCommon as MML
+import Data.Macaw.Architecture.Info qualified as MI
+import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Discovery qualified as Discovery
+import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
+import Data.Macaw.Memory.LoadCommon qualified as MML
 import Data.Macaw.BinaryLoader (BinaryLoader)
 
 -- crucible-macaw-debug
-import qualified Data.Macaw.Symbolic.Debug as MDebug
+import Data.Macaw.Symbolic.Debug qualified as MDebug
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
-import qualified Data.Macaw.Symbolic.Memory.Lazy as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
 
 -- macaw-symbolic-syntax
 import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
 
 -- macaw-aarch32
-import qualified Data.Macaw.ARM as ARM
+import Data.Macaw.ARM qualified as ARM
 
 -- macaw-aarch32-symbolic
-import qualified Data.Macaw.AArch32.Symbolic as AArch32Symbolic
+import Data.Macaw.AArch32.Symbolic qualified as AArch32Symbolic
 
 -- macaw-aarch32-syntax
-import qualified Data.Macaw.AArch32.Symbolic.Syntax as AArch32Syn
+import Data.Macaw.AArch32.Symbolic.Syntax qualified as AArch32Syn
 
 -- macaw-ppc
-import qualified Data.Macaw.PPC as PPC
+import Data.Macaw.PPC qualified as PPC
 
 -- macaw-ppc-symbolic
-import qualified Data.Macaw.PPC.Symbolic as PPCSymbolic
+import Data.Macaw.PPC.Symbolic qualified as PPCSymbolic
 
 -- macaw-ppc-syntax
-import qualified Data.Macaw.PPC.Symbolic.Syntax as PPCSyn
+import Data.Macaw.PPC.Symbolic.Syntax qualified as PPCSyn
 
 -- macaw-x86
-import qualified Data.Macaw.X86 as X86
+import Data.Macaw.X86 qualified as X86
 
 -- macaw-x86-symbolic
-import qualified Data.Macaw.X86.Crucible as X86Symbolic
+import Data.Macaw.X86.Crucible qualified as X86Symbolic
 
 -- macaw-x86-syntax
-import qualified Data.Macaw.X86.Symbolic.Syntax as X86Syn
+import Data.Macaw.X86.Symbolic.Syntax qualified as X86Syn
 
 -- stubs-common
-import qualified Stubs.FunctionOverride as Stubs
+import Stubs.FunctionOverride qualified as Stubs
 
 import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
-import qualified Grease.Bug as Bug
+import Grease.Bug qualified as Bug
 import Grease.Cli (optsFromArgs)
 import Grease.Concretize (ConcArgs(..), concArgs, printConcArgs)
 import Grease.Concretize.JSON (concArgsToJson)
 import Grease.Cursor.Pointer ()
-import qualified Lang.Crucible.Debug as Dbg
+import Lang.Crucible.Debug qualified as Dbg
 import Grease.Diagnostic
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint
 import Grease.FunctionOverride (builtinLLVMOverrides, builtinStubsOverrides)
 import Grease.Heuristic
-import qualified Grease.LLVM as LLVM
-import qualified Grease.LLVM.Overrides as LLVM
-import qualified Grease.Macaw as Macaw (SetupHook(..))
+import Grease.LLVM qualified as LLVM
+import Grease.LLVM.Overrides qualified as LLVM
+import Grease.Macaw qualified as Macaw (SetupHook(..))
 import Grease.Macaw
 import Grease.Macaw.Arch
 import Grease.Macaw.Arch.AArch32 (armCtx)
@@ -212,7 +212,7 @@ import Grease.Macaw.Arch.PPC32 (ppc32Ctx)
 import Grease.Macaw.Arch.PPC64 (ppc64Ctx)
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
-import qualified Grease.Macaw.FunctionOverride as Macaw
+import Grease.Macaw.FunctionOverride qualified as Macaw
 import Grease.Macaw.Load (LoadedProgram(..), load)
 import Grease.Macaw.Load.Relocation (RelocType(..), elfRelocationMap)
 import Grease.Macaw.PLT
@@ -220,8 +220,8 @@ import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, e
 import Grease.Pretty (prettyPtrFnMap)
 import Grease.Profiler.Feature (greaseProfilerFeature)
 import Grease.Macaw.RegName (RegName(..), RegNames(..), regNames, getRegName, mkRegName, regNameToString)
-import qualified Grease.MustFail as MustFail
-import qualified Grease.Main.Diagnostic as Diag
+import Grease.MustFail qualified as MustFail
+import Grease.Main.Diagnostic qualified as Diag
 import Grease.Options
 import Grease.Output
 import Grease.Refine
@@ -229,9 +229,9 @@ import Grease.Requirement
 import Grease.Setup
 import Grease.Shape (ArgShapes(..), minimalShapeWithPtrs, ExtShape)
 import Grease.Shape.Concretize (concShape)
-import qualified Grease.Shape as Shape
+import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag(NoTag))
-import qualified Grease.Shape.Parse as Parse
+import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Solver (withSolverOnlineBackend)
 import Grease.Syntax (parseProgram, parsedProgramCfgMap)

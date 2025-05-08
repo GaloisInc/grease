@@ -7,7 +7,6 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ImportQualifiedPost #-}
 
 module Grease.Shape.Concretize
   ( concShape

@@ -11,7 +11,7 @@ module Grease.LLVM.SimulatorHooks.Diagnostic
   , severity
   ) where
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
 import Grease.Diagnostic.Severity (Severity(Info))
 

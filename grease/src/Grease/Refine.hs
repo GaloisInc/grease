@@ -77,11 +77,11 @@ module Grease.Refine
 import Prelude (Num(..))
 
 import Control.Applicative (pure)
-import qualified Control.Monad as Monad
+import Control.Monad qualified as Monad
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Exception.Safe (MonadThrow, throw)
-import qualified Control.Exception.Safe as X
+import Control.Exception.Safe qualified as X
 import Control.Lens ((^.))
 
 import Data.Bool (Bool(..))
@@ -92,67 +92,67 @@ import Data.Functor.Const (Const)
 import Data.Ord ((>=))
 import Data.Int (Int)
 import Data.IORef (readIORef, IORef)
-import qualified Data.List as List
-import qualified Data.List.NonEmpty as NE
-import qualified Data.Map.Strict as Map
+import Data.List qualified as List
+import Data.List.NonEmpty qualified as NE
+import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe(..), maybeToList)
-import qualified Data.Maybe as Maybe
+import Data.Maybe qualified as Maybe
 import Data.Monoid (mconcat)
 import Data.Proxy (Proxy(..))
 import Data.Semigroup ((<>))
 import Data.String (String)
-import qualified Data.Tuple as Tuple
+import Data.Tuple qualified as Tuple
 import Data.Type.Equality (type (~))
 import System.IO (IO)
 import System.Timeout (timeout)
 
-import qualified Lumberjack as LJ
+import Lumberjack qualified as LJ
 
 -- prettyprinter
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Nonce (Nonce)
 
 -- what4
-import qualified What4.Interface as W4
-import qualified What4.Expr as W4
-import qualified What4.Expr.App as W4
-import qualified What4.FloatMode as W4FM
-import qualified What4.Solver as W4
-import qualified What4.LabeledPred as W4
+import What4.Interface qualified as W4
+import What4.Expr qualified as W4
+import What4.Expr.App qualified as W4
+import What4.FloatMode qualified as W4FM
+import What4.Solver qualified as W4
+import What4.LabeledPred qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.Backend.Prove as C
-import qualified Lang.Crucible.CFG.Core as C
-import qualified Lang.Crucible.CFG.Extension as C
-import qualified Lang.Crucible.Simulator as C
-import qualified Lang.Crucible.Simulator.BoundedExec as C
-import qualified Lang.Crucible.Simulator.BoundedRecursion as C
-import qualified Lang.Crucible.Simulator.SimError as C
-import qualified Lang.Crucible.Utils.Seconds as C
-import qualified Lang.Crucible.Utils.Timeout as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Prove qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator.BoundedExec qualified as C
+import Lang.Crucible.Simulator.BoundedRecursion qualified as C
+import Lang.Crucible.Simulator.SimError qualified as C
+import Lang.Crucible.Utils.Seconds qualified as C
+import Lang.Crucible.Utils.Timeout qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.MemModel.CallStack as Mem
-import qualified Lang.Crucible.LLVM.Errors as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
+import Lang.Crucible.LLVM.Errors qualified as Mem
 
 -- macaw-base
-import qualified Data.Macaw.CFG as MC
+import Data.Macaw.CFG qualified as MC
 
-import qualified Grease.Bug as Bug
+import Grease.Bug qualified as Bug
 import Grease.Concretize
 import Grease.Diagnostic
 import Grease.Heuristic
 import Grease.Options (LoopBound(..), Milliseconds(..))
-import qualified Grease.Refine.Diagnostic as Diag
+import Grease.Refine.Diagnostic qualified as Diag
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Setup (Args)
-import qualified Grease.Setup.Annotations as Anns
+import Grease.Setup.Annotations qualified as Anns
 import Grease.Solver (Solver, solverAdapter)
 import Grease.Utility
 

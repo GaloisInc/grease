@@ -19,13 +19,13 @@ module Grease.Cursor
 
 import Data.Kind (Type)
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
 -- parameterized-utils
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 
 -- crucible
-import qualified Lang.Crucible.Types as C
+import Lang.Crucible.Types qualified as C
 
 import Grease.Cursor.List (Last, Snoc, lastCons, lastSnoc)
 

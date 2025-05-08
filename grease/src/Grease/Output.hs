@@ -22,18 +22,18 @@ import GHC.Generics (Generic)
 import Control.Lens ((^.))
 
 import Data.Functor ((<&>))
-import qualified Data.List as List
-import qualified Data.List.NonEmpty as NE
+import Data.List qualified as List
+import Data.List.NonEmpty qualified as NE
 import Data.Text (Text)
-import qualified Data.Text.Encoding as Text
-import qualified Data.ByteString.Lazy as BSL
+import Data.Text.Encoding qualified as Text
+import Data.ByteString.Lazy qualified as BSL
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
-import qualified Data.Aeson as Aeson
+import Data.Map.Strict qualified as Map
+import Data.Aeson qualified as Aeson
 import Data.Word (Word64)
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
-import qualified Grease.Bug as Bug
+import Grease.Bug qualified as Bug
 import Grease.Heuristic.Result (CantRefine)
 import Grease.Requirement (Requirement)
 

@@ -4,6 +4,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 
 -- | Utilities for reading and analyzing ELF core dumps using @elf-edit@. The
 -- following resources are helpful in understanding how core dumps work:
@@ -43,18 +44,18 @@ module Data.ElfEdit.CoreDump
   ) where
 
 import Control.Monad (unless)
-import qualified Data.Binary.Get as Get
+import Data.Binary.Get qualified as Get
 import Data.Bits (Bits(..))
-import qualified Data.ByteString as BS
-import qualified Data.List as List
+import Data.ByteString qualified as BS
+import Data.List qualified as List
 import Data.Maybe (mapMaybe, maybeToList)
 
-import qualified Data.ElfEdit as Elf
+import Data.ElfEdit qualified as Elf
 
-import qualified Data.ElfEdit.CoreDump.ARM as ARM
-import qualified Data.ElfEdit.CoreDump.PPC as PPC
-import qualified Data.ElfEdit.CoreDump.X86_64 as X86_64
-import qualified Data.ElfEdit.Prim.Nhdr as Nhdr
+import Data.ElfEdit.CoreDump.ARM qualified as ARM
+import Data.ElfEdit.CoreDump.PPC qualified as PPC
+import Data.ElfEdit.CoreDump.X86_64 qualified as X86_64
+import Data.ElfEdit.Prim.Nhdr qualified as Nhdr
 
 -----
 -- Types

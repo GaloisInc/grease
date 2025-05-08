@@ -23,38 +23,38 @@ module Grease.Utility
   ) where
 
 import Control.Exception.Safe (MonadThrow, Exception)
-import qualified Control.Exception.Safe as X
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Builder as Builder
-import qualified Data.ByteString.Lazy as BSL
+import Control.Exception.Safe qualified as X
+import Data.ByteString qualified as BS
+import Data.ByteString.Builder qualified as Builder
+import Data.ByteString.Lazy qualified as BSL
 import Data.Function ((.))
-import qualified Data.List as List
+import Data.List qualified as List
 import Data.Maybe (Maybe(..))
 import Data.Semigroup ((<>))
 import Data.Text (Text)
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
 import Data.Type.Equality (type (~))
 import Data.Word (Word8, Word32, Word64)
 import Prelude ((+))
 import System.IO (Handle, stderr)
 import Text.Show (Show(..))
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
-import qualified Text.LLVM.AST as L
+import Text.LLVM.AST qualified as L
 
-import qualified What4.FunctionName as W4
-import qualified What4.Expr as W4
-import qualified What4.ProgramLoc as W4
-import qualified What4.Protocol.Online as W4
+import What4.FunctionName qualified as W4
+import What4.Expr qualified as W4
+import What4.ProgramLoc qualified as W4
+import What4.Protocol.Online qualified as W4
 
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.Backend.Online as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Online qualified as C
 
-import qualified Lang.Crucible.LLVM.Intrinsics as Mem
+import Lang.Crucible.LLVM.Intrinsics qualified as Mem
 
-import qualified Data.Macaw.CFG as MC
+import Data.Macaw.CFG qualified as MC
 
 import Grease.Panic (panic)
 

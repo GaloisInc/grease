@@ -17,38 +17,38 @@ module Grease.Concretize.JSON
   , concArgsToJson
   ) where
 
-import qualified Data.Aeson as Aeson
-import qualified Data.BitVector.Sized as BV
-import qualified Data.List as List
+import Data.Aeson qualified as Aeson
+import Data.BitVector.Sized qualified as BV
+import Data.List qualified as List
 import           Data.Functor.Product (Product(Pair))
 import           Data.Kind (Type)
-import qualified Data.Text.Encoding as Text
-import qualified LibBF as LibBF
+import Data.Text.Encoding qualified as Text
+import LibBF qualified as LibBF
 
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 import           Data.Parameterized.Map (MapF)
-import qualified Data.Parameterized.Map as MapF
+import Data.Parameterized.Map qualified as MapF
 import           Data.Parameterized.TraversableFC (FoldableFC(toListFC))
 import           Data.Parameterized.SymbolRepr (SymbolRepr)
 
-import qualified What4.Expr.Builder as W4
+import What4.Expr.Builder qualified as W4
 import           What4.FloatMode (FloatModeRepr)
-import qualified What4.FloatMode as W4FM
-import qualified What4.Utils.Complex as W4
-import qualified What4.Utils.StringLiteral as W4SL
-import qualified What4.Utils.Word16String as W4W16
+import What4.FloatMode qualified as W4FM
+import What4.Utils.Complex qualified as W4
+import What4.Utils.StringLiteral qualified as W4SL
+import What4.Utils.Word16String qualified as W4W16
 
 import           Lang.Crucible.Concretize (ConcRV')
 import           Lang.Crucible.Types (TypeRepr)
-import qualified Lang.Crucible.Types as C
-import qualified Lang.Crucible.Concretize as Conc
+import Lang.Crucible.Types qualified as C
+import Lang.Crucible.Concretize qualified as Conc
 
-import qualified Lang.Crucible.LLVM.MemModel.Pointer as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 
-import qualified Data.Macaw.Symbolic as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
 
 import Grease.Concretize (ConcArgs(..))
-import qualified Grease.Macaw.RegName as RN
+import Grease.Macaw.RegName qualified as RN
 import Grease.Panic (panic)
 import Grease.Shape (ExtShape, getTag)
 import Grease.Shape.Pointer (PtrShape, getPtrTag)

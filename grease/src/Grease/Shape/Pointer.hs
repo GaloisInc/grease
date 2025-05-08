@@ -48,20 +48,20 @@ import Prelude (Num(..), Integral (divMod), fromIntegral, toInteger, max, Intege
 import Control.Applicative (Applicative((<*>)), pure)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Exception.Safe (MonadThrow, throw)
-import qualified Control.Lens as Lens
+import Control.Lens qualified as Lens
 
 import Data.Bool (Bool(..))
 import Data.BitVector.Sized (BV)
 import Data.Eq (Eq((==)))
-import qualified Data.Foldable as Foldable
+import Data.Foldable qualified as Foldable
 import Data.Functor ((<$>), fmap)
 import Data.Kind (Type)
 import Data.Function (($), (.), id)
 import Data.Maybe (Maybe(..))
-import qualified Data.List as List
+import Data.List qualified as List
 import Data.Proxy (Proxy(Proxy))
 import Data.Sequence (Seq)
-import qualified Data.Sequence as Seq
+import Data.Sequence qualified as Seq
 import Data.Semigroup (Semigroup((<>)))
 import Data.Traversable (traverse)
 import Data.Type.Equality (type (~), TestEquality(testEquality), (:~:)(Refl))
@@ -70,24 +70,24 @@ import GHC.TypeLits (type Natural)
 
 import Text.Show (Show(..))
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
 -- parameterized-utils
 import Data.Parameterized.Classes (ShowF(..))
 import Data.Parameterized.NatRepr (NatRepr, natValue)
-import qualified Data.Parameterized.TraversableF as TF
-import qualified Data.Parameterized.TraversableFC as TFC
+import Data.Parameterized.TraversableF qualified as TF
+import Data.Parameterized.TraversableFC qualified as TFC
 
 -- crucible
-import qualified Lang.Crucible.CFG.Core as C
+import Lang.Crucible.CFG.Core qualified as C
 
 -- crucible-llvm
 import Lang.Crucible.LLVM.Bytes (Bytes(..))
-import qualified Lang.Crucible.LLVM.Bytes as Bytes
-import qualified Lang.Crucible.LLVM.MemModel as Mem
+import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.MemModel qualified as Mem
 
 -- macaw-base
-import qualified Data.Macaw.CFG as MC
+import Data.Macaw.CFG qualified as MC
 
 import Grease.Cursor
 import Grease.Cursor.Pointer (Dereference(..))
