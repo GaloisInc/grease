@@ -12,23 +12,23 @@ module Grease.Macaw.Load.Relocation
   ) where
 
 import Control.Exception (throw)
-import qualified Data.ByteString as BS
+import Data.ByteString qualified as BS
 import Data.Either (Either(..), either)
 import Data.Eq (Eq)
 import Data.Function (($), const)
 import Data.List (map)
-import qualified Data.Map.Strict as Map
+import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe(..), fromMaybe, listToMaybe)
 import Data.Semigroup ((<>))
 import Data.Type.Equality (type (~))
-import qualified Data.Vector as Vec
+import Data.Vector qualified as Vec
 import Data.Word (Word32)
 import Prelude (Num(..), fromIntegral)
 import Text.Show (Show(..))
 
-import qualified Data.ElfEdit as EE
-import qualified Data.Macaw.Memory as MM
-import qualified Data.Macaw.Memory.LoadCommon as MML
+import Data.ElfEdit qualified as EE
+import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Memory.LoadCommon qualified as MML
 
 import Grease.Utility (GreaseException(..), tshow)
 

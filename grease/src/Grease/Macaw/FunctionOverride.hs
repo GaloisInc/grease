@@ -22,60 +22,60 @@ import Prelude ((<$>), ($), (.), IO, pure)
 
 import Control.Lens ((^.))
 import Control.Monad.IO.Class (MonadIO(..))
-import qualified Data.Foldable as Foldable
-import qualified Data.List.NonEmpty as NE
-import qualified Data.Map.Strict as Map
+import Data.Foldable qualified as Foldable
+import Data.List.NonEmpty qualified as NE
+import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe(..))
 import Data.Proxy (Proxy(..))
 import Data.Semigroup ((<>))
-import qualified Data.Sequence as Seq
+import Data.Sequence qualified as Seq
 import Data.Traversable (traverse)
 import Data.Type.Equality (type (~))
 import System.IO (FilePath)
 
 -- parameterized-utils
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC)
 
 -- what4
-import qualified What4.Expr as W4
-import qualified What4.FunctionName as W4
-import qualified What4.Protocol.Online as W4
+import What4.Expr qualified as W4
+import What4.FunctionName qualified as W4
+import What4.Protocol.Online qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.Backend.Online as C
-import qualified Lang.Crucible.CFG.Core as C
-import qualified Lang.Crucible.FunctionHandle as C
-import qualified Lang.Crucible.Simulator as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Online qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.Simulator qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.DataLayout as CLLVM
-import qualified Lang.Crucible.LLVM.MemModel as Mem
+import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
+import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.TypeContext (TypeContext)
 
 -- crucible-llvm-syntax
 import Lang.Crucible.LLVM.Syntax (emptyParserHooks)
 
 -- crucible-syntax
-import qualified Lang.Crucible.Syntax.Concrete as CSyn
-import qualified Lang.Crucible.Syntax.Prog as CSyn
+import Lang.Crucible.Syntax.Concrete qualified as CSyn
+import Lang.Crucible.Syntax.Prog qualified as CSyn
 
 -- macaw
-import qualified Data.Macaw.CFG as MC
+import Data.Macaw.CFG qualified as MC
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
 
 -- macaw-symbolic-syntax
 import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
 
 -- stubs-common
-import qualified Stubs.FunctionOverride as Stubs
-import qualified Stubs.FunctionOverride.ForwardDeclarations as Stubs
+import Stubs.FunctionOverride qualified as Stubs
+import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
 
 -- stubs-wrapper
-import qualified Stubs.Wrapper as Stubs
+import Stubs.Wrapper qualified as Stubs
 
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch

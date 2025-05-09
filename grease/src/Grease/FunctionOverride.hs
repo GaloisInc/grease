@@ -19,69 +19,69 @@ module Grease.FunctionOverride
 import Control.Lens ((^.), to)
 import Data.Bool (Bool(..))
 import Data.Maybe (Maybe(..), mapMaybe)
-import qualified Data.Vector as Vec
+import Data.Vector qualified as Vec
 import Prelude (($), (.), otherwise, toInteger)
 import System.IO (IO)
 
 import Control.Applicative (pure)
 import Control.Monad.State (MonadState(..), StateT(..), evalStateT)
 import Control.Monad.IO.Class (liftIO)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BSC
+import Data.ByteString qualified as BS
+import Data.ByteString.Char8 qualified as BSC
 import Data.Either (Either(Left, Right))
 import Data.Functor ((<$>), fmap)
 import Data.Functor.Identity (Identity(Identity, runIdentity))
-import qualified Data.List as List
-import qualified Data.Map as Map
-import qualified Data.Sequence as Seq
+import Data.List qualified as List
+import Data.Map qualified as Map
+import Data.Sequence qualified as Seq
 import Data.Set (Set)
-import qualified Data.Set as Set
+import Data.Set qualified as Set
 import Data.Semigroup ((<>))
 import Text.Show (show)
 
 -- bv-sized
-import qualified Data.BitVector.Sized as BV
+import Data.BitVector.Sized qualified as BV
 
 -- llvm-pretty
-import qualified Text.LLVM.AST as L
+import Text.LLVM.AST qualified as L
 
 -- parameterized-utils
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (toListFC)
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.CFG.Core as C
-import qualified Lang.Crucible.Simulator as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.Simulator qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.Intrinsics as Mem
-import qualified Lang.Crucible.LLVM.Intrinsics.Cast as Cast
-import qualified Lang.Crucible.LLVM.Intrinsics.Libc as Libc
-import qualified Lang.Crucible.LLVM.Intrinsics.LLVM as LLVM
-import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.Printf as Printf
-import qualified Lang.Crucible.LLVM.SymIO as SymIO
-import qualified Lang.Crucible.LLVM.TypeContext as TCtx
+import Lang.Crucible.LLVM.Intrinsics qualified as Mem
+import Lang.Crucible.LLVM.Intrinsics.Cast qualified as Cast
+import Lang.Crucible.LLVM.Intrinsics.Libc qualified as Libc
+import Lang.Crucible.LLVM.Intrinsics.LLVM qualified as LLVM
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.Printf qualified as Printf
+import Lang.Crucible.LLVM.SymIO qualified as SymIO
+import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 
 -- what4
-import qualified What4.Interface as W4
-import qualified What4.FunctionName as W4
+import What4.Interface qualified as W4
+import What4.FunctionName qualified as W4
 
 -- macaw-base
-import qualified Data.Macaw.Architecture.Info as MI
-import qualified Data.Macaw.CFG as MC
-import qualified Data.Macaw.Memory as MM
+import Data.Macaw.Architecture.Info qualified as MI
+import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Memory qualified as MM
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
 
 -- stubs
-import qualified Stubs.FunctionOverride as Stubs
+import Stubs.FunctionOverride qualified as Stubs
 
 import Grease.Macaw.Arch (ArchContext, archInfo)
 import Grease.Macaw.Memory (loadConcreteString)
-import qualified Grease.Panic as Panic
+import Grease.Panic qualified as Panic
 import Grease.Utility (OnlineSolverAndBackend, llvmOverrideName)
 
 -- | All of the @stubs@ overrides that work across all supported configurations.

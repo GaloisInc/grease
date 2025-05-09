@@ -15,29 +15,29 @@ module Grease.LLVM.SimulatorHooks
 import Control.Lens ((^.), set)
 import Control.Monad.IO.Class (MonadIO)
 import Data.Type.Equality ((:~:)(..), TestEquality(..))
-import qualified Lumberjack as LJ
+import Lumberjack qualified as LJ
 
 -- parameterized-utils
-import qualified Data.Parameterized.NatRepr as NatRepr
+import Data.Parameterized.NatRepr qualified as NatRepr
 
 -- what4
-import qualified What4.FunctionName as W4
-import qualified What4.Interface as W4
+import What4.FunctionName qualified as W4
+import What4.Interface qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.FunctionHandle as C
-import qualified Lang.Crucible.Simulator as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.Simulator qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.DataLayout as CLLVM
+import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
 import Lang.Crucible.LLVM.Extension (LLVM)
-import qualified Lang.Crucible.LLVM.Extension as CLLVM
-import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.MemModel.Pointer as Mem
+import Lang.Crucible.LLVM.Extension qualified as CLLVM
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 
 import Grease.Diagnostic (Diagnostic(..), GreaseLogAction)
-import qualified Grease.LLVM.SimulatorHooks.Diagnostic as Diag
+import Grease.LLVM.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Options (ErrorSymbolicFunCalls(..))
 import Grease.Panic (panic)
 import Grease.Skip (createSkipOverride)

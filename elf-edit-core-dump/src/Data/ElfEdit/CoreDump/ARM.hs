@@ -1,3 +1,4 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE RecordWildCards #-}
 
 -- | ELF core note information that is specific to ARM. Much of this
@@ -12,10 +13,10 @@ module Data.ElfEdit.CoreDump.ARM
   , armPrRegOffset
   ) where
 
-import qualified Data.Binary.Get as Get
+import Data.Binary.Get qualified as Get
 import Data.Word (Word32)
 
-import qualified Data.ElfEdit as Elf
+import Data.ElfEdit qualified as Elf
 
 -- | General-purpose 32-bit ARM user registers.
 data ArmUserRegs = ArmUserRegs

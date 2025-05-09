@@ -41,48 +41,48 @@ import Data.Semigroup ((<>))
 import Data.Function (($), (.), (&), flip)
 import Data.Functor (fmap)
 import Data.Maybe (Maybe(..))
-import qualified Data.List as List
+import Data.List qualified as List
 import Data.Proxy (Proxy(Proxy))
-import qualified Data.Sequence as Seq
+import Data.Sequence qualified as Seq
 import Data.String (String)
 import Data.Type.Equality (type (~), (:~:)(Refl))
 import Data.Word (Word8)
-import qualified Data.Vector as Vec
+import Data.Vector qualified as Vec
 import Text.Show (show)
 import System.IO (IO)
 
-import qualified Lumberjack as LJ
+import Lumberjack qualified as LJ
 
 -- parameterized-utils
 import Data.Parameterized.Classes (ixF')
 import Data.Parameterized.NatRepr (NatRepr, natValue)
 import Data.Parameterized.TraversableFC (fmapFC)
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 
 -- bv-sized
-import qualified Data.BitVector.Sized as BV
+import Data.BitVector.Sized qualified as BV
 
 -- what4
-import qualified What4.Interface as W4
+import What4.Interface qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.CFG.Extension as C
-import qualified Lang.Crucible.Simulator as C
-import qualified Lang.Crucible.Types as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Types qualified as C
 
 -- crucible-llvm
 import Lang.Crucible.LLVM.Bytes (Bytes)
-import qualified Lang.Crucible.LLVM.Bytes as Bytes
-import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.MemModel.Pointer as Mem
-import qualified Lang.Crucible.LLVM.DataLayout as Mem
+import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.LLVM.DataLayout qualified as Mem
 
-import qualified Grease.Cursor as Cursor
-import qualified Grease.Cursor.Pointer as PtrCursor
+import Grease.Cursor qualified as Cursor
+import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic (GreaseLogAction, Diagnostic(SetupDiagnostic))
-import qualified Grease.Setup.Annotations as Anns
-import qualified Grease.Setup.Diagnostic as Diag
+import Grease.Setup.Annotations qualified as Anns
+import Grease.Setup.Diagnostic qualified as Diag
 import Grease.Shape
 import Grease.Shape.Pointer
 import Grease.Shape.Selector

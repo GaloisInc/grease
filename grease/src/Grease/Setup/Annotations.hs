@@ -28,32 +28,32 @@ import Control.Monad.State.Class (MonadState(..))
 import Control.Lens ((^.), (%=))
 
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
-import qualified Data.Maybe as Maybe
+import Data.Map.Strict qualified as Map
+import Data.Maybe qualified as Maybe
 import Data.Proxy (Proxy(Proxy))
 import Data.Type.Equality ((:~:)(Refl), testEquality)
 
 -- parameterized-utils
 import Data.Parameterized.Some (Some(..))
-import qualified Data.Parameterized.Map as MapF
+import Data.Parameterized.Map qualified as MapF
 
 -- what4
-import qualified What4.Interface as W4
-import qualified What4.Expr.Builder as W4
+import What4.Interface qualified as W4
+import What4.Expr.Builder qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.Types as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Types qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.MemModel.Pointer as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 
 -- macaw-base
-import qualified Data.Macaw.CFG as MC
+import Data.Macaw.CFG qualified as MC
 
-import qualified Grease.Cursor as Cursor
-import qualified Grease.Cursor.Pointer as PtrCursor
+import Grease.Cursor qualified as Cursor
+import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Shape.Selector
 
 data SomeBaseSelector ext argTys t

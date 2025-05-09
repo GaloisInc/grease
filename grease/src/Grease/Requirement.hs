@@ -11,14 +11,14 @@ module Grease.Requirement
 
 import Control.Applicative (Alternative(..))
 import Control.Exception (throw)
-import qualified Data.Aeson as Aeson
+import Data.Aeson qualified as Aeson
 import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Generics (Generic)
-import qualified Prettyprinter as PP
-import qualified Text.Megaparsec as TM
-import qualified Text.Megaparsec.Char as TMC
-import qualified Text.Megaparsec.Char.Lexer as TMCL
+import Prettyprinter qualified as PP
+import Text.Megaparsec qualified as TM
+import Text.Megaparsec.Char qualified as TMC
+import Text.Megaparsec.Char.Lexer qualified as TMCL
 
 import Grease.Utility (GreaseException(GreaseException), tshow)
 

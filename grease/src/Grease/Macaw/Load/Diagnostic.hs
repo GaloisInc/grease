@@ -12,18 +12,18 @@ module Grease.Macaw.Load.Diagnostic
   , severity
   ) where
 
-import qualified Data.ByteString.Char8 as BSC
-import qualified Data.Map as Map
+import Data.ByteString.Char8 qualified as BSC
+import Data.Map qualified as Map
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
 -- what4
-import qualified What4.FunctionName as W4
+import What4.FunctionName qualified as W4
 
 -- macaw
-import qualified Data.Macaw.CFG as MC
-import qualified Data.Macaw.Discovery as MD
-import qualified Data.Macaw.Memory as MM
+import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Discovery qualified as MD
+import Data.Macaw.Memory qualified as MM
 
 import Grease.Diagnostic.Severity (Severity(Info, Debug))
 

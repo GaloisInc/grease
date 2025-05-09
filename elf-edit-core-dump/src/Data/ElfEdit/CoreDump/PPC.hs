@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -17,9 +18,9 @@ module Data.ElfEdit.CoreDump.PPC
   , ppcPrRegOffset
   ) where
 
-import qualified Data.Binary.Get as Get
+import Data.Binary.Get qualified as Get
 
-import qualified Data.ElfEdit as Elf
+import Data.ElfEdit qualified as Elf
 
 -- | General-purpose PPC user registers.
 data PpcUserRegs w = PpcUserRegs

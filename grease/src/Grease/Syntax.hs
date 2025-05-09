@@ -12,31 +12,31 @@ module Grease.Syntax
 
 import Control.Exception.Safe (throw)
 
-import qualified Data.List as List
+import Data.List qualified as List
 import Data.Map (Map)
-import qualified Data.Map as Map
+import Data.Map qualified as Map
 import Data.Text (Text)
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text.IO
+import Data.Text qualified as Text
+import Data.Text.IO qualified as Text.IO
 
-import qualified Text.Megaparsec as MP
+import Text.Megaparsec qualified as MP
 
 -- parameterized-utils
 import Data.Parameterized.Nonce (globalNonceGenerator)
 
 -- what4
-import qualified What4.FunctionName as W4
+import What4.FunctionName qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.CFG.Extension as C
-import qualified Lang.Crucible.CFG.Reg as C.Reg
-import qualified Lang.Crucible.FunctionHandle as C
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.CFG.Reg qualified as C.Reg
+import Lang.Crucible.FunctionHandle qualified as C
 
 -- crucible-syntax
-import qualified Lang.Crucible.Syntax.Atoms as CSyn (atom)
-import qualified Lang.Crucible.Syntax.Concrete as CSyn
-import qualified Lang.Crucible.Syntax.ExprParse as CSyn
-import qualified Lang.Crucible.Syntax.SExpr as SExpr
+import Lang.Crucible.Syntax.Atoms qualified as CSyn (atom)
+import Lang.Crucible.Syntax.Concrete qualified as CSyn
+import Lang.Crucible.Syntax.ExprParse qualified as CSyn
+import Lang.Crucible.Syntax.SExpr qualified as SExpr
 
 import Grease.Utility (GreaseException(..))
 

@@ -28,37 +28,37 @@ module Grease.Entrypoint
 
 import Control.Applicative (Alternative(..))
 import Control.Exception.Safe (throw)
-import qualified Data.ByteString as BS
+import Data.ByteString qualified as BS
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
 import Data.Void (Void)
 import Data.Word (Word64)
 import Numeric (showHex)
-import qualified Prettyprinter as PP
-import qualified Text.Megaparsec as TM
-import qualified Text.Megaparsec.Char as TMC
-import qualified Text.Megaparsec.Char.Lexer as TMCL
+import Prettyprinter qualified as PP
+import Text.Megaparsec qualified as TM
+import Text.Megaparsec.Char qualified as TMC
+import Text.Megaparsec.Char.Lexer qualified as TMCL
 
 -- crucible
-import qualified Lang.Crucible.CFG.Extension as C
-import qualified Lang.Crucible.CFG.Reg as C.Reg
-import qualified Lang.Crucible.FunctionHandle as C
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.CFG.Reg qualified as C.Reg
+import Lang.Crucible.FunctionHandle qualified as C
 
 -- crucible-syntax
-import qualified Lang.Crucible.Syntax.Concrete as CSyn
-import qualified Lang.Crucible.Syntax.Prog as CSyn
+import Lang.Crucible.Syntax.Concrete qualified as CSyn
+import Lang.Crucible.Syntax.Prog qualified as CSyn
 
 -- macaw-base
-import qualified Data.Macaw.CFG as MC
+import Data.Macaw.CFG qualified as MC
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
 
 -- what4
-import qualified What4.FunctionName as W4
+import What4.FunctionName qualified as W4
 
 import Grease.Syntax (parseProgram, parsedProgramCfgMap)
 import Grease.Utility (GreaseException(..))

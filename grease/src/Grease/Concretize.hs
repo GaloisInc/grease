@@ -3,7 +3,6 @@ Copyright        : (c) Galois, Inc. 2024
 Maintainer       : GREASE Maintainers <grease@galois.com>
 -}
 
-{-# LANGUAGE ImportQualifiedPost #-}
 
 module Grease.Concretize
   ( ConcMem(..)

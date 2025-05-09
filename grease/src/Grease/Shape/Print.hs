@@ -8,7 +8,6 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Grease.Shape.Print

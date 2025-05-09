@@ -5,7 +5,7 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 
 module Main (main) where
 
-import qualified Grease.Main as Grease
+import Grease.Main qualified as Grease
 
 main :: IO ()
 main = Grease.main

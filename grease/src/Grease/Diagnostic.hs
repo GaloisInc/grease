@@ -15,26 +15,26 @@ module Grease.Diagnostic
   ) where
 
 import Control.Monad.IO.Class (MonadIO (..))
-import qualified Data.Time.Clock as Time
-import qualified Data.Time.Format as Time
-import qualified Lumberjack as LJ
+import Data.Time.Clock qualified as Time
+import Data.Time.Format qualified as Time
+import Lumberjack qualified as LJ
 import Prelude hiding (log)
-import qualified Prettyprinter as PP
-import qualified Prettyprinter.Render.Text as PP
+import Prettyprinter qualified as PP
+import Prettyprinter.Render.Text qualified as PP
 import System.IO (stderr)
 
 import Grease.Diagnostic.Severity (Severity)
-import qualified Grease.BranchTracer.Diagnostic as BranchTracer
-import qualified Grease.Heuristic.Diagnostic as Heuristic
-import qualified Grease.LLVM.Overrides.Diagnostic as LLVMOverrides
-import qualified Grease.LLVM.SimulatorHooks.Diagnostic as LLVMSimulatorHooks
-import qualified Grease.Macaw.Load.Diagnostic as Load
-import qualified Grease.Macaw.ResolveCall.Diagnostic as ResolveCall
-import qualified Grease.Macaw.SimulatorHooks.Diagnostic as SimulatorHooks
-import qualified Grease.Main.Diagnostic as Main
-import qualified Grease.Refine.Diagnostic as Refine
-import qualified Grease.Setup.Diagnostic as Setup
-import qualified Grease.Skip.Diagnostic as Skip
+import Grease.BranchTracer.Diagnostic qualified as BranchTracer
+import Grease.Heuristic.Diagnostic qualified as Heuristic
+import Grease.LLVM.Overrides.Diagnostic qualified as LLVMOverrides
+import Grease.LLVM.SimulatorHooks.Diagnostic qualified as LLVMSimulatorHooks
+import Grease.Macaw.Load.Diagnostic qualified as Load
+import Grease.Macaw.ResolveCall.Diagnostic qualified as ResolveCall
+import Grease.Macaw.SimulatorHooks.Diagnostic qualified as SimulatorHooks
+import Grease.Main.Diagnostic qualified as Main
+import Grease.Refine.Diagnostic qualified as Refine
+import Grease.Setup.Diagnostic qualified as Setup
+import Grease.Skip.Diagnostic qualified as Skip
 
 -- | A diagnostic message that @grease@ can emit.
 --

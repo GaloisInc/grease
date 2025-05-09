@@ -6,6 +6,7 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
+
 module Grease.Macaw.SimulatorState
   ( -- * @GreaseSimulatorState@
     GreaseSimulatorState(..)
@@ -25,24 +26,24 @@ module Grease.Macaw.SimulatorState
 
 import Control.Lens (Lens')
 import Control.Lens.TH (makeLenses)
-import qualified Data.Map.Strict as Map
+import Data.Map.Strict qualified as Map
 
 -- parameterized-utils
-import qualified Data.Parameterized.Context as Ctx
-import qualified Data.Parameterized.Map as MapF
+import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.Map qualified as MapF
 
 -- crucible
-import qualified Lang.Crucible.FunctionHandle as C
-import qualified Lang.Crucible.Simulator as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.Simulator qualified as C
 
 -- macaw
-import qualified Data.Macaw.CFG as MC
+import Data.Macaw.CFG qualified as MC
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
 
 -- stubs-common
-import qualified Stubs.Syscall as Stubs
+import Stubs.Syscall qualified as Stubs
 
 -- | The Crucible state extension for holding @grease@-specific state.
 data GreaseSimulatorState sym arch = GreaseSimulatorState

@@ -26,19 +26,19 @@ import Control.Lens ((^.), to)
 import Control.Monad (return)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Bool (otherwise)
-import qualified Data.ByteString.Builder as Builder
-import qualified Data.ByteString.Lazy as BSL
+import Data.ByteString.Builder qualified as Builder
+import Data.ByteString.Lazy qualified as BSL
 import Data.Function (($), (.))
 import Data.Int (Int, Int64)
 import Data.Kind (Type)
 import Data.List ((++))
-import qualified Data.Map.Strict as Map
+import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Proxy (Proxy(Proxy))
 import Data.Semigroup ((<>))
-import qualified Data.Sequence as Seq
+import Data.Sequence qualified as Seq
 import Data.String (String)
-import qualified Data.Text as Text
+import Data.Text qualified as Text
 import Data.Traversable (traverse)
 import Data.Type.Equality (type (~), (:~:)(Refl))
 import Data.Word (Word8, Word64)
@@ -47,57 +47,57 @@ import System.IO (IO)
 import Text.Show (Show(..))
 
 -- bv-sized
-import qualified Data.BitVector.Sized as BV
+import Data.BitVector.Sized qualified as BV
 
 -- parameterized-utils
 import Data.Parameterized.Classes (TestEquality(..))
-import qualified Data.Parameterized.Context as Ctx
-import qualified Data.Parameterized.List as P.List
-import qualified Data.Parameterized.Map as MapF
+import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.List qualified as P.List
+import Data.Parameterized.Map qualified as MapF
 
 -- what4
-import qualified What4.Expr as W4
-import qualified What4.FunctionName as W4
-import qualified What4.Interface as W4
-import qualified What4.Protocol.Online as W4
+import What4.Expr qualified as W4
+import What4.FunctionName qualified as W4
+import What4.Interface qualified as W4
+import What4.Protocol.Online qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Analysis.Postdom as C
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.Backend.Online as C
-import qualified Lang.Crucible.CFG.Core as C
-import qualified Lang.Crucible.CFG.Extension as C
-import qualified Lang.Crucible.FunctionHandle as C
-import qualified Lang.Crucible.Simulator as C
-import qualified Lang.Crucible.Simulator.GlobalState as C
+import Lang.Crucible.Analysis.Postdom qualified as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Online qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator.GlobalState qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.MemModel as Mem
-import qualified Lang.Crucible.LLVM.Intrinsics as Mem
-import qualified Lang.Crucible.LLVM.SymIO as SymIO
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.Intrinsics qualified as Mem
+import Lang.Crucible.LLVM.SymIO qualified as SymIO
 
 -- macaw-base
-import qualified Data.Macaw.Architecture.Info as MI
-import qualified Data.Macaw.CFG as MC
-import qualified Data.Macaw.Discovery as Discovery
-import qualified Data.Macaw.Memory as MM
-import qualified Data.Macaw.Memory.ElfLoader as EL
-import qualified Data.Macaw.Types as MT
+import Data.Macaw.Architecture.Info qualified as MI
+import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Discovery qualified as Discovery
+import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Memory.ElfLoader qualified as EL
+import Data.Macaw.Types qualified as MT
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
-import qualified Data.Macaw.Symbolic.Memory.Lazy as Symbolic
-import qualified Data.Macaw.Symbolic.Backend as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
+import Data.Macaw.Symbolic.Backend qualified as Symbolic
 
 -- stubs-common
-import qualified Stubs.Common as Stubs
-import qualified Stubs.Syscall as Stubs
+import Stubs.Common qualified as Stubs
+import Stubs.Syscall qualified as Stubs
 
 import Grease.Diagnostic
 import Grease.Macaw.Arch
 import Grease.Macaw.FunctionOverride
 import Grease.Macaw.Load.Relocation (RelocType(..))
-import qualified Grease.Options as Opts
+import Grease.Options qualified as Opts
 import Grease.Setup
 import Grease.Shape
 import Grease.Shape.NoTag (NoTag(NoTag))

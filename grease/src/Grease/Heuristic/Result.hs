@@ -12,13 +12,13 @@ module Grease.Heuristic.Result
   , mergeResultsOptimistic
   ) where
 
-import qualified Data.Aeson.Types as Aeson
+import Data.Aeson.Types qualified as Aeson
 import Data.Text (Text)
 import GHC.Generics (Generic)
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
-import qualified Grease.Bug as Bug
+import Grease.Bug qualified as Bug
 import Grease.Shape (ArgShapes)
 import Grease.Shape.NoTag (NoTag)
 

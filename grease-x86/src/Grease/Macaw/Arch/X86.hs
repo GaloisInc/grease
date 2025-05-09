@@ -13,42 +13,42 @@ module Grease.Macaw.Arch.X86 (x86Ctx) where
 
 import Control.Exception.Safe (throw)
 import Control.Monad.IO.Class (MonadIO(..))
-import qualified Data.Map as Map
+import Data.Map qualified as Map
 import Data.Proxy (Proxy(..))
 import Data.Word (Word64)
 
 -- bv-sized
-import qualified Data.BitVector.Sized as BV
+import Data.BitVector.Sized qualified as BV
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.FunctionHandle as C
-import qualified Lang.Crucible.Simulator as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.Simulator qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.MemModel as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem
 
 -- elf-edit
-import qualified Data.ElfEdit as EE
+import Data.ElfEdit qualified as EE
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
 
 -- macaw-x86
-import qualified Data.Macaw.X86 as X86
-import qualified Data.Macaw.X86.X86Reg as X86
+import Data.Macaw.X86 qualified as X86
+import Data.Macaw.X86.X86Reg qualified as X86
 
 -- parameterized-utils
-import qualified Data.Parameterized.NatRepr as NatRepr
+import Data.Parameterized.NatRepr qualified as NatRepr
 
 -- stubs
-import qualified Stubs.FunctionOverride.X86_64.Linux as Stubs
-import qualified Stubs.Memory.X86_64.Linux as Stubs
-import qualified Stubs.Syscall.X86_64.Linux as Stubs
-import qualified Stubs.Syscall.Names.X86_64.Linux as Stubs
+import Stubs.FunctionOverride.X86_64.Linux qualified as Stubs
+import Stubs.Memory.X86_64.Linux qualified as Stubs
+import Stubs.Syscall.X86_64.Linux qualified as Stubs
+import Stubs.Syscall.Names.X86_64.Linux qualified as Stubs
 
 -- what4
-import qualified What4.Interface as W4
+import What4.Interface qualified as W4
 
 import Grease.Macaw.Arch (ArchContext(..), ArchReloc, ArchRegs)
 import Grease.Macaw.Arch.X86.Reg (getX86Reg, modifyX86Reg)

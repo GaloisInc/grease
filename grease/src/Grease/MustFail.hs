@@ -1,4 +1,3 @@
-{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 
 module Grease.MustFail
@@ -26,7 +25,7 @@ import What4.Interface qualified as W4
 import What4.LabeledPred qualified as W4
 import What4.Protocol.Online qualified as W4
 import What4.SatResult qualified as W4
-import qualified Data.Tuple as Tuple
+import Data.Tuple qualified as Tuple
 
 -- | Should this proof obligation be excluded from consideration by the must-
 -- fail heuristic?

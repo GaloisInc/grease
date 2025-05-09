@@ -22,65 +22,65 @@ import Control.Monad.IO.Class (MonadIO(..))
 import Data.Foldable (foldl')
 import Data.Function (($), (&), (.))
 import Data.Int (Int)
-import qualified Data.IntMap as IntMap
-import qualified Data.List.NonEmpty as NE
-import qualified Data.Map.Strict as Map
+import Data.IntMap qualified as IntMap
+import Data.List.NonEmpty qualified as NE
+import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe(..))
 import Data.Type.Equality (type (~))
 import GHC.Word (Word64)
-import qualified Lumberjack as LJ
+import Lumberjack qualified as LJ
 import System.IO (IO)
 
-import qualified Data.BitVector.Sized as BV
+import Data.BitVector.Sized qualified as BV
 
 -- parameterized-utils
-import qualified Data.Parameterized.Context as Ctx
-import qualified Data.Parameterized.Map as MapF
+import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.Map qualified as MapF
 import Data.Parameterized.NatRepr (knownNat)
 
 -- what4
-import qualified What4.Expr as W4
-import qualified What4.FunctionName as W4
-import qualified What4.Interface as W4
-import qualified What4.Protocol.Online as W4
+import What4.Expr qualified as W4
+import What4.FunctionName qualified as W4
+import What4.Interface qualified as W4
+import What4.Protocol.Online qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Analysis.Postdom as C
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.Backend.Online as C
-import qualified Lang.Crucible.CFG.Core as C
-import qualified Lang.Crucible.CFG.SSAConversion as C
-import qualified Lang.Crucible.CFG.Reg as C.Reg
-import qualified Lang.Crucible.FunctionHandle as C
-import qualified Lang.Crucible.Simulator as C
+import Lang.Crucible.Analysis.Postdom qualified as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Online qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.SSAConversion qualified as C
+import Lang.Crucible.CFG.Reg qualified as C.Reg
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.Simulator qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.MemModel as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem
 
 -- macaw-base
-import qualified Data.Macaw.CFG as MC
-import qualified Data.Macaw.Discovery as Discovery
-import qualified Data.Macaw.Discovery.Classifier as Discovery
-import qualified Data.Macaw.Memory.ElfLoader as EL
+import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Discovery qualified as Discovery
+import Data.Macaw.Discovery.Classifier qualified as Discovery
+import Data.Macaw.Memory.ElfLoader qualified as EL
 
 -- macaw-loader
-import qualified Data.Macaw.BinaryLoader.ELF as Loader
+import Data.Macaw.BinaryLoader.ELF qualified as Loader
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
-import qualified Data.Macaw.Symbolic.Concretize as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Macaw.Symbolic.Concretize qualified as Symbolic
 
 -- stubs
-import qualified Stubs.FunctionOverride as Stubs
-import qualified Stubs.FunctionOverride.ForwardDeclarations as Stubs
-import qualified Stubs.Memory.Common as Stubs
-import qualified Stubs.Syscall as Stubs
+import Stubs.FunctionOverride qualified as Stubs
+import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
+import Stubs.Memory.Common qualified as Stubs
+import Stubs.Syscall qualified as Stubs
 
 import Grease.Diagnostic (Diagnostic(..), GreaseLogAction)
 import Grease.Macaw.Arch
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.FunctionOverride
-import qualified Grease.Macaw.ResolveCall.Diagnostic as Diag
+import Grease.Macaw.ResolveCall.Diagnostic qualified as Diag
 import Grease.Macaw.SkippedCall (SkippedCall(..))
 import Grease.Macaw.SimulatorState
 import Grease.Macaw.Syscall

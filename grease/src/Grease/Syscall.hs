@@ -15,24 +15,24 @@ module Grease.Syscall
 import Prelude (($), map)
 
 import Control.Monad.IO.Class (MonadIO(..))
-import qualified Data.Map.Strict as Map
+import Data.Map.Strict qualified as Map
 
 -- parameterized-utils
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 
 -- what4
-import qualified What4.FunctionName as W4
-import qualified What4.Interface as W4
+import What4.FunctionName qualified as W4
+import What4.Interface qualified as W4
 
 -- crucible
-import qualified Lang.Crucible.Backend as C
-import qualified Lang.Crucible.Simulator as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Simulator qualified as C
 
 -- crucible-llvm
-import qualified Lang.Crucible.LLVM.MemModel as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem
 
 -- stubs
-import qualified Stubs.Syscall as Stubs
+import Stubs.Syscall qualified as Stubs
 
 -- | All of the overrides that work across all supported configurations.
 builtinGenericSyscalls ::

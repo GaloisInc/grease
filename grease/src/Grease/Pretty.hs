@@ -5,7 +5,6 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Grease.Pretty

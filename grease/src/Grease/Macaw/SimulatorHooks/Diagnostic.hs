@@ -11,10 +11,10 @@ module Grease.Macaw.SimulatorHooks.Diagnostic
   , severity
   ) where
 
-import qualified Data.Text as Text
+import Data.Text qualified as Text
 import Data.Void (Void, absurd)
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
 import Grease.Diagnostic.Severity (Severity(Debug))
 

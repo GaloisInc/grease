@@ -10,12 +10,12 @@ module Grease.Setup.Diagnostic
   , severity
   ) where
 
-import qualified Prettyprinter as PP
+import Prettyprinter qualified as PP
 
-import qualified Lang.Crucible.LLVM.MemModel as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem
 
 import Grease.Diagnostic.Severity (Severity(Trace))
-import qualified What4.Interface as W4
+import What4.Interface qualified as W4
 
 data Diagnostic where
   SetupMem ::

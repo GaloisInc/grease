@@ -10,23 +10,23 @@ module Grease.Macaw.Arch.X86.Reg
   ) where
 
 import Control.Exception.Safe (MonadThrow, throw)
-import qualified Data.Text as Text
+import Data.Text qualified as Text
 import Prelude hiding (mod)
 
 import Grease.Utility (GreaseException(..))
 
 -- parameterized-utils
-import qualified Data.Parameterized.Context as Ctx
+import Data.Parameterized.Context qualified as Ctx
 
 -- macaw-x86
-import qualified Data.Macaw.X86 as X86 (X86_64)
-import qualified Data.Macaw.X86.X86Reg as X86
+import Data.Macaw.X86 qualified as X86 (X86_64)
+import Data.Macaw.X86.X86Reg qualified as X86
 
 -- macaw-symbolic
-import qualified Data.Macaw.Symbolic as Symbolic
+import Data.Macaw.Symbolic qualified as Symbolic
 
 -- macaw-x86-symbolic
-import qualified Data.Macaw.X86.Symbolic as X86Sym
+import Data.Macaw.X86.Symbolic qualified as X86Sym
 
 -- | Retrieve the value of an x86 register, throwing a 'GreaseException' if it
 -- isn\'t present.
