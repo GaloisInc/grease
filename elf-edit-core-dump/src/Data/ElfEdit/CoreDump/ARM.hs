@@ -1,5 +1,5 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | ELF core note information that is specific to ARM. Much of this
 -- information was inspired by the @elfutils@ source code:
