@@ -11,9 +11,8 @@ module Grease.LLVM.SimulatorHooks.Diagnostic
   , severity
   ) where
 
-import Prettyprinter qualified as PP
-
 import Grease.Diagnostic.Severity (Severity(Info))
+import Prettyprinter qualified as PP
 
 data Diagnostic where
   SkippedSymbolicFnHandleCall :: Diagnostic

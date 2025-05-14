@@ -14,22 +14,17 @@ module Grease.Main.Diagnostic
 import Data.List qualified as List
 import Data.Text qualified as Text
 import Data.Void (Void, absurd)
-
-import Prettyprinter qualified as PP
-
-import Text.LLVM.AST qualified as L
-
-import Lang.Crucible.Analysis.Postdom qualified as C
-import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.CFG.Extension qualified as C
-
-import Lang.Crucible.LLVM.Translation qualified as Trans
-
 import Grease.Diagnostic.Severity (Severity(Debug, Info, Warn))
 import Grease.Entrypoint (Entrypoint, EntrypointLocation)
 import Grease.Output (BatchStatus)
 import Grease.Requirement (Requirement, displayReq)
 import Grease.Time (Nanoseconds, nanosToMillis)
+import Lang.Crucible.Analysis.Postdom qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.LLVM.Translation qualified as Trans
+import Prettyprinter qualified as PP
+import Text.LLVM.AST qualified as L
 
 data Diagnostic where
   AnalyzedEntrypoint ::

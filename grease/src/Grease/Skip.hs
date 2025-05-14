@@ -14,41 +14,33 @@ module Grease.Skip
 import Control.Lens ((^.), to)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Text qualified as Text
-
-import Lumberjack qualified as LJ
-
-import Text.LLVM.AST qualified as L
-
--- what4
-import What4.FunctionName qualified as W4
-
--- crucible
-import Lang.Crucible.CFG.Extension qualified as C
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Types qualified as C
-
-import Lang.Crucible.LLVM.DataLayout as Mem
-import Lang.Crucible.LLVM.Functions as CLLVM
-import Lang.Crucible.LLVM.MemModel as Mem
-import Lang.Crucible.LLVM.Intrinsics as CLLVM
-import Lang.Crucible.LLVM.Translation (LLVMContext)
-import Lang.Crucible.LLVM.Translation qualified as CLLVM
-import Lang.Crucible.LLVM.TypeContext qualified as CLLVM
-
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic (GreaseLogAction, Diagnostic(SkipDiagnostic))
 import Grease.Setup qualified as Setup
 import Grease.Shape (ExtShape, Shape, minimalShapeWithPtrs')
+import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag(NoTag))
 import Grease.Shape.Pointer (PtrShape)
-import Grease.Shape qualified as Shape
 import Grease.Shape.Pointer qualified as PtrShape
 import Grease.Shape.Selector
 import Grease.Skip.Diagnostic qualified as Diag
 import Grease.Utility (declaredFunNotFound)
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.LLVM.DataLayout as Mem
+import Lang.Crucible.LLVM.Functions as CLLVM
+import Lang.Crucible.LLVM.Intrinsics as CLLVM
+import Lang.Crucible.LLVM.MemModel as Mem
+import Lang.Crucible.LLVM.Translation (LLVMContext)
+import Lang.Crucible.LLVM.Translation qualified as CLLVM
+import Lang.Crucible.LLVM.TypeContext qualified as CLLVM
+import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Types qualified as C
+import Lumberjack qualified as LJ
+import Text.LLVM.AST qualified as L
+import What4.FunctionName qualified as W4
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (SkipDiagnostic diag)

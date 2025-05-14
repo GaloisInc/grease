@@ -27,82 +27,65 @@ module Grease.Heuristic
   , macawHeuristics
   ) where
 
-import Prelude (div, fromIntegral)
-
+import           Lang.Crucible.LLVM.Extension (LLVM)
 import Control.Applicative (Alternative((<|>)), Const(..), pure)
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens (Lens', (^.), (.~))
 import Data.BitVector.Sized qualified as BV
 import Data.Bool qualified as Bool
 import Data.Eq ((==), (/=))
-import Data.Functor ((<$>))
 import Data.Function (($), (.), (&))
+import Data.Functor ((<$>))
+import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Maybe (Maybe(..))
 import Data.Maybe qualified as Maybe
+import Data.Parameterized.Classes (IxedF'(..))
 import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Semigroup (Semigroup((<>)))
 import Data.String (String)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Tuple qualified as Tuple
 import Data.Type.Equality (type (~), (:~:)(Refl), testEquality)
-import Numeric.Natural (Natural)
-import System.IO (IO)
-
-import Lumberjack qualified as LJ
-
-import Text.LLVM.AST qualified as L
-
--- parameterized-utils
-import Data.Parameterized.Classes (IxedF'(..))
-import Data.Parameterized.NatRepr qualified as NatRepr
-
--- what4
-import What4.Interface qualified as W4
-import What4.Expr qualified as W4
-import What4.LabeledPred qualified as W4
-import What4.ProgramLoc qualified as W4
-
--- crucible
-import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.CFG.Extension qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.Bytes qualified as Bytes
-import           Lang.Crucible.LLVM.Extension (LLVM)
-import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
-import Lang.Crucible.LLVM.MemModel qualified as Mem hiding (Mem)
-import Lang.Crucible.LLVM.MemModel.Generic qualified as Mem
-import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-import Lang.Crucible.LLVM.Errors qualified as Mem
-import Lang.Crucible.LLVM.Errors.MemoryError qualified as Mem
-import Lang.Crucible.LLVM.Errors.UndefinedBehavior qualified as Mem
-
--- macaw-base
-import Data.Macaw.CFG qualified as MC
-
--- macaw-symbolic
-import Data.Macaw.Symbolic qualified as Symbolic
-
 import Grease.Bug qualified as Bug
 import Grease.Bug.UndefinedBehavior qualified as UB
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer (Dereference)
 import Grease.Diagnostic
-import Grease.Heuristic.Result
 import Grease.Heuristic.Diagnostic qualified as Diag
+import Grease.Heuristic.Result
 import Grease.Macaw.RegName (RegNames, getRegName, mkRegName)
 import Grease.MustFail qualified as MustFail
+import Grease.Setup
+import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape
 import Grease.Shape.NoTag (NoTag(NoTag))
 import Grease.Shape.Pointer
 import Grease.Shape.Selector
-import Grease.Setup
-import Grease.Setup.Annotations qualified as Anns
 import Grease.Utility (GreaseException(..), OnlineSolverAndBackend, ppProgramLoc, tshow)
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.Errors qualified as Mem
+import Lang.Crucible.LLVM.Errors.MemoryError qualified as Mem
+import Lang.Crucible.LLVM.Errors.UndefinedBehavior qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem hiding (Mem)
+import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Generic qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.Simulator qualified as C
+import Lumberjack qualified as LJ
+import Numeric.Natural (Natural)
+import Prelude (div, fromIntegral)
+import System.IO (IO)
+import Text.LLVM.AST qualified as L
+import What4.Expr qualified as W4
+import What4.Interface qualified as W4
+import What4.LabeledPred qualified as W4
+import What4.ProgramLoc qualified as W4
 
 doLog :: GreaseLogAction -> Diag.Diagnostic -> IO ()
 doLog la diag = LJ.writeLog la (HeuristicDiagnostic diag)

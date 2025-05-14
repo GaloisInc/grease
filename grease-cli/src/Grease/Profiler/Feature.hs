@@ -11,17 +11,13 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (Async, async)
 import Data.ByteString qualified as BS
 import Data.Foldable qualified as Foldable
-import System.Directory (createDirectoryIfMissing)
-import System.FilePath ((</>), takeDirectory)
-
--- crucible
+import Grease.Profiler.EmbeddedData (profilerDataFiles)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.Profiling qualified as C
-
--- grease
-import Grease.Profiler.EmbeddedData (profilerDataFiles)
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath ((</>), takeDirectory)
 
 -- | Return an execution feature that enables Crucible profiling within
 -- @grease@, as well as an 'Async' action that updates a profiling report at

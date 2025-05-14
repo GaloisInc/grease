@@ -11,14 +11,11 @@ module Grease.LLVM.Overrides.Diagnostic
   , severity
   ) where
 
+import Grease.Diagnostic.Severity (Severity(Debug))
+import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
 import Prettyprinter qualified as PP
-
 import Text.LLVM.AST qualified as L
 import Text.LLVM.PP qualified as L
-
-import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
-
-import Grease.Diagnostic.Severity (Severity(Debug))
 
 data Diagnostic where
   FoundDeclare ::

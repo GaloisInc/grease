@@ -13,49 +13,30 @@ module Grease.Macaw.Arch.X86 (x86Ctx) where
 
 import Control.Exception.Safe (throw)
 import Control.Monad.IO.Class (MonadIO(..))
-import Data.Map qualified as Map
-import Data.Proxy (Proxy(..))
-import Data.Word (Word64)
-
--- bv-sized
 import Data.BitVector.Sized qualified as BV
-
--- crucible
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.Simulator qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-
--- elf-edit
 import Data.ElfEdit qualified as EE
-
--- macaw-symbolic
 import Data.Macaw.Symbolic qualified as Symbolic
-
--- macaw-x86
 import Data.Macaw.X86 qualified as X86
 import Data.Macaw.X86.X86Reg qualified as X86
-
--- parameterized-utils
+import Data.Map qualified as Map
 import Data.Parameterized.NatRepr qualified as NatRepr
-
--- stubs
-import Stubs.FunctionOverride.X86_64.Linux qualified as Stubs
-import Stubs.Memory.X86_64.Linux qualified as Stubs
-import Stubs.Syscall.X86_64.Linux qualified as Stubs
-import Stubs.Syscall.Names.X86_64.Linux qualified as Stubs
-
--- what4
-import What4.Interface qualified as W4
-
+import Data.Proxy (Proxy(..))
+import Data.Word (Word64)
 import Grease.Macaw.Arch (ArchContext(..), ArchReloc, ArchRegs)
 import Grease.Macaw.Arch.X86.Reg (getX86Reg, modifyX86Reg)
 import Grease.Macaw.Load.Relocation (RelocType(..))
 import Grease.Options (ExtraStackSlots)
 import Grease.Shape.Pointer (x64StackPtrShape)
 import Grease.Utility (GreaseException(..), bytes64LE)
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.Simulator qualified as C
+import Stubs.FunctionOverride.X86_64.Linux qualified as Stubs
+import Stubs.Memory.X86_64.Linux qualified as Stubs
+import Stubs.Syscall.Names.X86_64.Linux qualified as Stubs
+import Stubs.Syscall.X86_64.Linux qualified as Stubs
+import What4.Interface qualified as W4
 
 type instance ArchReloc X86.X86_64 = EE.X86_64_RelocationType
 

@@ -10,11 +10,9 @@ module Grease.Setup.Diagnostic
   , severity
   ) where
 
-import Prettyprinter qualified as PP
-
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-
 import Grease.Diagnostic.Severity (Severity(Trace))
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Prettyprinter qualified as PP
 import What4.Interface qualified as W4
 
 data Diagnostic where

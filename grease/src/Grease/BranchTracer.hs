@@ -14,18 +14,14 @@ module Grease.BranchTracer
 
 import Control.Lens ((^.))
 import Control.Monad.IO.Class (MonadIO)
-import Prelude hiding (pred)
-
-import Lumberjack qualified as LJ
-
-import What4.Interface qualified as W4
-
+import Grease.BranchTracer.Diagnostic qualified as Diag
+import Grease.Diagnostic (GreaseLogAction, Diagnostic(BranchTracerDiagnostic))
 import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.EvalStmt qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
-
-import Grease.Diagnostic (GreaseLogAction, Diagnostic(BranchTracerDiagnostic))
-import Grease.BranchTracer.Diagnostic qualified as Diag
+import Lumberjack qualified as LJ
+import Prelude hiding (pred)
+import What4.Interface qualified as W4
 
 -- | 'IO' action to run upon reaching a symbolic branch.
 newtype BranchTracer p sym ext

@@ -14,23 +14,21 @@ module Grease.Macaw.Load.Relocation
 import Control.Exception (throw)
 import Data.ByteString qualified as BS
 import Data.Either (Either(..), either)
+import Data.ElfEdit qualified as EE
 import Data.Eq (Eq)
 import Data.Function (($), const)
 import Data.List (map)
+import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Memory.LoadCommon qualified as MML
 import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe(..), fromMaybe, listToMaybe)
 import Data.Semigroup ((<>))
 import Data.Type.Equality (type (~))
 import Data.Vector qualified as Vec
 import Data.Word (Word32)
+import Grease.Utility (GreaseException(..), tshow)
 import Prelude (Num(..), fromIntegral)
 import Text.Show (Show(..))
-
-import Data.ElfEdit qualified as EE
-import Data.Macaw.Memory qualified as MM
-import Data.Macaw.Memory.LoadCommon qualified as MML
-
-import Grease.Utility (GreaseException(..), tshow)
 
 -- | An architecture-independent description of the type of a relocation. When
 -- appropriate, this groups together certain relocation types that have

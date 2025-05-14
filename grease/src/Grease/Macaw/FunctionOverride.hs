@@ -18,71 +18,47 @@ module Grease.Macaw.FunctionOverride
   , registerMacawOvForwardDeclarations
   ) where
 
-import Prelude ((<$>), ($), (.), IO, pure)
-
 import Control.Lens ((^.))
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Foldable qualified as Foldable
 import Data.List.NonEmpty qualified as NE
+import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe(..))
+import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Proxy (Proxy(..))
 import Data.Semigroup ((<>))
 import Data.Sequence qualified as Seq
 import Data.Traversable (traverse)
 import Data.Type.Equality (type (~))
-import System.IO (FilePath)
-
--- parameterized-utils
-import Data.Parameterized.Context qualified as Ctx
-import Data.Parameterized.TraversableFC (fmapFC)
-
--- what4
-import What4.Expr qualified as W4
-import What4.FunctionName qualified as W4
-import What4.Protocol.Online qualified as W4
-
--- crucible
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.Backend.Online qualified as C
-import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.Simulator qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.TypeContext (TypeContext)
-
--- crucible-llvm-syntax
-import Lang.Crucible.LLVM.Syntax (emptyParserHooks)
-
--- crucible-syntax
-import Lang.Crucible.Syntax.Concrete qualified as CSyn
-import Lang.Crucible.Syntax.Prog qualified as CSyn
-
--- macaw
-import Data.Macaw.CFG qualified as MC
-
--- macaw-symbolic
-import Data.Macaw.Symbolic qualified as Symbolic
-
--- macaw-symbolic-syntax
-import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
-
--- stubs-common
-import Stubs.FunctionOverride qualified as Stubs
-import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
-
--- stubs-wrapper
-import Stubs.Wrapper qualified as Stubs
-
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch
 import Grease.Macaw.SimulatorState
 import Grease.Skip (registerSkipOverride)
 import Grease.Syntax (parseProgram)
 import Grease.Utility (declaredFunNotFound)
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Online qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.Syntax (emptyParserHooks)
+import Lang.Crucible.LLVM.TypeContext (TypeContext)
+import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Syntax.Concrete qualified as CSyn
+import Lang.Crucible.Syntax.Prog qualified as CSyn
+import Prelude ((<$>), ($), (.), IO, pure)
+import Stubs.FunctionOverride qualified as Stubs
+import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
+import Stubs.Wrapper qualified as Stubs
+import System.IO (FilePath)
+import What4.Expr qualified as W4
+import What4.FunctionName qualified as W4
+import What4.Protocol.Online qualified as W4
 
 -- | A Macaw function override, corresponding to a single S-expression file.
 data MacawFunctionOverride p sym arch =

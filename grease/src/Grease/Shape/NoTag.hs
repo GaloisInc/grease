@@ -12,12 +12,9 @@ module Grease.Shape.NoTag
   ) where
 
 import Data.Kind (Type)
-
-import Data.Parameterized.Classes (ShowF(showF))
-
-import Lang.Crucible.Types qualified as C
-
 import Data.Macaw.CFG qualified as MC
+import Data.Parameterized.Classes (ShowF(showF))
+import Lang.Crucible.Types qualified as C
 
 -- | A @tag@ to annotate 'Grease.Shape.Shape'
 type NoTag :: C.CrucibleType -> Type

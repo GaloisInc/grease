@@ -32,42 +32,29 @@ module Grease.Shape
   , tagWithType
   ) where
 
+import           Data.Parameterized.Ctx (Ctx)
 import Control.Applicative (Alternative(empty))
 import Control.Exception.Safe (throw, MonadThrow)
 import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
 import Data.Functor.Identity (Identity(Identity, runIdentity))
-import Data.List qualified as List
 import Data.Kind (Type)
-import Data.Type.Equality (TestEquality(testEquality), (:~:)(Refl))
-
-import GHC.Show qualified as GShow
-import Text.Show qualified as Show
-
-import Prettyprinter qualified as PP
-
--- parameterized-utils
-import Data.Parameterized.Classes (ShowF(..))
-import Data.Parameterized.TraversableFC (traverseFC, fmapFC)
-import           Data.Parameterized.Ctx (Ctx)
-import Data.Parameterized.Context qualified as Ctx
-
--- crucible
-import Lang.Crucible.CFG.Core qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.Extension (LLVM)
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-
--- macaw-base
+import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
-
--- macaw-symbolic
 import Data.Macaw.Symbolic qualified as Symbolic
-
+import Data.Parameterized.Classes (ShowF(..))
+import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.TraversableFC (traverseFC, fmapFC)
+import Data.Parameterized.TraversableFC qualified as TFC
+import Data.Type.Equality (TestEquality(testEquality), (:~:)(Refl))
+import GHC.Show qualified as GShow
 import Grease.Shape.Pointer (PtrShape, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Grease.Utility (GreaseException(..))
-import Data.Parameterized.TraversableFC qualified as TFC
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.LLVM.Extension (LLVM)
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Prettyprinter qualified as PP
+import Text.Show qualified as Show
 
 data SomeTyped f = forall (t :: C.CrucibleType). SomeTyped (C.TypeRepr t) (f t)
 instance ShowF f => Show (SomeTyped f) where

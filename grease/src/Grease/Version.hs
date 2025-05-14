@@ -15,7 +15,6 @@ import Data.FileEmbed (embedFileRelative)
 import Data.List (intersperse)
 import Data.Text qualified as Text
 import Data.Version (showVersion)
-
 import Grease.GitRev qualified as GitRev
 import Paths_grease (version)
 

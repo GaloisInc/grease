@@ -11,13 +11,10 @@ module Grease.BranchTracer.Diagnostic
   , severity
   ) where
 
-import Prettyprinter qualified as PP
-
--- what4
-import What4.ProgramLoc qualified as W4
-
 import Grease.Diagnostic.Severity (Severity(Debug))
 import Grease.Utility (ppProgramLoc)
+import Prettyprinter qualified as PP
+import What4.ProgramLoc qualified as W4
 
 data Diagnostic where
   ReachedBranch ::

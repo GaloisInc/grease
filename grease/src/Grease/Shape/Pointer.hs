@@ -43,57 +43,44 @@ module Grease.Shape.Pointer
   , modifyPtrTarget
   ) where
 
-import Prelude (Num(..), Integral (divMod), fromIntegral, toInteger, max, Integer)
-
 import Control.Applicative (Applicative((<*>)), pure)
-import Control.Monad.IO.Class (MonadIO(..))
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens qualified as Lens
-
-import Data.Bool (Bool(..))
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.BitVector.Sized (BV)
+import Data.Bool (Bool(..))
 import Data.Eq (Eq((==)))
 import Data.Foldable qualified as Foldable
+import Data.Function (($), (.), id)
 import Data.Functor ((<$>), fmap)
 import Data.Kind (Type)
-import Data.Function (($), (.), id)
-import Data.Maybe (Maybe(..))
 import Data.List qualified as List
-import Data.Proxy (Proxy(Proxy))
-import Data.Sequence (Seq)
-import Data.Sequence qualified as Seq
-import Data.Semigroup (Semigroup((<>)))
-import Data.Traversable (traverse)
-import Data.Type.Equality (type (~), TestEquality(testEquality), (:~:)(Refl))
-import Data.Word (Word8)
-import GHC.TypeLits (type Natural)
-
-import Text.Show (Show(..))
-
-import Prettyprinter qualified as PP
-
--- parameterized-utils
+import Data.Macaw.CFG qualified as MC
+import Data.Maybe (Maybe(..))
 import Data.Parameterized.Classes (ShowF(..))
 import Data.Parameterized.NatRepr (NatRepr, natValue)
 import Data.Parameterized.TraversableF qualified as TF
 import Data.Parameterized.TraversableFC qualified as TFC
-
--- crucible
-import Lang.Crucible.CFG.Core qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.Bytes (Bytes(..))
-import Lang.Crucible.LLVM.Bytes qualified as Bytes
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-
--- macaw-base
-import Data.Macaw.CFG qualified as MC
-
+import Data.Proxy (Proxy(Proxy))
+import Data.Semigroup (Semigroup((<>)))
+import Data.Sequence (Seq)
+import Data.Sequence qualified as Seq
+import Data.Traversable (traverse)
+import Data.Type.Equality (type (~), TestEquality(testEquality), (:~:)(Refl))
+import Data.Word (Word8)
+import GHC.TypeLits (type Natural)
 import Grease.Cursor
 import Grease.Cursor.Pointer (Dereference(..))
 import Grease.Options (ExtraStackSlots(..))
 import Grease.Shape.NoTag (NoTag(NoTag))
 import Grease.Utility
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.LLVM.Bytes (Bytes(..))
+import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Prelude (Num(..), Integral (divMod), fromIntegral, toInteger, max, Integer)
+import Prettyprinter qualified as PP
+import Text.Show (Show(..))
 
 -- | A byte ('Word8') along with a @tag@ (see 'Grease.Shape.Shape').
 data TaggedByte tag

@@ -17,14 +17,8 @@ module Grease.Diagnostic
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Time.Clock qualified as Time
 import Data.Time.Format qualified as Time
-import Lumberjack qualified as LJ
-import Prelude hiding (log)
-import Prettyprinter qualified as PP
-import Prettyprinter.Render.Text qualified as PP
-import System.IO (stderr)
-
-import Grease.Diagnostic.Severity (Severity)
 import Grease.BranchTracer.Diagnostic qualified as BranchTracer
+import Grease.Diagnostic.Severity (Severity)
 import Grease.Heuristic.Diagnostic qualified as Heuristic
 import Grease.LLVM.Overrides.Diagnostic qualified as LLVMOverrides
 import Grease.LLVM.SimulatorHooks.Diagnostic qualified as LLVMSimulatorHooks
@@ -35,6 +29,11 @@ import Grease.Main.Diagnostic qualified as Main
 import Grease.Refine.Diagnostic qualified as Refine
 import Grease.Setup.Diagnostic qualified as Setup
 import Grease.Skip.Diagnostic qualified as Skip
+import Lumberjack qualified as LJ
+import Prelude hiding (log)
+import Prettyprinter qualified as PP
+import Prettyprinter.Render.Text qualified as PP
+import System.IO (stderr)
 
 -- | A diagnostic message that @grease@ can emit.
 --

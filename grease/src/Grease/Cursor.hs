@@ -18,16 +18,10 @@ module Grease.Cursor
   ) where
 
 import Data.Kind (Type)
-
-import Prettyprinter qualified as PP
-
--- parameterized-utils
 import Data.Parameterized.Context qualified as Ctx
-
--- crucible
-import Lang.Crucible.Types qualified as C
-
 import Grease.Cursor.List (Last, Snoc, lastCons, lastSnoc)
+import Lang.Crucible.Types qualified as C
+import Prettyprinter qualified as PP
 
 -- | A 'Cursor' points to a specific part of a value (i.e. a function argument
 -- or global variable). It's used for describing function preconditions, such as

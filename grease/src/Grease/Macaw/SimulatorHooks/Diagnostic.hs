@@ -13,10 +13,8 @@ module Grease.Macaw.SimulatorHooks.Diagnostic
 
 import Data.Text qualified as Text
 import Data.Void (Void, absurd)
-
-import Prettyprinter qualified as PP
-
 import Grease.Diagnostic.Severity (Severity(Debug))
+import Prettyprinter qualified as PP
 
 data Diagnostic where
   ExecutingInstruction ::

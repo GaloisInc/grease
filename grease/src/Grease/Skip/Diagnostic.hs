@@ -11,12 +11,9 @@ module Grease.Skip.Diagnostic
   , severity
   ) where
 
-import Prettyprinter qualified as PP
-
--- what4
-import What4.FunctionName qualified as W4
-
 import Grease.Diagnostic.Severity (Severity(Debug))
+import Prettyprinter qualified as PP
+import What4.FunctionName qualified as W4
 
 data Diagnostic where
   FunctionCall ::

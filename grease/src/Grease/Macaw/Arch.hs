@@ -32,50 +32,33 @@ module Grease.Macaw.Arch
   , archOffsetStackPointerPostCall
   ) where
 
+import           Data.Macaw.Types (BVType)
 import Control.Lens.TH (makeLenses)
-import Data.Kind (Type)
-import Data.IntMap (IntMap)
-import Data.Map (Map)
-import Data.Text (Text)
-
--- bv-sized
 import Data.BitVector.Sized qualified as BV
-
--- parameterized-utils
-import Data.Parameterized.Context qualified as Ctx
-
--- what4
-import What4.Expr qualified as W4
-import What4.Interface qualified as W4
-import What4.Protocol.Online qualified as W4
-
--- crucible
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.Backend.Online qualified as C
-import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.CFG.Reg qualified as C.Reg
-import Lang.Crucible.Simulator qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-
--- macaw-base
+import Data.IntMap (IntMap)
+import Data.Kind (Type)
 import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.CFG qualified as MC
-import           Data.Macaw.Types (BVType)
-
--- macaw-symbolic
-import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Memory qualified as Symbolic
-
--- stubs
-import Stubs.Common qualified as Stubs
-import Stubs.FunctionOverride qualified as Stubs
-
+import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Map (Map)
+import Data.Parameterized.Context qualified as Ctx
+import Data.Text (Text)
 import Grease.Macaw.Load.Relocation (RelocType)
 import Grease.Macaw.RegName (RegName)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrShape)
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Online qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Reg qualified as C.Reg
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.Simulator qualified as C
+import Stubs.Common qualified as Stubs
+import Stubs.FunctionOverride qualified as Stubs
+import What4.Expr qualified as W4
+import What4.Interface qualified as W4
+import What4.Protocol.Online qualified as W4
 
 type ArchRegs sym arch = Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch)
 

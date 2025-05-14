@@ -16,26 +16,23 @@ module Grease.Output
   , renderJSON
   ) where
 
-import Control.Lens.TH (makeLenses)
-import GHC.Generics (Generic)
-
 import Control.Lens ((^.))
-
+import Control.Lens.TH (makeLenses)
+import Data.Aeson qualified as Aeson
+import Data.ByteString.Lazy qualified as BSL
 import Data.Functor ((<&>))
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
-import Data.Text (Text)
-import Data.Text.Encoding qualified as Text
-import Data.ByteString.Lazy qualified as BSL
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Aeson qualified as Aeson
+import Data.Text (Text)
+import Data.Text.Encoding qualified as Text
 import Data.Word (Word64)
-import Prettyprinter qualified as PP
-
+import GHC.Generics (Generic)
 import Grease.Bug qualified as Bug
 import Grease.Heuristic.Result (CantRefine)
 import Grease.Requirement (Requirement)
+import Prettyprinter qualified as PP
 
 type Location = Text
 

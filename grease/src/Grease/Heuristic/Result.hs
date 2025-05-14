@@ -15,12 +15,10 @@ module Grease.Heuristic.Result
 import Data.Aeson.Types qualified as Aeson
 import Data.Text (Text)
 import GHC.Generics (Generic)
-
-import Prettyprinter qualified as PP
-
 import Grease.Bug qualified as Bug
 import Grease.Shape (ArgShapes)
 import Grease.Shape.NoTag (NoTag)
+import Prettyprinter qualified as PP
 
 -- | There is no way to proceed with refinement, for some explicit reason
 data CantRefine

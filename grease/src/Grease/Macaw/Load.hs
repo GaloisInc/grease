@@ -22,10 +22,19 @@ import Control.Monad.IO.Class (MonadIO)
 import Data.Bool (Bool(..), (&&), (||), otherwise)
 import Data.ByteString qualified as BS
 import Data.Either (Either(..))
+import Data.ElfEdit qualified as Elf
+import Data.ElfEdit.CoreDump qualified as CoreDump
 import Data.Eq (Eq(..))
 import Data.Function (($), (&), (.))
 import Data.Functor ((<$>), fmap)
 import Data.List qualified as List
+import Data.Macaw.BinaryLoader qualified as Loader
+import Data.Macaw.BinaryLoader.ELF qualified as Loader
+import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Memory.ElfLoader qualified as EL
+import Data.Macaw.Memory.LoadCommon qualified as LC
+import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe(..), fromMaybe, mapMaybe)
@@ -36,47 +45,20 @@ import Data.Text.Encoding qualified as Text
 import Data.Traversable (Traversable(..))
 import Data.Tuple qualified as Tuple
 import Data.Vector qualified as Vec
+import Grease.Diagnostic
+import Grease.Entrypoint (Entrypoint(..), EntrypointLocation(..))
+import Grease.Macaw.Load.Diagnostic qualified as Diag
+import Grease.Utility
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lumberjack qualified as LJ
 import Prelude (Integral(..), Num(..), fromIntegral)
 import System.Directory (Permissions)
 import System.FilePath (FilePath)
 import System.IO (IO)
 import Text.Read (readMaybe)
-
--- crucible
-import Lang.Crucible.CFG.Core qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-
--- elf-edit
-import Data.ElfEdit qualified as Elf
-
--- elf-edit-core-dump
-import Data.ElfEdit.CoreDump qualified as CoreDump
-
--- macaw-loader
-import Data.Macaw.BinaryLoader qualified as Loader
-import Data.Macaw.BinaryLoader.ELF qualified as Loader
-
--- macaw-base
-import Data.Macaw.CFG qualified as MC
-import Data.Macaw.Memory qualified as MM
-import Data.Macaw.Memory.ElfLoader qualified as EL
-import Data.Macaw.Memory.LoadCommon qualified as LC
-
--- macaw-symbolic
-import Data.Macaw.Symbolic qualified as Symbolic
-
--- what4
 import What4.FunctionName qualified as W4
 
-import Grease.Diagnostic
-import Grease.Entrypoint (Entrypoint(..), EntrypointLocation(..))
-import Grease.Macaw.Load.Diagnostic qualified as Diag
-import Grease.Utility
-
--- Helper, not exported
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LoadDiagnostic diag)
 

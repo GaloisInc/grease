@@ -12,27 +12,16 @@ module Grease.Syscall
   , callGetppid
   ) where
 
-import Prelude (($), map)
-
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Map.Strict qualified as Map
-
--- parameterized-utils
 import Data.Parameterized.Context qualified as Ctx
-
--- what4
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.Simulator qualified as C
+import Prelude (($), map)
+import Stubs.Syscall qualified as Stubs
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
-
--- crucible
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.Simulator qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-
--- stubs
-import Stubs.Syscall qualified as Stubs
 
 -- | All of the overrides that work across all supported configurations.
 builtinGenericSyscalls ::

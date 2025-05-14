@@ -11,33 +11,21 @@ module Grease.Macaw.Syscall
   ( macawSyscallOverride
   ) where
 
-import Prelude (($), (.))
-
 import Control.Lens ((^.))
 import Control.Monad.IO.Class (MonadIO(..))
-import Data.Type.Equality (type (~))
-
--- parameterized-utils
+import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC)
-
--- what4
-import What4.Expr qualified as W4
-import What4.Protocol.Online qualified as W4
-
--- crucible
+import Data.Type.Equality (type (~))
+import Grease.Macaw.Arch
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Simulator qualified as C
-
--- macaw-symbolic
-import Data.Macaw.Symbolic qualified as Symbolic
-
--- stubs-common
+import Prelude (($), (.))
 import Stubs.Syscall qualified as Stubs
-
-import Grease.Macaw.Arch
+import What4.Expr qualified as W4
+import What4.Protocol.Online qualified as W4
 
 -- | Convert a 'Stubs.Syscall' to a 'MacawOverride'. Really, this functionality
 -- ought to be exposed from @stubs-common@. See

@@ -27,19 +27,12 @@ module Grease.Shape.Selector
 import Control.Lens (Lens, lens, (.~))
 import Control.Lens.TH (makeLenses)
 import Data.Function ((&))
-
-import Prettyprinter qualified as PP
-
--- parameterized-utils
-import Data.Parameterized.Context qualified as Ctx
-
--- macaw-symbolic
 import Data.Macaw.Symbolic qualified as Symbolic
-
-import What4.FunctionName qualified as W4
-
+import Data.Parameterized.Context qualified as Ctx
 import Grease.Cursor (Cursor(..), CursorExt, ppCursor)
 import Grease.Cursor.Pointer (ppDereference)
+import Prettyprinter qualified as PP
+import What4.FunctionName qualified as W4
 
 -- | A pointer to a part of a symbolic value inside the arguments of a CFG
 --

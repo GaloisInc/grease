@@ -10,33 +10,22 @@ module Grease.Macaw.Discovery
 import Control.Lens ((^.), (.~), to)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Function ((&))
-import Data.Map.Strict qualified as Map
-import Lumberjack qualified as LJ
-
--- parameterized-utils
-import Data.Parameterized.Some
-
--- what4
-import What4.FunctionName qualified as W4
-import What4.ProgramLoc qualified as W4
-
--- crucible
-import Lang.Crucible.FunctionHandle qualified as C
-
--- macaw-base
 import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Memory.ElfLoader qualified as EL
-import Data.Macaw.Utils.IncComp qualified as IncComp
-
--- macaw-symbolic
 import Data.Macaw.Symbolic qualified as Symbolic
-
+import Data.Macaw.Utils.IncComp qualified as IncComp
+import Data.Map.Strict qualified as Map
+import Data.Parameterized.Some
 import Grease.Diagnostic
 import Grease.Macaw.Arch
 import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Utility
+import Lang.Crucible.FunctionHandle qualified as C
+import Lumberjack qualified as LJ
+import What4.FunctionName qualified as W4
+import What4.ProgramLoc qualified as W4
 
 -- | We pass this log function to @macaw@ to wrap discovery events in a custom
 -- wrapper that we stream out with the rest of our diagnostics.

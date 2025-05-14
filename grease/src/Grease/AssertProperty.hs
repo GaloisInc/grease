@@ -14,44 +14,27 @@ module Grease.AssertProperty
 
 import Control.Applicative (pure)
 import Control.Monad (foldM)
+import Data.BitVector.Sized qualified as BV
 import Data.Function (($))
+import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Macaw.Types qualified as MT
 import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe(..))
+import Data.Parameterized.Map qualified as MapF
 import Data.Text (Text)
 import Data.Traversable (for)
-import Prelude (Bool(False), toInteger)
-
--- bv-sized
-import Data.BitVector.Sized qualified as BV
-
--- parameterized-utils
-import Data.Parameterized.Map qualified as MapF
-
--- what4
-import What4.Interface qualified as W4
-import What4.ProgramLoc qualified as W4
-
--- crucible
+import Grease.Macaw.Arch
+import Grease.Utility (segoffToAbsoluteAddr)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Expr qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
-import Lang.Crucible.Utils.RegRewrite qualified as C
-
--- crucible-llvm
 import Lang.Crucible.LLVM.MemModel qualified as Mem
-
--- what4
+import Lang.Crucible.Utils.RegRewrite qualified as C
+import Prelude (Bool(False), toInteger)
 import What4.FunctionName qualified as W4
-
--- macaw-base
-import Data.Macaw.CFG qualified as MC
-import Data.Macaw.Types qualified as MT
-
--- macaw-symbolic
-import Data.Macaw.Symbolic qualified as Symbolic
-
-import Grease.Macaw.Arch
-import Grease.Utility (segoffToAbsoluteAddr)
+import What4.Interface qualified as W4
+import What4.ProgramLoc qualified as W4
 
 def ::
   C.TypeRepr ty ->

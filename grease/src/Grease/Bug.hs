@@ -11,15 +11,13 @@ module Grease.Bug
   , BugInstance(..)
   ) where
 
+import Data.Aeson.Types qualified as Aeson
 import Data.Eq qualified as Eq
 import Data.Maybe qualified as Maybe
 import Data.Text qualified as Text
-import Data.Aeson.Types qualified as Aeson
 import GHC.Generics (Generic)
-
-import Prettyprinter qualified as PP
-
 import Grease.Bug.UndefinedBehavior qualified as UB
+import Prettyprinter qualified as PP
 
 -- | Errors that we don\'t know how to work around with heuristics, so the best
 -- we can do is report them as possible bugs.

@@ -13,34 +13,23 @@ module Grease.Macaw.SimulatorHooks
   ) where
 
 import Control.Monad.IO.Class (MonadIO)
-import Lumberjack qualified as LJ
-import Prettyprinter qualified as PP
-
--- what4
-import What4.Expr qualified as W4
-import What4.Interface qualified as W4
-
--- crucible
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.CFG.Extension qualified as C
-import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Simulator.Evaluation qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-
--- macaw-base
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
-
--- macaw-symbolic
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Backend qualified as Symbolic
-
 import Grease.Diagnostic (Diagnostic(SimulatorHooksDiagnostic), GreaseLogAction)
 import Grease.Macaw.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Panic (panic)
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator.Evaluation qualified as C
+import Lumberjack qualified as LJ
+import Prettyprinter qualified as PP
+import What4.Expr qualified as W4
+import What4.Interface qualified as W4
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (SimulatorHooksDiagnostic diag)

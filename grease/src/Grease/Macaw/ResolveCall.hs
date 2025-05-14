@@ -13,79 +13,60 @@ module Grease.Macaw.ResolveCall
   , lookupSyscallHandle
   ) where
 
-import Prelude (Integer, fromIntegral, otherwise, toInteger)
-
 import Control.Applicative (pure)
 import Control.Lens ((^.), (%~), (.~), to)
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (MonadIO(..))
+import Data.BitVector.Sized qualified as BV
 import Data.Foldable (foldl')
 import Data.Function (($), (&), (.))
 import Data.Int (Int)
 import Data.IntMap qualified as IntMap
 import Data.List.NonEmpty qualified as NE
-import Data.Map.Strict qualified as Map
-import Data.Maybe (Maybe(..))
-import Data.Type.Equality (type (~))
-import GHC.Word (Word64)
-import Lumberjack qualified as LJ
-import System.IO (IO)
-
-import Data.BitVector.Sized qualified as BV
-
--- parameterized-utils
-import Data.Parameterized.Context qualified as Ctx
-import Data.Parameterized.Map qualified as MapF
-import Data.Parameterized.NatRepr (knownNat)
-
--- what4
-import What4.Expr qualified as W4
-import What4.FunctionName qualified as W4
-import What4.Interface qualified as W4
-import What4.Protocol.Online qualified as W4
-
--- crucible
-import Lang.Crucible.Analysis.Postdom qualified as C
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.Backend.Online qualified as C
-import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.CFG.SSAConversion qualified as C
-import Lang.Crucible.CFG.Reg qualified as C.Reg
-import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.Simulator qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-
--- macaw-base
+import Data.Macaw.BinaryLoader.ELF qualified as Loader
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Discovery.Classifier qualified as Discovery
 import Data.Macaw.Memory.ElfLoader qualified as EL
-
--- macaw-loader
-import Data.Macaw.BinaryLoader.ELF qualified as Loader
-
--- macaw-symbolic
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Concretize qualified as Symbolic
-
--- stubs
-import Stubs.FunctionOverride qualified as Stubs
-import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
-import Stubs.Memory.Common qualified as Stubs
-import Stubs.Syscall qualified as Stubs
-
+import Data.Map.Strict qualified as Map
+import Data.Maybe (Maybe(..))
+import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.Map qualified as MapF
+import Data.Parameterized.NatRepr (knownNat)
+import Data.Type.Equality (type (~))
+import GHC.Word (Word64)
 import Grease.Diagnostic (Diagnostic(..), GreaseLogAction)
 import Grease.Macaw.Arch
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.FunctionOverride
 import Grease.Macaw.ResolveCall.Diagnostic qualified as Diag
-import Grease.Macaw.SkippedCall (SkippedCall(..))
 import Grease.Macaw.SimulatorState
+import Grease.Macaw.SkippedCall (SkippedCall(..))
 import Grease.Macaw.Syscall
 import Grease.Options (ErrorSymbolicFunCalls(..))
 import Grease.Utility (declaredFunNotFound)
+import Lang.Crucible.Analysis.Postdom qualified as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Online qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Reg qualified as C.Reg
+import Lang.Crucible.CFG.SSAConversion qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.Simulator qualified as C
+import Lumberjack qualified as LJ
+import Prelude (Integer, fromIntegral, otherwise, toInteger)
+import Stubs.FunctionOverride qualified as Stubs
+import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
+import Stubs.Memory.Common qualified as Stubs
+import Stubs.Syscall qualified as Stubs
+import System.IO (IO)
+import What4.Expr qualified as W4
+import What4.FunctionName qualified as W4
+import What4.Interface qualified as W4
+import What4.Protocol.Online qualified as W4
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (ResolveCallDiagnostic diag)

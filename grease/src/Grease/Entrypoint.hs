@@ -29,6 +29,8 @@ module Grease.Entrypoint
 import Control.Applicative (Alternative(..))
 import Control.Exception.Safe (throw)
 import Data.ByteString qualified as BS
+import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
@@ -36,32 +38,19 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Void (Void)
 import Data.Word (Word64)
+import Grease.Syntax (parseProgram, parsedProgramCfgMap)
+import Grease.Utility (GreaseException(..))
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.CFG.Reg qualified as C.Reg
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.Syntax.Concrete qualified as CSyn
+import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Numeric (showHex)
 import Prettyprinter qualified as PP
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
 import Text.Megaparsec.Char.Lexer qualified as TMCL
-
--- crucible
-import Lang.Crucible.CFG.Extension qualified as C
-import Lang.Crucible.CFG.Reg qualified as C.Reg
-import Lang.Crucible.FunctionHandle qualified as C
-
--- crucible-syntax
-import Lang.Crucible.Syntax.Concrete qualified as CSyn
-import Lang.Crucible.Syntax.Prog qualified as CSyn
-
--- macaw-base
-import Data.Macaw.CFG qualified as MC
-
--- macaw-symbolic
-import Data.Macaw.Symbolic qualified as Symbolic
-
--- what4
 import What4.FunctionName qualified as W4
-
-import Grease.Syntax (parseProgram, parsedProgramCfgMap)
-import Grease.Utility (GreaseException(..))
 
 -- | An 'EntrypointLocation' and its optional startup override.
 data Entrypoint =

@@ -34,8 +34,8 @@ import Data.Coerce (coerce)
 import Data.Either (Either)
 import Data.Either qualified as Either
 import Data.Function ((.), ($))
-import Data.Functor.Const qualified as Const
 import Data.Functor qualified as Functor
+import Data.Functor.Const qualified as Const
 import Data.Int (Int)
 import Data.IntMap (IntMap)
 import Data.IntMap qualified as IntMap
@@ -51,11 +51,11 @@ import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Some (Some (Some))
 import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Proxy (Proxy(Proxy))
-import Data.Sequence qualified as Seq
 import Data.Sequence (Seq)
+import Data.Sequence qualified as Seq
 import Data.String (String)
-import Data.Text qualified as Text
 import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Traversable qualified as Traversable
 import Data.Tuple qualified as Tuple
 import Data.Type.Equality (type (~), type (:~:) (Refl), testEquality)
@@ -64,10 +64,10 @@ import Data.Word (Word8)
 import GHC.TypeLits (Nat)
 import Grease.Panic (panic)
 import Grease.Shape (ExtShape, Shape)
-import Grease.Shape.Pointer (PtrShape)
-import Grease.Shape.Pointer qualified as PtrShape
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag(NoTag))
+import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes (Bytes)
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.MemModel.Pointer (HasPtrWidth)
@@ -78,14 +78,11 @@ import Numeric
 import Prelude ((*), fromIntegral)
 import Prettyprinter qualified as PP
 import System.IO (FilePath)
-import Text.Megaparsec.Char.Lexer qualified as MPCL
-import Text.Megaparsec.Char qualified as MPC
 import Text.Megaparsec (Parsec)
 import Text.Megaparsec qualified as MP
+import Text.Megaparsec.Char qualified as MPC
+import Text.Megaparsec.Char.Lexer qualified as MPCL
 import Text.Show (Show)
-
------------------------------------------------------------
--- * AST
 
 newtype BlockId = BlockId { getBlockId :: Int }
   deriving Show

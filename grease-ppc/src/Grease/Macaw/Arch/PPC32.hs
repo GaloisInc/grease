@@ -12,46 +12,27 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Arch.PPC32 (ppc32Ctx) where
 
 import Control.Exception.Safe (throw)
+import Data.BitVector.Sized qualified as BV
+import Data.ElfEdit qualified as EE
+import Data.Macaw.PPC qualified as PPC
+import Data.Macaw.PPC.Symbolic.Regs qualified as PPC.Symbolic.Regs
+import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map qualified as Map
+import Data.Parameterized.NatRepr (knownNat)
 import Data.Proxy (Proxy(..))
 import Data.Word (Word32)
-
--- bv-sized
-import Data.BitVector.Sized qualified as BV
-
--- parameterized-utils
-import Data.Parameterized.NatRepr (knownNat)
-
--- crucible
-import Lang.Crucible.Simulator.RegValue qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-
--- elf-edit
-import Data.ElfEdit qualified as EE
-
--- macaw-symbolic
-import Data.Macaw.Symbolic qualified as Symbolic
-
--- macaw-ppc
-import Data.Macaw.PPC qualified as PPC
-
--- macaw-ppc-symbolic
-import Data.Macaw.PPC.Symbolic.Regs qualified as PPC.Symbolic.Regs
-
--- stubs
-import Stubs.FunctionOverride.PPC.Linux qualified as Stubs
-import Stubs.Memory.PPC.Linux qualified as Stubs
-import Stubs.Syscall.PPC.Linux qualified as Stubs
-import Stubs.Syscall.Names.PPC32.Linux qualified as Stubs
-
 import Grease.Macaw.Arch (ArchContext(..), ArchReloc)
 import Grease.Macaw.Load.Relocation (RelocType(..))
 import Grease.Macaw.RegName (RegName(..))
 import Grease.Options (ExtraStackSlots)
 import Grease.Shape.Pointer (ppcStackPtrShape)
 import Grease.Utility (GreaseException(..), bytes32LE)
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.Simulator.RegValue qualified as C
+import Stubs.FunctionOverride.PPC.Linux qualified as Stubs
+import Stubs.Memory.PPC.Linux qualified as Stubs
+import Stubs.Syscall.Names.PPC32.Linux qualified as Stubs
+import Stubs.Syscall.PPC.Linux qualified as Stubs
 
 type instance ArchReloc PPC.PPC32 = EE.PPC32_RelocationType
 

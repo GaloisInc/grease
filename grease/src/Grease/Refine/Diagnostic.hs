@@ -15,32 +15,20 @@ module Grease.Refine.Diagnostic
 import Control.Lens ((^.))
 import Data.Functor.Const (Const(..))
 import Data.List qualified as List
-
-import Prettyprinter qualified as PP
-
--- parameterized-utils
-import Data.Parameterized.Context qualified as Ctx
-
--- what4
-import What4.Interface qualified as W4
-import What4.LabeledPred qualified as W4
-import What4.ProgramLoc qualified as W4
-
--- crucible
-import Lang.Crucible.Simulator qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.Errors qualified as Mem
-import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
-
--- macaw-base
 import Data.Macaw.Memory qualified as MM
-
+import Data.Parameterized.Context qualified as Ctx
 import Grease.Diagnostic.Severity (Severity(Info, Debug))
 import Grease.Heuristic.Result qualified as Heuristic
 import Grease.Shape (ArgShapes (..), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Print qualified as ShapePP
+import Lang.Crucible.LLVM.Errors qualified as Mem
+import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
+import Lang.Crucible.Simulator qualified as C
+import Prettyprinter qualified as PP
+import What4.Interface qualified as W4
+import What4.LabeledPred qualified as W4
+import What4.ProgramLoc qualified as W4
 
 data Diagnostic where
   CantRefine ::

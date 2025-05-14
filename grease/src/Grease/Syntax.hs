@@ -11,34 +11,23 @@ module Grease.Syntax
   ) where
 
 import Control.Exception.Safe (throw)
-
 import Data.List qualified as List
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Parameterized.Nonce (globalNonceGenerator)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text.IO
-
-import Text.Megaparsec qualified as MP
-
--- parameterized-utils
-import Data.Parameterized.Nonce (globalNonceGenerator)
-
--- what4
-import What4.FunctionName qualified as W4
-
--- crucible
+import Grease.Utility (GreaseException(..))
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.FunctionHandle qualified as C
-
--- crucible-syntax
 import Lang.Crucible.Syntax.Atoms qualified as CSyn (atom)
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.ExprParse qualified as CSyn
 import Lang.Crucible.Syntax.SExpr qualified as SExpr
-
-import Grease.Utility (GreaseException(..))
+import Text.Megaparsec qualified as MP
+import What4.FunctionName qualified as W4
 
 -- | Parse a program in Crucible S-expression syntax
 parseProgram ::

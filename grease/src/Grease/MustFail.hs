@@ -12,20 +12,18 @@ import Control.Monad qualified as Monad
 import Data.Function qualified as Function
 import Data.List qualified as List
 import Data.Traversable qualified as Traversable
-
+import Data.Tuple qualified as Tuple
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online (OnlineBackend, withSolverProcess)
 import Lang.Crucible.Backend.Simple (Flags)
 import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.Errors.MemoryError qualified as Mem
 import Lang.Crucible.Simulator.SimError qualified as C
-
 import What4.Expr.Builder qualified as W4
 import What4.Interface qualified as W4
 import What4.LabeledPred qualified as W4
 import What4.Protocol.Online qualified as W4
 import What4.SatResult qualified as W4
-import Data.Tuple qualified as Tuple
 
 -- | Should this proof obligation be excluded from consideration by the must-
 -- fail heuristic?
