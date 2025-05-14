@@ -1,11 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 
--- \| These are placed in their own module to minimize the cost of recompilation
--- due to Template Haskell.
-
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
+--
+-- These are placed in their own module to minimize the cost of recompilation
+-- due to Template Haskell.
 module Grease.GitRev (hash, branch, dirty) where
 
 import GitHash (GitInfo, giBranch, giDirty, giHash, tGitInfoCwdTry)
