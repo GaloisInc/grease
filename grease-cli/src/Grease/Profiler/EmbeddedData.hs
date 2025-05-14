@@ -12,9 +12,8 @@ module Grease.Profiler.EmbeddedData
 import Data.Bifunctor (Bifunctor(..))
 import Data.ByteString (ByteString)
 import Data.FileEmbed (embedDir, embedFileRelative, makeRelativeToProject)
-import System.FilePath ((</>))
-
 import Grease.Profiler.Paths (profilerDir, profileHtmlPath)
+import System.FilePath ((</>))
 
 -- | The contents of the @sympro-ui@ files needed to display the profiler UI.
 -- This is kept in its own module to minimize the costs of recompilation due to

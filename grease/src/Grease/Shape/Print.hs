@@ -25,8 +25,8 @@ import Control.Monad (Monad)
 import Control.Monad qualified as Monad
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
-import Control.Monad.State.Strict qualified as State
 import Control.Monad.State.Strict (State)
+import Control.Monad.State.Strict qualified as State
 import Control.Monad.Trans.Reader qualified as ReaderT
 import Data.BitVector.Sized (BV)
 import Data.BitVector.Sized qualified as BV
@@ -58,10 +58,10 @@ import Data.Type.Equality (type (~))
 import Data.Void (Void)
 import Data.Void qualified as Void
 import GHC.Integer (Integer)
+import Grease.Shape (Shape, ExtShape)
+import Grease.Shape qualified as Shape
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
-import Grease.Shape qualified as Shape
-import Grease.Shape (Shape, ExtShape)
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Numeric (showHex)
 import Prelude (Num((+), (-)), fromIntegral, Integral(div))

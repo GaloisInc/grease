@@ -15,12 +15,11 @@ import Data.Aeson qualified as Aeson
 import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Generics (Generic)
+import Grease.Utility (GreaseException(GreaseException), tshow)
 import Prettyprinter qualified as PP
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
 import Text.Megaparsec.Char.Lexer qualified as TMCL
-
-import Grease.Utility (GreaseException(GreaseException), tshow)
 
 -- | A requirement that a software program should adhere to. This data type
 -- enumerates all of the requirements that @grease@ explicitly supports checking

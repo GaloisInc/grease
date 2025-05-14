@@ -13,19 +13,13 @@ module Grease.Macaw.Load.Diagnostic
   ) where
 
 import Data.ByteString.Char8 qualified as BSC
-import Data.Map qualified as Map
-
-import Prettyprinter qualified as PP
-
--- what4
-import What4.FunctionName qualified as W4
-
--- macaw
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as MD
 import Data.Macaw.Memory qualified as MM
-
+import Data.Map qualified as Map
 import Grease.Diagnostic.Severity (Severity(Info, Debug))
+import Prettyprinter qualified as PP
+import What4.FunctionName qualified as W4
 
 data Diagnostic where
   DiscoveryEvent ::

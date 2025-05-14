@@ -74,87 +74,72 @@ module Grease.Refine
   , refinementLoop
   ) where
 
-import Prelude (Num(..))
-
 import Control.Applicative (pure)
-import Control.Monad qualified as Monad
-import Control.Monad.Except (ExceptT, runExceptT)
-import Control.Monad.IO.Class (MonadIO(..))
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Exception.Safe qualified as X
 import Control.Lens ((^.))
-
+import Control.Monad qualified as Monad
+import Control.Monad.Except (ExceptT, runExceptT)
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.Bool (Bool(..))
 import Data.Either (Either(..))
 import Data.Function (($), (.))
 import Data.Functor ((<$>), fmap)
 import Data.Functor.Const (Const)
-import Data.Ord ((>=))
-import Data.Int (Int)
 import Data.IORef (readIORef, IORef)
+import Data.Int (Int)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
+import Data.Macaw.CFG qualified as MC
 import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe(..), maybeToList)
 import Data.Maybe qualified as Maybe
 import Data.Monoid (mconcat)
+import Data.Ord ((>=))
+import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.Nonce (Nonce)
 import Data.Proxy (Proxy(..))
 import Data.Semigroup ((<>))
 import Data.String (String)
 import Data.Tuple qualified as Tuple
 import Data.Type.Equality (type (~))
-import System.IO (IO)
-import System.Timeout (timeout)
-
-import Lumberjack qualified as LJ
-
--- prettyprinter
-import Prettyprinter qualified as PP
-
-import Data.Parameterized.Context qualified as Ctx
-import Data.Parameterized.Nonce (Nonce)
-
--- what4
-import What4.Interface qualified as W4
-import What4.Expr qualified as W4
-import What4.Expr.App qualified as W4
-import What4.FloatMode qualified as W4FM
-import What4.Solver qualified as W4
-import What4.LabeledPred qualified as W4
-
--- crucible
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.Backend.Prove qualified as C
-import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.CFG.Extension qualified as C
-import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Simulator.BoundedExec qualified as C
-import Lang.Crucible.Simulator.BoundedRecursion qualified as C
-import Lang.Crucible.Simulator.SimError qualified as C
-import Lang.Crucible.Utils.Seconds qualified as C
-import Lang.Crucible.Utils.Timeout qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
-import Lang.Crucible.LLVM.Errors qualified as Mem
-
--- macaw-base
-import Data.Macaw.CFG qualified as MC
-
 import Grease.Bug qualified as Bug
 import Grease.Concretize
 import Grease.Diagnostic
 import Grease.Heuristic
 import Grease.Options (LoopBound(..), Milliseconds(..))
 import Grease.Refine.Diagnostic qualified as Diag
+import Grease.Setup (Args)
+import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrShape)
-import Grease.Setup (Args)
-import Grease.Setup.Annotations qualified as Anns
 import Grease.Solver (Solver, solverAdapter)
 import Grease.Utility
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Prove qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.LLVM.Errors qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
+import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator.BoundedExec qualified as C
+import Lang.Crucible.Simulator.BoundedRecursion qualified as C
+import Lang.Crucible.Simulator.SimError qualified as C
+import Lang.Crucible.Utils.Seconds qualified as C
+import Lang.Crucible.Utils.Timeout qualified as C
+import Lumberjack qualified as LJ
+import Prelude (Num(..))
+import Prettyprinter qualified as PP
+import System.IO (IO)
+import System.Timeout (timeout)
+import What4.Expr qualified as W4
+import What4.Expr.App qualified as W4
+import What4.FloatMode qualified as W4FM
+import What4.Interface qualified as W4
+import What4.LabeledPred qualified as W4
+import What4.Solver qualified as W4
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (RefineDiagnostic diag)

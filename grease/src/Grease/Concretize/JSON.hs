@@ -17,41 +17,35 @@ module Grease.Concretize.JSON
   , concArgsToJson
   ) where
 
+import           Data.Functor.Product (Product(Pair))
+import           Data.Kind (Type)
+import           Data.Parameterized.Map (MapF)
+import           Data.Parameterized.SymbolRepr (SymbolRepr)
+import           Data.Parameterized.TraversableFC (FoldableFC(toListFC))
+import           Lang.Crucible.Concretize (ConcRV')
+import           Lang.Crucible.Types (TypeRepr)
+import           What4.FloatMode (FloatModeRepr)
 import Data.Aeson qualified as Aeson
 import Data.BitVector.Sized qualified as BV
 import Data.List qualified as List
-import           Data.Functor.Product (Product(Pair))
-import           Data.Kind (Type)
-import Data.Text.Encoding qualified as Text
-import LibBF qualified as LibBF
-
-import Data.Parameterized.Context qualified as Ctx
-import           Data.Parameterized.Map (MapF)
-import Data.Parameterized.Map qualified as MapF
-import           Data.Parameterized.TraversableFC (FoldableFC(toListFC))
-import           Data.Parameterized.SymbolRepr (SymbolRepr)
-
-import What4.Expr.Builder qualified as W4
-import           What4.FloatMode (FloatModeRepr)
-import What4.FloatMode qualified as W4FM
-import What4.Utils.Complex qualified as W4
-import What4.Utils.StringLiteral qualified as W4SL
-import What4.Utils.Word16String qualified as W4W16
-
-import           Lang.Crucible.Concretize (ConcRV')
-import           Lang.Crucible.Types (TypeRepr)
-import Lang.Crucible.Types qualified as C
-import Lang.Crucible.Concretize qualified as Conc
-
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-
 import Data.Macaw.Symbolic qualified as Symbolic
-
+import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.Map qualified as MapF
+import Data.Text.Encoding qualified as Text
 import Grease.Concretize (ConcArgs(..))
 import Grease.Macaw.RegName qualified as RN
 import Grease.Panic (panic)
 import Grease.Shape (ExtShape, getTag)
 import Grease.Shape.Pointer (PtrShape, getPtrTag)
+import Lang.Crucible.Concretize qualified as Conc
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.Types qualified as C
+import LibBF qualified as LibBF
+import What4.Expr.Builder qualified as W4
+import What4.FloatMode qualified as W4FM
+import What4.Utils.Complex qualified as W4
+import What4.Utils.StringLiteral qualified as W4SL
+import What4.Utils.Word16String qualified as W4W16
 
 -- | Function for serializing a concretized intrinsic type
 type IntrinsicJsonFn :: Type -> C.Symbol -> Type

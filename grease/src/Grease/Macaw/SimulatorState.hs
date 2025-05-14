@@ -26,23 +26,13 @@ module Grease.Macaw.SimulatorState
 
 import Control.Lens (Lens')
 import Control.Lens.TH (makeLenses)
+import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict qualified as Map
-
--- parameterized-utils
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
-
--- crucible
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Simulator qualified as C
-
--- macaw
-import Data.Macaw.CFG qualified as MC
-
--- macaw-symbolic
-import Data.Macaw.Symbolic qualified as Symbolic
-
--- stubs-common
 import Stubs.Syscall qualified as Stubs
 
 -- | The Crucible state extension for holding @grease@-specific state.

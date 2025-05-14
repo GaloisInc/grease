@@ -29,6 +29,7 @@ import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as BSL
 import Data.Function ((.))
 import Data.List qualified as List
+import Data.Macaw.CFG qualified as MC
 import Data.Maybe (Maybe(..))
 import Data.Semigroup ((<>))
 import Data.Text (Text)
@@ -36,27 +37,19 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Type.Equality (type (~))
 import Data.Word (Word8, Word32, Word64)
-import Prelude ((+))
-import System.IO (Handle, stderr)
-import Text.Show (Show(..))
-
-import Prettyprinter qualified as PP
-
-import Text.LLVM.AST qualified as L
-
-import What4.FunctionName qualified as W4
-import What4.Expr qualified as W4
-import What4.ProgramLoc qualified as W4
-import What4.Protocol.Online qualified as W4
-
+import Grease.Panic (panic)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
-
 import Lang.Crucible.LLVM.Intrinsics qualified as Mem
-
-import Data.Macaw.CFG qualified as MC
-
-import Grease.Panic (panic)
+import Prelude ((+))
+import Prettyprinter qualified as PP
+import System.IO (Handle, stderr)
+import Text.LLVM.AST qualified as L
+import Text.Show (Show(..))
+import What4.Expr qualified as W4
+import What4.FunctionName qualified as W4
+import What4.ProgramLoc qualified as W4
+import What4.Protocol.Online qualified as W4
 
 -- | Constraint synonym for using online solver features, e.g. 'W4.checkSatisfiable'
 type OnlineSolverAndBackend solver sym bak t st fs =

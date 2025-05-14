@@ -32,16 +32,18 @@ import Data.Parameterized.Pair (Pair(Pair))
 import Data.Parameterized.Some (Some(Some))
 import Data.Sequence qualified as Seq
 import Data.String (String)
-import Data.Text qualified as Text
 import Data.Text (Text)
-import Data.Type.Equality qualified as Equality
+import Data.Text qualified as Text
 import Data.Type.Equality (testEquality)
+import Data.Type.Equality qualified as Equality
 import Grease.Shape as Shape
 import Grease.Shape.NoTag (NoTag(NoTag))
+import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
-import Hedgehog.Gen qualified as HG
+import Grease.Shape.Print qualified as Print
 import Hedgehog qualified as H
+import Hedgehog.Gen qualified as HG
 import Hedgehog.Range qualified as HR
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.Extension (LLVM)
@@ -51,13 +53,10 @@ import Prelude (error, maxBound, (*), minBound, Integral)
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import System.IO (IO)
-import Test.Tasty.Hedgehog qualified as TTH
-import Test.Tasty.HUnit qualified as TH
 import Test.Tasty qualified as TT
+import Test.Tasty.HUnit qualified as TH
+import Test.Tasty.Hedgehog qualified as TTH
 import Text.Show (show)
-
-import Grease.Shape.Parse qualified as Parse
-import Grease.Shape.Print qualified as Print
 
 eqShape ::
   (forall t1' t2'. ExtShape ext NoTag t1' -> ExtShape ext NoTag t2' -> Bool) ->

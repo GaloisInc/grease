@@ -14,33 +14,24 @@ module Grease.LLVM.SimulatorHooks
 
 import Control.Lens ((^.), set)
 import Control.Monad.IO.Class (MonadIO)
-import Data.Type.Equality ((:~:)(..), TestEquality(..))
-import Lumberjack qualified as LJ
-
--- parameterized-utils
 import Data.Parameterized.NatRepr qualified as NatRepr
-
--- what4
-import What4.FunctionName qualified as W4
-import What4.Interface qualified as W4
-
--- crucible
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.Simulator qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
-import Lang.Crucible.LLVM.Extension (LLVM)
-import Lang.Crucible.LLVM.Extension qualified as CLLVM
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-
+import Data.Type.Equality ((:~:)(..), TestEquality(..))
 import Grease.Diagnostic (Diagnostic(..), GreaseLogAction)
 import Grease.LLVM.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Options (ErrorSymbolicFunCalls(..))
 import Grease.Panic (panic)
 import Grease.Skip (createSkipOverride)
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
+import Lang.Crucible.LLVM.Extension (LLVM)
+import Lang.Crucible.LLVM.Extension qualified as CLLVM
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.Simulator qualified as C
+import Lumberjack qualified as LJ
+import What4.FunctionName qualified as W4
+import What4.Interface qualified as W4
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMSimulatorHooksDiagnostic diag)

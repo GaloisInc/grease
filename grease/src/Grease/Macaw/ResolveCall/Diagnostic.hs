@@ -11,18 +11,12 @@ module Grease.Macaw.ResolveCall.Diagnostic
   , severity
   ) where
 
-import Data.Text (Text)
-
-import Prettyprinter qualified as PP
-
--- what4
-import What4.FunctionName qualified as W4
-
--- macaw
 import Data.Macaw.Memory qualified as MM
-
+import Data.Text (Text)
 import Grease.Diagnostic.Severity (Severity(Debug, Info))
 import Grease.Macaw.SkippedCall qualified as Skip
+import Prettyprinter qualified as PP
+import What4.FunctionName qualified as W4
 
 data Diagnostic where
   PltCall ::

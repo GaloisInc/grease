@@ -19,8 +19,7 @@ module Grease.LLVM.Overrides
   , LLVMFunctionOverride(..)
   ) where
 
-import Prelude (fromIntegral)
-
+import           Data.Parameterized.TraversableFC (toListFC)
 import Control.Applicative (pure)
 import Control.Exception.Safe (throw)
 import Control.Monad (forM, sequence)
@@ -34,59 +33,44 @@ import Data.Functor ((<$>))
 import Data.List qualified as List
 import Data.Map qualified as Map
 import Data.Maybe (Maybe(..))
-import Data.Semigroup ((<>))
-import Data.Sequence qualified as Seq
-import Data.Text (Text)
-import Data.Text qualified as Text
-import Data.Traversable (traverse)
-import Data.String (String)
-import System.IO (FilePath, IO)
-import System.FilePath (dropExtensions, takeBaseName)
-
-import Lumberjack qualified as LJ
-
-import Text.LLVM.AST qualified as L
-
--- parameterized-utils
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Some qualified as Some
-import           Data.Parameterized.TraversableFC (toListFC)
-
--- what4
-import What4.FunctionName qualified as W4
-
--- crucible
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.CFG.Reg qualified as C.Reg
-import Lang.Crucible.CFG.SSAConversion qualified as C
-import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.Simulator qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.DataLayout as CLLVM
-import Lang.Crucible.LLVM.Functions qualified as CLLVM
-import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.SymIO qualified as SymIO
-import Lang.Crucible.LLVM.Translation (LLVMContext)
-import Lang.Crucible.LLVM.Translation qualified as CLLVM
-import Lang.Crucible.LLVM.TypeContext (TypeContext(..))
-
--- crucible-syntax
-import Lang.Crucible.Syntax.Concrete qualified as CSyn
-import Lang.Crucible.Syntax.Prog qualified as CSyn
-
--- crucible-llvm-syntax
-import Lang.Crucible.LLVM.Syntax (llvmParserHooks, emptyParserHooks)
-
+import Data.Semigroup ((<>))
+import Data.Sequence qualified as Seq
+import Data.String (String)
+import Data.Text (Text)
+import Data.Text qualified as Text
+import Data.Traversable (traverse)
 import Grease.Diagnostic (GreaseLogAction, Diagnostic(LLVMOverridesDiagnostic))
 import Grease.FunctionOverride (basicLLVMOverrides)
 import Grease.LLVM.Overrides.Diagnostic as Diag
 import Grease.Skip (declSkipOverride, registerSkipOverride)
 import Grease.Syntax (parseProgram)
 import Grease.Utility (GreaseException(..), declaredFunNotFound, tshow, llvmOverrideName)
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.CFG.Reg qualified as C.Reg
+import Lang.Crucible.CFG.SSAConversion qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.LLVM.DataLayout as CLLVM
+import Lang.Crucible.LLVM.Functions qualified as CLLVM
+import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.SymIO qualified as SymIO
+import Lang.Crucible.LLVM.Syntax (llvmParserHooks, emptyParserHooks)
+import Lang.Crucible.LLVM.Translation (LLVMContext)
+import Lang.Crucible.LLVM.Translation qualified as CLLVM
+import Lang.Crucible.LLVM.TypeContext (TypeContext(..))
+import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Syntax.Concrete qualified as CSyn
+import Lang.Crucible.Syntax.Prog qualified as CSyn
+import Lumberjack qualified as LJ
+import Prelude (fromIntegral)
+import System.FilePath (dropExtensions, takeBaseName)
+import System.IO (FilePath, IO)
+import Text.LLVM.AST qualified as L
+import What4.FunctionName qualified as W4
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMOverridesDiagnostic diag)

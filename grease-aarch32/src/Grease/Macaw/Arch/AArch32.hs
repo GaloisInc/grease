@@ -12,49 +12,30 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Arch.AArch32 (armCtx) where
 
 import Control.Exception.Safe (throw)
+import Data.BitVector.Sized qualified as BV
+import Data.ElfEdit qualified as EE
+import Data.Macaw.AArch32.Symbolic qualified as ARM.Symbolic
+import Data.Macaw.ARM qualified as ARM
+import Data.Macaw.ARM.ARMReg ()
+import Data.Macaw.ARM.ARMReg qualified as ARM
+import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map qualified as Map
+import Data.Parameterized.NatRepr (knownNat)
 import Data.Proxy (Proxy(..))
 import Data.Word (Word32)
-
--- bv-sized
-import Data.BitVector.Sized qualified as BV
-
--- parameterized-utils
-import Data.Parameterized.NatRepr (knownNat)
-
--- crucible
-import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.Simulator.RegValue qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-
--- elf-edit
-import Data.ElfEdit qualified as EE
-
--- macaw-symbolic
-import Data.Macaw.Symbolic qualified as Symbolic
-
--- macaw-aarch32
-import Data.Macaw.ARM qualified as ARM
-import Data.Macaw.ARM.ARMReg qualified as ARM
-import Data.Macaw.ARM.ARMReg ()
-
--- macaw-aarch32-symbolic
-import Data.Macaw.AArch32.Symbolic qualified as ARM.Symbolic
-
--- stubs
-import Stubs.FunctionOverride.AArch32.Linux qualified as Stubs
-import Stubs.Memory.AArch32.Linux qualified as Stubs
-import Stubs.Syscall.AArch32.Linux qualified as Stubs
-import Stubs.Syscall.Names.AArch32.Linux qualified as Stubs
-
 import Grease.Macaw.Arch (ArchContext(..), ArchReloc)
 import Grease.Macaw.Load.Relocation (RelocType(..))
 import Grease.Macaw.RegName (RegName(..))
 import Grease.Options (ExtraStackSlots)
 import Grease.Shape.Pointer (armStackPtrShape)
 import Grease.Utility (GreaseException(..))
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.Simulator.RegValue qualified as C
+import Stubs.FunctionOverride.AArch32.Linux qualified as Stubs
+import Stubs.Memory.AArch32.Linux qualified as Stubs
+import Stubs.Syscall.AArch32.Linux qualified as Stubs
+import Stubs.Syscall.Names.AArch32.Linux qualified as Stubs
 
 type instance ArchReloc ARM.ARM = EE.ARM32_RelocationType
 

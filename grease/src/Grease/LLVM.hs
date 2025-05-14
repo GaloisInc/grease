@@ -12,38 +12,29 @@ module Grease.LLVM
   , initState
   ) where
 
-import Control.Monad.IO.Class (MonadIO(..))
 import Control.Exception.Safe (MonadThrow)
 import Control.Lens ((^.))
-
--- parameterized-utils
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
-
--- what4
-import What4.Expr qualified as W4
-
--- crucible
-import Lang.Crucible.Analysis.Postdom qualified as C
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Simulator.GlobalState qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.Extension (ArchWidth, LLVM)
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
-import Lang.Crucible.LLVM.SymIO qualified as SymIO
-import Lang.Crucible.LLVM.Translation qualified as Trans
-import Lang.Crucible.LLVM.TypeContext qualified as TCtx
-
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.LLVM.SimulatorHooks (greaseLlvmExtImpl)
 import Grease.Options (ErrorSymbolicFunCalls)
 import Grease.Setup (SetupMem(getSetupMem))
 import Grease.Utility (printHandle)
+import Lang.Crucible.Analysis.Postdom qualified as C
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.LLVM.Extension (ArchWidth, LLVM)
+import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.SymIO qualified as SymIO
+import Lang.Crucible.LLVM.Translation qualified as Trans
+import Lang.Crucible.LLVM.TypeContext qualified as TCtx
+import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator.GlobalState qualified as C
+import What4.Expr qualified as W4
 
 -- | Hook to run before executing a CFG.
 --

@@ -13,16 +13,13 @@ module Grease.Heuristic.Diagnostic
   ) where
 
 import Control.Lens ((^.))
-
-import Prettyprinter qualified as PP
-
 import Data.Macaw.CFG qualified as MC
-
 import Grease.Cursor (CursorExt, ppCursor)
 import Grease.Cursor.Pointer (Dereference, ppDereference)
+import Grease.Diagnostic.Severity (Severity(Debug, Info))
 import Grease.Shape.Pointer (PtrTarget)
 import Grease.Shape.Selector (ArgSelector, argSelectorPath)
-import Grease.Diagnostic.Severity (Severity(Debug, Info))
+import Prettyprinter qualified as PP
 
 data Diagnostic where
   DefaultHeuristicsBytesToPtr ::

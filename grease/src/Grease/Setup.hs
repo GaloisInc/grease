@@ -24,60 +24,31 @@ module Grease.Setup
   , ValueName(..)
   ) where
 
-import Prelude (Int, Num(..), fromIntegral)
-
+import Control.Applicative (pure)
+import Control.Exception.Safe (MonadCatch)
+import Control.Lens (use, (^.), (%~), (.=))
 import Control.Lens.TH (makeLenses)
 import Control.Lens.Zoom (zoom)
-
-import Control.Applicative (pure)
 import Control.Monad (foldM, (=<<))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.State (StateT(..), evalStateT)
-import Control.Exception.Safe (MonadCatch)
-import Control.Lens (use, (^.), (%~), (.=))
-
+import Data.BitVector.Sized qualified as BV
 import Data.Eq (Eq((==)))
-import Data.Semigroup ((<>))
 import Data.Function (($), (.), (&), flip)
 import Data.Functor (fmap)
-import Data.Maybe (Maybe(..))
 import Data.List qualified as List
+import Data.Maybe (Maybe(..))
+import Data.Parameterized.Classes (ixF')
+import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.NatRepr (NatRepr, natValue)
+import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Proxy (Proxy(Proxy))
+import Data.Semigroup ((<>))
 import Data.Sequence qualified as Seq
 import Data.String (String)
 import Data.Type.Equality (type (~), (:~:)(Refl))
-import Data.Word (Word8)
 import Data.Vector qualified as Vec
-import Text.Show (show)
-import System.IO (IO)
-
-import Lumberjack qualified as LJ
-
--- parameterized-utils
-import Data.Parameterized.Classes (ixF')
-import Data.Parameterized.NatRepr (NatRepr, natValue)
-import Data.Parameterized.TraversableFC (fmapFC)
-import Data.Parameterized.Context qualified as Ctx
-
--- bv-sized
-import Data.BitVector.Sized qualified as BV
-
--- what4
-import What4.Interface qualified as W4
-
--- crucible
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.CFG.Extension qualified as C
-import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Types qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.Bytes (Bytes)
-import Lang.Crucible.LLVM.Bytes qualified as Bytes
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-import Lang.Crucible.LLVM.DataLayout qualified as Mem
-
+import Data.Word (Word8)
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic (GreaseLogAction, Diagnostic(SetupDiagnostic))
@@ -86,6 +57,20 @@ import Grease.Setup.Diagnostic qualified as Diag
 import Grease.Shape
 import Grease.Shape.Pointer
 import Grease.Shape.Selector
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.LLVM.Bytes (Bytes)
+import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.DataLayout qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Types qualified as C
+import Lumberjack qualified as LJ
+import Prelude (Int, Num(..), fromIntegral)
+import System.IO (IO)
+import Text.Show (show)
+import What4.Interface qualified as W4
 
 -- | Name for fresh symbolic values, passed to 'W4.safeSymbol'. The phantom
 -- type parameter prevents making recursive calls without changing the name.

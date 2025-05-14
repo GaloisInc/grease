@@ -19,14 +19,13 @@ module Grease.Bug.UndefinedBehavior
 import Data.Aeson qualified as Aeson
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Prettyprinter qualified as PP
-import Prettyprinter.Render.Text qualified as PP
-
-import Lang.Crucible.LLVM.Errors.UndefinedBehavior (UndefinedBehavior)
-import Lang.Crucible.LLVM.Errors.UndefinedBehavior qualified as UB
 import Lang.Crucible.LLVM.Errors.Poison (Poison)
 import Lang.Crucible.LLVM.Errors.Poison qualified as Poison
+import Lang.Crucible.LLVM.Errors.UndefinedBehavior (UndefinedBehavior)
+import Lang.Crucible.LLVM.Errors.UndefinedBehavior qualified as UB
 import Lang.Crucible.Simulator.RegValue qualified as C
+import Prettyprinter qualified as PP
+import Prettyprinter.Render.Text qualified as PP
 import What4.Interface qualified as W4
 
 -- | A simplified, serializable version of 'UndefinedBehavior'

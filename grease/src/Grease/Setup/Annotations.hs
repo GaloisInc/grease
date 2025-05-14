@@ -20,41 +20,28 @@ module Grease.Setup.Annotations
   , lookupPtrAnnotation
   ) where
 
-import Control.Lens.TH (makeLenses)
-
 import Control.Applicative ((<|>))
+import Control.Lens ((^.), (%=))
+import Control.Lens.TH (makeLenses)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.State.Class (MonadState(..))
-import Control.Lens ((^.), (%=))
-
+import Data.Macaw.CFG qualified as MC
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe qualified as Maybe
+import Data.Parameterized.Map qualified as MapF
+import Data.Parameterized.Some (Some(..))
 import Data.Proxy (Proxy(Proxy))
 import Data.Type.Equality ((:~:)(Refl), testEquality)
-
--- parameterized-utils
-import Data.Parameterized.Some (Some(..))
-import Data.Parameterized.Map qualified as MapF
-
--- what4
-import What4.Interface qualified as W4
-import What4.Expr.Builder qualified as W4
-
--- crucible
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.Types qualified as C
-
--- crucible-llvm
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-
--- macaw-base
-import Data.Macaw.CFG qualified as MC
-
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Shape.Selector
+import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.Types qualified as C
+import What4.Expr.Builder qualified as W4
+import What4.Interface qualified as W4
 
 data SomeBaseSelector ext argTys t
   = forall ts regTy.

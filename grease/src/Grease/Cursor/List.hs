@@ -14,12 +14,10 @@ module Grease.Cursor.List
   , lastSnoc
   ) where
 
-import Prelude (undefined)
-import Data.Type.Equality (type (~), (:~:)(Refl))
-
--- parameterized-utils
 import Data.Parameterized.Axiom (unsafeAxiom)
 import Data.Parameterized.List (List(..))
+import Data.Type.Equality (type (~), (:~:)(Refl))
+import Prelude (undefined)
 
 type family Last (ts :: [k]) :: k where
   Last '[t] = t
