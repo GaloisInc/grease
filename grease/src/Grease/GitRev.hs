@@ -9,13 +9,22 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 -- due to Template Haskell.
 module Grease.GitRev (hash, branch, dirty) where
 
-import Development.GitRev (gitBranch, gitDirty, gitHash)
+import GitHash (GitInfo, giBranch, giDirty, giHash, tGitInfoCwdTry)
+
+gitInfo :: Either String GitInfo
+gitInfo = $$tGitInfoCwdTry
 
 hash :: String
-hash = $(gitHash)
+hash = case gitInfo of
+    Left _ -> "UNKNOWN"
+    Right gi -> giHash gi
 
 branch :: String
-branch = $(gitBranch)
+branch = case gitInfo of
+    Left _ -> "UNKNOWN"
+    Right gi -> giBranch gi
 
 dirty :: Bool
-dirty = $(gitDirty)
+dirty = case gitInfo of
+  Left _ -> False
+  Right gi -> giDirty gi
