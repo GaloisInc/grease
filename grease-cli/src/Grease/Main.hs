@@ -34,7 +34,6 @@ import Control.Exception.Safe (MonadThrow, Handler(..), catches, throw)
 import Control.Lens ((^.), (.~), to)
 import Control.Monad ((>>=), forM, forM_, mapM_, when)
 import Control.Monad.IO.Class (MonadIO(..))
-import Data.Aeson qualified as Aeson
 import Data.Bool (Bool(..), (&&), (||), otherwise, not)
 import Data.ByteString qualified as BS
 import Data.Either (Either(..))
@@ -101,7 +100,7 @@ import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Bug qualified as Bug
 import Grease.Cli (optsFromArgs)
 import Grease.Concretize (ConcArgs(..), concArgs, printConcArgs)
-import Grease.Concretize.JSON (concArgsToJson, concRegsToJson)
+import Grease.Concretize.JSON (concArgsToJson)
 import Grease.Cursor.Pointer ()
 import Grease.Diagnostic
 import Grease.Diagnostic.Severity (Severity)
@@ -186,6 +185,8 @@ import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
 import qualified Lang.Crucible.SymIO as SymIO
 import qualified Lang.Crucible.SymIO.Loader as SymIO.Loader
+import qualified Prettyprinter.Render.Text as PP
+import Grease.Concretize (ConcretizedData)
 
 -- | Results of analysis, one per given 'Entrypoint'
 newtype Results = Results { getResults :: Map Entrypoint Batch }
@@ -288,14 +289,41 @@ loadInitialPreconditions preconds names initArgs =
         Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
         Right shapes -> pure shapes
 
+toBatchBug ::
+  Mem.HasPtrWidth wptr =>
+  (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
+  (ExtShape ext ~ PtrShape ext wptr) =>
+  W4.FloatModeRepr fm ->
+  MC.AddrWidthRepr wptr ->
+  Ctx.Assignment (Const String) args ->
+  Ctx.Assignment C.TypeRepr args ->
+  Shape.ArgShapes ext NoTag args ->
+  Bug.BugInstance ->
+  ConcretizedData sym ext args ->
+  BatchBug
+toBatchBug fm addrWidth argNames argTys initArgs b cData =
+  let argsJson = concArgsToJson fm argNames (concArgs cData) argTys in
+  let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData) in
+  let prettyArgs = printConcArgs addrWidth argNames interestingShapes (concArgs cData) in
+  let prettyArgs' = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyArgs) in
+  MkBatchBug b argsJson prettyArgs'
 
 toFailedPredicate ::
-  NoHeuristic sym ext tys ->
-  [Aeson.Value] ->
-  Text.Text ->
+  Mem.HasPtrWidth wptr =>
+  (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
+  (ExtShape ext ~ PtrShape ext wptr) =>
+  W4.FloatModeRepr fm ->
+  MC.AddrWidthRepr wptr ->
+  Ctx.Assignment (Const String) args ->
+  Ctx.Assignment C.TypeRepr args ->
+  Shape.ArgShapes ext NoTag args ->
+  NoHeuristic sym ext args ->
   FailedPredicate
-toFailedPredicate (NoHeuristic goal _cData _err) argsJson concShapes =
-  let lp = C.proofGoal goal
+toFailedPredicate fm addrWidth argNames argTys initArgs (NoHeuristic goal cData _err) =
+  let argsJson = concArgsToJson fm argNames (concArgs cData) argTys
+      interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData)
+      prettyArgs = printConcArgs addrWidth argNames interestingShapes (concArgs cData)
+      lp = C.proofGoal goal
       simErr = lp ^. C.labeledPredMsg
       -- We inline and modify 'ppSimError', because we don't need to repeat the
       -- function name nor location.
@@ -312,7 +340,8 @@ toFailedPredicate (NoHeuristic goal _cData _err) argsJson concShapes =
          tshow (PP.pretty (W4.plSourceLoc (C.simErrorLoc simErr)))
      , _failedPredicateMessage = msg
      , _failedPredicateArgs = argsJson
-     , _failedPredicateConcShapes = concShapes
+     , _failedPredicateConcShapes =
+         PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyArgs)
      }
 
 checkMustFail ::
@@ -622,12 +651,9 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
       ]
 
   res <- case result of
-    RefinementBug b cData -> do
-      let argsJson = concRegsToJson fm rNames (concArgs cData) regTypes
-      let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData)
-      let addrWidth = archCtx ^. archInfo . to MI.archAddrWidth
-      let prettyArgs = printConcArgs addrWidth argNames interestingShapes (concArgs cData)
-      pure (BatchBug (MkBatchBug b argsJson (Text.pack (show prettyArgs))))
+    RefinementBug b cData ->
+      let addrWidth = archCtx ^. archInfo . to MI.archAddrWidth in
+      pure (BatchBug (toBatchBug fm addrWidth argNames regTypes initArgs b cData))
     RefinementCantRefine b ->
       pure (BatchCantRefine b)
     RefinementItersExceeded ->
@@ -640,12 +666,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         Just bug -> pure (BatchBug bug)
         Nothing ->
           pure $ BatchCouldNotInfer $ errs <&> \noHeuristic ->
-            let cData = noHeuristicConcretizedData noHeuristic
-                argsJson = concRegsToJson fm rNames (concArgs cData) regTypes
-                addrWidth = archCtx ^. archInfo . to MI.archAddrWidth
-                interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData)
-                prettyArgs = printConcArgs addrWidth argNames interestingShapes (concArgs cData)
-            in toFailedPredicate noHeuristic argsJson (Text.pack (show prettyArgs))
+            let addrWidth = archCtx ^. archInfo . to MI.archAddrWidth
+            in toFailedPredicate fm addrWidth argNames regTypes initArgs noHeuristic
     RefinementSuccess argShapes -> do
       let pcReg = archCtx ^. archPcReg
       let assertInText = addPCBoundAssertion knownNat pcReg memory (MC.memWord $ fromIntegral starttext) (MC.memWord $ fromIntegral endtext) pltStubs
@@ -679,12 +701,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
           ProveNoHeuristic errs -> do
             doLog la Diag.SimulationGoalsFailed
             pure $ CheckAssertionFailure $ NE.toList errs <&> \noHeuristic ->
-              let cData = noHeuristicConcretizedData noHeuristic
-                  argsJson = concRegsToJson fm rNames (concArgs cData) regTypes
-                  addrWidth = archCtx ^. archInfo . to MI.archAddrWidth
-                  interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData)
-                  prettyArgs = printConcArgs addrWidth argNames interestingShapes (concArgs cData)
-              in toFailedPredicate noHeuristic argsJson (Text.pack (show prettyArgs))
+              let addrWidth = archCtx ^. archInfo . to MI.archAddrWidth
+              in toFailedPredicate fm addrWidth argNames regTypes initArgs noHeuristic
           ProveRefine _ -> do
             doLog la Diag.SimulationGoalsFailed
             pure $ CheckAssertionFailure []
@@ -1106,11 +1124,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
     execAndRefine bak (simSolver simOpts) fm la setupAnns initMem heuristics argNames argShapes args bbMapRef (simLoopBound simOpts) execFeats st
 
   res <- case result of
-    RefinementBug b cData -> do
-      let argsJson = concArgsToJson fm argNames (concArgs cData) argTys
-      let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData)
-      let prettyArgs = printConcArgs MM.Addr64 argNames interestingShapes (concArgs cData)
-      pure (BatchBug (MkBatchBug b argsJson (Text.pack (show prettyArgs))))
+    RefinementBug b cData ->
+      pure (BatchBug (toBatchBug fm MM.Addr64 argNames argTys initArgs b cData))
     RefinementCantRefine b ->
       pure (BatchCantRefine b)
     RefinementItersExceeded ->
@@ -1123,11 +1138,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
         Just bug -> pure (BatchBug bug)
         Nothing ->
           pure $ BatchCouldNotInfer $ errs <&> \noHeuristic ->
-            let cData = noHeuristicConcretizedData noHeuristic
-                argsJson = concArgsToJson fm argNames (concArgs cData) argTys
-                interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData)
-                prettyArgs = printConcArgs MM.Addr64 argNames interestingShapes (concArgs cData)
-            in toFailedPredicate noHeuristic argsJson (Text.pack (show prettyArgs))
+            toFailedPredicate fm MM.Addr64 argNames argTys initArgs noHeuristic
     RefinementSuccess _argShapes -> pure (BatchChecks Map.empty)
   traverse_ cancel (fmap snd profFeatLog)
   pure res
