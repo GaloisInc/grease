@@ -78,6 +78,11 @@ organized into different subdirectories:
 5. `x86`: x86-64 machine-code CFGs (via `macaw-x86-syntax`). Each of these test
    cases has the file extension `*.x64.cbl`.
 
+## UX tests
+
+Tests located in the `ux/` directory may be binaries, bitcode, or S-expression programs.
+They are intended to test the User eXperience (mostly, the log output) of GREASE.
+
 ## Lua API
 
 The test harness provides the following Lua API, which enriches that of Oughta
