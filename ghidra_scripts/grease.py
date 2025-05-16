@@ -323,22 +323,22 @@ def renderInterestingConcreteReg(argInfo):
     """Render nonzero register concrete contents as a string, otherwise None.
 
     If the content is "boring" (zero) this function returns None
-    E.g. {'reg': 'rdi', 'block': 0, 'offset': 0} => None
+    E.g. {'arg': 'rdi', 'block': 0, 'offset': 0} => None
 
     More interesting examples:
 
-    E.g. {'reg': 'rsi', 'value': {'offset': 128, 'block': 0}}
+    E.g. {'arg': 'rsi', 'value': {'offset': 128, 'block': 0}}
          returns: "rsi == 128 (0x80)"
-    and  renders {'reg': 'rsp', 'value': {'offset': 1048568, 'block': 2}}
+    and  renders {'arg': 'rsp', 'value': {'offset': 1048568, 'block': 2}}
          returns: "rsp contains a pointer (offset 0xffff8)"
     """
     if (
-        "reg" in argInfo
+        "arg" in argInfo
         and argInfo["value"]  # GREASE JSON values might be false or []
         # we're looking for ones with content like { "block": 0, "offset": 0 }
         and "block" in argInfo["value"]
     ):
-        regName = argInfo["reg"]
+        regName = argInfo["arg"]
         if (
             # block of zero means bitvector (with value in offset field)
             argInfo["value"]["block"] == 0
