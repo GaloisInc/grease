@@ -305,7 +305,11 @@ toBatchBug fm addrWidth argNames argTys initArgs b cData =
   let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData) in
   let prettyArgs = printConcArgs addrWidth argNames interestingShapes (concArgs cData) in
   let prettyArgs' = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyArgs) in
-  MkBatchBug b argsJson prettyArgs'
+  MkBatchBug
+    { bugDesc = b
+    , bugArgs = argsJson
+    , bugShapes = prettyArgs'
+    }
 
 toFailedPredicate ::
   Mem.HasPtrWidth wptr =>
@@ -370,7 +374,8 @@ checkMustFail bak errs = do
         , Bug.bugUb = Nothing  -- TODO: check if they are all the same?
         }
   if mustFail
-  then pure (Just (MkBatchBug bug [] ""))  -- TODO: concretized args
+  -- TODO: concretized args
+  then pure (Just (MkBatchBug { bugDesc = bug, bugArgs = [], bugShapes = "" }))
   else pure Nothing
 
 -- | Machine code-specific arguments that are used throughout 'simulateMacawCfg'
@@ -442,7 +447,8 @@ interestingRegs =
 -- They are interesting when:
 --
 -- * They have a non-default value, and
--- * The name is in a known \"interesting\" set ('interestingRegs')
+-- * The name is in a known \"interesting\" set ('interestingRegs'), or is an
+--   LLVM argument name (i.e., is prefixed by @%@).
 --
 -- This is clearly a bit of a hack, but leads to concise and readable output.
 interestingConcretizedShapes ::
