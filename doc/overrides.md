@@ -10,14 +10,8 @@ from libc, such as `malloc`. Users may also provide overrides, which take
 priority over both built-in overrides and functions defined in the program under
 analysis.
 
-User-provided overrides are written in the [Crucible S-expression syntax].
-Each language supported by GREASE extends this base S-expression language with
-additional types and operations, see [macaw-symbolic-syntax] for binaries and
-[crucible-llvm-syntax] for LLVM for further information about these extensions.
-
-[Crucible S-expression syntax]: https://github.com/GaloisInc/crucible/tree/master/crucible-syntax
-[macaw-symbolic-syntax]: https://github.com/GaloisInc/macaw/tree/master/symbolic-syntax
-[crucible-llvm-syntax]: https://github.com/GaloisInc/crucible/tree/master/crucible-llvm-syntax
+User-provided overrides are written in the Crucible S-expression language. For
+information about this language, see [Writing S-expression programs](sexp.md).
 
 ## LLVM example
 
@@ -99,10 +93,13 @@ overrides.
 While GREASE does not enforce this convention, it is strongly encouraged to
 name override files as follows:
 
-- `*.armv7l.cbl` for ARM overrides
+<!-- This list also appears in sexp.md -->
+
+- `*.armv7l.cbl` for AArch32 overrides
 - `*.llvm.cbl` for LLVM overrides
 - `*.ppc32.cbl` for PPC32 overrides
-- `*.x86.cbl` for x86_64 overrides
+- `*.ppc64.cbl` for PPC64 overrides
+- `*.x64.cbl` for x86_64 overrides
 
 This naming scheme matches convention that GREASE requires for simulating
 S-expression programs.
