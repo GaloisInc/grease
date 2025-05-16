@@ -258,6 +258,7 @@ main = do
         , "prop"
         , "refine"
         , "sanity"
+        , "ux"
         , "x86"
         ]
   tests <- mapM discoverTests (map ("tests" </>) dirs)

@@ -8,6 +8,7 @@
 - [Overrides](./overrides.md)
 - [Usage](./usage.md)
 - [Ghidra plugin](./ghidra-plugin.md)
+- [Writing S-expression programs](./sexp.md)
 
 # Reference
 
