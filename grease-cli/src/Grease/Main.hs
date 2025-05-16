@@ -28,7 +28,6 @@ module Grease.Main
   , logResults
   ) where
 
-import           Lang.Crucible.LLVM.DataLayout (DataLayout)
 import Control.Applicative (pure)
 import Control.Concurrent.Async (cancel)
 import Control.Exception.Safe (MonadThrow, Handler(..), catches, throw)
@@ -155,6 +154,7 @@ import Lang.Crucible.CFG.SSAConversion qualified as C
 import Lang.Crucible.Debug qualified as Dbg
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM qualified as CLLVM
+import Lang.Crucible.LLVM.DataLayout (DataLayout)
 import Lang.Crucible.LLVM.DataLayout qualified as DataLayout
 import Lang.Crucible.LLVM.Debug qualified as Debug
 import Lang.Crucible.LLVM.Extension qualified as CLLVM
