@@ -106,7 +106,7 @@ jobs:
 
     - name: Configure build
       shell: bash
-      run: cabal configure --enable-tests
+      run: cabal configure --enable-tests --semaphore
 
     - name: Build grease-cli
       shell: bash
