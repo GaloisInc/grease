@@ -99,7 +99,7 @@ import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Bug qualified as Bug
 import Grease.Cli (optsFromArgs)
-import Grease.Concretize (ConcArgs(..), concArgs, printConcArgs)
+import Grease.Concretize (ConcretizedData, ConcArgs(..), concArgs, printConcArgs)
 import Grease.Concretize.JSON (concArgsToJson)
 import Grease.Cursor.Pointer ()
 import Grease.Diagnostic
@@ -164,6 +164,8 @@ import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.LLVM.SymIO qualified as CLLVM.SymIO
 import Lang.Crucible.LLVM.Syntax (llvmParserHooks, emptyParserHooks)
 import Lang.Crucible.LLVM.Translation qualified as Trans
+import Lang.Crucible.SymIO qualified as SymIO
+import Lang.Crucible.SymIO.Loader qualified as SymIO.Loader
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
@@ -172,6 +174,7 @@ import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Lumberjack qualified as LJ
 import Prelude (Num(..), fromIntegral, Integral)
 import Prettyprinter qualified as PP
+import Prettyprinter.Render.Text qualified as PP
 import Stubs.FunctionOverride qualified as Stubs
 import System.Directory (Permissions, getPermissions)
 import System.FilePath (FilePath)
@@ -183,10 +186,6 @@ import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
-import qualified Lang.Crucible.SymIO as SymIO
-import qualified Lang.Crucible.SymIO.Loader as SymIO.Loader
-import qualified Prettyprinter.Render.Text as PP
-import Grease.Concretize (ConcretizedData)
 
 -- | Results of analysis, one per given 'Entrypoint'
 newtype Results = Results { getResults :: Map Entrypoint Batch }
