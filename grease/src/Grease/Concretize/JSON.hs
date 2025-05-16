@@ -15,16 +15,14 @@ module Grease.Concretize.JSON
   , jsonPtrFnMap
   , concRegValueToJson
   , concArgsToJson
-  , concRegsToJson
   ) where
 
 import Data.Aeson qualified as Aeson
 import Data.BitVector.Sized qualified as BV
-import Data.Functor.Const (Const (getConst, Const))
+import Data.Functor.Const (Const(getConst))
 import Data.Functor.Product (Product(Pair))
 import Data.Kind (Type)
 import Data.List qualified as List
-import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map (MapF)
 import Data.Parameterized.Map qualified as MapF
@@ -32,7 +30,6 @@ import Data.Parameterized.SymbolRepr (SymbolRepr)
 import Data.Parameterized.TraversableFC as TFC
 import Data.Text.Encoding qualified as Text
 import Grease.Concretize (ConcArgs(..))
-import Grease.Macaw.RegName qualified as RN
 import Grease.Panic (panic)
 import Grease.Shape (ExtShape, getTag)
 import Grease.Shape.Pointer (PtrShape, getPtrTag)
@@ -210,15 +207,3 @@ concArgsToJson fm argNames (ConcArgs cArgs) argTys =
   let argBlobs = TFC.toListFC (\(Pair ty cVal) -> concRegValueToJson jsonPtrFnMap fm ty cVal) argsWithTypes in
   let argNames' = TFC.toListFC getConst argNames in
   List.zipWith (\name mval -> Aeson.object ["arg" Aeson..= name, "value" Aeson..= mval]) argNames' argBlobs
-
-concRegsToJson ::
-  (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
-  (ExtShape ext ~ PtrShape ext wptr) =>
-  FloatModeRepr fm ->
-  RN.RegNames arch ->
-  ConcArgs sym ext (Symbolic.MacawCrucibleRegTypes arch) ->
-  Ctx.Assignment C.TypeRepr (Symbolic.MacawCrucibleRegTypes arch) ->
-  [Aeson.Value]
-concRegsToJson fm (RN.RegNames regNames) cArgs argTys =
-  let regNames' = TFC.fmapFC (\(Const n) -> Const (RN.regNameToString n)) regNames in
-  concArgsToJson fm regNames' cArgs argTys
