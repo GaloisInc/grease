@@ -31,6 +31,12 @@ jobs:
       - name: Ensure linters are formatted
         run: ruff format --check --diff scripts/lint
 
+      - name: Lint the Ghidra script with ruff
+        run: ruff check ghidra_scripts
+
+      - name: Ensure the Ghidra script is formatted
+        run: ruff format --check --diff ghidra_scripts
+
       - name: Run hlint
         run: |
           curl \

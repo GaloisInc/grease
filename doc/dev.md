@@ -83,11 +83,11 @@ hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/{main,src,tests}
 
 ### ruff
 
-We lint and format the Python linting scripts with [ruff].
+We lint and format the Python linting scripts and Ghidra plug-in with [ruff].
 
 ```sh
-ruff format scripts/lint
-ruff check scripts/lint
+ruff format scripts/lint ghidra_scripts
+ruff check scripts/lint ghidra_scripts
 ```
 
 [ruff]: https://docs.astral.sh/ruff/

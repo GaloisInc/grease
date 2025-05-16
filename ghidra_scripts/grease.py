@@ -22,6 +22,12 @@
 # @menupath Tools.GREASE Analysis
 # @copyright Galois Inc. 2024
 
+# Many names are defined by Ghidra, but Ruff doesn't know that
+# ruff: noqa: F821
+
+# This one is just too opinionated
+# ruff: noqa: E741
+
 import json
 import math
 import os
@@ -367,8 +373,7 @@ def parseBatchBug(fnEntryPoint, greaseLoadOffset, batchBugJSON):
     details = []
     try:
         location = greaseOffsetToGhidraAddress(
-            greaseLoadOffset,
-            parseGreaseLocation(bugDesc["bugLoc"])
+            greaseLoadOffset, parseGreaseLocation(bugDesc["bugLoc"])
         )
     except ValueError:
         # if we can't determine the location, use the entry point
@@ -472,8 +477,7 @@ def parseBatchCouldNotInfer(fnEntryPoint, greaseLoadOffset, failedPredicateJSONs
         # show message at a particular instruction, if we can
         try:
             location_addr = greaseOffsetToGhidraAddress(
-                greaseLoadOffset,
-                parseGreaseLocation(p["_failedPredicateLocation"])
+                greaseLoadOffset, parseGreaseLocation(p["_failedPredicateLocation"])
             )
             location = location = "0x{:x}".format(location_addr.getOffset())
             location_results.append(
@@ -530,7 +534,9 @@ def parseBatchChecks(fnEntryPoint, greaseLoadOffset, mapReqStatusJSON):
                 try:
                     location = greaseOffsetToGhidraAddress(
                         greaseLoadOffset,
-                        parseGreaseLocation(failedPredicate["_failedPredicateLocation"])
+                        parseGreaseLocation(
+                            failedPredicate["_failedPredicateLocation"]
+                        ),
                     )
                 except ValueError:
                     # if we don't have a location, just report at start of function
@@ -559,9 +565,13 @@ def parseGreaseResults(fnEntryPoint, greaseLoadOffset, batchStatusJSON):
     """Return a list of GreaseFunctionResult and/or GreaseInstructionResult"""
     tag = batchStatusJSON["tag"]
     if tag == "BatchBug":
-        return parseBatchBug(fnEntryPoint, greaseLoadOffset, batchStatusJSON["contents"])
+        return parseBatchBug(
+            fnEntryPoint, greaseLoadOffset, batchStatusJSON["contents"]
+        )
     elif tag == "BatchCouldNotInfer":
-        return parseBatchCouldNotInfer(fnEntryPoint, greaseLoadOffset, batchStatusJSON["contents"])
+        return parseBatchCouldNotInfer(
+            fnEntryPoint, greaseLoadOffset, batchStatusJSON["contents"]
+        )
     elif tag == "BatchItersExceeded":
         return [GreaseIncompleteFunction(fnEntryPoint, "Iteration count exceeded", [])]
     elif tag == "BatchResourceExhausted":
@@ -573,9 +583,13 @@ def parseGreaseResults(fnEntryPoint, greaseLoadOffset, batchStatusJSON):
             )
         ]
     elif tag == "BatchChecks":
-        return parseBatchChecks(fnEntryPoint, greaseLoadOffset, batchStatusJSON["contents"])
+        return parseBatchChecks(
+            fnEntryPoint, greaseLoadOffset, batchStatusJSON["contents"]
+        )
     elif tag == "BatchCantRefine":
-        return parseBatchCantRefine(fnEntryPoint, greaseLoadOffset, batchStatusJSON["contents"])
+        return parseBatchCantRefine(
+            fnEntryPoint, greaseLoadOffset, batchStatusJSON["contents"]
+        )
     elif tag == "BatchTimeout":
         return [GreaseIncompleteFunction(fnEntryPoint, "Analysis timed out", [])]
     raise GreaseParseError("Failed to parse GREASE results: {}".format(batchStatusJSON))
