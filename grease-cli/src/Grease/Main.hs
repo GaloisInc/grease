@@ -787,6 +787,8 @@ simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs = do
 
     pure (Results (Map.fromList results))
   where
+    -- Ensure that this CFG is a well-formed Macaw CFG, i.e., it takes the
+    -- register struct as its only argument and returns it.
     checkCfgSignature ::
       Text.Text ->
       C.Reg.CFG (Symbolic.MacawExt arch) s init ret ->
