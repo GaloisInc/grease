@@ -15,33 +15,35 @@ module Grease.Concretize.JSON
   , jsonPtrFnMap
   , concRegValueToJson
   , concArgsToJson
+  , concRegsToJson
   ) where
 
-import           Data.Functor.Product (Product(Pair))
-import           Data.Kind (Type)
-import           Data.Parameterized.Map (MapF)
-import           Data.Parameterized.SymbolRepr (SymbolRepr)
-import           Data.Parameterized.TraversableFC (FoldableFC(toListFC))
-import           Lang.Crucible.Concretize (ConcRV')
-import           Lang.Crucible.Types (TypeRepr)
-import           What4.FloatMode (FloatModeRepr)
 import Data.Aeson qualified as Aeson
 import Data.BitVector.Sized qualified as BV
+import Data.Functor.Const (Const (getConst, Const))
+import Data.Functor.Product (Product(Pair))
+import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.Map (MapF)
 import Data.Parameterized.Map qualified as MapF
+import Data.Parameterized.SymbolRepr (SymbolRepr)
+import Data.Parameterized.TraversableFC as TFC
 import Data.Text.Encoding qualified as Text
 import Grease.Concretize (ConcArgs(..))
 import Grease.Macaw.RegName qualified as RN
 import Grease.Panic (panic)
 import Grease.Shape (ExtShape, getTag)
 import Grease.Shape.Pointer (PtrShape, getPtrTag)
+import Lang.Crucible.Concretize (ConcRV')
 import Lang.Crucible.Concretize qualified as Conc
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.Types (TypeRepr)
 import Lang.Crucible.Types qualified as C
 import LibBF qualified as LibBF
 import What4.Expr.Builder qualified as W4
+import What4.FloatMode (FloatModeRepr)
 import What4.FloatMode qualified as W4FM
 import What4.Utils.Complex qualified as W4
 import What4.Utils.StringLiteral qualified as W4SL
@@ -199,12 +201,24 @@ concArgsToJson ::
   (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   FloatModeRepr fm ->
+  Ctx.Assignment (Const String) args ->
+  ConcArgs sym ext args ->
+  Ctx.Assignment C.TypeRepr args ->
+  [Aeson.Value]
+concArgsToJson fm argNames (ConcArgs cArgs) argTys =
+  let argsWithTypes = Ctx.zipWith (\argTy cArg -> Pair argTy (getTag getPtrTag cArg)) argTys cArgs in
+  let argBlobs = TFC.toListFC (\(Pair ty cVal) -> concRegValueToJson jsonPtrFnMap fm ty cVal) argsWithTypes in
+  let argNames' = TFC.toListFC getConst argNames in
+  List.zipWith (\name mval -> Aeson.object ["arg" Aeson..= name, "value" Aeson..= mval]) argNames' argBlobs
+
+concRegsToJson ::
+  (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
+  (ExtShape ext ~ PtrShape ext wptr) =>
+  FloatModeRepr fm ->
   RN.RegNames arch ->
   ConcArgs sym ext (Symbolic.MacawCrucibleRegTypes arch) ->
   Ctx.Assignment C.TypeRepr (Symbolic.MacawCrucibleRegTypes arch) ->
   [Aeson.Value]
-concArgsToJson fm regNames (ConcArgs cArgs) argTys =
-  let argsWithTypes = Ctx.zipWith (\argTy cArg -> Pair argTy (getTag getPtrTag cArg)) argTys cArgs in
-  let argBlobs = toListFC (\(Pair ty cVal) -> concRegValueToJson jsonPtrFnMap fm ty cVal) argsWithTypes in
-  let regNames' = List.map RN.regNameToString (RN.regNamesToList regNames) in
-  List.zipWith (\name mval -> Aeson.object ["reg" Aeson..= name, "value" Aeson..= mval]) regNames' argBlobs
+concRegsToJson fm (RN.RegNames regNames) cArgs argTys =
+  let regNames' = TFC.fmapFC (\(Const n) -> Const (RN.regNameToString n)) regNames in
+  concArgsToJson fm regNames' cArgs argTys
