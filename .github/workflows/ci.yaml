@@ -50,7 +50,10 @@ jobs:
               gunzip > \
               /usr/local/bin/cabal-force-upper-bound
             chmod +x /usr/local/bin/cabal-force-upper-bound
-            for f in ./grease*/grease*.cabal; do
+            for f in \
+                ./doc/diagrams/grease-diagrams.cabal \
+                ./elf-edit-core-dump/elf-edit-core-dump.cabal \
+                ./grease*/grease*.cabal; do
               cabal-force-upper-bound --cabal-project "${f}" >> cabal.project
             done
     steps:
