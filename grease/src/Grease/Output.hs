@@ -40,12 +40,8 @@ data FailedPredicate = FailedPredicate
   { _failedPredicateLocation :: Location
   , _failedPredicateMessage :: Text
     -- | Concrete arguments that make the bug occur.
-    --
-    -- At the moment, this is only populated when simulating Macaw CFGs.
   , _failedPredicateArgs :: [Aeson.Value]
     -- | Concrete shapes that make the bug occur.
-    --
-    -- At the moment, this is only populated when simulating Macaw CFGs.
   , _failedPredicateConcShapes :: Text
   } deriving (Show, Generic)
 makeLenses ''FailedPredicate
@@ -73,9 +69,9 @@ data BatchBug
   = MkBatchBug
     { bugDesc :: Bug.BugInstance
       -- | Concrete arguments that make the bug occur.
-      --
-      -- At the moment, this is only populated when simulating Macaw CFGs.
     , bugArgs :: [Aeson.Value]
+    -- | Concrete shapes that make the bug occur.
+    , bugShapes :: Text
     }
   deriving (Show, Generic)
 instance Aeson.ToJSON BatchBug
@@ -92,7 +88,15 @@ data BatchStatus
 instance Aeson.ToJSON BatchStatus
 
 instance PP.Pretty BatchStatus where
-  pretty (BatchBug (MkBatchBug b _)) = "Likely bug:" PP.<+> PP.pretty b
+  pretty (BatchBug (MkBatchBug b _ shapes)) = PP.vcat $
+    [ "Likely bug:" PP.<+> PP.pretty b
+    ] ++
+      if shapes == ""
+      then []
+      else [ ""
+           , "Concretized arguments:"
+           , PP.pretty shapes
+           ]
   pretty (BatchChecks m) = mconcat $ Map.toList m <&> \(req, cs) -> mconcat
     [ "Checked" PP.<+> PP.pretty req <> ". Result:"
         PP.<+> PP.pretty cs

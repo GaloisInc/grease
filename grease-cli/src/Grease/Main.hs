@@ -35,7 +35,7 @@ import Control.Lens ((^.), (.~), to)
 import Control.Monad ((>>=), forM, forM_, mapM_, when)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Aeson qualified as Aeson
-import Data.Bool (Bool(..), (&&), otherwise, not)
+import Data.Bool (Bool(..), (&&), (||), otherwise, not)
 import Data.ByteString qualified as BS
 import Data.Either (Either(..))
 import Data.ElfEdit qualified as Elf
@@ -101,7 +101,7 @@ import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Bug qualified as Bug
 import Grease.Cli (optsFromArgs)
 import Grease.Concretize (ConcArgs(..), concArgs, printConcArgs)
-import Grease.Concretize.JSON (concArgsToJson)
+import Grease.Concretize.JSON (concArgsToJson, concRegsToJson)
 import Grease.Cursor.Pointer ()
 import Grease.Diagnostic
 import Grease.Diagnostic.Severity (Severity)
@@ -342,7 +342,7 @@ checkMustFail bak errs = do
         , Bug.bugUb = Nothing  -- TODO: check if they are all the same?
         }
   if mustFail
-  then pure (Just (MkBatchBug bug []))  -- TODO: concretized args
+  then pure (Just (MkBatchBug bug [] ""))  -- TODO: concretized args
   else pure Nothing
 
 -- | Machine code-specific arguments that are used throughout 'simulateMacawCfg'
@@ -429,9 +429,10 @@ interestingConcretizedShapes ::
 interestingConcretizedShapes names initArgs (ConcArgs cArgs) =
   let cShapes = fmapFC (Shape.tagWithType . concShape) cArgs in
   let initArgs' = fmapFC Shape.tagWithType initArgs in
+  let isLlvmArg name = "%" `List.isPrefixOf` name in
   Ctx.zipWith
     (\(Const name) (Const isDefault) ->
-      Const (name `List.elem` interestingRegs && not isDefault))
+      Const ((name `List.elem` interestingRegs || isLlvmArg name) && not isDefault))
     names
     (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgs')
 
@@ -621,9 +622,12 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
       ]
 
   res <- case result of
-    RefinementBug b concData -> do
-      let argsJson = concArgsToJson fm rNames (concArgs concData) regTypes
-      pure (BatchBug (MkBatchBug b argsJson))
+    RefinementBug b cData -> do
+      let argsJson = concRegsToJson fm rNames (concArgs cData) regTypes
+      let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData)
+      let addrWidth = archCtx ^. archInfo . to MI.archAddrWidth
+      let prettyArgs = printConcArgs addrWidth argNames interestingShapes (concArgs cData)
+      pure (BatchBug (MkBatchBug b argsJson (Text.pack (show prettyArgs))))
     RefinementCantRefine b ->
       pure (BatchCantRefine b)
     RefinementItersExceeded ->
@@ -637,7 +641,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         Nothing ->
           pure $ BatchCouldNotInfer $ errs <&> \noHeuristic ->
             let cData = noHeuristicConcretizedData noHeuristic
-                argsJson = concArgsToJson fm rNames (concArgs cData) regTypes
+                argsJson = concRegsToJson fm rNames (concArgs cData) regTypes
                 addrWidth = archCtx ^. archInfo . to MI.archAddrWidth
                 interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData)
                 prettyArgs = printConcArgs addrWidth argNames interestingShapes (concArgs cData)
@@ -676,7 +680,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
             doLog la Diag.SimulationGoalsFailed
             pure $ CheckAssertionFailure $ NE.toList errs <&> \noHeuristic ->
               let cData = noHeuristicConcretizedData noHeuristic
-                  argsJson = concArgsToJson fm rNames (concArgs cData) regTypes
+                  argsJson = concRegsToJson fm rNames (concArgs cData) regTypes
                   addrWidth = archCtx ^. archInfo . to MI.archAddrWidth
                   interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData)
                   prettyArgs = printConcArgs addrWidth argNames interestingShapes (concArgs cData)
@@ -1102,9 +1106,11 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
     execAndRefine bak (simSolver simOpts) fm la setupAnns initMem heuristics argNames argShapes args bbMapRef (simLoopBound simOpts) execFeats st
 
   res <- case result of
-    RefinementBug b _ -> do
-      let argsJson = []  -- TODO
-      pure (BatchBug (MkBatchBug b argsJson))
+    RefinementBug b cData -> do
+      let argsJson = concArgsToJson fm argNames (concArgs cData) argTys
+      let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData)
+      let prettyArgs = printConcArgs MM.Addr64 argNames interestingShapes (concArgs cData)
+      pure (BatchBug (MkBatchBug b argsJson (Text.pack (show prettyArgs))))
     RefinementCantRefine b ->
       pure (BatchCantRefine b)
     RefinementItersExceeded ->
@@ -1116,7 +1122,12 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
       case maybeBug of
         Just bug -> pure (BatchBug bug)
         Nothing ->
-          pure $ BatchCouldNotInfer $ NE.map (\n -> toFailedPredicate n [] "") errs
+          pure $ BatchCouldNotInfer $ errs <&> \noHeuristic ->
+            let cData = noHeuristicConcretizedData noHeuristic
+                argsJson = concArgsToJson fm argNames (concArgs cData) argTys
+                interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData)
+                prettyArgs = printConcArgs MM.Addr64 argNames interestingShapes (concArgs cData)
+            in toFailedPredicate noHeuristic argsJson (Text.pack (show prettyArgs))
     RefinementSuccess _argShapes -> pure (BatchChecks Map.empty)
   traverse_ cancel (fmap snd profFeatLog)
   pure res
