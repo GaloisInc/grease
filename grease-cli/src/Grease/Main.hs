@@ -940,6 +940,13 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
         forM_ (Map.elems cfgs) $ \entrypointCfgs ->
           forM_ (startupOvForwardDecs <$> entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
             Macaw.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
+
+        -- Register defined functions.
+        forM_ (CSyn.parsedProgCFGs prog) $ \(C.Reg.AnyCFG defCfg) -> do
+          C.SomeCFG defSsa <- pure $ C.toSSA defCfg
+          -- This could probably be a helper defined in Crucible...
+          let bindCfg c = C.bindFnHandle (C.cfgHandle c) (C.UseCFG c (C.postdomInfo c))
+          bindCfg defSsa
   let macawCfgConfig =
         MacawCfgConfig
           { mcDataLayout = dl
