@@ -95,15 +95,13 @@ import What4.Protocol.Online qualified as W4
 --
 -- Note that @sym@ is a type parameter so that users can define 'SetupHook's
 -- that reference a fixed @sym@ type.
-newtype SetupHook sym
+newtype SetupHook sym arch
   = SetupHook
-    (forall arch bak rtp a r solver scope st fs p.
+    (forall bak rtp a r solver scope st fs p.
       ( C.IsSymBackend sym bak
       , sym ~ W4.ExprBuilder scope st fs
       , bak ~ C.OnlineBackend solver scope st fs
       , W4.OnlineSolver solver
-      , Symbolic.SymArchConstraints arch
-      , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
       , Mem.HasLLVMAnn sym
       , HasGreaseSimulatorState p sym arch
       ) =>
@@ -523,7 +521,7 @@ initState ::
   SymIO.SomeOverrideSim sym () ->
   ArchContext arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
-  SetupHook sym ->
+  SetupHook sym arch ->
   -- | The initial personality state.
   p ->
   -- | The initial register state.
