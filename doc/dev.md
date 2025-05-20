@@ -118,4 +118,60 @@ residing in its own top-level directory:
 * `grease-cli`: This defines a command-line application on top of the library
   code in `grease`.
 
+## Periodic tasks
+
+The following is a list of things that should be done occasionally by GREASE
+developers.
+
+- Check for out-of-date documentation
+- Fix warnings from `cabal haddock`
+- Review and triage old issues
+- Update versions of dependencies and tools
+  - Bump bounds on Hackage dependencies (`cabal outdated` can help)
+  - Bump submodules
+  - Update versions of tools used in CI:
+    - Cabal
+    - GHC (see below)
+    - Linters
+    - OS images
+    - `what4-solvers`
+  - Update versions of tools used in the Dockerfile:
+    - `ghcup`
+
+## GHC versions
+
+We support the three most recent versions of GHC.
+We try to support new versions as soon as they are supported by the libraries that we depend on.
+
+### Adding a new version
+
+GREASE has several Galois-developed dependencies that are pinned as Git submodules, in `deps/`.
+These dependencies need to support new GHC versions before GREASE itself can.
+First, create GitHub issues on each of these dependencies requesting support for the new GHC version.
+Then, create an issue on the GREASE repo that includes:
+
+1. A link to the GHC release notes for the new version
+2. Links to the issues on the dependencies
+3. A link to this section of this document
+
+Then, wait for the issues on the dependencies to be resolved.
+When adding support for the new GHC version to GREASE itself, complete the following steps:
+
+- For each package:
+  - [ ] Allow the [new version of `base`][base] in the Cabal `build-depends`
+  - [ ] Run `cabal {build,test,haddock}`, bumping dependency bounds and submodules as needed
+  - [ ] Fix any new warnings from [`-Wdefault`][wdefault]
+- [ ] Add the new GHC version to the matrix in the GitHub Actions workflows
+- [ ] Bump the GHC version in the Dockerfile to the latest supported version
+- [ ] Follow the below steps to remove the oldest GHC version
+
+[base]: https://gitlab.haskell.org/ghc/ghc/-/wikis/commentary/libraries/version-history
+[wdefault]: https://downloads.haskell.org/ghc/latest/docs/users_guide/using-warnings.html#ghc-flag-Wdefault
+
+### Removing an old version
+
+- [ ] Remove the old version from the matrix in the GitHub Actions configuration
+- [ ] Remove outdated CPP `ifdef`s that refer to the dropped version
+- [ ] Remove outdated `if` stanzas in the Cabal files
+
 <!-- Copyright (c) Galois, Inc. 2024. -->
