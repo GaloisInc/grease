@@ -502,7 +502,7 @@ simulateMacawCfg ::
   , W4.OnlineSolver solver
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
-  , 16 C.<= MC.ArchAddrWidth arch
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
@@ -517,7 +517,7 @@ simulateMacawCfg ::
   MacawCfgConfig arch ->
   ArchContext arch ->
   SimOpts ->
-  Macaw.SetupHook sym ->
+  Macaw.SetupHook sym arch ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
@@ -531,7 +531,6 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory (simMutGlobs simOpts) relocs
-  let ?ptrWidth = knownNat @(MC.ArchAddrWidth arch)
 
   let (tyCtxErrs, tyCtx) = TCtx.mkTypeContext dl IntMap.empty []
   let ?lc = tyCtx
@@ -730,7 +729,7 @@ simulateMacawCfgs ::
   forall arch.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
-  , 16 C.<= MC.ArchAddrWidth arch
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
   , BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , Show (ArchReloc arch)
@@ -742,7 +741,7 @@ simulateMacawCfgs ::
   MacawCfgConfig arch ->
   ArchContext arch ->
   SimOpts ->
-  (forall sym. Macaw.SetupHook sym) ->
+  (forall sym. Macaw.SetupHook sym arch) ->
   Map Entrypoint (MacawEntrypointCfgs arch) ->
   IO Results
 simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs = do
@@ -898,7 +897,7 @@ simulateMacawSyntax ::
   forall arch.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
-  , 16 C.<= MC.ArchAddrWidth arch
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
   , BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , Show (ArchReloc arch)
@@ -918,7 +917,7 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
   let cfgs' = Map.map (\cfg -> MacawEntrypointCfgs cfg Nothing) cfgs
   let memory = MC.emptyMemory (archCtx ^. archInfo . to MI.archAddrWidth)
   let dl = macawDataLayout archCtx
-  let setupHook :: forall sym. SetupHook sym
+  let setupHook :: forall sym. SetupHook sym arch
       setupHook = Macaw.SetupHook $ \bak mvar funOvs -> do
         -- Register overrides, both user-defined ones and ones that are
         -- hard-coded into GREASE itself.
@@ -941,6 +940,13 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
         forM_ (Map.elems cfgs) $ \entrypointCfgs ->
           forM_ (startupOvForwardDecs <$> entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
             Macaw.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
+
+        -- Register defined functions.
+        forM_ (CSyn.parsedProgCFGs prog) $ \(C.Reg.AnyCFG defCfg) -> do
+          C.SomeCFG defSsa <- pure $ C.toSSA defCfg
+          -- This could probably be a helper defined in Crucible...
+          let bindCfg c = C.bindFnHandle (C.cfgHandle c) (C.UseCFG c (C.postdomInfo c))
+          bindCfg defSsa
   let macawCfgConfig =
         MacawCfgConfig
           { mcDataLayout = dl
@@ -960,7 +966,7 @@ simulateMacaw ::
   forall arch.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
-  , 16 C.<= MC.ArchAddrWidth arch
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
   , Elf.IsRelocationType (ArchReloc arch)
   , Elf.RelocationWidth (ArchReloc arch) ~ MC.ArchAddrWidth arch
   , BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
@@ -1052,7 +1058,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
   -- work. Given that startup overrides can't invoke anything defined in the
   -- main program itself, it's much less work to register them ahead of time
   -- here.)
-  let setupHook :: forall sym. SetupHook sym
+  let setupHook :: forall sym. SetupHook sym arch
       setupHook = Macaw.SetupHook $ \bak _mvar funOvs ->
         forM_ (Map.elems cfgs) $ \(MacawEntrypointCfgs entrypointCfgs _) ->
           forM_ (startupOvForwardDecs <$> entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
@@ -1385,6 +1391,7 @@ simulateARMSyntax ::
   GreaseLogAction ->
   IO Results
 simulateARMSyntax simOpts la = withMemOptions simOpts $ do
+  let ?ptrWidth = knownNat @32
   halloc <- C.newHandleAllocator
   archCtx <- armCtx halloc Nothing (simStackArgumentSlots simOpts)
   simulateMacawSyntax la halloc archCtx simOpts AArch32Syn.aarch32ParserHooks
@@ -1463,6 +1470,7 @@ simulateX86Syntax ::
   GreaseLogAction ->
   IO Results
 simulateX86Syntax simOpts la = withMemOptions simOpts $ do
+  let ?ptrWidth = knownNat @64
   halloc <- C.newHandleAllocator
   -- We don't have an ELF file on hand, so there's no reasonable concrete
   -- default value to put on the stack as the return address, so we use fresh,
