@@ -3,14 +3,21 @@ Copyright        : (c) Galois, Inc. 2024
 Maintainer       : GREASE Maintainers <grease@galois.com>
 -}
 
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Grease.Macaw.ResolveCall
-  ( lookupFunctionHandle
+  ( -- * Looking up function handles
+    lookupFunctionHandle
+
+    -- * Looking up syscall handles
   , lookupSyscallHandle
+  , LookupSyscallDispatch(..)
+  , defaultLookupSyscallDispatch
+  , LookupSyscallResult(..)
   ) where
 
 import Control.Applicative (pure)
@@ -35,6 +42,7 @@ import Data.Maybe (Maybe(..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
 import Data.Parameterized.NatRepr (knownNat)
+import Data.Text (Text)
 import Data.Type.Equality (type (~))
 import GHC.Word (Word64)
 import Grease.Diagnostic (Diagnostic(..), GreaseLogAction)
@@ -46,7 +54,7 @@ import Grease.Macaw.SimulatorState
 import Grease.Macaw.SkippedCall (SkippedFunctionCall(..), SkippedSyscall(..))
 import Grease.Macaw.Syscall
 import Grease.Options (ErrorSymbolicFunCalls(..))
-import Grease.Utility (declaredFunNotFound)
+import Grease.Utility (OnlineSolverAndBackend, declaredFunNotFound)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
@@ -238,32 +246,37 @@ lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs 
         Nothing -> skipExternalCall (InvalidAddress (BV.ppHex knownNat bv))
         Just funcAddrOff -> dispatchFuncAddrOff funcAddrOff
 
--- | An implementation of 'Symbolic.LookupSyscallHandle' that attempts to look
--- up an override for the syscall, and if one is found, invokes it. If one
--- cannot be found, the syscall is simulated as a no-op.
-lookupSyscallHandle ::
-  forall arch sym bak solver scope st fs p.
-  ( C.IsSymBackend sym bak
-  , Symbolic.SymArchConstraints arch
-  , W4.OnlineSolver solver
-  , sym ~ W4.ExprBuilder scope st fs
-  , bak ~ C.OnlineBackend solver scope st fs
-  , HasGreaseSimulatorState p sym arch
-  ) =>
+-- | Dispatch on the result of looking up a syscall override. The
+-- 'lookupSyscallHandle' function invokes a continuation of this type after it
+-- has looked up a syscall override, so the behavior of that function can be
+-- customized by performing different actions for each 'LookupSyscallResult'.
+newtype LookupSyscallDispatch p sym arch = LookupSyscallDispatch
+  ( forall rtp blocks r ctx atps rtps.
+    Ctx.Assignment C.TypeRepr atps ->
+    Ctx.Assignment C.TypeRepr rtps ->
+    C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
+    C.RegEntry sym (C.StructType atps) ->
+    LookupSyscallResult p sym arch atps rtps ->
+    IO ( C.FnHandle atps (C.StructType rtps)
+       , C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
+       )
+  )
+
+-- | An implementation of 'LookupSyscallDispatch' that attempts to invoke
+-- syscall overrides if they can be found. If an override cannot be found, the
+-- syscall is simulated as a no-op.
+defaultLookupSyscallDispatch ::
+  OnlineSolverAndBackend solver sym bak t st fs =>
   bak ->
   GreaseLogAction ->
   C.HandleAllocator ->
   ArchContext arch ->
-  -- | Map of names of overridden syscalls to their implementations
-  Map.Map
-    W4.FunctionName
-    (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
-  Symbolic.LookupSyscallHandle p sym arch
-lookupSyscallHandle bak la halloc arch syscallOvs = Symbolic.LookupSyscallHandle $ \atps rtps st regs -> do
-  symSyscallBV <- (arch ^. archSyscallNumberRegister) bak atps regs
-
-  let -- Treat this syscall as a no-op during simulation.
-      skipCall reason = do
+  LookupSyscallDispatch p sym arch
+defaultLookupSyscallDispatch bak la halloc arch =
+  LookupSyscallDispatch $ \atps rtps st regs lsr ->
+    case lsr of
+      SkippedSyscall reason -> do
+        -- Treat this syscall as a no-op during simulation.
         doLog la $ Diag.SkippedSyscall reason
         let funcName = W4.functionNameFromText "_grease_syscall"
         handle <- C.mkHandle' halloc funcName atps (C.StructRepr rtps)
@@ -274,30 +287,83 @@ lookupSyscallHandle bak la halloc arch syscallOvs = Symbolic.LookupSyscallHandle
                 ((arch ^. archSyscallReturnRegisters)
                    C.UnitRepr (pure ()) atps regs rtps)
         pure $ useFnHandleAndState handle (C.UseOverride override) st
+      CachedSyscallFnHandle (Stubs.SyscallFnHandle syscallHdl) ->
+        pure (syscallHdl, st)
+      NewSyscall syscallName syscallNum (Stubs.SomeSyscall syscallOv) -> do
+        doLog la $ Diag.SyscallOverride syscallName syscallNum
+        let syscallFnName = W4.functionNameFromText syscallName
+        macawSyscallHdl <- C.mkHandle' halloc syscallFnName atps (C.StructRepr rtps)
+        let macawSyscallOv = macawSyscallOverride bak arch atps rtps syscallOv
+        pure $ useFnHandleAndState macawSyscallHdl (C.UseOverride macawSyscallOv) st
 
-  case W4.asBV (C.regValue symSyscallBV) of
-    Nothing ->
-      skipCall SymbolicSyscallNumber
-    Just syscallBV ->
-      let syscallNum = fromIntegral @Integer @Int $ BV.asUnsigned syscallBV in
-      case IntMap.lookup syscallNum (arch ^. archSyscallCodeMapping) of
-        Nothing ->
-          skipCall $ UnknownSyscallNumber syscallNum
-        Just syscallName ->
-          let syscallNumRepr = Stubs.SyscallNumRepr atps rtps (toInteger syscallNum) in
-          case MapF.lookup syscallNumRepr (st ^. stateSyscallHandles) of
-            Just (Stubs.SyscallFnHandle syscallHdl) ->
-              pure (syscallHdl, st)
-            Nothing ->
-              let syscallFnName = W4.functionNameFromText syscallName in
-              case Map.lookup syscallFnName syscallOvs of
-                Just (Stubs.SomeSyscall syscallOv) -> do
-                  doLog la $ Diag.SyscallOverride syscallName syscallNum
-                  macawSyscallHdl <- C.mkHandle' halloc syscallFnName atps (C.StructRepr rtps)
-                  let macawSyscallOv = macawSyscallOverride bak arch atps rtps syscallOv
-                  pure $ useFnHandleAndState macawSyscallHdl (C.UseOverride macawSyscallOv) st
-                Nothing ->
-                  skipCall $ SyscallWithoutOverride syscallName syscallNum
+-- | The result of looking up a syscall override.
+data LookupSyscallResult p sym arch atps rtps where
+  -- | The syscall override could not be found for some reason, so it is
+  -- skipped.
+  SkippedSyscall ::
+    -- | The reason for skipping the syscall.
+    SkippedSyscall ->
+    LookupSyscallResult p sym arch atps rtps
+  -- | The syscall has an override that was previously registered.
+  CachedSyscallFnHandle ::
+    -- | The handle for the syscall override.
+    Stubs.SyscallFnHandle '(atps, rtps) ->
+    LookupSyscallResult p sym arch atps rtps
+  -- | The syscall has an override that has not yet been registered.
+  NewSyscall ::
+    -- | The syscall's name.
+    Text ->
+    -- | The syscall's number.
+    Int ->
+    -- | The syscall's override.
+    Stubs.SomeSyscall p sym (Symbolic.MacawExt arch) ->
+    LookupSyscallResult p sym arch atps rtps
+
+-- | An implementation of 'Symbolic.LookupSyscallHandle' that attempts to look
+-- up an syscall override and dispatches on the result.
+lookupSyscallHandle ::
+  forall arch sym bak solver scope st fs p.
+  ( C.IsSymBackend sym bak
+  , Symbolic.SymArchConstraints arch
+  , W4.OnlineSolver solver
+  , sym ~ W4.ExprBuilder scope st fs
+  , bak ~ C.OnlineBackend solver scope st fs
+  , HasGreaseSimulatorState p sym arch
+  ) =>
+  bak ->
+  ArchContext arch ->
+  -- | Map of names of overridden syscalls to their implementations
+  Map.Map
+    W4.FunctionName
+    (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
+  -- | Dispatch on the result of looking up a syscall override.
+  LookupSyscallDispatch p sym arch ->
+  Symbolic.LookupSyscallHandle p sym arch
+lookupSyscallHandle bak arch syscallOvs (LookupSyscallDispatch dispatch) =
+  Symbolic.LookupSyscallHandle $ \atps rtps st regs -> do
+    let dispatch' = dispatch atps rtps st regs
+    symSyscallBV <- (arch ^. archSyscallNumberRegister) bak atps regs
+
+    case W4.asBV (C.regValue symSyscallBV) of
+      Nothing ->
+        dispatch' $ SkippedSyscall SymbolicSyscallNumber
+      Just syscallBV ->
+        let syscallNum = fromIntegral @Integer @Int $ BV.asUnsigned syscallBV in
+        case IntMap.lookup syscallNum (arch ^. archSyscallCodeMapping) of
+          Nothing ->
+            dispatch' $ SkippedSyscall $ UnknownSyscallNumber syscallNum
+          Just syscallName ->
+            let syscallNumRepr = Stubs.SyscallNumRepr atps rtps (toInteger syscallNum) in
+            case MapF.lookup syscallNumRepr (st ^. stateSyscallHandles) of
+              Just syscallFnHandle ->
+                dispatch' $ CachedSyscallFnHandle syscallFnHandle
+              Nothing ->
+                let syscallFnName = W4.functionNameFromText syscallName in
+                case Map.lookup syscallFnName syscallOvs of
+                  Just someSyscall ->
+                    dispatch' $ NewSyscall syscallName syscallNum someSyscall
+                  Nothing ->
+                    dispatch' $ SkippedSyscall $ SyscallWithoutOverride syscallName syscallNum
 
 -- | Perform code discovery on the function address (see @Note [Incremental
 -- code discovery]@ in "Grease.Macaw.SimulatorState") and bind the function
