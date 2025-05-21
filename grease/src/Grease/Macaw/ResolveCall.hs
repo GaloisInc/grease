@@ -247,7 +247,8 @@ lookupFunctionHandle ::
   ErrorSymbolicFunCalls ->
   LookupFunctionHandleDispatch p sym arch ->
   Symbolic.LookupFunctionHandle p sym arch
-lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls (LookupFunctionHandleDispatch dispatch) = Symbolic.LookupFunctionHandle $ \st mem regs -> do
+lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
+  let LookupFunctionHandleDispatch dispatch = lfhd
   let dispatch' st' = dispatch st' mem regs
 
   -- First, obtain the address contained in the instruction pointer.
@@ -442,8 +443,9 @@ lookupSyscallHandle ::
   -- | Dispatch on the result of looking up a syscall override.
   LookupSyscallDispatch p sym arch ->
   Symbolic.LookupSyscallHandle p sym arch
-lookupSyscallHandle bak arch syscallOvs (LookupSyscallDispatch dispatch) =
+lookupSyscallHandle bak arch syscallOvs lsd =
   Symbolic.LookupSyscallHandle $ \atps rtps st regs -> do
+    let LookupSyscallDispatch dispatch = lsd
     let dispatch' = dispatch atps rtps st regs
     symSyscallBV <- (arch ^. archSyscallNumberRegister) bak atps regs
 
