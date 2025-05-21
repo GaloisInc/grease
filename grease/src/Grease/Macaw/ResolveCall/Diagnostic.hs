@@ -45,8 +45,10 @@ data Diagnostic where
     Text {- ^ Syscall name -} ->
     Int {- ^ Syscall number -} ->
     Diagnostic
-  SkippedCall ::
-    Skip.SkippedCall arch -> Diagnostic
+  SkippedFunctionCall ::
+    Skip.SkippedFunctionCall arch -> Diagnostic
+  SkippedSyscall ::
+    Skip.SkippedSyscall -> Diagnostic
 
 instance PP.Pretty Diagnostic where
   pretty d =
@@ -71,7 +73,8 @@ instance PP.Pretty Diagnostic where
       SyscallOverride name num ->
         "Using an override for the" PP.<+> PP.pretty name PP.<+>
         PP.parens (PP.pretty num) PP.<+> "syscall"
-      SkippedCall call -> PP.pretty call
+      SkippedFunctionCall call -> PP.pretty call
+      SkippedSyscall call -> PP.pretty call
 
 severity :: Diagnostic -> Severity
 severity =
@@ -80,4 +83,5 @@ severity =
     FunctionCall{} -> Debug
     FunctionOverride{} -> Debug
     SyscallOverride{} -> Debug
-    SkippedCall{} -> Info
+    SkippedFunctionCall{} -> Info
+    SkippedSyscall{} -> Info

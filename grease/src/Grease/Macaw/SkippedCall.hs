@@ -7,7 +7,10 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Macaw.SkippedCall (SkippedCall(..)) where
+module Grease.Macaw.SkippedCall
+  ( SkippedFunctionCall(..)
+  , SkippedSyscall(..)
+  ) where
 
 import Data.Macaw.CFG.Core qualified as MC
 import Data.Macaw.Memory (MemSegmentOff, MemWidth)
@@ -17,32 +20,35 @@ import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 
 -- | The reasons that GREASE might skip a function call
-data SkippedCall arch where
+data SkippedFunctionCall arch where
   SymbolicAddress ::
-    SkippedCall arch
+    SkippedFunctionCall arch
   InvalidAddress ::
     String {- ^ Address -} ->
-    SkippedCall arch
+    SkippedFunctionCall arch
   PltNoOverride ::
     (1 W4.<= MC.ArchAddrWidth arch, MemWidth (MC.ArchAddrWidth arch)) =>
     MemSegmentOff (MC.ArchAddrWidth arch) ->
     W4.FunctionName ->
-    SkippedCall arch
+    SkippedFunctionCall arch
   NotExecutable ::
     (1 W4.<= MC.ArchAddrWidth arch, MemWidth (MC.ArchAddrWidth arch)) =>
     MemSegmentOff (MC.ArchAddrWidth arch) ->
-    SkippedCall arch
+    SkippedFunctionCall arch
+
+-- | The reasons that GREASE might skip a function call
+data SkippedSyscall where
   SymbolicSyscallNumber ::
-    SkippedCall arch
+    SkippedSyscall
   UnknownSyscallNumber ::
     Int ->
-    SkippedCall arch
+    SkippedSyscall
   SyscallWithoutOverride ::
     Text {- ^ Syscall name -} ->
     Int {- ^ Syscall number -} ->
-    SkippedCall arch
+    SkippedSyscall
 
-instance PP.Pretty (SkippedCall arch) where
+instance PP.Pretty (SkippedFunctionCall arch) where
   pretty =
     \case
       SymbolicAddress -> "Skipped call to a symbolic address"
@@ -52,6 +58,10 @@ instance PP.Pretty (SkippedCall arch) where
         PP.pretty addr PP.<> PP.colon PP.<+> PP.pretty name
       NotExecutable addr ->
         "Skipped call to a non-executable address:" PP.<+> PP.pretty addr
+
+instance PP.Pretty SkippedSyscall where
+  pretty =
+    \case
       SymbolicSyscallNumber -> "Skipped syscall call with a symbolic syscall number"
       UnknownSyscallNumber num -> "Skipped syscall with unknown number" PP.<+> PP.parens (PP.pretty num)
       SyscallWithoutOverride name num -> "Skipped system call without an override:" PP.<+> PP.pretty name PP.<+> PP.parens (PP.pretty num)

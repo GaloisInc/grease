@@ -43,7 +43,7 @@ import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.FunctionOverride
 import Grease.Macaw.ResolveCall.Diagnostic qualified as Diag
 import Grease.Macaw.SimulatorState
-import Grease.Macaw.SkippedCall (SkippedCall(..))
+import Grease.Macaw.SkippedCall (SkippedFunctionCall(..), SkippedSyscall(..))
 import Grease.Macaw.Syscall
 import Grease.Options (ErrorSymbolicFunCalls(..))
 import Grease.Utility (declaredFunNotFound)
@@ -146,7 +146,7 @@ lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs 
 
   let -- Treat an external function as a no-op during simulation.
       skipExternalCall reason = do
-        doLog la $ Diag.SkippedCall reason
+        doLog la $ Diag.SkippedFunctionCall reason
         let funcName = W4.functionNameFromText "_grease_external"
         handle <- C.mkHandle' halloc funcName (Ctx.Empty Ctx.:> regStructRepr arch) (regStructRepr arch)
         let override = C.mkOverride' funcName (regStructRepr arch) $ do
@@ -264,7 +264,7 @@ lookupSyscallHandle bak la halloc arch syscallOvs = Symbolic.LookupSyscallHandle
 
   let -- Treat this syscall as a no-op during simulation.
       skipCall reason = do
-        doLog la $ Diag.SkippedCall reason
+        doLog la $ Diag.SkippedSyscall reason
         let funcName = W4.functionNameFromText "_grease_syscall"
         handle <- C.mkHandle' halloc funcName atps (C.StructRepr rtps)
         let override =
