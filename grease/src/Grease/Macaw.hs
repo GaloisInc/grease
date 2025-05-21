@@ -458,7 +458,7 @@ memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap 
   , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs lsd
   }
   where
-    lfhd = ResolveCall.defaultLookupFunctionHandleDispatch bak logAction halloc arch funOvs
+    lfhd = ResolveCall.defaultLookupFunctionHandleDispatch bak logAction halloc arch memory funOvs
     lsd = ResolveCall.defaultLookupSyscallDispatch bak logAction halloc arch
 
 -- | Check whether a pointer points to a relocation address, and if so, assert

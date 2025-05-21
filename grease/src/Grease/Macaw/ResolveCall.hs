@@ -57,7 +57,7 @@ import Grease.Macaw.SimulatorState
 import Grease.Macaw.SkippedCall (SkippedFunctionCall(..), SkippedSyscall(..))
 import Grease.Macaw.Syscall
 import Grease.Options (ErrorSymbolicFunCalls(..))
-import Grease.Utility (OnlineSolverAndBackend, declaredFunNotFound)
+import Grease.Utility (OnlineSolverAndBackend, declaredFunNotFound, segoffToAbsoluteAddr)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
@@ -141,10 +141,11 @@ defaultLookupFunctionHandleDispatch ::
   GreaseLogAction ->
   C.HandleAllocator ->
   ArchContext arch ->
+  EL.Memory (MC.ArchAddrWidth arch) ->
   -- | Map of names of overridden functions to their implementations
   Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
   LookupFunctionHandleDispatch p sym arch
-defaultLookupFunctionHandleDispatch bak la halloc arch funOvs =
+defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs =
   LookupFunctionHandleDispatch $ \st mem regs lfhr -> do
     let -- Call a function handle, unless we have an override in which case call
         -- the override instead.
@@ -156,9 +157,10 @@ defaultLookupFunctionHandleDispatch bak la halloc arch funOvs =
               pure (hdl, st')
 
         -- Log that we have performed a function call.
-        logFunctionCall fnName fnAbsAddr = do
+        logFunctionCall fnName fnAddrOff = do
           mbReturnAddr <-
             (arch ^. archFunctionReturnAddr) bak (arch ^. archVals) regs mem
+          let fnAbsAddr = segoffToAbsoluteAddr memory fnAddrOff
           doLog la $ Diag.FunctionCall fnName fnAbsAddr mbReturnAddr
 
     case lfhr of
@@ -171,14 +173,14 @@ defaultLookupFunctionHandleDispatch bak la halloc arch funOvs =
               let regs' = Ctx.last $ C.regMap args
               (arch ^. archOffsetStackPointerPostCall) (C.regValue regs')
         pure $ useFnHandleAndState handle (C.UseOverride override) st
-      CachedFnHandle fnAbsAddr _fnAddrOff hdl mbOv -> do
-        logFunctionCall (C.handleName hdl) fnAbsAddr
+      CachedFnHandle fnAddrOff hdl mbOv -> do
+        logFunctionCall (C.handleName hdl) fnAddrOff
         callHandle hdl mbOv st
-      DiscoveredFnHandle fnAbsAddr _fnAddrOff hdl mbOv -> do
-        logFunctionCall (C.handleName hdl) fnAbsAddr
+      DiscoveredFnHandle fnAddrOff hdl mbOv -> do
+        logFunctionCall (C.handleName hdl) fnAddrOff
         callHandle hdl mbOv st
-      PltStubOverride pltStubAbsAddr _pltStubAddrOff pltStubName macawFnOv -> do
-        logFunctionCall pltStubName pltStubAbsAddr
+      PltStubOverride pltStubAddrOff pltStubName macawFnOv -> do
+        logFunctionCall pltStubName pltStubAddrOff
         useMacawFunctionOverride bak la halloc arch funOvs macawFnOv st
 
 -- | The result of looking up a function handle.
@@ -190,8 +192,6 @@ data LookupFunctionHandleResult p sym arch where
     LookupFunctionHandleResult p sym arch
   -- | The function handle was previously registered.
   CachedFnHandle ::
-    -- | The function's absolute address.
-    MC.MemWord (MC.ArchAddrWidth arch) ->
     -- | The function's resolved address.
     MC.ArchSegmentOff arch ->
     -- | The function's handle.
@@ -201,8 +201,6 @@ data LookupFunctionHandleResult p sym arch where
     LookupFunctionHandleResult p sym arch
   -- | This is a newly discovered function handle.
   DiscoveredFnHandle ::
-    -- | The function's absolute address.
-    MC.MemWord (MC.ArchAddrWidth arch) ->
     -- | The function's resolved address.
     MC.ArchSegmentOff arch ->
     -- | The function's handle.
@@ -212,8 +210,6 @@ data LookupFunctionHandleResult p sym arch where
     LookupFunctionHandleResult p sym arch
   -- | This is a PLT stub function with a corresponding override.
   PltStubOverride ::
-    -- | The PLT stub's absolute address.
-    MC.MemWord (MC.ArchAddrWidth arch) ->
     -- | The PLT stub's resolved address.
     MC.ArchSegmentOff arch ->
     -- | The PLT stub's name.
@@ -303,7 +299,7 @@ lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs 
             -- discovered
             | Just hdl <- Map.lookup funcAddrOff hdls =
               dispatch' st $
-              CachedFnHandle bvMemWord funcAddrOff hdl $
+              CachedFnHandle funcAddrOff hdl $
               Map.lookup (C.handleName hdl) funOvs
 
             -- Next, check if this is a PLT stub.
@@ -319,7 +315,7 @@ lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs 
                       -- use it...
                       Just macawFnOv ->
                         dispatch' st $
-                        PltStubOverride bvMemWord funcAddrOff pltStubName macawFnOv
+                        PltStubOverride funcAddrOff pltStubName macawFnOv
                       -- ...otherwise, skip the PLT call entirely.
                       Nothing ->
                         dispatch' st $
@@ -340,7 +336,7 @@ lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs 
               (hdl, st') <-
                 discoverFuncAddr la halloc arch memory symMap pltStubs funcAddrOff st
               dispatch' st' $
-                DiscoveredFnHandle bvMemWord funcAddrOff hdl $
+                DiscoveredFnHandle funcAddrOff hdl $
                 Map.lookup (C.handleName hdl) funOvs
 
             | otherwise =
