@@ -36,7 +36,7 @@ data SkippedFunctionCall arch where
     MemSegmentOff (MC.ArchAddrWidth arch) ->
     SkippedFunctionCall arch
 
--- | The reasons that GREASE might skip a function call
+-- | The reasons that GREASE might skip a syscall
 data SkippedSyscall where
   SymbolicSyscallNumber ::
     SkippedSyscall
