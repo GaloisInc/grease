@@ -21,6 +21,9 @@ module Grease.Macaw.ResolveCall
   , LookupSyscallDispatch(..)
   , defaultLookupSyscallDispatch
   , LookupSyscallResult(..)
+
+    -- * Helper functions for looking up handles
+  , discoverFuncAddr
   ) where
 
 import Control.Applicative (pure)
