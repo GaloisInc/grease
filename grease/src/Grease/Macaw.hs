@@ -454,10 +454,11 @@ memConfigWithHandles ::
   Symbolic.MemModelConfig p sym arch Mem.Mem
 memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs syscallOvs errorSymbolicFunCalls memCfg =
   memCfg
-  { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls
+  { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls lfhd
   , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs lsd
   }
   where
+    lfhd = ResolveCall.defaultLookupFunctionHandleDispatch bak logAction halloc arch funOvs
     lsd = ResolveCall.defaultLookupSyscallDispatch bak logAction halloc arch
 
 -- | Check whether a pointer points to a relocation address, and if so, assert

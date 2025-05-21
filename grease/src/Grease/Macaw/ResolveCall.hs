@@ -12,6 +12,9 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.ResolveCall
   ( -- * Looking up function handles
     lookupFunctionHandle
+  , LookupFunctionHandleDispatch(..)
+  , defaultLookupFunctionHandleDispatch
+  , LookupFunctionHandleResult(..)
 
     -- * Looking up syscall handles
   , lookupSyscallHandle
@@ -108,6 +111,117 @@ useComposedOverride halloc arch handle0 override0 st funcName f = do
         f (C.regValue regs)
   pure $ useFnHandleAndState handle (C.UseOverride override) st
 
+-- | Dispatch on the result of looking up a function handle. The
+-- 'lookupFunctionHandle' function invokes a continuation of this type after it
+-- has looked up a function handle, so the behavior of that function can be
+-- customized by performing different actions for each
+-- 'LookupFunctionHandleResult'.
+newtype LookupFunctionHandleDispatch p sym arch = LookupFunctionHandleDispatch
+  ( forall rtp blocks r ctx.
+    C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
+    Mem.MemImpl sym ->
+    Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
+    LookupFunctionHandleResult p sym arch ->
+    IO ( C.FnHandle (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)
+       , C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
+       )
+  )
+
+-- | An reasonable default implementation of 'LookupFunctionHandleDispatch'.
+-- This invokes function handles (replacing them when overrides when they can be
+-- found) if they can be found, and if not, skips them by simulating them as
+-- no-ops.
+defaultLookupFunctionHandleDispatch ::
+  ( OnlineSolverAndBackend solver sym bak t st fs
+  , Symbolic.SymArchConstraints arch
+  , Mem.HasLLVMAnn sym
+  , HasGreaseSimulatorState p sym arch
+  ) =>
+  bak ->
+  GreaseLogAction ->
+  C.HandleAllocator ->
+  ArchContext arch ->
+  -- | Map of names of overridden functions to their implementations
+  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
+  LookupFunctionHandleDispatch p sym arch
+defaultLookupFunctionHandleDispatch bak la halloc arch funOvs =
+  LookupFunctionHandleDispatch $ \st mem regs lfhr -> do
+    let -- Call a function handle, unless we have an override in which case call
+        -- the override instead.
+        callHandle hdl mbOv st' =
+          case mbOv of
+            Just macawFnOv ->
+              useMacawFunctionOverride bak la halloc arch funOvs macawFnOv st'
+            Nothing ->
+              pure (hdl, st')
+
+        -- Log that we have performed a function call.
+        logFunctionCall fnName fnAbsAddr = do
+          mbReturnAddr <-
+            (arch ^. archFunctionReturnAddr) bak (arch ^. archVals) regs mem
+          doLog la $ Diag.FunctionCall fnName fnAbsAddr mbReturnAddr
+
+    case lfhr of
+      SkippedFunctionCall reason -> do
+        doLog la $ Diag.SkippedFunctionCall reason
+        let funcName = W4.functionNameFromText "_grease_external"
+        handle <- C.mkHandle' halloc funcName (Ctx.Empty Ctx.:> regStructRepr arch) (regStructRepr arch)
+        let override = C.mkOverride' funcName (regStructRepr arch) $ do
+              args <- C.getOverrideArgs
+              let regs' = Ctx.last $ C.regMap args
+              (arch ^. archOffsetStackPointerPostCall) (C.regValue regs')
+        pure $ useFnHandleAndState handle (C.UseOverride override) st
+      CachedFnHandle fnAbsAddr _fnAddrOff hdl mbOv -> do
+        logFunctionCall (C.handleName hdl) fnAbsAddr
+        callHandle hdl mbOv st
+      DiscoveredFnHandle fnAbsAddr _fnAddrOff hdl mbOv -> do
+        logFunctionCall (C.handleName hdl) fnAbsAddr
+        callHandle hdl mbOv st
+      PltStubOverride pltStubAbsAddr _pltStubAddrOff pltStubName macawFnOv -> do
+        logFunctionCall pltStubName pltStubAbsAddr
+        useMacawFunctionOverride bak la halloc arch funOvs macawFnOv st
+
+-- | The result of looking up a function handle.
+data LookupFunctionHandleResult p sym arch where
+  -- | The function handle could not be found for some reason, so it is skipped.
+  SkippedFunctionCall ::
+    -- | The reason for skipping the function.
+    SkippedFunctionCall arch ->
+    LookupFunctionHandleResult p sym arch
+  -- | The function handle was previously registered.
+  CachedFnHandle ::
+    -- | The function's absolute address.
+    MC.MemWord (MC.ArchAddrWidth arch) ->
+    -- | The function's resolved address.
+    MC.ArchSegmentOff arch ->
+    -- | The function's handle.
+    MacawFnHandle arch ->
+    -- | The function's override (if one exists).
+    Maybe (MacawFunctionOverride p sym arch) ->
+    LookupFunctionHandleResult p sym arch
+  -- | This is a newly discovered function handle.
+  DiscoveredFnHandle ::
+    -- | The function's absolute address.
+    MC.MemWord (MC.ArchAddrWidth arch) ->
+    -- | The function's resolved address.
+    MC.ArchSegmentOff arch ->
+    -- | The function's handle.
+    MacawFnHandle arch ->
+    -- | The function's override (if one exists).
+    Maybe (MacawFunctionOverride p sym arch) ->
+    LookupFunctionHandleResult p sym arch
+  -- | This is a PLT stub function with a corresponding override.
+  PltStubOverride ::
+    -- | The PLT stub's absolute address.
+    MC.MemWord (MC.ArchAddrWidth arch) ->
+    -- | The PLT stub's resolved address.
+    MC.ArchSegmentOff arch ->
+    -- | The PLT stub's name.
+    W4.FunctionName ->
+    -- | The PLT stub's override.
+    MacawFunctionOverride p sym arch ->
+    LookupFunctionHandleResult p sym arch
+
 lookupFunctionHandle ::
   forall arch sym bak solver scope st fs p.
   ( C.IsSymBackend sym bak
@@ -132,8 +246,11 @@ lookupFunctionHandle ::
   -- | Map of names of overridden functions to their implementations
   Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
   ErrorSymbolicFunCalls ->
+  LookupFunctionHandleDispatch p sym arch ->
   Symbolic.LookupFunctionHandle p sym arch
-lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls = Symbolic.LookupFunctionHandle $ \st mem regs -> do
+lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls (LookupFunctionHandleDispatch dispatch) = Symbolic.LookupFunctionHandle $ \st mem regs -> do
+  let dispatch' st' = dispatch st' mem regs
+
   -- First, obtain the address contained in the instruction pointer.
   symAddr0 <- (arch ^. archGetIP) regs
   -- Next, attempt to concretize the address. We must do this because it is
@@ -178,31 +295,16 @@ lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs 
     Just bv ->
       let -- This conversion is safe iff MC.ArchAddrWidth arch <= 64
           bvWord64 = fromIntegral @Integer @Word64 (BV.asUnsigned bv)
-
-          -- Call a function handle, unless we have an override in which case call
-          -- the override instead.
-          callHandle hdl st' =
-            case Map.lookup (C.handleName hdl) funOvs of
-              Just macawFnOv ->
-                useMacawFunctionOverride bak la halloc arch funOvs macawFnOv st'
-              Nothing ->
-                pure (hdl, st')
-
-          -- Log that we have performed a function call.
-          logFunctionCall fnName = do
-            mbReturnAddr <-
-              (arch ^. archFunctionReturnAddr) bak (arch ^. archVals) regs mem
-            doLog la $ Diag.FunctionCall fnName bvMemWord mbReturnAddr
-
           hdls = st ^. stateDiscoveredFnHandles
           bvMemWord = EL.memWord bvWord64
 
           dispatchFuncAddrOff funcAddrOff
             -- First, check if this is the address of a CFG we have already
             -- discovered
-            | Just hdl <- Map.lookup funcAddrOff hdls = do
-              logFunctionCall (C.handleName hdl)
-              callHandle hdl st
+            | Just hdl <- Map.lookup funcAddrOff hdls =
+              dispatch' st $
+              CachedFnHandle bvMemWord funcAddrOff hdl $
+              Map.lookup (C.handleName hdl) funOvs
 
             -- Next, check if this is a PLT stub.
             | Just pltStubName <- Map.lookup funcAddrOff pltStubs = do
@@ -215,13 +317,14 @@ lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs 
                  -> case Map.lookup pltStubName funOvs of
                       -- ...otherwise, if there is an override for the PLT stub,
                       -- use it...
-                      Just macawFnOv -> do
-                        logFunctionCall pltStubName
-                        useMacawFunctionOverride bak la halloc arch funOvs macawFnOv st
+                      Just macawFnOv ->
+                        dispatch' st $
+                        PltStubOverride bvMemWord funcAddrOff pltStubName macawFnOv
                       -- ...otherwise, skip the PLT call entirely.
-                      Nothing -> do
-                        logFunctionCall pltStubName
-                        skipExternalCall (PltNoOverride @arch funcAddrOff pltStubName)
+                      Nothing ->
+                        dispatch' st $
+                        SkippedFunctionCall $
+                        PltNoOverride funcAddrOff pltStubName
 
             -- Finally, check if this is a function that we should explore, and if
             -- so, use Macaw's code discovery to do so. See Note [Incremental code
@@ -236,14 +339,15 @@ lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs 
             | Discovery.isExecutableSegOff funcAddrOff = do
               (hdl, st') <-
                 discoverFuncAddr la halloc arch memory symMap pltStubs funcAddrOff st
-              logFunctionCall (C.handleName hdl)
-              callHandle hdl st'
+              dispatch' st' $
+                DiscoveredFnHandle bvMemWord funcAddrOff hdl $
+                Map.lookup (C.handleName hdl) funOvs
 
             | otherwise =
-              skipExternalCall (NotExecutable funcAddrOff)
+              dispatch' st $ SkippedFunctionCall $ NotExecutable funcAddrOff
 
       in case Loader.resolveAbsoluteAddress memory bvMemWord of
-        Nothing -> skipExternalCall (InvalidAddress (BV.ppHex knownNat bv))
+        Nothing -> dispatch' st $ SkippedFunctionCall $ InvalidAddress $ BV.ppHex knownNat bv
         Just funcAddrOff -> dispatchFuncAddrOff funcAddrOff
 
 -- | Dispatch on the result of looking up a syscall override. The
