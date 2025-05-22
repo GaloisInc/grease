@@ -60,7 +60,7 @@ import Grease.Diagnostic
 import Grease.Macaw.Arch
 import Grease.Macaw.FunctionOverride
 import Grease.Macaw.Load.Relocation (RelocType(..))
-import Grease.Macaw.ResolveCall (lookupFunctionHandle, lookupSyscallHandle)
+import Grease.Macaw.ResolveCall qualified as ResolveCall
 import Grease.Macaw.SimulatorHooks
 import Grease.Macaw.SimulatorState
 import Grease.Options qualified as Opts
@@ -454,9 +454,12 @@ memConfigWithHandles ::
   Symbolic.MemModelConfig p sym arch Mem.Mem
 memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs syscallOvs errorSymbolicFunCalls memCfg =
   memCfg
-  { Symbolic.lookupFunctionHandle = lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls
-  , Symbolic.lookupSyscallHandle = lookupSyscallHandle bak logAction halloc arch syscallOvs
+  { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls lfhd
+  , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs lsd
   }
+  where
+    lfhd = ResolveCall.defaultLookupFunctionHandleDispatch bak logAction halloc arch memory funOvs
+    lsd = ResolveCall.defaultLookupSyscallDispatch bak logAction halloc arch
 
 -- | Check whether a pointer points to a relocation address, and if so, assert
 -- that the underlying relocation type is supported. If not, throw an exception.
