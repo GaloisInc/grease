@@ -223,7 +223,8 @@ data LookupFunctionHandleResult p sym arch where
 
 -- | Attempt to look up a function handle.
 lookupFunctionHandleResult ::
-  ( OnlineSolverAndBackend solver sym bak t st fs
+  forall arch sym bak solver scope st fs p rtp blocks r ctx.
+  ( OnlineSolverAndBackend solver sym bak scope st fs
   , Symbolic.SymArchConstraints arch
   , HasGreaseSimulatorState p sym arch
   ) =>
@@ -280,69 +281,77 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
     Just bv ->
       let -- This conversion is safe iff MC.ArchAddrWidth arch <= 64
           bvWord64 = fromIntegral @Integer @Word64 (BV.asUnsigned bv)
-          hdls = st ^. stateDiscoveredFnHandles
           bvMemWord = EL.memWord bvWord64
-
-          go funcAddrOff
-            -- First, check if this is the address of a CFG we have already
-            -- discovered
-            | Just hdl <- Map.lookup funcAddrOff hdls =
-              pure
-                ( CachedFnHandle funcAddrOff hdl $
-                  Map.lookup (C.handleName hdl) funOvs
-                , st
-                )
-
-            -- Next, check if this is a PLT stub.
-            | Just pltStubName <- Map.lookup funcAddrOff pltStubs = do
-              if |  -- If a PLT stub jumps to an address within the same binary
-                    -- or shared library, resolve it...
-                    Just pltCallAddr <- Map.lookup pltStubName dynFunMap
-                 -> do doLog la $ Diag.PltCall pltStubName funcAddrOff pltCallAddr
-                       go pltCallAddr
-                 |  otherwise
-                 -> case Map.lookup pltStubName funOvs of
-                      -- ...otherwise, if there is an override for the PLT stub,
-                      -- use it...
-                      Just macawFnOv ->
-                        pure
-                          ( PltStubOverride funcAddrOff pltStubName macawFnOv
-                          , st
-                          )
-                      -- ...otherwise, skip the PLT call entirely.
-                      Nothing ->
-                        pure
-                          ( SkippedFunctionCall $
-                            PltNoOverride funcAddrOff pltStubName
-                          , st
-                          )
-
-            -- Finally, check if this is a function that we should explore, and if
-            -- so, use Macaw's code discovery to do so. See Note [Incremental code
-            -- discovery] in Grease.Macaw.SimulatorState.
-            --
-            -- As a simple heuristic for whether a function is worthy of
-            -- exploration, we check if the segment that the address inhabits is
-            -- executable. This check is important to prevent simulating functions
-            -- that, say, inhabit the .data section (which is common for binaries
-            -- that fail the `in-text` requirement), as Macaw will simply crash
-            -- when simulating them.
-            | Discovery.isExecutableSegOff funcAddrOff = do
-              (hdl, st') <-
-                discoverFuncAddr la halloc arch memory symMap pltStubs funcAddrOff st
-              pure
-                ( DiscoveredFnHandle funcAddrOff hdl $
-                  Map.lookup (C.handleName hdl) funOvs
-                , st'
-                )
-
-            | otherwise =
-              pure (SkippedFunctionCall (NotExecutable funcAddrOff), st)
 
       in case Loader.resolveAbsoluteAddress memory bvMemWord of
         Nothing ->
           pure (SkippedFunctionCall (InvalidAddress (BV.ppHex knownNat bv)), st)
         Just funcAddrOff -> go funcAddrOff
+  where
+    -- Given a resolved function address, compute a
+    -- 'LookupFunctionHandleResult'. This function is recursive because we may
+    -- need to handle PLT stubs that jump to other addresses within the same
+    -- binary.
+    go ::
+      MC.ArchSegmentOff arch ->
+      IO ( LookupFunctionHandleResult p sym arch
+         , C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
+         )
+    go funcAddrOff
+      -- First, check if this is the address of a CFG we have already
+      -- discovered
+      | Just hdl <- Map.lookup funcAddrOff (st ^. stateDiscoveredFnHandles) =
+        pure
+          ( CachedFnHandle funcAddrOff hdl $
+            Map.lookup (C.handleName hdl) funOvs
+          , st
+          )
+
+      -- Next, check if this is a PLT stub.
+      | Just pltStubName <- Map.lookup funcAddrOff pltStubs =
+        if |  -- If a PLT stub jumps to an address within the same binary
+              -- or shared library, resolve it...
+              Just pltCallAddr <- Map.lookup pltStubName dynFunMap
+           -> do doLog la $ Diag.PltCall pltStubName funcAddrOff pltCallAddr
+                 go pltCallAddr
+           |  otherwise
+           -> case Map.lookup pltStubName funOvs of
+                -- ...otherwise, if there is an override for the PLT stub,
+                -- use it...
+                Just macawFnOv ->
+                  pure
+                    ( PltStubOverride funcAddrOff pltStubName macawFnOv
+                    , st
+                    )
+                -- ...otherwise, skip the PLT call entirely.
+                Nothing ->
+                  pure
+                    ( SkippedFunctionCall $
+                      PltNoOverride funcAddrOff pltStubName
+                    , st
+                    )
+
+      -- Finally, check if this is a function that we should explore, and if
+      -- so, use Macaw's code discovery to do so. See Note [Incremental code
+      -- discovery] in Grease.Macaw.SimulatorState.
+      --
+      -- As a simple heuristic for whether a function is worthy of
+      -- exploration, we check if the segment that the address inhabits is
+      -- executable. This check is important to prevent simulating functions
+      -- that, say, inhabit the .data section (which is common for binaries
+      -- that fail the `in-text` requirement), as Macaw will simply crash
+      -- when simulating them.
+      | Discovery.isExecutableSegOff funcAddrOff = do
+        (hdl, st') <-
+          discoverFuncAddr la halloc arch memory symMap pltStubs funcAddrOff st
+        pure
+          ( DiscoveredFnHandle funcAddrOff hdl $
+            Map.lookup (C.handleName hdl) funOvs
+          , st'
+          )
+
+      | otherwise =
+        pure (SkippedFunctionCall (NotExecutable funcAddrOff), st)
 
 lookupFunctionHandle ::
   ( OnlineSolverAndBackend solver sym bak t st fs
