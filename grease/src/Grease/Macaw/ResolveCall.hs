@@ -221,14 +221,132 @@ data LookupFunctionHandleResult p sym arch where
     MacawFunctionOverride p sym arch ->
     LookupFunctionHandleResult p sym arch
 
-lookupFunctionHandle ::
-  forall arch sym bak solver scope st fs p.
-  ( C.IsSymBackend sym bak
+-- | Attempt to look up a function handle.
+lookupFunctionHandleResult ::
+  ( OnlineSolverAndBackend solver sym bak t st fs
   , Symbolic.SymArchConstraints arch
-  , W4.OnlineSolver solver
-  , sym ~ W4.ExprBuilder scope st fs
-  , bak ~ C.OnlineBackend solver scope st fs
-  , Mem.HasLLVMAnn sym
+  , HasGreaseSimulatorState p sym arch
+  ) =>
+  bak ->
+  GreaseLogAction ->
+  C.HandleAllocator ->
+  ArchContext arch ->
+  EL.Memory (MC.ArchAddrWidth arch) ->
+  -- | Map of entrypoint addresses to their names
+  Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
+  -- | Map of addresses to PLT stub names
+  Map.Map (MC.ArchSegmentOff arch) W4.FunctionName ->
+  -- | Map of dynamic function names to their addresses
+  Map.Map W4.FunctionName (MC.ArchSegmentOff arch) ->
+  -- | Map of names of overridden functions to their implementations
+  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
+  ErrorSymbolicFunCalls ->
+  C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
+  Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
+  IO ( LookupFunctionHandleResult p sym arch
+     , C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
+     )
+lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls st regs = do
+  -- First, obtain the address contained in the instruction pointer.
+  symAddr0 <- (arch ^. archGetIP) regs
+  -- Next, attempt to concretize the address. We must do this because it is
+  -- possible that the address was obtained from a memory read, and due to the
+  -- way macaw-symbolic's memory model works, such an address would be a fresh
+  -- variable that is constrained to be equal to a concrete address. As such,
+  -- we can only conclude that the address is concrete by consulting an SMT
+  -- solver. (See the refine/bug/symbolic_ip test case for where this technique
+  -- is essential.)
+  --
+  -- Using resolveSymBV is somewhat overkill, as if it is given a truly symbolic
+  -- function address, then it will wastefully attempt to refine the lower and
+  -- upper bounds of the address. (Refining the symbolic bounds won't help here,
+  -- since we can only invoke concrete addresses.) We could make the truly
+  -- symbolic case cheaper by leveraging the ideas in
+  -- https://github.com/GaloisInc/what4/issues/259.
+  symAddr1 <- Symbolic.resolveSymBV bak C.knownNat symAddr0
+
+  case W4.asBV symAddr1 of
+    -- If asBV returns Nothing here, despite the call to resolveSymBV above,
+    -- then the address is truly symbolic. By default, we skip the call
+    -- entirely, but if the user passes --error-symbolic-fun-calls, then this is
+    -- treated as an error.
+    Nothing ->
+      if getErrorSymbolicFunCalls errorSymbolicFunCalls
+        then C.addFailedAssertion bak $
+             C.AssertFailureSimError
+               "Failed to call function"
+               "Cannot resolve a symbolic function address"
+        else pure (SkippedFunctionCall SymbolicAddress, st)
+    Just bv ->
+      let -- This conversion is safe iff MC.ArchAddrWidth arch <= 64
+          bvWord64 = fromIntegral @Integer @Word64 (BV.asUnsigned bv)
+          hdls = st ^. stateDiscoveredFnHandles
+          bvMemWord = EL.memWord bvWord64
+
+          go funcAddrOff
+            -- First, check if this is the address of a CFG we have already
+            -- discovered
+            | Just hdl <- Map.lookup funcAddrOff hdls =
+              pure
+                ( CachedFnHandle funcAddrOff hdl $
+                  Map.lookup (C.handleName hdl) funOvs
+                , st
+                )
+
+            -- Next, check if this is a PLT stub.
+            | Just pltStubName <- Map.lookup funcAddrOff pltStubs = do
+              if |  -- If a PLT stub jumps to an address within the same binary
+                    -- or shared library, resolve it...
+                    Just pltCallAddr <- Map.lookup pltStubName dynFunMap
+                 -> do doLog la $ Diag.PltCall pltStubName funcAddrOff pltCallAddr
+                       go pltCallAddr
+                 |  otherwise
+                 -> case Map.lookup pltStubName funOvs of
+                      -- ...otherwise, if there is an override for the PLT stub,
+                      -- use it...
+                      Just macawFnOv ->
+                        pure
+                          ( PltStubOverride funcAddrOff pltStubName macawFnOv
+                          , st
+                          )
+                      -- ...otherwise, skip the PLT call entirely.
+                      Nothing ->
+                        pure
+                          ( SkippedFunctionCall $
+                            PltNoOverride funcAddrOff pltStubName
+                          , st
+                          )
+
+            -- Finally, check if this is a function that we should explore, and if
+            -- so, use Macaw's code discovery to do so. See Note [Incremental code
+            -- discovery] in Grease.Macaw.SimulatorState.
+            --
+            -- As a simple heuristic for whether a function is worthy of
+            -- exploration, we check if the segment that the address inhabits is
+            -- executable. This check is important to prevent simulating functions
+            -- that, say, inhabit the .data section (which is common for binaries
+            -- that fail the `in-text` requirement), as Macaw will simply crash
+            -- when simulating them.
+            | Discovery.isExecutableSegOff funcAddrOff = do
+              (hdl, st') <-
+                discoverFuncAddr la halloc arch memory symMap pltStubs funcAddrOff st
+              pure
+                ( DiscoveredFnHandle funcAddrOff hdl $
+                  Map.lookup (C.handleName hdl) funOvs
+                , st'
+                )
+
+            | otherwise =
+              pure (SkippedFunctionCall (NotExecutable funcAddrOff), st)
+
+      in case Loader.resolveAbsoluteAddress memory bvMemWord of
+        Nothing ->
+          pure (SkippedFunctionCall (InvalidAddress (BV.ppHex knownNat bv)), st)
+        Just funcAddrOff -> go funcAddrOff
+
+lookupFunctionHandle ::
+  ( OnlineSolverAndBackend solver sym bak t st fs
+  , Symbolic.SymArchConstraints arch
   , HasGreaseSimulatorState p sym arch
   ) =>
   bak ->
@@ -249,106 +367,8 @@ lookupFunctionHandle ::
   Symbolic.LookupFunctionHandle p sym arch
 lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
   let LookupFunctionHandleDispatch dispatch = lfhd
-  let dispatch' st' = dispatch st' mem regs
-
-  -- First, obtain the address contained in the instruction pointer.
-  symAddr0 <- (arch ^. archGetIP) regs
-  -- Next, attempt to concretize the address. We must do this because it is
-  -- possible that the address was obtained from a memory read, and due to the
-  -- way macaw-symbolic's memory model works, such an address would be a fresh
-  -- variable that is constrained to be equal to a concrete address. As such,
-  -- we can only conclude that the address is concrete by consulting an SMT
-  -- solver. (See the refine/bug/symbolic_ip test case for where this technique
-  -- is essential.)
-  --
-  -- Using resolveSymBV is somewhat overkill, as if it is given a truly symbolic
-  -- function address, then it will wastefully attempt to refine the lower and
-  -- upper bounds of the address. (Refining the symbolic bounds won't help here,
-  -- since we can only invoke concrete addresses.) We could make the truly
-  -- symbolic case cheaper by leveraging the ideas in
-  -- https://github.com/GaloisInc/what4/issues/259.
-  symAddr1 <- Symbolic.resolveSymBV bak C.knownNat symAddr0
-
-  let -- Treat an external function as a no-op during simulation.
-      skipExternalCall reason = do
-        doLog la $ Diag.SkippedFunctionCall reason
-        let funcName = W4.functionNameFromText "_grease_external"
-        handle <- C.mkHandle' halloc funcName (Ctx.Empty Ctx.:> regStructRepr arch) (regStructRepr arch)
-        let override = C.mkOverride' funcName (regStructRepr arch) $ do
-              args <- C.getOverrideArgs
-              let regs' = Ctx.last $ C.regMap args
-              (arch ^. archOffsetStackPointerPostCall) (C.regValue regs')
-        pure $ useFnHandleAndState handle (C.UseOverride override) st
-
-  case W4.asBV symAddr1 of
-    -- If asBV returns Nothing here, despite the call to resolveSymBV above,
-    -- then the address is truly symbolic. By default, we skip the call
-    -- entirely, but if the user passes --error-symbolic-fun-calls, then this is
-    -- treated as an error.
-    Nothing ->
-      if getErrorSymbolicFunCalls errorSymbolicFunCalls
-        then C.addFailedAssertion bak $
-             C.AssertFailureSimError
-               "Failed to call function"
-               "Cannot resolve a symbolic function address"
-        else skipExternalCall SymbolicAddress
-    Just bv ->
-      let -- This conversion is safe iff MC.ArchAddrWidth arch <= 64
-          bvWord64 = fromIntegral @Integer @Word64 (BV.asUnsigned bv)
-          hdls = st ^. stateDiscoveredFnHandles
-          bvMemWord = EL.memWord bvWord64
-
-          dispatchFuncAddrOff funcAddrOff
-            -- First, check if this is the address of a CFG we have already
-            -- discovered
-            | Just hdl <- Map.lookup funcAddrOff hdls =
-              dispatch' st $
-              CachedFnHandle funcAddrOff hdl $
-              Map.lookup (C.handleName hdl) funOvs
-
-            -- Next, check if this is a PLT stub.
-            | Just pltStubName <- Map.lookup funcAddrOff pltStubs = do
-              if |  -- If a PLT stub jumps to an address within the same binary
-                    -- or shared library, resolve it...
-                    Just pltCallAddr <- Map.lookup pltStubName dynFunMap
-                 -> do doLog la $ Diag.PltCall pltStubName funcAddrOff pltCallAddr
-                       dispatchFuncAddrOff pltCallAddr
-                 |  otherwise
-                 -> case Map.lookup pltStubName funOvs of
-                      -- ...otherwise, if there is an override for the PLT stub,
-                      -- use it...
-                      Just macawFnOv ->
-                        dispatch' st $
-                        PltStubOverride funcAddrOff pltStubName macawFnOv
-                      -- ...otherwise, skip the PLT call entirely.
-                      Nothing ->
-                        dispatch' st $
-                        SkippedFunctionCall $
-                        PltNoOverride funcAddrOff pltStubName
-
-            -- Finally, check if this is a function that we should explore, and if
-            -- so, use Macaw's code discovery to do so. See Note [Incremental code
-            -- discovery] in Grease.Macaw.SimulatorState.
-            --
-            -- As a simple heuristic for whether a function is worthy of
-            -- exploration, we check if the segment that the address inhabits is
-            -- executable. This check is important to prevent simulating functions
-            -- that, say, inhabit the .data section (which is common for binaries
-            -- that fail the `in-text` requirement), as Macaw will simply crash
-            -- when simulating them.
-            | Discovery.isExecutableSegOff funcAddrOff = do
-              (hdl, st') <-
-                discoverFuncAddr la halloc arch memory symMap pltStubs funcAddrOff st
-              dispatch' st' $
-                DiscoveredFnHandle funcAddrOff hdl $
-                Map.lookup (C.handleName hdl) funOvs
-
-            | otherwise =
-              dispatch' st $ SkippedFunctionCall $ NotExecutable funcAddrOff
-
-      in case Loader.resolveAbsoluteAddress memory bvMemWord of
-        Nothing -> dispatch' st $ SkippedFunctionCall $ InvalidAddress $ BV.ppHex knownNat bv
-        Just funcAddrOff -> dispatchFuncAddrOff funcAddrOff
+  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls st regs
+  dispatch st' mem regs res
 
 -- | Dispatch on the result of looking up a syscall override. The
 -- 'lookupSyscallHandle' function invokes a continuation of this type after it
@@ -423,15 +443,49 @@ data LookupSyscallResult p sym arch atps rtps where
     Stubs.SomeSyscall p sym (Symbolic.MacawExt arch) ->
     LookupSyscallResult p sym arch atps rtps
 
--- | An implementation of 'Symbolic.LookupSyscallHandle' that attempts to look
--- up an syscall override and dispatches on the result.
-lookupSyscallHandle ::
-  forall arch sym bak solver scope st fs p.
+-- | Attempt to look up a syscall override.
+lookupSyscallResult ::
   ( C.IsSymBackend sym bak
-  , Symbolic.SymArchConstraints arch
-  , W4.OnlineSolver solver
-  , sym ~ W4.ExprBuilder scope st fs
-  , bak ~ C.OnlineBackend solver scope st fs
+  , HasGreaseSimulatorState p sym arch
+  ) =>
+  bak ->
+  ArchContext arch ->
+  -- | Map of names of overridden syscalls to their implementations
+  Map.Map
+    W4.FunctionName
+    (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
+  Ctx.Assignment C.TypeRepr atps ->
+  Ctx.Assignment C.TypeRepr rtps ->
+  C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
+  C.RegEntry sym (C.StructType atps) ->
+  IO (LookupSyscallResult p sym arch atps rtps)
+lookupSyscallResult bak arch syscallOvs atps rtps st regs = do
+  symSyscallBV <- (arch ^. archSyscallNumberRegister) bak atps regs
+  case W4.asBV (C.regValue symSyscallBV) of
+    Nothing ->
+      pure $ SkippedSyscall SymbolicSyscallNumber
+    Just syscallBV ->
+      let syscallNum = fromIntegral @Integer @Int $ BV.asUnsigned syscallBV in
+      case IntMap.lookup syscallNum (arch ^. archSyscallCodeMapping) of
+        Nothing ->
+          pure $ SkippedSyscall $ UnknownSyscallNumber syscallNum
+        Just syscallName ->
+          let syscallNumRepr = Stubs.SyscallNumRepr atps rtps (toInteger syscallNum) in
+          case MapF.lookup syscallNumRepr (st ^. stateSyscallHandles) of
+            Just syscallFnHandle ->
+              pure $ CachedSyscallFnHandle syscallFnHandle
+            Nothing ->
+              let syscallFnName = W4.functionNameFromText syscallName in
+              case Map.lookup syscallFnName syscallOvs of
+                Just someSyscall ->
+                  pure $ NewSyscall syscallName syscallNum someSyscall
+                Nothing ->
+                  pure $ SkippedSyscall $ SyscallWithoutOverride syscallName syscallNum
+
+-- | An implementation of 'Symbolic.LookupSyscallHandle' that attempts to look
+-- up a syscall override and dispatches on the result.
+lookupSyscallHandle ::
+  ( C.IsSymBackend sym bak
   , HasGreaseSimulatorState p sym arch
   ) =>
   bak ->
@@ -446,29 +500,8 @@ lookupSyscallHandle ::
 lookupSyscallHandle bak arch syscallOvs lsd =
   Symbolic.LookupSyscallHandle $ \atps rtps st regs -> do
     let LookupSyscallDispatch dispatch = lsd
-    let dispatch' = dispatch atps rtps st regs
-    symSyscallBV <- (arch ^. archSyscallNumberRegister) bak atps regs
-
-    case W4.asBV (C.regValue symSyscallBV) of
-      Nothing ->
-        dispatch' $ SkippedSyscall SymbolicSyscallNumber
-      Just syscallBV ->
-        let syscallNum = fromIntegral @Integer @Int $ BV.asUnsigned syscallBV in
-        case IntMap.lookup syscallNum (arch ^. archSyscallCodeMapping) of
-          Nothing ->
-            dispatch' $ SkippedSyscall $ UnknownSyscallNumber syscallNum
-          Just syscallName ->
-            let syscallNumRepr = Stubs.SyscallNumRepr atps rtps (toInteger syscallNum) in
-            case MapF.lookup syscallNumRepr (st ^. stateSyscallHandles) of
-              Just syscallFnHandle ->
-                dispatch' $ CachedSyscallFnHandle syscallFnHandle
-              Nothing ->
-                let syscallFnName = W4.functionNameFromText syscallName in
-                case Map.lookup syscallFnName syscallOvs of
-                  Just someSyscall ->
-                    dispatch' $ NewSyscall syscallName syscallNum someSyscall
-                  Nothing ->
-                    dispatch' $ SkippedSyscall $ SyscallWithoutOverride syscallName syscallNum
+    res <- lookupSyscallResult bak arch syscallOvs atps rtps st regs
+    dispatch atps rtps st regs res
 
 -- | Perform code discovery on the function address (see @Note [Incremental
 -- code discovery]@ in "Grease.Macaw.SimulatorState") and bind the function
