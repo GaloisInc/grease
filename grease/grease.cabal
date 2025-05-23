@@ -191,6 +191,7 @@ library
     Grease.Heuristic.Result
     Grease.LLVM
     Grease.LLVM.Overrides
+    Grease.LLVM.Overrides.Declare
     Grease.LLVM.Overrides.Diagnostic
     Grease.LLVM.SimulatorHooks
     Grease.LLVM.SimulatorHooks.Diagnostic

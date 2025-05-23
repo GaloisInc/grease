@@ -19,35 +19,22 @@ module Grease.LLVM.Overrides
   , LLVMFunctionOverride(..)
   ) where
 
-import           Data.Parameterized.TraversableFC (toListFC)
-import Control.Applicative (pure)
 import Control.Exception.Safe (throw)
-import Control.Monad (forM, sequence)
+import Control.Monad (forM, unless)
 import Control.Monad.IO.Class (MonadIO(liftIO))
-import Data.Bool (Bool(..))
-import Data.Either (Either(..))
-import Data.Eq ((==))
 import Data.Foldable qualified as Foldable
-import Data.Function (($))
-import Data.Functor ((<$>))
 import Data.List qualified as List
 import Data.Map qualified as Map
-import Data.Maybe (Maybe(..))
-import Data.Parameterized.Context qualified as Ctx
-import Data.Parameterized.NatRepr qualified as NatRepr
-import Data.Parameterized.Some qualified as Some
-import Data.Semigroup ((<>))
 import Data.Sequence qualified as Seq
-import Data.String (String)
-import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Traversable (traverse)
+import Data.Type.Equality ((:~:)(Refl), testEquality)
 import Grease.Diagnostic (GreaseLogAction, Diagnostic(LLVMOverridesDiagnostic))
 import Grease.FunctionOverride (basicLLVMOverrides)
+import Grease.LLVM.Overrides.Declare (mkDeclare)
 import Grease.LLVM.Overrides.Diagnostic as Diag
 import Grease.Skip (declSkipOverride, registerSkipOverride)
 import Grease.Syntax (parseProgram)
-import Grease.Utility (GreaseException(..), declaredFunNotFound, tshow, llvmOverrideName)
+import Grease.Utility (GreaseException(..), declaredFunNotFound, llvmOverrideName)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
@@ -66,89 +53,13 @@ import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Lumberjack qualified as LJ
-import Prelude (fromIntegral)
 import System.FilePath (dropExtensions, takeBaseName)
-import System.IO (FilePath, IO)
 import Text.LLVM.AST qualified as L
 import What4.FunctionName qualified as W4
+import qualified Lang.Crucible.LLVM.Syntax.Overrides.String as StrOv
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMOverridesDiagnostic diag)
-
--- | Lift a Crucible type to an LLVM type.
---
--- This function has several missing cases that can be filled in as necessary.
-llvmType :: Mem.HasPtrWidth w => C.TypeRepr t -> Maybe L.Type
-llvmType =
-  \case
-    C.AnyRepr {} -> Nothing
-    C.BoolRepr -> Just (L.PrimType (L.Integer 1))
-    C.CharRepr {} -> Nothing
-    C.BVRepr w -> Just (intType w)
-    C.ComplexRealRepr {} -> Nothing
-    C.FloatRepr {} -> Nothing  -- TODO?
-    C.FunctionHandleRepr {} -> Nothing
-    C.IEEEFloatRepr {} -> Nothing  -- TODO?
-    C.IntegerRepr {} -> Nothing
-    C.MaybeRepr {} -> Nothing
-    C.NatRepr {} -> Nothing
-    C.RealValRepr {} -> Nothing
-    C.RecursiveRepr {} -> Nothing
-    C.ReferenceRepr {} -> Nothing
-    C.SequenceRepr {} -> Nothing
-    C.StringRepr {} -> Nothing
-    C.StringMapRepr {} -> Nothing
-    C.StructRepr fieldAssn -> do
-      fieldTys <-
-        traverse (Some.viewSome llvmType) $
-        toListFC Some.Some fieldAssn
-      Just $ L.Struct fieldTys
-    C.SymbolicArrayRepr {} -> Nothing
-    C.SymbolicStructRepr {} -> Nothing
-    C.UnitRepr -> Just (L.PrimType L.Void)
-    C.VariantRepr {} -> Nothing
-    C.VectorRepr {} -> Nothing
-    C.WordMapRepr {} -> Nothing
-
-    Mem.LLVMPointerRepr w ->
-      case C.testEquality w ?ptrWidth of
-        Just C.Refl -> Just L.PtrOpaque
-        Nothing -> Just (intType w)
-    C.IntrinsicRepr {} -> Nothing
-  where
-    -- TODO(lb): Avoid 'fromIntegral', handle overflow gracefully
-    intType :: NatRepr.NatRepr n -> L.Type
-    intType w = L.PrimType (L.Integer (fromIntegral (NatRepr.natValue w)))
-
--- | Create an LLVM declaration from Crucible types.
---
--- See https://github.com/GaloisInc/crucible/issues/1138 for progress on
--- obviating this code.
-mkDeclare ::
-  Mem.HasPtrWidth w =>
-  String ->
-  Ctx.Assignment C.TypeRepr args ->
-  C.TypeRepr ret ->
-  Either Text L.Declare
-mkDeclare name args ret = do
-  let getType :: forall t. C.TypeRepr t -> Either Text L.Type
-      getType t =
-        case llvmType t of
-          Nothing -> Left ("Can't make LLVM type from Crucible type " <> tshow t)
-          Just llTy -> Right llTy
-  llvmArgs <- sequence (toListFC getType args)
-  llvmRet <- getType ret
-  pure $
-    L.Declare
-    { L.decArgs = llvmArgs
-    , L.decAttrs = []
-    , L.decComdat = Nothing
-    , L.decLinkage = Nothing
-    , L.decName = L.Symbol name
-    , L.decRetType = llvmRet
-    , L.decVarArgs = False
-    , L.decVisibility = Nothing
-    }
 
 -- | Parse overrides in the Crucible-LLVM S-expression syntax.
 loadOverrides ::
@@ -426,8 +337,8 @@ registerLLVMModuleOverrides ::
   -- ^ Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
-registerLLVMModuleOverrides la builtinOvs paths bak halloc llvmCtx fs mod = do
-  let decls = L.modDeclares mod
+registerLLVMModuleOverrides la builtinOvs paths bak halloc llvmCtx fs mod_ = do
+  let decls = L.modDeclares mod_
   registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx fs decls
 
 -- | Redirect handles for forward declarations in an LLVM S-expression program
@@ -455,7 +366,11 @@ registerLLVMSexpProgForwardDeclarations la dl mvar funOvs =
 -- to call the corresponding LLVM overrides. Attempting to call an unresolved
 -- forward declaration will raise an error.
 registerLLVMOvForwardDeclarations ::
-  Mem.HasLLVMAnn sym =>
+  ( C.IsSymInterface sym
+  , Mem.HasPtrWidth w
+  , Mem.HasLLVMAnn sym
+  , ?memOpts :: Mem.MemOptions
+  ) =>
   C.GlobalVar Mem.Mem ->
   Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM)
     {- ^ The map of public function names to their overrides. -} ->
@@ -470,7 +385,11 @@ registerLLVMOvForwardDeclarations mvar funOvs =
 -- actually call the corresponding LLVM overrides. If a forward declaration
 -- name cannot be resolved to an override, then perform the supplied action.
 registerLLVMForwardDeclarations ::
-  Mem.HasLLVMAnn sym =>
+  ( C.IsSymInterface sym
+  , Mem.HasPtrWidth w
+  , Mem.HasLLVMAnn sym
+  , ?memOpts :: Mem.MemOptions
+  ) =>
   C.GlobalVar Mem.Mem ->
   Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM)
     {- ^ The map of public function names to their overrides. -} ->
@@ -485,9 +404,39 @@ registerLLVMForwardDeclarations ::
 registerLLVMForwardDeclarations mvar funOvs cannotResolve fwdDecs =
   Foldable.for_ (Map.toList fwdDecs) $ \(fwdDecName, C.SomeHandle hdl) ->
     case Map.lookup fwdDecName funOvs of
-      Nothing -> cannotResolve fwdDecName hdl
       Just (CLLVM.SomeLLVMOverride llvmOverride) ->
         bindLLVMOverrideFnHandle mvar hdl llvmOverride
+      Nothing ->
+        -- These string-manipulating overrides are *only* callable from
+        -- S-expression files with forward-declarations of them.
+        case fwdDecName of
+          "read-bytes" -> do
+            ok <- tryBindTypedOverride hdl (StrOv.readBytesOverride mvar)
+            unless ok (cannotResolve fwdDecName hdl)
+          "read-c-string" -> do
+            ok <- tryBindTypedOverride hdl (StrOv.readCStringOverride mvar)
+            unless ok (cannotResolve fwdDecName hdl)
+          "write-bytes" -> do
+            ok <- tryBindTypedOverride hdl (StrOv.writeBytesOverride mvar)
+            unless ok (cannotResolve fwdDecName hdl)
+          "write-c-string" -> do
+            ok <- tryBindTypedOverride hdl (StrOv.writeCStringOverride  mvar)
+            unless ok (cannotResolve fwdDecName hdl)
+          _ -> cannotResolve fwdDecName hdl
+
+tryBindTypedOverride ::
+  C.FnHandle args ret ->
+  C.TypedOverride p sym ext args' ret' ->
+  C.OverrideSim p sym ext rtp args'' ret'' Bool
+tryBindTypedOverride hdl ov =
+  case testEquality (C.handleArgTypes hdl) (C.typedOverrideArgs ov) of
+    Nothing -> pure False
+    Just Refl ->
+      case testEquality (C.handleReturnType hdl) (C.typedOverrideRet ov) of
+        Nothing -> pure False
+        Just Refl -> do
+          C.bindTypedOverride hdl ov
+          pure True
 
 -- | An LLVM function override, corresponding to a single S-expression file.
 data LLVMFunctionOverride p sym =
