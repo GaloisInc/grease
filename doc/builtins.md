@@ -201,6 +201,18 @@ available:
 - `void @__stack_chk_fail()`
 - `void @__stack_chk_fail_local()`
 
+### S-expression-specific overrides
+
+For LLVM S-expression files (programs or overrides), the following overrides are also available:
+```
+(declare @read-bytes ((x (Ptr 64))) (Vector (Bitvector 8)))
+(declare @read-c-string ((x (Ptr 64))) (String Unicode))
+(declare @write-bytes ((dest (Ptr 64)) (src (Vector (Bitvector 8)))) Unit)
+(declare @write-c-string ((dst (Ptr 64)) (src (String Unicode))) Unit)
+```
+
+See [the upstream documentation](https://github.com/GaloisInc/crucible/blob/master/crucible-llvm-syntax/README.md#string-manipulation).
+
 ### Discussion
 
 The following overrides merit a bit of discussion:

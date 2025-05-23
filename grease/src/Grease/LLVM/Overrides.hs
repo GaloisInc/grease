@@ -20,13 +20,14 @@ module Grease.LLVM.Overrides
   ) where
 
 import Control.Exception.Safe (throw)
-import Control.Monad (forM)
+import Control.Monad (forM, unless)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Foldable qualified as Foldable
 import Data.List qualified as List
 import Data.Map qualified as Map
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
+import Data.Type.Equality ((:~:)(Refl), testEquality)
 import Grease.Diagnostic (GreaseLogAction, Diagnostic(LLVMOverridesDiagnostic))
 import Grease.FunctionOverride (basicLLVMOverrides)
 import Grease.LLVM.Overrides.Declare (mkDeclare)
@@ -55,6 +56,7 @@ import Lumberjack qualified as LJ
 import System.FilePath (dropExtensions, takeBaseName)
 import Text.LLVM.AST qualified as L
 import What4.FunctionName qualified as W4
+import qualified Lang.Crucible.LLVM.Syntax.Overrides.String as StrOv
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMOverridesDiagnostic diag)
@@ -364,7 +366,11 @@ registerLLVMSexpProgForwardDeclarations la dl mvar funOvs =
 -- to call the corresponding LLVM overrides. Attempting to call an unresolved
 -- forward declaration will raise an error.
 registerLLVMOvForwardDeclarations ::
-  Mem.HasLLVMAnn sym =>
+  ( C.IsSymInterface sym
+  , Mem.HasPtrWidth w
+  , Mem.HasLLVMAnn sym
+  , ?memOpts :: Mem.MemOptions
+  ) =>
   C.GlobalVar Mem.Mem ->
   Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM)
     {- ^ The map of public function names to their overrides. -} ->
@@ -379,7 +385,11 @@ registerLLVMOvForwardDeclarations mvar funOvs =
 -- actually call the corresponding LLVM overrides. If a forward declaration
 -- name cannot be resolved to an override, then perform the supplied action.
 registerLLVMForwardDeclarations ::
-  Mem.HasLLVMAnn sym =>
+  ( C.IsSymInterface sym
+  , Mem.HasPtrWidth w
+  , Mem.HasLLVMAnn sym
+  , ?memOpts :: Mem.MemOptions
+  ) =>
   C.GlobalVar Mem.Mem ->
   Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM)
     {- ^ The map of public function names to their overrides. -} ->
@@ -394,9 +404,39 @@ registerLLVMForwardDeclarations ::
 registerLLVMForwardDeclarations mvar funOvs cannotResolve fwdDecs =
   Foldable.for_ (Map.toList fwdDecs) $ \(fwdDecName, C.SomeHandle hdl) ->
     case Map.lookup fwdDecName funOvs of
-      Nothing -> cannotResolve fwdDecName hdl
       Just (CLLVM.SomeLLVMOverride llvmOverride) ->
         bindLLVMOverrideFnHandle mvar hdl llvmOverride
+      Nothing ->
+        -- These string-manipulating overrides are *only* callable from
+        -- S-expression files with forward-declarations of them.
+        case fwdDecName of
+          "read-bytes" -> do
+            ok <- tryBindTypedOverride hdl (StrOv.readBytesOverride mvar)
+            unless ok (cannotResolve fwdDecName hdl)
+          "read-c-string" -> do
+            ok <- tryBindTypedOverride hdl (StrOv.readCStringOverride mvar)
+            unless ok (cannotResolve fwdDecName hdl)
+          "write-bytes" -> do
+            ok <- tryBindTypedOverride hdl (StrOv.writeBytesOverride mvar)
+            unless ok (cannotResolve fwdDecName hdl)
+          "write-c-string" -> do
+            ok <- tryBindTypedOverride hdl (StrOv.writeCStringOverride  mvar)
+            unless ok (cannotResolve fwdDecName hdl)
+          _ -> cannotResolve fwdDecName hdl
+
+tryBindTypedOverride ::
+  C.FnHandle args ret ->
+  C.TypedOverride p sym ext args' ret' ->
+  C.OverrideSim p sym ext rtp args'' ret'' Bool
+tryBindTypedOverride hdl ov =
+  case testEquality (C.handleArgTypes hdl) (C.typedOverrideArgs ov) of
+    Nothing -> pure False
+    Just Refl ->
+      case testEquality (C.handleReturnType hdl) (C.typedOverrideRet ov) of
+        Nothing -> pure False
+        Just Refl -> do
+          C.bindTypedOverride hdl ov
+          pure True
 
 -- | An LLVM function override, corresponding to a single S-expression file.
 data LLVMFunctionOverride p sym =
