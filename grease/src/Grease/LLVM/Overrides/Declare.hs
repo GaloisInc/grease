@@ -13,15 +13,13 @@ module Grease.LLVM.Overrides.Declare
   , typedOverrideToSomeLLVMOverride
   ) where
 
-import Control.Exception.Safe (throw)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Some qualified as Some
 import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Grease.Utility (tshow, GreaseException (GreaseException))
-import Lang.Crucible.LLVM qualified as CLLVM
+import Grease.Panic (panic)
 import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.Simulator qualified as C
@@ -103,25 +101,27 @@ mkDeclare name args ret = do
     , L.decVisibility = Nothing
     }
 
+-- | Convert a 'C.TypedOverride' into a 'CLLVM.SomeLLVMOverride'.
+--
+-- Panics if 'mkDeclare' fails to make an LLVM declaration.
 typedOverrideToSomeLLVMOverride ::
   Mem.HasPtrWidth w =>
   -- | Override name, only used in error messages
   String ->
-  C.TypedOverride p sym CLLVM.LLVM args ret ->
-  IO (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM)
+  C.TypedOverride p sym ext args ret ->
+  CLLVM.SomeLLVMOverride p sym ext
 typedOverrideToSomeLLVMOverride nm ov =
   let argTys = C.typedOverrideArgs ov in
   let retTy = C.typedOverrideRet ov in
   case mkDeclare nm argTys retTy of
     Right decl ->
-      pure $
       CLLVM.SomeLLVMOverride $
-      CLLVM.LLVMOverride
-        { CLLVM.llvmOverride_declare = decl
-        , CLLVM.llvmOverride_args = argTys
-        , CLLVM.llvmOverride_ret = retTy
-        , CLLVM.llvmOverride_def =
-            \_mvar args -> C.typedOverrideHandler ov (TFC.fmapFC (C.RV . C.regValue) args)
-        }
+        CLLVM.LLVMOverride
+          { CLLVM.llvmOverride_declare = decl
+          , CLLVM.llvmOverride_args = argTys
+          , CLLVM.llvmOverride_ret = retTy
+          , CLLVM.llvmOverride_def =
+              \_mvar args -> C.typedOverrideHandler ov (TFC.fmapFC (C.RV . C.regValue) args)
+          }
     Left err ->
-      throw (GreaseException ("Bad override for `" <> Text.pack nm <> "`: " <> err))
+      panic ("Bad override for `" <> nm <> "`: " <> Text.unpack err) []
