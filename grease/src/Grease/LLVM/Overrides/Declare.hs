@@ -10,7 +10,6 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 
 module Grease.LLVM.Overrides.Declare
   ( mkDeclare
-  , typedOverrideToSomeLLVMOverride
   ) where
 
 import Data.Parameterized.Context qualified as Ctx
@@ -18,11 +17,8 @@ import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Some qualified as Some
 import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Text (Text)
-import Data.Text qualified as Text
-import Grease.Panic (panic)
-import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
+import Grease.Utility (tshow)
 import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Types qualified as C
 import Text.LLVM.AST qualified as L
 
@@ -100,28 +96,3 @@ mkDeclare name args ret = do
     , L.decVarArgs = False
     , L.decVisibility = Nothing
     }
-
--- | Convert a 'C.TypedOverride' into a 'CLLVM.SomeLLVMOverride'.
---
--- Panics if 'mkDeclare' fails to make an LLVM declaration.
-typedOverrideToSomeLLVMOverride ::
-  Mem.HasPtrWidth w =>
-  -- | Override name, only used in error messages
-  String ->
-  C.TypedOverride p sym ext args ret ->
-  CLLVM.SomeLLVMOverride p sym ext
-typedOverrideToSomeLLVMOverride nm ov =
-  let argTys = C.typedOverrideArgs ov in
-  let retTy = C.typedOverrideRet ov in
-  case mkDeclare nm argTys retTy of
-    Right decl ->
-      CLLVM.SomeLLVMOverride $
-        CLLVM.LLVMOverride
-          { CLLVM.llvmOverride_declare = decl
-          , CLLVM.llvmOverride_args = argTys
-          , CLLVM.llvmOverride_ret = retTy
-          , CLLVM.llvmOverride_def =
-              \_mvar args -> C.typedOverrideHandler ov (TFC.fmapFC (C.RV . C.regValue) args)
-          }
-    Left err ->
-      panic ("Bad override for `" <> nm <> "`: " <> Text.unpack err) []
