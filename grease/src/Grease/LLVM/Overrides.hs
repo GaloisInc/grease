@@ -424,6 +424,7 @@ registerLLVMForwardDeclarations mvar funOvs cannotResolve fwdDecs =
             unless ok (cannotResolve fwdDecName hdl)
           _ -> cannotResolve fwdDecName hdl
 
+-- | The return value indicates whether the override was bound.
 tryBindTypedOverride ::
   C.FnHandle args ret ->
   C.TypedOverride p sym ext args' ret' ->
