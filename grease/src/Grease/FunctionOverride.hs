@@ -16,16 +16,12 @@ module Grease.FunctionOverride
   , builtinLLVMOverrides
   ) where
 
-import Control.Applicative (pure)
 import Control.Lens ((^.), to)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State (MonadState(..), StateT(..), evalStateT)
 import Data.BitVector.Sized qualified as BV
-import Data.Bool (Bool(..))
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
-import Data.Either (Either(Left, Right))
-import Data.Functor ((<$>), fmap)
 import Data.Functor.Identity (Identity(Identity, runIdentity))
 import Data.List qualified as List
 import Data.Macaw.Architecture.Info qualified as MI
@@ -33,10 +29,9 @@ import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map qualified as Map
-import Data.Maybe (Maybe(..), mapMaybe)
+import Data.Maybe (mapMaybe)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (toListFC)
-import Data.Semigroup ((<>))
 import Data.Sequence qualified as Seq
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -56,11 +51,8 @@ import Lang.Crucible.LLVM.Printf qualified as Printf
 import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as C
-import Prelude (($), (.), otherwise, toInteger)
 import Stubs.FunctionOverride qualified as Stubs
-import System.IO (IO)
 import Text.LLVM.AST qualified as L
-import Text.Show (show)
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 

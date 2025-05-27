@@ -26,14 +26,10 @@ import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (Maybe(..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Proxy (Proxy(..))
-import Data.Semigroup ((<>))
 import Data.Sequence qualified as Seq
-import Data.Traversable (traverse)
-import Data.Type.Equality (type (~))
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch
 import Grease.Macaw.SimulatorState
@@ -51,11 +47,9 @@ import Lang.Crucible.LLVM.TypeContext (TypeContext)
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
-import Prelude ((<$>), ($), (.), IO, pure)
 import Stubs.FunctionOverride qualified as Stubs
 import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
 import Stubs.Wrapper qualified as Stubs
-import System.IO (FilePath)
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as W4
 import What4.Protocol.Online qualified as W4

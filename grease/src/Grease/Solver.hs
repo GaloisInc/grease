@@ -14,15 +14,9 @@ module Grease.Solver
 
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.IO.Class (MonadIO(..))
-import Data.Function (($))
 import Data.Parameterized.Nonce (NonceGenerator)
-import Data.Type.Equality (type (~))
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
-import Prelude (Bounded, Enum)
-import System.IO (IO)
-import Text.Read (Read)
-import Text.Show (Show)
 import What4.Expr qualified as W4
 import What4.ProblemFeatures qualified as W4
 import What4.Protocol.Online qualified as W4

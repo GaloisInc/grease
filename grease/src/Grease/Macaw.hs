@@ -20,19 +20,14 @@ module Grease.Macaw
   , initState
   ) where
 
-import Control.Applicative (pure)
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens ((^.), to)
-import Control.Monad (return)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.BitVector.Sized qualified as BV
-import Data.Bool (otherwise)
 import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as BSL
-import Data.Function (($), (.))
-import Data.Int (Int, Int64)
+import Data.Int (Int64)
 import Data.Kind (Type)
-import Data.List ((++))
 import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
@@ -43,18 +38,15 @@ import Data.Macaw.Symbolic.Backend qualified as Symbolic
 import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
 import Data.Macaw.Types qualified as MT
 import Data.Map.Strict qualified as Map
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Parameterized.Classes (TestEquality(..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.List qualified as P.List
 import Data.Parameterized.Map qualified as MapF
 import Data.Proxy (Proxy(Proxy))
-import Data.Semigroup ((<>))
 import Data.Sequence qualified as Seq
-import Data.String (String)
 import Data.Text qualified as Text
-import Data.Traversable (traverse)
-import Data.Type.Equality (type (~), (:~:)(Refl))
+import Data.Type.Equality ((:~:)(Refl))
 import Data.Word (Word8, Word64)
 import Grease.Diagnostic
 import Grease.Macaw.Arch
@@ -81,11 +73,8 @@ import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.GlobalState qualified as C
-import Prelude (Num(..), fromInteger, fromIntegral)
 import Stubs.Common qualified as Stubs
 import Stubs.Syscall qualified as Stubs
-import System.IO (IO)
-import Text.Show (Show(..))
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4

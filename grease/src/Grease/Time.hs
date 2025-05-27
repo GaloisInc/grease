@@ -12,12 +12,9 @@ module Grease.Time
   , time
   ) where
 
-import Control.Applicative (Applicative(pure))
 import Data.Word (Word64)
 import GHC.Clock (getMonotonicTimeNSec)
-import Prelude (Num((-)), Integral(div))
 import Prettyprinter qualified as PP
-import System.IO (IO)
 
 newtype Nanoseconds = Nanoseconds Word64
 

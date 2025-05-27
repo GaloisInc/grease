@@ -13,11 +13,7 @@ module Grease.Shape.Concretize
   ) where
 
 import Data.BitVector.Sized as BV
-import Data.Eq ((==))
-import Data.Function ((.))
-import Data.Functor (fmap)
 import Data.List qualified as List
-import Data.Type.Equality (type (~))
 import Data.Vector qualified as Vec
 import Data.Word (Word8)
 import Grease.Shape (Shape, ExtShape)
@@ -26,7 +22,6 @@ import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.Concretize qualified as Conc
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-import Prelude (fromIntegral)
 
 -- | Turns 'PtrShape.Initialized' into 'PtrShape.Exactly', calls 'concPtrTarget'.
 concMemShape ::

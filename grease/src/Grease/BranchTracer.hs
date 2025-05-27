@@ -20,7 +20,6 @@ import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.EvalStmt qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
 import Lumberjack qualified as LJ
-import Prelude hiding (pred)
 import What4.Interface qualified as W4
 
 -- | 'IO' action to run upon reaching a symbolic branch.
@@ -42,8 +41,8 @@ branchTracerFeature ::
   C.ExecutionFeature p sym ext rtp
 branchTracerFeature tracer = C.ExecutionFeature $
   \case
-    C.SymbolicBranchState pred tpath fpath mergePoint simState -> do
-      getBranchTracer tracer pred tpath fpath mergePoint simState
+    C.SymbolicBranchState stPred tpath fpath mergePoint simState -> do
+      getBranchTracer tracer stPred tpath fpath mergePoint simState
       pure C.ExecutionFeatureNoChange
     _ -> pure C.ExecutionFeatureNoChange
 

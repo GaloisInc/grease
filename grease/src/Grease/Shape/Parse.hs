@@ -29,21 +29,16 @@ import Control.Monad qualified as Monad
 import Data.Bifunctor qualified as Bifunctor
 import Data.BitVector.Sized (BV)
 import Data.BitVector.Sized qualified as BV
-import Data.Char (Char)
 import Data.Coerce (coerce)
-import Data.Either (Either)
 import Data.Either qualified as Either
-import Data.Function ((.), ($))
 import Data.Functor qualified as Functor
 import Data.Functor.Const qualified as Const
-import Data.Int (Int)
 import Data.IntMap (IntMap)
 import Data.IntMap qualified as IntMap
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Map (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (Maybe)
 import Data.Maybe qualified as Maybe
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (NatRepr)
@@ -53,12 +48,11 @@ import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Proxy (Proxy(Proxy))
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
-import Data.String (String)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Traversable qualified as Traversable
 import Data.Tuple qualified as Tuple
-import Data.Type.Equality (type (~), type (:~:) (Refl), testEquality)
+import Data.Type.Equality (type (:~:) (Refl), testEquality)
 import Data.Void (Void)
 import Data.Word (Word8)
 import GHC.TypeLits (Nat)
@@ -75,14 +69,11 @@ import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Types qualified as C
 import Lang.Crucible.Types qualified as CT
 import Numeric
-import Prelude ((*), fromIntegral)
 import Prettyprinter qualified as PP
-import System.IO (FilePath)
 import Text.Megaparsec (Parsec)
 import Text.Megaparsec qualified as MP
 import Text.Megaparsec.Char qualified as MPC
 import Text.Megaparsec.Char.Lexer qualified as MPCL
-import Text.Show (Show)
 
 newtype BlockId = BlockId { getBlockId :: Int }
   deriving Show

@@ -20,8 +20,8 @@ module Grease.Shape.Print
   , print
   ) where
 
-import Control.Applicative (Applicative (pure))
-import Control.Monad (Monad)
+
+import Prelude hiding (print)
 import Control.Monad qualified as Monad
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
@@ -30,41 +30,30 @@ import Control.Monad.State.Strict qualified as State
 import Control.Monad.Trans.Reader qualified as ReaderT
 import Data.BitVector.Sized (BV)
 import Data.BitVector.Sized qualified as BV
-import Data.Bool (Bool(..))
-import Data.Char (Char)
 import Data.Foldable qualified as Foldable
-import Data.Function ((.), ($))
-import Data.Functor (Functor)
 import Data.Functor qualified as Functor
 import Data.Functor.Const qualified as Const
 import Data.Functor.Product qualified as Product
-import Data.Int (Int)
 import Data.IntMap (IntMap)
 import Data.IntMap qualified as IntMap
 import Data.List qualified as List
 import Data.Macaw.Memory (AddrWidthRepr)
 import Data.Macaw.Memory qualified as DMM
 import Data.Monoid qualified as Monoid
-import Data.Ord ((<=))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (NatRepr)
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.TraversableFC qualified as TFC
-import Data.String (String)
 import Data.Text (Text)
-import Data.Traversable (traverse)
 import Data.Tuple qualified as Tuple
-import Data.Type.Equality (type (~))
 import Data.Void (Void)
 import Data.Void qualified as Void
-import GHC.Integer (Integer)
 import Grease.Shape (Shape, ExtShape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Numeric (showHex)
-import Prelude (Num((+), (-)), fromIntegral, Integral(div))
 import Prettyprinter qualified as PP
 
 newtype BlockId = BlockId Int

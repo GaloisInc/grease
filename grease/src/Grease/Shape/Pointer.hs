@@ -43,30 +43,22 @@ module Grease.Shape.Pointer
   , modifyPtrTarget
   ) where
 
-import Control.Applicative (Applicative((<*>)), pure)
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens qualified as Lens
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.BitVector.Sized (BV)
-import Data.Bool (Bool(..))
-import Data.Eq (Eq((==)))
 import Data.Foldable qualified as Foldable
-import Data.Function (($), (.), id)
-import Data.Functor ((<$>), fmap)
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
-import Data.Maybe (Maybe(..))
 import Data.Parameterized.Classes (ShowF(..))
 import Data.Parameterized.NatRepr (NatRepr, natValue)
 import Data.Parameterized.TraversableF qualified as TF
 import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Proxy (Proxy(Proxy))
-import Data.Semigroup (Semigroup((<>)))
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
-import Data.Traversable (traverse)
-import Data.Type.Equality (type (~), TestEquality(testEquality), (:~:)(Refl))
+import Data.Type.Equality (TestEquality(testEquality), (:~:)(Refl))
 import Data.Word (Word8)
 import GHC.TypeLits (type Natural)
 import Grease.Cursor
@@ -78,9 +70,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (Bytes(..))
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Prelude (Num(..), Integral (divMod), fromIntegral, toInteger, max, Integer)
 import Prettyprinter qualified as PP
-import Text.Show (Show(..))
 
 -- | A byte ('Word8') along with a @tag@ (see 'Grease.Shape.Shape').
 data TaggedByte tag
@@ -281,8 +271,8 @@ ptrTarget = PtrTarget . Foldable.foldl' go Seq.empty
     go s (Uninitialized 0) = s
     go s (Initialized _tag 0) = s
     go Seq.Empty memShape = Seq.singleton memShape
-    go accum@(pfx Seq.:|> last) memShape =
-      case merge last memShape of
+    go accum@(pfx Seq.:|> lastElem) memShape =
+      case merge lastElem memShape of
         Just last' -> pfx Seq.:|> last'
         Nothing -> accum Seq.:|> memShape
 
@@ -363,8 +353,8 @@ ptrTargetToPtrs ::
 ptrTargetToPtrs proxy tag tgt =
   let sz = ptrTargetSize proxy tgt
       ptrBytes = Bytes.bitsToBytes (C.widthVal ?ptrWidth)
-      (nPtrs, rem) = sz `divMod` ptrBytes
-      nPtrs' = Bytes.bytesToInteger $ if rem == 0 then nPtrs else nPtrs + 1
+      (nPtrs, remBytes) = sz `divMod` ptrBytes
+      nPtrs' = Bytes.bytesToInteger $ if remBytes == 0 then nPtrs else nPtrs + 1
       genSeq n x = Seq.iterateN n id x
   in PtrTarget (genSeq (fromIntegral nPtrs') (Pointer tag (ptrTarget Seq.Empty)))
 

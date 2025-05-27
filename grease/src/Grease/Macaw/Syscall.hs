@@ -16,13 +16,11 @@ import Control.Monad.IO.Class (MonadIO(..))
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC)
-import Data.Type.Equality (type (~))
 import Grease.Macaw.Arch
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Simulator qualified as C
-import Prelude (($), (.))
 import Stubs.Syscall qualified as Stubs
 import What4.Expr qualified as W4
 import What4.Protocol.Online qualified as W4

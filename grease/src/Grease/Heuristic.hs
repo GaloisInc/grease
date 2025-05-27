@@ -28,27 +28,22 @@ module Grease.Heuristic
   ) where
 
 import           Lang.Crucible.LLVM.Extension (LLVM)
-import Control.Applicative (Alternative((<|>)), Const(..), pure)
+import Control.Applicative (Alternative((<|>)), Const(..))
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens (Lens', (^.), (.~))
 import Data.BitVector.Sized qualified as BV
 import Data.Bool qualified as Bool
-import Data.Eq ((==), (/=))
-import Data.Function (($), (.), (&))
-import Data.Functor ((<$>))
+import Data.Function ((&))
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
-import Data.Maybe (Maybe(..))
 import Data.Maybe qualified as Maybe
 import Data.Parameterized.Classes (IxedF'(..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
-import Data.Semigroup (Semigroup((<>)))
-import Data.String (String)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Tuple qualified as Tuple
-import Data.Type.Equality (type (~), (:~:)(Refl), testEquality)
+import Data.Type.Equality ((:~:)(Refl), testEquality)
 import Grease.Bug qualified as Bug
 import Grease.Bug.UndefinedBehavior qualified as UB
 import Grease.Cursor qualified as Cursor
@@ -79,8 +74,6 @@ import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lumberjack qualified as LJ
 import Numeric.Natural (Natural)
-import Prelude (div, fromIntegral)
-import System.IO (IO)
 import Text.LLVM.AST qualified as L
 import What4.Expr qualified as W4
 import What4.Interface qualified as W4

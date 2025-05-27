@@ -16,38 +16,26 @@ module Grease.Macaw.PLT
   , resolvePltStubs
   ) where
 
-import Control.Applicative (Applicative(..), empty)
+import Control.Applicative (empty)
 import Control.Exception.Safe (throw)
-import Data.Bool (Bool(..), (&&))
 import Data.ElfEdit qualified as Elf
-import Data.Eq (Eq(..))
 import Data.Foldable qualified as Foldable
-import Data.Function (($), (.))
-import Data.List (map)
 import Data.Macaw.BinaryLoader.ELF as Loader
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
 import Data.Macaw.Memory.LoadCommon qualified as LC
 import Data.Map qualified as Map
-import Data.Maybe (Maybe(..), fromMaybe, listToMaybe)
-import Data.Ord (Ord(..))
-import Data.Semigroup ((<>))
+import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
-import Data.Traversable (traverse)
-import Data.Tuple (fst)
-import Data.Type.Equality (type (~))
 import Data.Void (Void)
 import Data.Word (Word64)
 import Grease.Panic (panic)
 import Grease.Utility
-import Prelude (Num(..), fromInteger, fromIntegral)
-import System.IO (IO)
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
 import Text.Megaparsec.Char.Lexer qualified as TMCL
-import Text.Show (Show)
 import What4.FunctionName qualified as W4
 
 -- | A variant of 'PLT.pltStubSymbols' that performs some experimental hacks to
