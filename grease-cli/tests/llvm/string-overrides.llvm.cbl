@@ -1,4 +1,4 @@
-; Copyright (c) Galois, Inc. 2024
+; Copyright (c) Galois, Inc. 2025
 
 ; Ensure that the S-expression-specific string-manipulation overrides work.
 
