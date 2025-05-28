@@ -16,8 +16,7 @@ module Grease.Cursor.List
 
 import Data.Parameterized.Axiom (unsafeAxiom)
 import Data.Parameterized.List (List(..))
-import Data.Type.Equality (type (~), (:~:)(Refl))
-import Prelude (undefined)
+import Data.Type.Equality ((:~:)(Refl))
 
 type family Last (ts :: [k]) :: k where
   Last '[t] = t

@@ -19,22 +19,14 @@ module Grease.Macaw.Memory
   , loadConcreteString
   ) where
 
-import Control.Applicative (pure)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.BitVector.Sized qualified as BV
-import Data.Bool (otherwise)
 import Data.ByteString qualified as BS
-import Data.Eq (Eq(..))
-import Data.Function (($), id)
-import Data.Functor ((<$>))
-import Data.Int (Int)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Backend qualified as Symbolic
 import Data.Macaw.Symbolic.Concretize qualified as Symbolic
-import Data.Maybe (Maybe(..))
-import Data.Traversable (Traversable(..))
 import Data.Word (Word8)
 import GHC.Stack qualified as Stack
 import Grease.Utility (OnlineSolverAndBackend)
@@ -42,8 +34,6 @@ import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.Simulator qualified as C
-import Prelude (Num(..), subtract)
-import System.IO (IO)
 import What4.Interface qualified as W4
 
 -- | Load a null-terminated string from memory.

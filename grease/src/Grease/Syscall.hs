@@ -18,7 +18,6 @@ import Data.Parameterized.Context qualified as Ctx
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.Simulator qualified as C
-import Prelude (($), map)
 import Stubs.Syscall qualified as Stubs
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4

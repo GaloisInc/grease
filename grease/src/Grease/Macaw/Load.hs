@@ -15,18 +15,13 @@ module Grease.Macaw.Load
   , load
   ) where
 
-import Control.Applicative (pure)
 import Control.Exception.Safe (throw)
-import Control.Monad (return, forM, when)
+import Control.Monad (forM, when)
 import Control.Monad.IO.Class (MonadIO)
-import Data.Bool (Bool(..), (&&), (||), otherwise)
 import Data.ByteString qualified as BS
-import Data.Either (Either(..))
 import Data.ElfEdit qualified as Elf
 import Data.ElfEdit.CoreDump qualified as CoreDump
-import Data.Eq (Eq(..))
-import Data.Function (($), (&), (.))
-import Data.Functor ((<$>), fmap)
+import Data.Function ((&))
 import Data.List qualified as List
 import Data.Macaw.BinaryLoader qualified as Loader
 import Data.Macaw.BinaryLoader.ELF qualified as Loader
@@ -37,12 +32,9 @@ import Data.Macaw.Memory.LoadCommon qualified as LC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (Maybe(..), fromMaybe, mapMaybe)
-import Data.Ord (Ord(..))
-import Data.Semigroup ((<>))
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import Data.Traversable (Traversable(..))
 import Data.Tuple qualified as Tuple
 import Data.Vector qualified as Vec
 import Grease.Diagnostic
@@ -52,10 +44,7 @@ import Grease.Utility
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lumberjack qualified as LJ
-import Prelude (Integral(..), Num(..), fromIntegral)
 import System.Directory (Permissions)
-import System.FilePath (FilePath)
-import System.IO (IO)
 import Text.Read (readMaybe)
 import What4.FunctionName qualified as W4
 

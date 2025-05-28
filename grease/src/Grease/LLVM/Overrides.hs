@@ -337,8 +337,8 @@ registerLLVMModuleOverrides ::
   -- ^ Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
-registerLLVMModuleOverrides la builtinOvs paths bak halloc llvmCtx fs mod_ = do
-  let decls = L.modDeclares mod_
+registerLLVMModuleOverrides la builtinOvs paths bak halloc llvmCtx fs llMod = do
+  let decls = L.modDeclares llMod
   registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx fs decls
 
 -- | Redirect handles for forward declarations in an LLVM S-expression program

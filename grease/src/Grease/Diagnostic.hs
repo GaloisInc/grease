@@ -10,7 +10,7 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Diagnostic
   ( Diagnostic(..)
   , GreaseLogAction
-  , log
+  , Grease.Diagnostic.log
   , severity
   ) where
 
@@ -30,7 +30,6 @@ import Grease.Refine.Diagnostic qualified as Refine
 import Grease.Setup.Diagnostic qualified as Setup
 import Grease.Skip.Diagnostic qualified as Skip
 import Lumberjack qualified as LJ
-import Prelude hiding (log)
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import System.IO (stderr)
