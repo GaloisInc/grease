@@ -305,12 +305,12 @@ toBatchBug ::
 toBatchBug fm addrWidth argNames argTys initArgs b cData =
   let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys in
   let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (Conc.concArgs cData) in
-  let prettyArgs = Conc.printConcArgs addrWidth argNames interestingShapes (Conc.concArgs cData) in
-  let prettyArgs' = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyArgs) in
+  let prettyConc = Conc.printConcData addrWidth argNames interestingShapes cData in
+  let prettyConc' = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyConc) in
   MkBatchBug
     { bugDesc = b
     , bugArgs = argsJson
-    , bugShapes = prettyArgs'
+    , bugShapes = prettyConc'
     }
 
 toFailedPredicate ::
@@ -327,7 +327,7 @@ toFailedPredicate ::
 toFailedPredicate fm addrWidth argNames argTys initArgs (NoHeuristic goal cData _err) =
   let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
       interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (Conc.concArgs cData)
-      prettyArgs = Conc.printConcArgs addrWidth argNames interestingShapes (Conc.concArgs cData)
+      prettyConc = Conc.printConcData addrWidth argNames interestingShapes cData
       lp = C.proofGoal goal
       simErr = lp ^. C.labeledPredMsg
       -- We inline and modify 'ppSimError', because we don't need to repeat the
@@ -346,7 +346,7 @@ toFailedPredicate fm addrWidth argNames argTys initArgs (NoHeuristic goal cData 
      , _failedPredicateMessage = msg
      , _failedPredicateArgs = argsJson
      , _failedPredicateConcShapes =
-         PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyArgs)
+         PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyConc)
      }
 
 checkMustFail ::

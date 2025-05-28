@@ -1,6 +1,6 @@
 ; Copyright (c) Galois, Inc. 2025
 
-; Ensure that `--fs-root` and the I/O overrides work.
+; Ensure that the IO overrides work.
 
 ;; flags {"--symbol", "test"}
 ;; flags {"--fs-root", "tests/llvm/extra/fs"}
@@ -31,16 +31,19 @@
     (let one (ptr 64 0 (bv 64 1)))
     (let _ (funcall read fd buf one))
 
-    ; int close(int filedes)
-    (let close-global (resolve-global "close"))
-    (let close (load-handle (Ptr 32) ((Ptr 32)) close-global))
-    (let closed1 (funcall close fd))
-    (let closed1-off (ptr-offset 32 closed1))
-    (assert! (not (equal? closed1-off (bv 32 0xffffffff))) "close() returned -1!")
-    (let closed2 (funcall close fd))
-    (let closed2-off (ptr-offset 32 closed2))
-    (assert! (equal? closed2-off (bv 32 0xffffffff)) "close() didn't return -1!")
-
+    (let byte (load none i8 buf))
+    (let byte-off (ptr-offset 8 byte))
+    (branch (equal? byte-off (bv 8 0)) if: else:))
+  (defblock if:
+    (let g (resolve-global "abort"))
+    (let h (load-handle Unit () g))
+    (funcall h)
+    (return ()))
+  (defblock else:
     (return ())))
 
-;; ok()
+;; check [[
+;; Concretized filesystem:
+;; /symb
+;; 00
+;; ]]
