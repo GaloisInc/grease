@@ -44,6 +44,6 @@
 
 ;; check [[
 ;; Concretized filesystem:
-;; /symb
-;; 00
+;;   /symb
+;;     00
 ;; ]]
