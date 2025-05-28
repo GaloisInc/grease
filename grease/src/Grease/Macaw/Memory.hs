@@ -4,11 +4,11 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 
 Various utilities for loading strings from memory. Strictly speaking, nothing
 about this functionality is @grease@-specific, but we make a somewhat
-opinionated design choice: when checking if the last character is a null
-terminator, we consult an SMT solver. This is useful (and necessary) for some
-use cases, but it does require adding 'OnlineSolverAndBackend' constraints to
-support it. This design choice warrants a closer look before being considered
-for inclusion upstream in @macaw@.
+opinionated design choice: we attempt to concretize the pointer to read from
+using an SMT solver. This is useful (and necessary) for some use cases, but it
+does require adding 'OnlineSolverAndBackend' constraints to support it. This
+design choice warrants a closer look before being considered for inclusion
+upstream in @macaw@.
 -}
 
 {-# LANGUAGE DataKinds #-}
