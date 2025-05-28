@@ -100,7 +100,7 @@ newtype ConcMem sym = ConcMem { getConcMem :: Mem.MemImpl sym }
 
 -- | File system contents before execution ('SymIO.InitialFileSystemContents')
 -- that has been concretized
-data ConcFs = ConcFs { getConcFs :: Map (SymIO.FDTarget SymIO.In) [Word8] }
+newtype ConcFs = ConcFs { getConcFs :: Map (SymIO.FDTarget SymIO.In) [Word8] }
 
 -- | Initial state, to be concretized into 'ConcretizedData'
 data InitialState sym ext argTys
