@@ -1,6 +1,6 @@
 ; Copyright (c) Galois, Inc. 2025
 
-; Ensure that the IO overrides work.
+; Ensure that concretization of the symbolic filesystem works.
 
 ;; flags {"--symbol", "test"}
 ;; flags {"--fs-root", "tests/llvm/extra/fs"}
