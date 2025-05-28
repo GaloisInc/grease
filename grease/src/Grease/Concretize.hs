@@ -160,7 +160,7 @@ printConcFs ::
 printConcFs cFs =
   PP.vsep $
     PP.pretty "Concretized filesystem:" :
-      map (uncurry ppFile) (Map.toList (getConcFs cFs))
+      map (PP.indent 2 . uncurry ppFile) (Map.toList (getConcFs cFs))
   where
     ppWord8 = PP.pretty . padHex 2
 
@@ -177,7 +177,7 @@ printConcFs cFs =
     ppFile tgt content =
       PP.vsep
       [ PP.pretty (SymIO.fdTargetToText tgt)
-      , PP.fillSep (List.map ppWord8 content)
+      , PP.indent 2 (PP.fillSep (List.map ppWord8 content))
       ]
 
 -- | Pretty-print concretized arguments and the concretized filesystem
