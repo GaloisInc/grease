@@ -100,7 +100,8 @@ import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Bug qualified as Bug
 import Grease.Cli (optsFromArgs)
-import Grease.Concretize (ConcretizedData, ConcArgs(..), concArgs, printConcArgs)
+import Grease.Concretize (ConcretizedData, ConcArgs(..))
+import Grease.Concretize qualified as Conc
 import Grease.Concretize.JSON (concArgsToJson)
 import Grease.Cursor.Pointer ()
 import Grease.Diagnostic
@@ -302,9 +303,9 @@ toBatchBug ::
   ConcretizedData sym ext args ->
   BatchBug
 toBatchBug fm addrWidth argNames argTys initArgs b cData =
-  let argsJson = concArgsToJson fm argNames (concArgs cData) argTys in
-  let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData) in
-  let prettyArgs = printConcArgs addrWidth argNames interestingShapes (concArgs cData) in
+  let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys in
+  let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (Conc.concArgs cData) in
+  let prettyArgs = Conc.printConcArgs addrWidth argNames interestingShapes (Conc.concArgs cData) in
   let prettyArgs' = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyArgs) in
   MkBatchBug
     { bugDesc = b
@@ -324,9 +325,9 @@ toFailedPredicate ::
   NoHeuristic sym ext args ->
   FailedPredicate
 toFailedPredicate fm addrWidth argNames argTys initArgs (NoHeuristic goal cData _err) =
-  let argsJson = concArgsToJson fm argNames (concArgs cData) argTys
-      interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (concArgs cData)
-      prettyArgs = printConcArgs addrWidth argNames interestingShapes (concArgs cData)
+  let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
+      interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (Conc.concArgs cData)
+      prettyArgs = Conc.printConcArgs addrWidth argNames interestingShapes (Conc.concArgs cData)
       lp = C.proofGoal goal
       simErr = lp ^. C.labeledPredMsg
       -- We inline and modify 'ppSimError', because we don't need to repeat the
@@ -481,7 +482,8 @@ initialLlvmFileSystem ::
   C.HandleAllocator ->
   sym ->
   SimOpts ->
-  IO ( CLLVM.SymIO.LLVMFileSystem ptrW
+  IO ( SymIO.InitialFileSystemContents sym
+     , CLLVM.SymIO.LLVMFileSystem ptrW
      , C.SymGlobalState sym
      , CLLVM.SymIO.SomeOverrideSim sym ()
      )
@@ -492,7 +494,8 @@ initialLlvmFileSystem halloc sym simOpts = do
       Just fsRoot -> SymIO.Loader.loadInitialFiles sym fsRoot
   -- We currently don't mirror stdout or stderr
   let mirroredOutputs = []
-  CLLVM.SymIO.initialLLVMFileSystem halloc sym ?ptrWidth fileContents mirroredOutputs C.emptyGlobals
+  (fs, gs, ov) <- CLLVM.SymIO.initialLLVMFileSystem halloc sym ?ptrWidth fileContents mirroredOutputs C.emptyGlobals
+  pure (fileContents, fs, gs, ov)
 
 simulateMacawCfg ::
   forall sym bak arch solver scope st fm.
@@ -610,10 +613,12 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         ArchRegs sym arch ->
         SetupMem sym ->
         C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch) ->
-        m (C.ExecState (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch))))
+        m ( SymIO.InitialFileSystemContents sym
+          , C.ExecState (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch)))
+          )
       mkInitState regs' mem' ssa'@(C.SomeCFG ssaCfg') = do
         mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
-        (fs, globals, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
+        (fs0, fs, globals, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
         let builtinOvs = builtinStubsOverrides bak mvar memCfg0 archCtx fs
         fnOvsMap <- liftIO $ Macaw.mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
         let memCfg1 = memConfigWithHandles bak la halloc archCtx memory symMap pltStubs dynFunMap fnOvsMap builtinGenericSyscalls errorSymbolicFunCalls memCfg0
@@ -627,7 +632,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         -- use an empty map instead. (See gitlab#118 for more discussion on this point.)
         let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` ssaCfgHdl) mbCfgAddr
         let personality = emptyGreaseSimulatorState & discoveredFnHandles .~ discoveredHdls
-        initState bak la macawExtImpl halloc mvar mem' globals initFsOv archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa'
+        st <- initState bak la macawExtImpl halloc mvar mem' globals initFsOv archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa'
+        pure (fs0, st)
 
   doLog la (Diag.TargetCFG ssaCfg)
   result <- refinementLoop la (simMaxIters simOpts) (simTimeout simOpts) rNamesAssign' initArgs $ \argShapes -> do
@@ -636,7 +642,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
     bbMapRef <- liftIO (newIORef Map.empty)
     let ?recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
           modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
-    st <- mkInitState regs' setupMem ssa
+    (fs0, st) <- mkInitState regs' setupMem ssa
     -- The order of the heuristics is significant, the 'macawHeuristics'
     -- find a sensible initial memory layout, which is necessary before
     -- applying the 'mustFailHeuristic' (which would otherwise report many
@@ -646,7 +652,13 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
           if simNoHeuristics simOpts
           then []
           else macawHeuristics la rNames List.++ [mustFailHeuristic]
-    execAndRefine bak (simSolver simOpts) fm la setupAnns initMem heuristics argNames argShapes args bbMapRef (simLoopBound simOpts) execFeats st `catches`
+    let concInitState =
+          Conc.InitialState
+          { Conc.initStateArgs = args
+          , Conc.initStateFs = fs0
+          , Conc.initStateMem = initMem
+          }
+    execAndRefine bak (simSolver simOpts) fm la setupAnns heuristics argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st `catches`
       [ Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
           pure $ ProveCantRefine $ MissingSemantics $ pshow ex
       , Handler (\(ex :: AArch32Symbolic.AArch32Exception) ->
@@ -693,8 +705,14 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         let ?recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
               modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
         let assertingSsa = C.toSSA assertingCfg
-        st <- mkInitState regs' setupMem assertingSsa
-        new <- execAndRefine bak (simSolver simOpts) fm la setupAnns initMem (macawHeuristics la rNames) argNames argShapes args bbMapRef (simLoopBound simOpts) execFeats st
+        (fs0, st) <- mkInitState regs' setupMem assertingSsa
+        let concInitState =
+              Conc.InitialState
+              { Conc.initStateArgs = args
+              , Conc.initStateFs = fs0
+              , Conc.initStateMem = initMem
+              }
+        new <- execAndRefine bak (simSolver simOpts) fm la setupAnns (macawHeuristics la rNames) argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
         case new of
           ProveBug {} ->
             throw (GreaseException "CFG rewriting introduced a bug!")
@@ -1131,7 +1149,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
     let ?recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
           modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
     let llvmExtImpl = CLLVM.llvmExtensionImpl ?memOpts
-    (fs, globals, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
+    (fs0, fs, globals, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
     st <- LLVM.initState bak la llvmExtImpl halloc (simErrorSymbolicFunCalls simOpts) setupMem fs globals initFsOv llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
     let cmdExt = Debug.llvmCommandExt
     debuggerFeat <-
@@ -1159,7 +1177,13 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
           if simNoHeuristics simOpts
           then []
           else llvmHeuristics la List.++ [mustFailHeuristic]
-    execAndRefine bak (simSolver simOpts) fm la setupAnns initMem heuristics argNames argShapes args bbMapRef (simLoopBound simOpts) execFeats st
+    let concInitState =
+          Conc.InitialState
+          { Conc.initStateArgs = args
+          , Conc.initStateFs = fs0
+          , Conc.initStateMem = initMem
+          }
+    execAndRefine bak (simSolver simOpts) fm la setupAnns heuristics argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
 
   res <- case result of
     RefinementBug b cData ->

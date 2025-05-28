@@ -104,12 +104,12 @@ import Data.String (String)
 import Data.Tuple qualified as Tuple
 import Data.Type.Equality (type (~))
 import Grease.Bug qualified as Bug
-import Grease.Concretize
+import Grease.Concretize (ConcretizedData)
+import Grease.Concretize qualified as Conc
 import Grease.Diagnostic
 import Grease.Heuristic
 import Grease.Options (LoopBound(..), Milliseconds(..))
 import Grease.Refine.Diagnostic qualified as Diag
-import Grease.Setup (Args)
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
 import Grease.Shape.NoTag (NoTag)
@@ -238,15 +238,14 @@ consumer ::
   bak ->
   Anns.Annotations sym ext argTys ->
   GreaseLogAction ->
-  InitialMem sym ->
   [RefineHeuristic sym bak ext argTys] ->
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
-  Args sym ext argTys ->
   Map.Map (Nonce t C.BaseBoolType) (Mem.CallStack, Mem.BadBehavior sym) ->
+  Conc.InitialState sym ext argTys ->
   C.ProofConsumer sym t (ProveRefineResult sym ext argTys)
-consumer bak anns la initMem heuristics argNames argShapes initArgs bbMap =
+consumer bak anns la heuristics argNames argShapes bbMap initState =
   C.ProofConsumer $ \goal result -> do
     let sym = C.backendGetSym bak
     let lp = C.proofGoal goal
@@ -272,7 +271,7 @@ consumer bak anns la initMem heuristics argNames argShapes initArgs bbMap =
         doLog la (Diag.SolverGoalPassed (C.simErrorLoc simErr))
         pure ProveSuccess
       C.Disproved groundEvalFn _ -> do
-        cData <- makeConcretizedData bak groundEvalFn initMem minfo initArgs
+        cData <- Conc.makeConcretizedData bak groundEvalFn minfo initState
         doLog la $ Diag.SolverGoalFailed sym lp minfo
         let
           runHeuristics ::
@@ -280,6 +279,7 @@ consumer bak anns la initMem heuristics argNames argShapes initArgs bbMap =
             ArgShapes ext NoTag argTys ->
             IO (ProveRefineResult sym ext argTys)
           runHeuristics (h:hs) fc = do
+            let initMem = Conc.initStateMem initState
             res <- liftIO (h bak anns initMem goal minfo argNames fc)
             case res of
               CantRefine reason -> do
@@ -338,22 +338,21 @@ proveAndRefine ::
   Solver ->
   Anns.Annotations sym ext argTys ->
   GreaseLogAction ->
-  InitialMem sym ->
   [RefineHeuristic sym bak ext argTys] ->
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
-  Args sym ext argTys ->
+  Conc.InitialState sym ext argTys ->
   Map.Map (Nonce t C.BaseBoolType) (Mem.CallStack, Mem.BadBehavior sym) ->
   C.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
-proveAndRefine bak solver anns la initMem heuristics argNames argShapes initArgs bbMap goals = do
+proveAndRefine bak solver anns la heuristics argNames argShapes initState bbMap goals = do
   -- TODO: Make the timeout configurable at the CLI
   let tout = C.Timeout (C.secondsFromInt 5)
   let sym = C.backendGetSym bak
   let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
   let strat = C.ProofStrategy prover combiner
-  let cons = consumer bak anns la initMem heuristics argNames argShapes initArgs bbMap
+  let cons = consumer bak anns la heuristics argNames argShapes bbMap initState
   case goals of
     Nothing -> pure ProveSuccess
     Just goals' ->
@@ -380,22 +379,21 @@ execAndRefine ::
   W4FM.FloatModeRepr fm ->
   GreaseLogAction ->
   Anns.Annotations sym ext argTys ->
-  InitialMem sym ->
   [RefineHeuristic sym bak ext argTys] ->
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
-  Args sym ext argTys ->
+  Conc.InitialState sym ext argTys ->
   IORef (Map.Map (Nonce t C.BaseBoolType) (Mem.CallStack, Mem.BadBehavior sym)) ->
   LoopBound ->
   [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
   C.ExecState p sym ext (C.RegEntry sym ret) ->
   m (ProveRefineResult sym ext argTys)
-execAndRefine bak solver _fm la anns initMem heuristics argNames argShapes initArgs bbMapRef (LoopBound bound) execFeats initialState = do
+execAndRefine bak solver _fm la anns heuristics argNames argShapes initState bbMapRef (LoopBound bound) execFeats initialState = do
   (result, goals) <- liftIO (execCfg bak (LoopBound bound) execFeats initialState)
   doLog la (Diag.ExecutionResult result)
   bbMap <- liftIO (readIORef bbMapRef)
-  liftIO (proveAndRefine bak solver anns la initMem heuristics argNames argShapes initArgs bbMap goals)
+  liftIO (proveAndRefine bak solver anns la heuristics argNames argShapes initState bbMap goals)
 
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)
