@@ -13,13 +13,17 @@ module Grease.Concretize
   , ConcretizedData(..)
   , concArgsToSym
   , makeConcretizedData
+  , printConcFs
+  , printConcData
   ) where
 
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.BitVector.Sized qualified as BV
 import Data.Functor.Const (Const)
+import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
 import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
 import Data.Word (Word8)
@@ -40,6 +44,7 @@ import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.SymIO qualified as SymIO
+import Numeric (showHex)
 import Prettyprinter qualified as PP
 import What4.Expr qualified as W4
 import What4.FloatMode qualified as W4FM
@@ -147,3 +152,46 @@ makeConcretizedData bak groundEvalFn minfo initState = do
     , concMem = ConcMem cMem
     , concErr = cErr
     }
+
+-- | Pretty-print the concretized filesystem
+printConcFs ::
+  ConcFs ->
+  PP.Doc ann
+printConcFs cFs =
+  PP.vsep $
+    PP.pretty "Concretized filesystem:" :
+      map (uncurry ppFile) (Map.toList (getConcFs cFs))
+  where
+    ppWord8 = PP.pretty . padHex 2
+
+    showHex' :: Integral a => a -> String
+    showHex' n = showHex n ""
+
+    padHex :: Integral a => Int -> a -> String
+    padHex pad v =
+      let initial = showHex' v
+          zs = List.take (pad - List.length initial) (List.repeat '0')
+      in zs List.++ initial
+
+    ppFile :: SymIO.FDTarget SymIO.In -> [Word8] -> PP.Doc ann
+    ppFile tgt content =
+      PP.vsep
+      [ PP.pretty (SymIO.fdTargetToText tgt)
+      , PP.fillSep (List.map ppWord8 content)
+      ]
+
+-- | Pretty-print concretized arguments and the concretized filesystem
+printConcData ::
+  Mem.HasPtrWidth wptr =>
+  (ExtShape ext ~ PtrShape ext wptr) =>
+  MM.AddrWidthRepr wptr ->
+  -- | Argument names
+  Ctx.Assignment (Const String) argTys ->
+  -- | Which shapes to print
+  Ctx.Assignment (Const Bool) argTys ->
+  ConcretizedData sym ext argTys ->
+  PP.Doc ann
+printConcData addrWidth argNames filt cData =
+  let args = printConcArgs addrWidth argNames filt (concArgs cData)
+      fs = printConcFs (concFs cData)
+  in PP.vsep ([args] ++ if Map.null (getConcFs (concFs cData)) then [] else [fs])
