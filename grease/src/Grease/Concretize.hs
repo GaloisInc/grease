@@ -3,10 +3,12 @@ Copyright        : (c) Galois, Inc. 2024
 Maintainer       : GREASE Maintainers <grease@galois.com>
 -}
 
+{-# LANGUAGE DataKinds #-}
 
 module Grease.Concretize
   ( ConcMem(..)
   , ConcArgs(..)
+  , InitialState(..)
   , printConcArgs
   , ConcretizedData(..)
   , concArgsToSym
@@ -14,10 +16,13 @@ module Grease.Concretize
   ) where
 
 import Control.Monad.IO.Class (MonadIO(..))
+import Data.BitVector.Sized qualified as BV
 import Data.Functor.Const (Const)
 import Data.Macaw.Memory qualified as MM
+import Data.Map.Strict (Map)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
+import Data.Word (Word8)
 import Grease.Setup (Args(Args), InitialMem(..))
 import Grease.Shape (Shape, ExtShape)
 import Grease.Shape qualified as Shape
@@ -34,6 +39,7 @@ import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.SymIO qualified as SymIO
 import Prettyprinter qualified as PP
 import What4.Expr qualified as W4
 import What4.FloatMode qualified as W4FM
@@ -87,9 +93,22 @@ concArgsToSym sym fm argTys (ConcArgs cArgs) =
 -- the future.
 newtype ConcMem sym = ConcMem { getConcMem :: Mem.MemImpl sym }
 
+-- | File system contents before execution ('SymIO.InitialFileSystemContents')
+-- that has been concretized
+data ConcFs = ConcFs { getConcFs :: Map (SymIO.FDTarget SymIO.In) [Word8] }
+
+-- | Initial state, to be concretized into 'ConcretizedData'
+data InitialState sym ext argTys
+  = InitialState
+    { initStateArgs :: Args sym ext argTys
+    , initStateFs :: SymIO.InitialFileSystemContents sym
+    , initStateMem :: InitialMem sym
+    }
+
 data ConcretizedData sym ext argTys
   = ConcretizedData
     { concArgs :: ConcArgs sym ext argTys
+    , concFs :: ConcFs
     , concMem :: ConcMem sym
     , concErr :: Maybe (Mem.BadBehavior sym)
     }
@@ -101,23 +120,30 @@ makeConcretizedData ::
   (ExtShape ext ~ PtrShape ext wptr) =>
   bak ->
   W4.GroundEvalFn t ->
-  InitialMem sym ->
   Maybe (Mem.CallStack, Mem.BadBehavior sym) ->
-  Args sym ext argTys ->
+  InitialState sym ext argTys ->
   IO (ConcretizedData sym ext argTys)
-makeConcretizedData bak groundEvalFn initMem minfo (Args initArgs) = do
+makeConcretizedData bak groundEvalFn minfo initState = do
+  let InitialState
+        { initStateArgs = Args initArgs
+        , initStateFs = initFs
+        , initStateMem = InitialMem initMem
+        } = initState
   let sym = C.backendGetSym bak
   let ctx = Conc.ConcCtx @sym @t groundEvalFn Mem.concPtrFnMap
-  let InitialMem mem = initMem
   let concRV :: forall tp. C.TypeRepr tp -> C.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)
       concRV t = fmap (Conc.ConcRV' @sym) . Conc.concRegValue @sym @t ctx t . C.unRV
   cArgs <- liftIO (traverseFC (Shape.traverseShapeWithType concRV) initArgs)
   let W4.GroundEvalFn gFn = groundEvalFn
-  cMem <- Mem.concMemImpl sym gFn mem
+  let toWord8 :: BV.BV 8 -> Word8
+      toWord8 = fromIntegral . BV.asUnsigned
+  cFs <- traverse (traverse (fmap toWord8 . gFn)) (SymIO.symbolicFiles initFs)
+  cMem <- Mem.concMemImpl sym gFn initMem
   cErr <- traverse (\(_, bb) -> Mem.concBadBehavior sym gFn bb) minfo
   pure $
     ConcretizedData
     { concArgs = ConcArgs cArgs
+    , concFs = ConcFs cFs
     , concMem = ConcMem cMem
     , concErr = cErr
     }

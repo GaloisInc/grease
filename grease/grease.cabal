@@ -158,6 +158,7 @@ library
     , crucible-debug
     , crucible-llvm
     , crucible-llvm-syntax
+    , crucible-symio
     , crucible-syntax
     , elf-edit
     , elf-edit-core-dump
