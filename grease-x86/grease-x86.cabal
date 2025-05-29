@@ -27,6 +27,7 @@ common shared
   -- See doc/style.md
   ghc-options:
     -Werror=missing-export-lists
+    -Werror=prepositive-qualified-module
 
   -- Specifying -Wall and -Werror can cause the project to fail to build on
   -- newer versions of GHC simply due to new warnings being added to -Wall. To
