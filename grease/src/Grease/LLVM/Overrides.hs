@@ -46,6 +46,7 @@ import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.LLVM.Syntax (llvmParserHooks, emptyParserHooks)
+import Lang.Crucible.LLVM.Syntax.Overrides.String qualified as StrOv
 import Lang.Crucible.LLVM.Translation (LLVMContext)
 import Lang.Crucible.LLVM.Translation qualified as CLLVM
 import Lang.Crucible.LLVM.TypeContext (TypeContext(..))
@@ -56,7 +57,6 @@ import Lumberjack qualified as LJ
 import System.FilePath (dropExtensions, takeBaseName)
 import Text.LLVM.AST qualified as L
 import What4.FunctionName qualified as W4
-import qualified Lang.Crucible.LLVM.Syntax.Overrides.String as StrOv
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMOverridesDiagnostic diag)

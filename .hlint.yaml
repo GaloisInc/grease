@@ -5,6 +5,7 @@
 - error: { name: "Redundant bracket" }
 - error: { name: "Redundant do" }
 - error: { name: "Unused LANGUAGE pragma" }
+- error: { name: "Use camelCase" }
 - error: { name: "Use module export list" }
 - error: { name: "Use unless" }
 - error: { name: "Use when" }

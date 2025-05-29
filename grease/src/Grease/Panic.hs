@@ -7,7 +7,7 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Panic (panic) where
 
 import Panic hiding (panic)
-import qualified Panic
+import Panic qualified 
 
 data Grease = Grease
 
