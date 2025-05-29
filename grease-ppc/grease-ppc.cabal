@@ -24,6 +24,10 @@ common shared
   default-language: GHC2021
   build-depends: base >= 4.17 && < 4.20
 
+  -- See doc/style.md
+  ghc-options:
+    -Werror=missing-export-lists
+
   -- Specifying -Wall and -Werror can cause the project to fail to build on
   -- newer versions of GHC simply due to new warnings being added to -Wall. To
   -- prevent this from happening we manually list which warnings should be
