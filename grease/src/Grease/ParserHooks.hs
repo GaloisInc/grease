@@ -30,7 +30,7 @@ parserHooks ::
   LCSC.ParserHooks ext
 parserHooks =
   LCSC.ParserHooks
-  { LCSC.extensionTypeParser = empty
+  { LCSC.extensionTypeParser = LCSC.extensionTypeParser ?parserHooks
   , LCSC.extensionParser = parseGreaseOp
   }
 
@@ -55,7 +55,7 @@ parseGreaseOp =
               atomVal <- freshVec nmPrefix tp len
               endAtom <- LCSC.freshAtom loc atomVal
               return (Some endAtom)
-      LCSA.AtomName _ -> empty
+      LCSA.AtomName _ -> LCSC.extensionParser ?parserHooks
 
 -- | Generate a vector of the given length, where each element is a fresh
 -- constant of the supplied type whose name is derived from the given string.
