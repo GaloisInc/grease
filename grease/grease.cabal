@@ -217,6 +217,7 @@ library
     Grease.Options
     Grease.Output
     Grease.Panic
+    Grease.ParserHooks
     Grease.Pretty
     Grease.Refine
     Grease.Refine.Diagnostic
