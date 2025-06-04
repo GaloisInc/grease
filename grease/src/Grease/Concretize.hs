@@ -4,6 +4,7 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 -}
 
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 
 module Grease.Concretize
   ( ConcMem(..)
@@ -20,15 +21,18 @@ module Grease.Concretize
 
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.BitVector.Sized qualified as BV
+import Data.Foldable (toList)
 import Data.Functor.Const (Const)
 import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some (Some (Some))
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
 import Data.Text (Text)
+import Data.Type.Equality (testEquality)
 import Data.Word (Word8)
 import Grease.Setup (Args(Args), InitialMem(..))
 import Grease.Shape (Shape, ExtShape)
@@ -179,6 +183,27 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
     , concErr = cErr
     }
 
+-- | Pretty-print the \"extra\" concretized data
+printConcExtra ::
+  [SomeConcretizedValue sym] ->
+  PP.Doc ann
+printConcExtra vals =
+  PP.vsep $
+    PP.pretty "Concretized values:" :
+      map (PP.indent 2 . ppValue) vals
+  where
+    ppValue :: SomeConcretizedValue sym -> PP.Doc ann
+    ppValue (SomeConcretizedValue { concName = name, concTy = ty, concValue = Conc.ConcRV' val }) =
+      PP.vsep
+      [ PP.pretty name
+      , PP.indent 2 $
+          case ty of
+            C.VectorRepr (C.BVRepr w) | Just C.Refl <- testEquality w (knownNat @8) ->
+              PP.fillSep (List.map (\(Conc.ConcRV' b) -> PP.pretty (BV.ppHex (knownNat @8) b)) (toList val))
+            -- TODO(#204): Handle more cases
+            _ -> PP.pretty "<can't print this value>"
+      ]
+
 -- | Pretty-print the concretized filesystem
 printConcFs ::
   ConcFs ->
@@ -221,4 +246,10 @@ printConcData addrWidth argNames filt cData =
   -- TODO: print extra concretized data
   let args = printConcArgs addrWidth argNames filt (concArgs cData)
       fs = printConcFs (concFs cData)
-  in PP.vsep ([args] ++ if Map.null (getConcFs (concFs cData)) then [] else [fs])
+      extra = printConcExtra (concExtra cData)
+  in PP.vsep $
+       concat $
+         [ [args]
+         , if Map.null (getConcFs (concFs cData)) then [] else [fs]
+         , if List.null (concExtra cData) then [] else [extra]
+         ]
