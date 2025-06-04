@@ -4,6 +4,7 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 -}
 
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ImplicitParams #-}
 
 -- | Functionality for converting 'Stubs.FunctionOverride's into functions
@@ -19,6 +20,7 @@ module Grease.Macaw.FunctionOverride
   ) where
 
 import Control.Lens ((^.))
+import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Foldable qualified as Foldable
 import Data.List.NonEmpty qualified as NE
@@ -31,6 +33,7 @@ import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Proxy (Proxy(..))
 import Data.Sequence qualified as Seq
 import Grease.Diagnostic (GreaseLogAction)
+import Grease.FunctionOverride.SExp (tryBindTypedOverride, freshBytesOverride)
 import Grease.Macaw.Arch
 import Grease.Macaw.SimulatorState
 import Grease.Skip (registerSkipOverride)
@@ -256,6 +259,7 @@ registerMacawOvForwardDeclarations ::
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
+  , Mem.HasPtrWidth w
   ) =>
   bak ->
   Map.Map W4.FunctionName (MacawFunctionOverride p sym arch)
@@ -275,6 +279,7 @@ registerMacawForwardDeclarations ::
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
+  , Mem.HasPtrWidth w
   ) =>
   bak ->
   Map.Map W4.FunctionName (MacawFunctionOverride p sym arch)
@@ -290,7 +295,14 @@ registerMacawForwardDeclarations ::
 registerMacawForwardDeclarations bak funOvs cannotResolve fwdDecs =
   Foldable.forM_ (Map.toList fwdDecs) $ \(decName, C.SomeHandle hdl) ->
     case Map.lookup decName funOvs of
-      Nothing -> cannotResolve decName hdl
+      Nothing ->
+        -- These overrides are *only* callable from S-expression files with
+        -- forward-declarations of them.
+        case decName of
+          "fresh-bytes" -> do
+            ok <- tryBindTypedOverride hdl (freshBytesOverride ?ptrWidth)
+            Monad.unless ok (cannotResolve decName hdl)
+          _ -> cannotResolve decName hdl
       Just mfo -> do
         let someForwardedOv = mfoSomeFunctionOverride mfo
             forwardedOv =

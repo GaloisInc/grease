@@ -192,6 +192,7 @@ library
     Grease.Diagnostic.Severity
     Grease.Entrypoint
     Grease.FunctionOverride
+    Grease.FunctionOverride.SExp
     Grease.Heuristic
     Grease.Heuristic.Diagnostic
     Grease.Heuristic.Result
