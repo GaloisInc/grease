@@ -18,6 +18,17 @@ additional types and operations, see:
 [macaw-x86-syntax]: https://github.com/GaloisInc/macaw/tree/master/macaw-x86-syntax
 [crucible-llvm-syntax]: https://github.com/GaloisInc/crucible/tree/master/crucible-llvm-syntax
 
+## Additional operations
+
+GREASE provides the following operations in S-expression files, in addition to
+the operations provided by the base S-expression language:
+
+- `fresh-vec :: String Unicode -> forall (t :: Type) -> Nat -> Vector t`, where
+  `(fresh-vec s t n)` generates a length-`n` vector where each element is a
+  fresh constant of type `t` with the name `<s>_<i>` (for each `i` between 0 and
+  `<n> - 1`). Note that `t` must be a scalar type (e.g., no nested `Vector`s),
+  and `s` and `n` must both be concrete values.
+
 ## File naming conventions
 
 <!-- This list also appears in overrides.md -->

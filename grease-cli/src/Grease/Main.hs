@@ -129,6 +129,7 @@ import Grease.Main.Diagnostic qualified as Diag
 import Grease.MustFail qualified as MustFail
 import Grease.Options
 import Grease.Output
+import Grease.ParserHooks (parserHooks)
 import Grease.Pretty (prettyPtrFnMap)
 import Grease.Profiler.Feature (greaseProfilerFeature)
 import Grease.Refine
@@ -927,8 +928,9 @@ simulateMacawSyntax ::
   SimOpts ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
   IO Results
-simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
-  let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
+simulateMacawSyntax la halloc archCtx simOpts archParserHooks = do
+  let ?parserHooks = machineCodeParserHooks (Proxy @arch) archParserHooks
+  let ?parserHooks = parserHooks
   prog <- parseProgram halloc (simProgPath simOpts)
   CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
   cfgs <- entrypointCfgMap la halloc prog (simEntryPoints simOpts)
@@ -1001,8 +1003,9 @@ simulateMacaw ::
   SimOpts ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
   IO Results
-simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts parserHooks = do
-  let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
+simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts archParserHooks = do
+  let ?parserHooks = machineCodeParserHooks (Proxy @arch) archParserHooks
+  let ?parserHooks = parserHooks
   let dl = macawDataLayout archCtx
   let memory = Loader.memoryImage $ progLoadedBinary loadedProg
   let loadOpts = progLoadOptions loadedProg
@@ -1271,6 +1274,7 @@ simulateLlvmSyntax simOpts la = do
   let mkMem = \_ -> InitialMem <$> Mem.emptyMem DataLayout.LittleEndian
   let ?ptrWidth = knownNat @64
   let ?parserHooks = llvmParserHooks emptyParserHooks mvar
+  let ?parserHooks = parserHooks
   prog <- parseProgram halloc (simProgPath simOpts)
   CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
   regCfgs <- entrypointCfgMap la halloc prog (simEntryPoints simOpts)
