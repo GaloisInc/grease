@@ -271,7 +271,7 @@ consumer bak anns la heuristics argNames argShapes bbMap initState =
         doLog la (Diag.SolverGoalPassed (C.simErrorLoc simErr))
         pure ProveSuccess
       C.Disproved groundEvalFn _ -> do
-        cData <- Conc.makeConcretizedData bak groundEvalFn minfo initState
+        cData <- Conc.makeConcretizedData bak groundEvalFn minfo initState []
         doLog la $ Diag.SolverGoalFailed sym lp minfo
         let
           runHeuristics ::

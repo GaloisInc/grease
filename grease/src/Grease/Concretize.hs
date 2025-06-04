@@ -11,6 +11,7 @@ module Grease.Concretize
   , InitialState(..)
   , printConcArgs
   , ConcretizedData(..)
+  , SomeConcretizedValue(..)
   , concArgsToSym
   , makeConcretizedData
   , printConcFs
@@ -25,7 +26,9 @@ import Data.Macaw.Memory qualified as MM
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.Some (Some (Some))
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
+import Data.Text (Text)
 import Data.Word (Word8)
 import Grease.Setup (Args(Args), InitialMem(..))
 import Grease.Shape (Shape, ExtShape)
@@ -110,9 +113,19 @@ data InitialState sym ext argTys
     , initStateMem :: InitialMem sym
     }
 
+-- | An extra value that has been concretized
+data SomeConcretizedValue sym
+  = forall ty.
+    SomeConcretizedValue
+    { concName :: Text
+    , concTy :: C.TypeRepr ty
+    , concValue :: Conc.ConcRV' sym ty
+    }
+
 data ConcretizedData sym ext argTys
   = ConcretizedData
     { concArgs :: ConcArgs sym ext argTys
+    , concExtra :: [SomeConcretizedValue sym]
     , concFs :: ConcFs
     , concMem :: ConcMem sym
     , concErr :: Maybe (Mem.BadBehavior sym)
@@ -127,8 +140,10 @@ makeConcretizedData ::
   W4.GroundEvalFn t ->
   Maybe (Mem.CallStack, Mem.BadBehavior sym) ->
   InitialState sym ext argTys ->
+  -- | Extra data to concretize
+  [(Text, Some (C.RegEntry sym))] ->
   IO (ConcretizedData sym ext argTys)
-makeConcretizedData bak groundEvalFn minfo initState = do
+makeConcretizedData bak groundEvalFn minfo initState extra = do
   let InitialState
         { initStateArgs = Args initArgs
         , initStateFs = initFs
@@ -142,12 +157,23 @@ makeConcretizedData bak groundEvalFn minfo initState = do
   let W4.GroundEvalFn gFn = groundEvalFn
   let toWord8 :: BV.BV 8 -> Word8
       toWord8 = fromIntegral . BV.asUnsigned
+  let doConcExtra :: Text -> Some (C.RegEntry sym) -> IO (SomeConcretizedValue sym)
+      doConcExtra name (Some (C.RegEntry ty val)) = do
+        concVal <- concRV ty (C.RV val)
+        pure $
+          SomeConcretizedValue
+          { concName = name
+          , concTy = ty
+          , concValue = concVal
+          }
+  cExtra <- liftIO (traverse (uncurry doConcExtra) extra)
   cFs <- traverse (traverse (fmap toWord8 . gFn)) (SymIO.symbolicFiles initFs)
   cMem <- Mem.concMemImpl sym gFn initMem
   cErr <- traverse (\(_, bb) -> Mem.concBadBehavior sym gFn bb) minfo
   pure $
     ConcretizedData
     { concArgs = ConcArgs cArgs
+    , concExtra = cExtra
     , concFs = ConcFs cFs
     , concMem = ConcMem cMem
     , concErr = cErr
@@ -192,6 +218,7 @@ printConcData ::
   ConcretizedData sym ext argTys ->
   PP.Doc ann
 printConcData addrWidth argNames filt cData =
+  -- TODO: print extra concretized data
   let args = printConcArgs addrWidth argNames filt (concArgs cData)
       fs = printConcFs (concFs cData)
   in PP.vsep ([args] ++ if Map.null (getConcFs (concFs cData)) then [] else [fs])
