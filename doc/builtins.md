@@ -203,6 +203,11 @@ available:
 
 ### S-expression-specific overrides
 
+For S-expression files (programs or overrides), the following overrides are also available:
+```
+(declare @fresh-bytes ((name (String Unicode)) (num (Bitvector w))) (Vector (Bitvector 8)))
+```
+
 For LLVM S-expression files (programs or overrides), the following overrides are also available:
 ```
 (declare @read-bytes ((x (Ptr 64))) (Vector (Bitvector 8)))

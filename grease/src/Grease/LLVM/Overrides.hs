@@ -27,9 +27,9 @@ import Data.List qualified as List
 import Data.Map qualified as Map
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
-import Data.Type.Equality ((:~:)(Refl), testEquality)
 import Grease.Diagnostic (GreaseLogAction, Diagnostic(LLVMOverridesDiagnostic))
 import Grease.FunctionOverride (basicLLVMOverrides)
+import Grease.FunctionOverride.SExp (freshBytesOverride, tryBindTypedOverride)
 import Grease.LLVM.Overrides.Declare (mkDeclare)
 import Grease.LLVM.Overrides.Diagnostic as Diag
 import Grease.Skip (declSkipOverride, registerSkipOverride)
@@ -46,6 +46,7 @@ import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.LLVM.Syntax (llvmParserHooks, emptyParserHooks)
+import Lang.Crucible.LLVM.Syntax.Overrides.String qualified as StrOv
 import Lang.Crucible.LLVM.Translation (LLVMContext)
 import Lang.Crucible.LLVM.Translation qualified as CLLVM
 import Lang.Crucible.LLVM.TypeContext (TypeContext(..))
@@ -56,7 +57,6 @@ import Lumberjack qualified as LJ
 import System.FilePath (dropExtensions, takeBaseName)
 import Text.LLVM.AST qualified as L
 import What4.FunctionName qualified as W4
-import qualified Lang.Crucible.LLVM.Syntax.Overrides.String as StrOv
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMOverridesDiagnostic diag)
@@ -410,6 +410,9 @@ registerLLVMForwardDeclarations mvar funOvs cannotResolve fwdDecs =
         -- These string-manipulating overrides are *only* callable from
         -- S-expression files with forward-declarations of them.
         case fwdDecName of
+          "fresh-bytes" -> do
+            ok <- tryBindTypedOverride hdl (freshBytesOverride ?ptrWidth)
+            unless ok (cannotResolve fwdDecName hdl)
           "read-bytes" -> do
             ok <- tryBindTypedOverride hdl (StrOv.readBytesOverride mvar)
             unless ok (cannotResolve fwdDecName hdl)
@@ -423,21 +426,6 @@ registerLLVMForwardDeclarations mvar funOvs cannotResolve fwdDecs =
             ok <- tryBindTypedOverride hdl (StrOv.writeCStringOverride  mvar)
             unless ok (cannotResolve fwdDecName hdl)
           _ -> cannotResolve fwdDecName hdl
-
--- | The return value indicates whether the override was bound.
-tryBindTypedOverride ::
-  C.FnHandle args ret ->
-  C.TypedOverride p sym ext args' ret' ->
-  C.OverrideSim p sym ext rtp args'' ret'' Bool
-tryBindTypedOverride hdl ov =
-  case testEquality (C.handleArgTypes hdl) (C.typedOverrideArgs ov) of
-    Nothing -> pure False
-    Just Refl ->
-      case testEquality (C.handleReturnType hdl) (C.typedOverrideRet ov) of
-        Nothing -> pure False
-        Just Refl -> do
-          C.bindTypedOverride hdl ov
-          pure True
 
 -- | An LLVM function override, corresponding to a single S-expression file.
 data LLVMFunctionOverride p sym =
