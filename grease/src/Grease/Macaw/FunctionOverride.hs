@@ -237,7 +237,7 @@ registerMacawSexpProgForwardDeclarations ::
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
-  , Conc.HasToConcretize p sym
+  , Conc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   ) =>
   bak ->
@@ -262,7 +262,7 @@ registerMacawOvForwardDeclarations ::
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
   , Mem.HasPtrWidth w
-  , Conc.HasToConcretize p sym
+  , Conc.HasToConcretize p
   ) =>
   bak ->
   Map.Map W4.FunctionName (MacawFunctionOverride p sym arch)
@@ -283,7 +283,7 @@ registerMacawForwardDeclarations ::
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
   , Mem.HasPtrWidth w
-  , Conc.HasToConcretize p sym
+  , Conc.HasToConcretize p
   ) =>
   bak ->
   Map.Map W4.FunctionName (MacawFunctionOverride p sym arch)

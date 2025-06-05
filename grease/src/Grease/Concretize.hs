@@ -4,15 +4,13 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 -}
 
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Grease.Concretize
   ( -- * Data to be concretized
     InitialState(..)
-  , ToConcretize(..)
-  , HasToConcretize(..)
+  , ToConcretizeType
+  , HasToConcretize(toConcretize)
   , stateToConcretize
   , addToConcretize
     -- * Concretization
@@ -29,8 +27,8 @@ module Grease.Concretize
   ) where
 
 import Control.Lens qualified as Lens
-import Control.Lens.TH (makeLenses)
 import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.State (gets)
 import Data.BitVector.Sized qualified as BV
 import Data.Foldable (toList)
 import Data.Functor.Const (Const)
@@ -40,7 +38,6 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
-import Data.Parameterized.Some (Some (Some))
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
 import Data.Text (Text)
 import Data.Type.Equality (testEquality)
@@ -61,11 +58,13 @@ import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator.SymSequence qualified as C
 import Lang.Crucible.SymIO qualified as SymIO
 import Numeric (showHex)
 import Prettyprinter qualified as PP
 import What4.Expr qualified as W4
 import What4.FloatMode qualified as W4FM
+import What4.Interface qualified as WI
 
 ---------------------------------------------------------------------
 -- * Data to be concretized
@@ -78,38 +77,50 @@ data InitialState sym ext argTys
     , initStateMem :: InitialMem sym
     }
 
--- | Extra data created during simulation (usually by overrides) to be
--- concretized
-newtype ToConcretize sym
-  = ToConcretize { _getToConcretize :: [(Text, Some (C.RegEntry sym))] }
-
-makeLenses ''ToConcretize
+-- | The type of a global variable containing data to be concretized.
+--
+-- The first component of the struct is a name (generally expected, but not
+-- required, to be concrete), and the second component is the value to be
+-- concretized.
+type ToConcretizeType
+  = C.SequenceType (C.StructType (Ctx.EmptyCtx Ctx.::> C.AnyType Ctx.::> C.StringType WI.Unicode))
 
 -- | A class for Crucible personality types @p@ (see
 -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality') which contain a
 -- 'ToConcretize'.
-class HasToConcretize p sym | p -> sym where
-  toConcretize :: Lens.Lens' p (ToConcretize sym)
+class HasToConcretize p where
+  toConcretize :: Lens.Lens' p (C.GlobalVar ToConcretizeType)
 
-instance HasToConcretize (ToConcretize sym) sym where
+instance HasToConcretize (C.GlobalVar ToConcretizeType) where
   toConcretize = id
 
 -- | `Lens.Lens'` for the 'ToConcretize' in the
 -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'
 stateToConcretize ::
-  HasToConcretize p sym =>
-  Lens.Lens' (C.SimState p sym ext r f a) (ToConcretize sym)
+  HasToConcretize p =>
+  Lens.Lens' (C.SimState p sym ext r f a) (C.GlobalVar ToConcretizeType)
 stateToConcretize = C.stateContext . C.cruciblePersonality . toConcretize
 
 -- | Add a value to the 'ToConcretize' in the 'C.SimState'.
 addToConcretize ::
-  HasToConcretize p sym =>
-  -- | Name
+  forall p sym ext rtp args ret ty.
+  C.IsSymInterface sym =>
+  HasToConcretize p =>
+  -- | Name to be displayed when pretty-printing
   Text ->
   C.RegEntry sym ty ->
   C.OverrideSim p sym ext rtp args ret ()
-addToConcretize txt val =
-  stateToConcretize . getToConcretize Lens.%= ((txt, Some val) :)
+addToConcretize name0 ent = do
+  concVar <- gets (Lens.view stateToConcretize)
+  C.ovrWithBackend $ \bak -> do
+    let sym = C.backendGetSym bak
+    name <- liftIO (WI.stringLit sym (WI.UnicodeLiteral name0))
+    let C.RegEntry ty val = ent
+    let anyVal = C.AnyValue ty val
+    C.modifyGlobal concVar $ \toConc -> do
+      let struct = Ctx.Empty Ctx.:> C.RV anyVal Ctx.:> C.RV name
+      toConc' <- liftIO (C.consSymSequence sym struct toConc)
+      pure ((), toConc')
 
 ---------------------------------------------------------------------
 -- * Concretization
@@ -177,11 +188,12 @@ makeConcretizedData ::
   OnlineSolverAndBackend solver sym bak t st fm =>
   Mem.HasPtrWidth wptr =>
   (ExtShape ext ~ PtrShape ext wptr) =>
+  (WI.SymExpr sym ~ W4.Expr t) =>
   bak ->
   W4.GroundEvalFn t ->
   Maybe (Mem.CallStack, Mem.BadBehavior sym) ->
   InitialState sym ext argTys ->
-  ToConcretize sym ->
+  C.RegValue sym ToConcretizeType ->
   IO (ConcretizedData sym ext argTys)
 makeConcretizedData bak groundEvalFn minfo initState extra = do
   let InitialState
@@ -197,16 +209,17 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   let W4.GroundEvalFn gFn = groundEvalFn
   let toWord8 :: BV.BV 8 -> Word8
       toWord8 = fromIntegral . BV.asUnsigned
-  let doConcExtra :: Text -> Some (C.RegEntry sym) -> IO (SomeConcretizedValue sym)
-      doConcExtra name (Some (C.RegEntry ty val)) = do
-        concVal <- concRV ty (C.RV val)
+  let concStruct (Ctx.Empty Ctx.:> anyVal Ctx.:> name) = do
+        Conc.ConcRV' (Conc.ConcAnyValue ty cVal) <- concRV C.AnyRepr anyVal
+        Conc.ConcRV' (WI.UnicodeLiteral cName) <-
+          concRV (C.StringRepr WI.UnicodeRepr) name
         pure $
           SomeConcretizedValue
-          { concName = name
+          { concName = cName
           , concTy = ty
-          , concValue = concVal
+          , concValue = cVal
           }
-  cExtra <- liftIO (traverse (uncurry doConcExtra) (_getToConcretize extra))
+  cExtra <- toList <$> liftIO (C.concretizeSymSequence gFn concStruct extra)
   cFs <- traverse (traverse (fmap toWord8 . gFn)) (SymIO.symbolicFiles initFs)
   cMem <- Mem.concMemImpl sym gFn initMem
   cErr <- traverse (\(_, bb) -> Mem.concBadBehavior sym gFn bb) minfo

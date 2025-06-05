@@ -49,7 +49,7 @@ newtype SetupHook sym
       , ArchWidth arch ~ 64
       , Mem.HasPtrWidth (ArchWidth arch)
       , Mem.HasLLVMAnn sym
-      , HasToConcretize p sym
+      , HasToConcretize p
       , ?lc :: TCtx.TypeContext
       , ?memOpts :: Mem.MemOptions
       , ?intrinsicsOpts :: CLLVM.IntrinsicsOptions
@@ -70,7 +70,7 @@ initState ::
   , ArchWidth arch ~ 64
   , Mem.HasPtrWidth (ArchWidth arch)
   , Mem.HasLLVMAnn sym
-  , HasToConcretize p sym
+  , HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   ) =>
   bak ->
