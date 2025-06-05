@@ -4,12 +4,14 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 -}
 
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 
 module Grease.Concretize
   ( -- * Data to be concretized
     InitialState(..)
   , ToConcretize(..)
+  , HasToConcretize(..)
     -- * Concretization
   , ConcMem(..)
   , ConcArgs(..)
@@ -23,6 +25,7 @@ module Grease.Concretize
   , printConcData
   ) where
 
+import Control.Lens qualified as Lens
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.BitVector.Sized qualified as BV
 import Data.Foldable (toList)
@@ -75,6 +78,12 @@ data InitialState sym ext argTys
 -- concretized
 newtype ToConcretize sym
   = ToConcretize { getToConcretize :: [(Text, Some (C.RegEntry sym))] }
+
+-- | A class for Crucible personality types @p@ (see
+-- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality') which contain a
+-- 'ToConcretize'.
+class HasToConcretize p sym | p -> sym where
+  toConcretize :: Lens.Lens' p (ToConcretize sym)
 
 ---------------------------------------------------------------------
 -- * Concretization
