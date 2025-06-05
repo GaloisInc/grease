@@ -48,6 +48,7 @@ import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Data.Type.Equality ((:~:)(Refl))
 import Data.Word (Word8, Word64)
+import Grease.Concretize (HasToConcretize)
 import Grease.Diagnostic
 import Grease.Macaw.Arch
 import Grease.Macaw.FunctionOverride
@@ -93,6 +94,7 @@ newtype SetupHook sym arch
       , W4.OnlineSolver solver
       , Mem.HasLLVMAnn sym
       , HasGreaseSimulatorState p sym arch
+      , HasToConcretize p sym
       ) =>
       bak ->
       C.GlobalVar Mem.Mem ->
@@ -502,6 +504,7 @@ initState ::
   , Mem.HasLLVMAnn sym
   , ?memOpts :: Mem.MemOptions
   , HasGreaseSimulatorState p sym arch
+  , HasToConcretize p sym
   ) =>
   bak ->
   GreaseLogAction ->
@@ -514,7 +517,8 @@ initState ::
   ArchContext arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   SetupHook sym arch ->
-  -- | The initial personality state.
+  -- | The initial personality, see
+  -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'
   p ->
   -- | The initial register state.
   ArchRegs sym arch ->

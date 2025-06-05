@@ -14,14 +14,15 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Type.Equality ((:~:)(Refl), testEquality)
 import Data.Type.Ord (type (<=))
 import Data.Vector qualified as Vec
+import Grease.Concretize qualified as Conc
 import Lang.Crucible.Backend qualified as LCB
 import Lang.Crucible.FunctionHandle qualified as LCF
 import Lang.Crucible.Simulator qualified as LCS
 import Lang.Crucible.Types qualified as LCT
 import What4.Interface qualified as WI
-import Data.Type.Equality ((:~:)(Refl), testEquality)
 
 -- | The return value indicates whether the override was bound.
 tryBindTypedOverride ::
@@ -46,8 +47,10 @@ tryBindTypedOverride hdl ov =
 -- The number of bytes must be concrete. If a symbolic number is passed this
 -- function will generate an assertion failure.
 freshBytesOverride ::
-  LCB.IsSymInterface sym =>
-  (1 <= w) =>
+  ( 1 <= w
+  , Conc.HasToConcretize p sym
+  , LCB.IsSymInterface sym
+  ) =>
   NatRepr.NatRepr w ->
   LCS.TypedOverride p sym ext (Ctx.EmptyCtx Ctx.::> LCT.StringType WI.Unicode Ctx.::> LCT.BVType w) (LCT.VectorType (LCT.BVType 8 ))
 freshBytesOverride w =
@@ -62,8 +65,10 @@ freshBytesOverride w =
 -- The number of bytes must be concrete. If a symbolic number is passed this
 -- function will generate an assertion failure.
 freshBytes ::
-  LCB.IsSymInterface sym =>
-  (1 <= w) =>
+  ( 1 <= w
+  , Conc.HasToConcretize p sym
+  , LCB.IsSymInterface sym
+  ) =>
   LCS.RegValue' sym (LCT.StringType WI.Unicode) ->
   LCS.RegValue' sym (LCT.BVType w) ->
   LCS.OverrideSim p sym ext r args ret (LCS.RegValue sym (LCT.VectorType (LCT.BVType 8)))
@@ -80,15 +85,24 @@ freshBytes name0 bv0 =
         Just bv -> doFreshBytes name (BV.asUnsigned bv)
 
 doFreshBytes ::
-  LCB.IsSymInterface sym =>
+  ( Conc.HasToConcretize p sym
+  , LCB.IsSymInterface sym
+  ) =>
   Text ->
   Integer ->
   LCS.OverrideSim p sym ext r args ret (LCS.RegValue sym (LCT.VectorType (LCT.BVType 8)))
 doFreshBytes name len =
   LCS.ovrWithBackend $ \bak -> do
     let sym = LCB.backendGetSym bak
-    fmap Vec.fromList $
-      liftIO $
-        Monad.forM [0..len] $ \i -> do
-          let nm = WI.safeSymbol (Text.unpack name ++ "_" ++ show i)
-          WI.freshConstant sym nm (WI.BaseBVRepr (NatRepr.knownNat @8))
+    v <-
+      fmap Vec.fromList $
+        liftIO $
+          Monad.forM [0..len] $ \i -> do
+            let nm = WI.safeSymbol (Text.unpack name ++ "_" ++ show i)
+            WI.freshConstant sym nm (WI.BaseBVRepr (NatRepr.knownNat @8))
+
+    let ty = LCT.VectorRepr (LCT.BVRepr (NatRepr.knownNat @8))
+    let entry = LCS.RegEntry ty v
+    Conc.addToConcretize name entry
+
+    pure v
