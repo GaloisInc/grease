@@ -43,7 +43,9 @@ data GreaseSimulatorState sym arch = GreaseSimulatorState
     -- function is discovered (see @Note [Incremental code discovery]@), it will
     -- be added to this map so that it can be looked up in future invocations of
     -- that function.
-  , _toConcretize :: Conc.ToConcretize sym
+  , _toConcretize :: C.GlobalVar Conc.ToConcretizeType
+    -- ^ Values created during runtime to be passed to the concretization
+    -- functionality and generally displayed to the user.
   , _syscallHandles :: MapF.MapF Stubs.SyscallNumRepr Stubs.SyscallFnHandle
     -- ^ A map of syscall numbers (that have been invoked thus far during
     -- simulation) to their handles. Any time a new syscall is simulated, it
@@ -73,10 +75,12 @@ data GreaseSimulatorState sym arch = GreaseSimulatorState
   }
 
 -- | An initial value for 'GreaseSimulatorState'.
-emptyGreaseSimulatorState :: GreaseSimulatorState sym arch
-emptyGreaseSimulatorState = GreaseSimulatorState
+emptyGreaseSimulatorState ::
+  C.GlobalVar Conc.ToConcretizeType ->
+  GreaseSimulatorState sym arch
+emptyGreaseSimulatorState toConcVar = GreaseSimulatorState
   { _discoveredFnHandles = Map.empty
-  , _toConcretize = Conc.ToConcretize []
+  , _toConcretize = toConcVar
   , _syscallHandles = MapF.empty
   , _macawLazySimulatorState = Symbolic.emptyMacawLazySimulatorState
   }
@@ -114,7 +118,7 @@ type MacawOverride p sym arch =
 
 makeLenses ''GreaseSimulatorState
 
-instance Conc.HasToConcretize (GreaseSimulatorState sym arch) sym where
+instance Conc.HasToConcretize (GreaseSimulatorState sym arch) where
   toConcretize = toConcretize
 
 instance (MC.ArchAddrWidth arch ~ w) =>

@@ -126,7 +126,10 @@ import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.BoundedExec qualified as C
 import Lang.Crucible.Simulator.BoundedRecursion qualified as C
+import Lang.Crucible.Simulator.ExecutionTree qualified as C
+import Lang.Crucible.Simulator.GlobalState qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
+import Lang.Crucible.Simulator.SymSequence qualified as C
 import Lang.Crucible.Utils.Seconds qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
@@ -237,7 +240,7 @@ consumer ::
   ) =>
   bak ->
   Anns.Annotations sym ext argTys ->
-  Conc.ToConcretize sym ->
+  C.RegValue sym Conc.ToConcretizeType ->
   GreaseLogAction ->
   [RefineHeuristic sym bak ext argTys] ->
   -- | Argument names
@@ -338,7 +341,7 @@ proveAndRefine ::
   bak ->
   Solver ->
   Anns.Annotations sym ext argTys ->
-  Conc.ToConcretize sym ->
+  C.RegValue sym Conc.ToConcretizeType ->
   GreaseLogAction ->
   [RefineHeuristic sym bak ext argTys] ->
   -- | Argument names
@@ -373,7 +376,7 @@ execAndRefine ::
   , 16 C.<= w
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth w
-  , Conc.HasToConcretize p sym
+  , Conc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
@@ -397,7 +400,9 @@ execAndRefine bak solver _fm la anns heuristics argNames argShapes initState bbM
   doLog la (Diag.ExecutionResult result)
   bbMap <- liftIO (readIORef bbMapRef)
   let simCtx = C.execResultContext result
-  let toConc = simCtx ^. C.cruciblePersonality . Conc.toConcretize
+  let toConcVar = simCtx ^. C.cruciblePersonality . Conc.toConcretize
+  globs <- liftIO (C.execResultGlobals result)
+  let toConc = Maybe.fromMaybe C.SymSequenceNil (C.lookupGlobal toConcVar globs)
   liftIO (proveAndRefine bak solver anns toConc la heuristics argNames argShapes initState bbMap goals)
 
 data RefinementSummary sym ext tys

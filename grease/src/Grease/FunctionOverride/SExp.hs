@@ -48,7 +48,7 @@ tryBindTypedOverride hdl ov =
 -- function will generate an assertion failure.
 freshBytesOverride ::
   ( 1 <= w
-  , Conc.HasToConcretize p sym
+  , Conc.HasToConcretize p
   , LCB.IsSymInterface sym
   ) =>
   NatRepr.NatRepr w ->
@@ -66,7 +66,7 @@ freshBytesOverride w =
 -- function will generate an assertion failure.
 freshBytes ::
   ( 1 <= w
-  , Conc.HasToConcretize p sym
+  , Conc.HasToConcretize p
   , LCB.IsSymInterface sym
   ) =>
   LCS.RegValue' sym (LCT.StringType WI.Unicode) ->
@@ -85,7 +85,7 @@ freshBytes name0 bv0 =
         Just bv -> doFreshBytes name (BV.asUnsigned bv)
 
 doFreshBytes ::
-  ( Conc.HasToConcretize p sym
+  ( Conc.HasToConcretize p
   , LCB.IsSymInterface sym
   ) =>
   Text ->

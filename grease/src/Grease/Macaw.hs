@@ -94,7 +94,7 @@ newtype SetupHook sym arch
       , W4.OnlineSolver solver
       , Mem.HasLLVMAnn sym
       , HasGreaseSimulatorState p sym arch
-      , HasToConcretize p sym
+      , HasToConcretize p
       ) =>
       bak ->
       C.GlobalVar Mem.Mem ->
@@ -504,7 +504,7 @@ initState ::
   , Mem.HasLLVMAnn sym
   , ?memOpts :: Mem.MemOptions
   , HasGreaseSimulatorState p sym arch
-  , HasToConcretize p sym
+  , HasToConcretize p
   ) =>
   bak ->
   GreaseLogAction ->

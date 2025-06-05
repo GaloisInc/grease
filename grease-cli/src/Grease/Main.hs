@@ -170,7 +170,9 @@ import Lang.Crucible.SymIO qualified as SymIO
 import Lang.Crucible.SymIO.Loader qualified as SymIO.Loader
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator.GlobalState qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
+import Lang.Crucible.Simulator.SymSequence qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Lumberjack qualified as LJ
@@ -618,7 +620,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
           )
       mkInitState regs' mem' ssa'@(C.SomeCFG ssaCfg') = do
         mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
-        (fs0, fs, globals, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
+        (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
         let builtinOvs = builtinStubsOverrides bak mvar memCfg0 archCtx fs
         fnOvsMap <- liftIO $ Macaw.mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
         let memCfg1 = memConfigWithHandles bak la halloc archCtx memory symMap pltStubs dynFunMap fnOvsMap builtinGenericSyscalls errorSymbolicFunCalls memCfg0
@@ -631,7 +633,11 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         -- Grease.Macaw.SimulatorState.) If we are simulating an S-expression program,
         -- use an empty map instead. (See gitlab#118 for more discussion on this point.)
         let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` ssaCfgHdl) mbCfgAddr
-        let personality = emptyGreaseSimulatorState & discoveredFnHandles .~ discoveredHdls
+        toConcVar <- liftIO (C.freshGlobalVar halloc "to-concretize" W4.knownRepr)
+        let globals = C.insertGlobal toConcVar C.SymSequenceNil globals0
+        let personality =
+              emptyGreaseSimulatorState toConcVar &
+                discoveredFnHandles .~ discoveredHdls
         st <- initState bak la macawExtImpl halloc mvar mem' globals initFsOv archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa'
         pure (fs0, st)
 
@@ -1123,7 +1129,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
 
   profFeatLog <-
     traverse
-      (greaseProfilerFeature @(Conc.ToConcretize sym) @sym @CLLVM.LLVM @(C.RegEntry sym ret))
+      (greaseProfilerFeature @(C.GlobalVar Conc.ToConcretizeType) @sym @CLLVM.LLVM @(C.RegEntry sym ret))
       (simProfileTo simOpts)
 
   C.Refl <-
@@ -1149,8 +1155,9 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
     let ?recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
           modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
     let llvmExtImpl = CLLVM.llvmExtensionImpl ?memOpts
-    (fs0, fs, globals, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
-    let p = Conc.ToConcretize []  -- personality
+    (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
+    p <- C.freshGlobalVar halloc "to-concretize" W4.knownRepr
+    let globals = C.insertGlobal p C.SymSequenceNil globals0
     st <- LLVM.initState bak la llvmExtImpl p halloc (simErrorSymbolicFunCalls simOpts) setupMem fs globals initFsOv llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
     let cmdExt = Debug.llvmCommandExt
     debuggerFeat <-

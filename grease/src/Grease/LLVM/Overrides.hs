@@ -199,7 +199,7 @@ registerLLVMOverrides ::
   ( C.IsSymBackend sym bak
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth 64
-  , Conc.HasToConcretize p sym
+  , Conc.HasToConcretize p
   , ?lc :: TypeContext
   , ?memOpts :: Mem.MemOptions
   ) =>
@@ -292,7 +292,7 @@ registerLLVMSexpOverrides ::
   ( C.IsSymBackend sym bak
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth 64
-  , Conc.HasToConcretize p sym
+  , Conc.HasToConcretize p
   , ?lc :: TypeContext
   , ?memOpts :: Mem.MemOptions
   ) =>
@@ -325,7 +325,7 @@ registerLLVMModuleOverrides ::
   ( C.IsSymBackend sym bak
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth 64
-  , Conc.HasToConcretize p sym
+  , Conc.HasToConcretize p
   , ?lc :: TypeContext
   , ?memOpts :: Mem.MemOptions
   ) =>
@@ -352,7 +352,7 @@ registerLLVMSexpProgForwardDeclarations ::
   ( C.IsSymInterface sym
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth 64
-  , Conc.HasToConcretize p sym
+  , Conc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   ) =>
   GreaseLogAction ->
@@ -374,7 +374,7 @@ registerLLVMOvForwardDeclarations ::
   ( C.IsSymInterface sym
   , Mem.HasPtrWidth w
   , Mem.HasLLVMAnn sym
-  , Conc.HasToConcretize p sym
+  , Conc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   ) =>
   C.GlobalVar Mem.Mem ->
@@ -394,7 +394,7 @@ registerLLVMForwardDeclarations ::
   ( C.IsSymInterface sym
   , Mem.HasPtrWidth w
   , Mem.HasLLVMAnn sym
-  , Conc.HasToConcretize p sym
+  , Conc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   ) =>
   C.GlobalVar Mem.Mem ->
