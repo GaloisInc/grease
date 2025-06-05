@@ -6,12 +6,15 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Grease.Concretize
   ( -- * Data to be concretized
     InitialState(..)
   , ToConcretize(..)
   , HasToConcretize(..)
+  , stateToConcretize
+  , addToConcretize
     -- * Concretization
   , ConcMem(..)
   , ConcArgs(..)
@@ -26,6 +29,7 @@ module Grease.Concretize
   ) where
 
 import Control.Lens qualified as Lens
+import Control.Lens.TH (makeLenses)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.BitVector.Sized qualified as BV
 import Data.Foldable (toList)
@@ -77,13 +81,33 @@ data InitialState sym ext argTys
 -- | Extra data created during simulation (usually by overrides) to be
 -- concretized
 newtype ToConcretize sym
-  = ToConcretize { getToConcretize :: [(Text, Some (C.RegEntry sym))] }
+  = ToConcretize { _getToConcretize :: [(Text, Some (C.RegEntry sym))] }
+
+makeLenses ''ToConcretize
 
 -- | A class for Crucible personality types @p@ (see
 -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality') which contain a
 -- 'ToConcretize'.
 class HasToConcretize p sym | p -> sym where
   toConcretize :: Lens.Lens' p (ToConcretize sym)
+
+-- | `Lens.Lens'` for the 'ToConcretize' in the
+-- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'
+stateToConcretize ::
+  HasToConcretize p sym =>
+  Lens.Lens' (C.SimState p sym ext r f a) (ToConcretize sym)
+stateToConcretize = C.stateContext . C.cruciblePersonality . toConcretize
+
+-- | Add a value to the 'ToConcretize' in the 'C.SimState'.
+addToConcretize ::
+  HasToConcretize p sym =>
+  -- | Name
+  Text ->
+  C.RegEntry sym ty ->
+  C.OverrideSim p sym ext rtp args ret ()
+addToConcretize txt val =
+  C.stateContext . C.cruciblePersonality . toConcretize . getToConcretize Lens.%=
+    ((txt, Some val) :)
 
 ---------------------------------------------------------------------
 -- * Concretization
@@ -180,7 +204,7 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
           , concTy = ty
           , concValue = concVal
           }
-  cExtra <- liftIO (traverse (uncurry doConcExtra) (getToConcretize extra))
+  cExtra <- liftIO (traverse (uncurry doConcExtra) (_getToConcretize extra))
   cFs <- traverse (traverse (fmap toWord8 . gFn)) (SymIO.symbolicFiles initFs)
   cMem <- Mem.concMemImpl sym gFn initMem
   cErr <- traverse (\(_, bb) -> Mem.concBadBehavior sym gFn bb) minfo
