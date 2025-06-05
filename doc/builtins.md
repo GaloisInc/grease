@@ -203,9 +203,31 @@ available:
 
 ### S-expression-specific overrides
 
-For S-expression files (programs or overrides), the following overrides are also available:
+For S-expression files (programs or overrides), the following override is also available:
 ```
 (declare @fresh-bytes ((name (String Unicode)) (num (Bitvector w))) (Vector (Bitvector 8)))
+```
+
+The bytes created using `fresh-bytes` will be concretized and printed to the
+terminal if GREASE finds a possible bug. `fresh-bytes` can be used to create
+overrides for functions that do I/O, such as the following basic override for
+`recv`:
+```
+; Basic override for `recv`.
+;
+; Ignores `socket` and `flags`. Always reads exactly `length` bytes.
+
+(declare @fresh-bytes ((name (String Unicode)) (num (Bitvector 64))) (Vector (Bitvector 8)))
+
+; `man 2 recv`: ssize_t recv(int socket, void *buffer, size_t length, int flags)
+(defun @recv ((socket (Ptr 32)) (buffer (Ptr 64)) (length (Ptr 64)) (flags (Ptr 32))) (Ptr 64)
+  (start start:
+    (let length-bv (ptr-offset 64 length))
+    (let bytes (funcall @fresh-bytes "recv" length-bv))
+    (let byte (vector-get bytes 0))
+    (let byte-ptr (ptr 8 0 byte))
+    (store none i8 buffer byte-ptr)
+    (return length)))
 ```
 
 For LLVM S-expression files (programs or overrides), the following overrides are also available:
