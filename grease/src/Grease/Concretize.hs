@@ -11,6 +11,7 @@ module Grease.Concretize
   , ConcArgs(..)
   , InitialState(..)
   , printConcArgs
+  , ToConcretize(..)
   , ConcretizedData(..)
   , SomeConcretizedValue(..)
   , concArgsToSym
@@ -129,11 +130,16 @@ data SomeConcretizedValue sym
 data ConcretizedData sym ext argTys
   = ConcretizedData
     { concArgs :: ConcArgs sym ext argTys
+      -- | Concretized values from 'ToConcretize'
     , concExtra :: [SomeConcretizedValue sym]
     , concFs :: ConcFs
     , concMem :: ConcMem sym
     , concErr :: Maybe (Mem.BadBehavior sym)
     }
+
+-- | Extra data created during simulation to be concretized
+newtype ToConcretize sym
+  = ToConcretize { getToConcretize :: [(Text, Some (C.RegEntry sym))] }
 
 makeConcretizedData ::
   forall solver sym ext wptr bak t st argTys fm.
@@ -144,8 +150,7 @@ makeConcretizedData ::
   W4.GroundEvalFn t ->
   Maybe (Mem.CallStack, Mem.BadBehavior sym) ->
   InitialState sym ext argTys ->
-  -- | Extra data to concretize
-  [(Text, Some (C.RegEntry sym))] ->
+  ToConcretize sym ->
   IO (ConcretizedData sym ext argTys)
 makeConcretizedData bak groundEvalFn minfo initState extra = do
   let InitialState
@@ -170,7 +175,7 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
           , concTy = ty
           , concValue = concVal
           }
-  cExtra <- liftIO (traverse (uncurry doConcExtra) extra)
+  cExtra <- liftIO (traverse (uncurry doConcExtra) (getToConcretize extra))
   cFs <- traverse (traverse (fmap toWord8 . gFn)) (SymIO.symbolicFiles initFs)
   cMem <- Mem.concMemImpl sym gFn initMem
   cErr <- traverse (\(_, bb) -> Mem.concBadBehavior sym gFn bb) minfo
