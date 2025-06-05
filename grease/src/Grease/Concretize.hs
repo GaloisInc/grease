@@ -7,15 +7,18 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE GADTs #-}
 
 module Grease.Concretize
-  ( ConcMem(..)
-  , ConcArgs(..)
-  , InitialState(..)
-  , printConcArgs
+  ( -- * Data to be concretized
+    InitialState(..)
   , ToConcretize(..)
+    -- * Concretization
+  , ConcMem(..)
+  , ConcArgs(..)
   , ConcretizedData(..)
   , SomeConcretizedValue(..)
   , concArgsToSym
   , makeConcretizedData
+    -- * Pretty-printing
+  , printConcArgs
   , printConcFs
   , printConcData
   ) where
@@ -57,26 +60,28 @@ import Prettyprinter qualified as PP
 import What4.Expr qualified as W4
 import What4.FloatMode qualified as W4FM
 
+---------------------------------------------------------------------
+-- * Data to be concretized
+
+-- | Initial state, to be concretized into 'ConcretizedData'
+data InitialState sym ext argTys
+  = InitialState
+    { initStateArgs :: Args sym ext argTys
+    , initStateFs :: SymIO.InitialFileSystemContents sym
+    , initStateMem :: InitialMem sym
+    }
+
+-- | Extra data created during simulation (usually by overrides) to be
+-- concretized
+newtype ToConcretize sym
+  = ToConcretize { getToConcretize :: [(Text, Some (C.RegEntry sym))] }
+
+---------------------------------------------------------------------
+-- * Concretization
+
 -- | Arguments ('Args') that have been concretized
 newtype ConcArgs sym ext argTys
   = ConcArgs { getConcArgs :: Ctx.Assignment (Shape ext (Conc.ConcRV' sym)) argTys }
-
-printConcArgs ::
-  Mem.HasPtrWidth wptr =>
-  (ExtShape ext ~ PtrShape ext wptr) =>
-  MM.AddrWidthRepr wptr ->
-  -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
-  -- | Which shapes to print
-  Ctx.Assignment (Const Bool) argTys ->
-  ConcArgs sym ext argTys ->
-  PP.Doc ann
-printConcArgs addrWidth argNames filt (ConcArgs cArgs) =
-  let cShapes = fmapFC concShape cArgs in
-  let rleThreshold = 8 in  -- this matches uses in Grease.Refine.Diagnostic
-   ShapePP.evalPrinter
-    (ShapePP.PrinterConfig addrWidth rleThreshold)
-    (ShapePP.printNamedShapesFiltered argNames filt cShapes)
 
 -- | Turn 'ConcArgs' back into a 'C.RegMap' that can be used to re-execute
 -- a CFG.
@@ -110,14 +115,6 @@ newtype ConcMem sym = ConcMem { getConcMem :: Mem.MemImpl sym }
 -- that has been concretized
 newtype ConcFs = ConcFs { getConcFs :: Map (SymIO.FDTarget SymIO.In) [Word8] }
 
--- | Initial state, to be concretized into 'ConcretizedData'
-data InitialState sym ext argTys
-  = InitialState
-    { initStateArgs :: Args sym ext argTys
-    , initStateFs :: SymIO.InitialFileSystemContents sym
-    , initStateMem :: InitialMem sym
-    }
-
 -- | An extra value that has been concretized
 data SomeConcretizedValue sym
   = forall ty.
@@ -127,6 +124,9 @@ data SomeConcretizedValue sym
     , concValue :: Conc.ConcRV' sym ty
     }
 
+-- | Concretized version of 'InitialState' plus 'ToConcretize'
+--
+-- Produced by 'makeConcretizedData'
 data ConcretizedData sym ext argTys
   = ConcretizedData
     { concArgs :: ConcArgs sym ext argTys
@@ -136,10 +136,6 @@ data ConcretizedData sym ext argTys
     , concMem :: ConcMem sym
     , concErr :: Maybe (Mem.BadBehavior sym)
     }
-
--- | Extra data created during simulation to be concretized
-newtype ToConcretize sym
-  = ToConcretize { getToConcretize :: [(Text, Some (C.RegEntry sym))] }
 
 makeConcretizedData ::
   forall solver sym ext wptr bak t st argTys fm.
@@ -187,6 +183,26 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
     , concMem = ConcMem cMem
     , concErr = cErr
     }
+
+---------------------------------------------------------------------
+-- * Pretty-printing
+
+printConcArgs ::
+  Mem.HasPtrWidth wptr =>
+  (ExtShape ext ~ PtrShape ext wptr) =>
+  MM.AddrWidthRepr wptr ->
+  -- | Argument names
+  Ctx.Assignment (Const String) argTys ->
+  -- | Which shapes to print
+  Ctx.Assignment (Const Bool) argTys ->
+  ConcArgs sym ext argTys ->
+  PP.Doc ann
+printConcArgs addrWidth argNames filt (ConcArgs cArgs) =
+  let cShapes = fmapFC concShape cArgs in
+  let rleThreshold = 8 in  -- this matches uses in Grease.Refine.Diagnostic
+   ShapePP.evalPrinter
+    (ShapePP.PrinterConfig addrWidth rleThreshold)
+    (ShapePP.printNamedShapesFiltered argNames filt cShapes)
 
 -- | Pretty-print the \"extra\" concretized data
 printConcExtra ::
