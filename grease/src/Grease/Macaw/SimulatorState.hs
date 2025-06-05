@@ -31,6 +31,7 @@ import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
+import Grease.Concretize qualified as Conc
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Simulator qualified as C
 import Stubs.Syscall qualified as Stubs
@@ -42,6 +43,7 @@ data GreaseSimulatorState sym arch = GreaseSimulatorState
     -- function is discovered (see @Note [Incremental code discovery]@), it will
     -- be added to this map so that it can be looked up in future invocations of
     -- that function.
+  , _toConcretize :: Conc.ToConcretize sym
   , _syscallHandles :: MapF.MapF Stubs.SyscallNumRepr Stubs.SyscallFnHandle
     -- ^ A map of syscall numbers (that have been invoked thus far during
     -- simulation) to their handles. Any time a new syscall is simulated, it
@@ -74,6 +76,7 @@ data GreaseSimulatorState sym arch = GreaseSimulatorState
 emptyGreaseSimulatorState :: GreaseSimulatorState sym arch
 emptyGreaseSimulatorState = GreaseSimulatorState
   { _discoveredFnHandles = Map.empty
+  , _toConcretize = Conc.ToConcretize []
   , _syscallHandles = MapF.empty
   , _macawLazySimulatorState = Symbolic.emptyMacawLazySimulatorState
   }
@@ -110,6 +113,9 @@ type MacawOverride p sym arch =
 -----
 
 makeLenses ''GreaseSimulatorState
+
+instance Conc.HasToConcretize (GreaseSimulatorState sym arch) sym where
+  toConcretize = toConcretize
 
 instance (MC.ArchAddrWidth arch ~ w) =>
          Symbolic.HasMacawLazySimulatorState
