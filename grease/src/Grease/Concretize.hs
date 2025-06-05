@@ -109,8 +109,7 @@ addToConcretize ::
   C.RegEntry sym ty ->
   C.OverrideSim p sym ext rtp args ret ()
 addToConcretize txt val =
-  C.stateContext . C.cruciblePersonality . toConcretize . getToConcretize Lens.%=
-    ((txt, Some val) :)
+  stateToConcretize . getToConcretize Lens.%= ((txt, Some val) :)
 
 ---------------------------------------------------------------------
 -- * Concretization
