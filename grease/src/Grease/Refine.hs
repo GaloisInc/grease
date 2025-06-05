@@ -271,7 +271,8 @@ consumer bak anns la heuristics argNames argShapes bbMap initState =
         doLog la (Diag.SolverGoalPassed (C.simErrorLoc simErr))
         pure ProveSuccess
       C.Disproved groundEvalFn _ -> do
-        cData <- Conc.makeConcretizedData bak groundEvalFn minfo initState (Conc.ToConcretize [])
+        let toConc = Conc.ToConcretize []  -- TODO: get from personality
+        cData <- Conc.makeConcretizedData bak groundEvalFn minfo initState toConc
         doLog la $ Diag.SolverGoalFailed sym lp minfo
         let
           runHeuristics ::

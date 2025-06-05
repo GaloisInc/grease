@@ -91,6 +91,9 @@ makeLenses ''ToConcretize
 class HasToConcretize p sym | p -> sym where
   toConcretize :: Lens.Lens' p (ToConcretize sym)
 
+instance HasToConcretize (ToConcretize sym) sym where
+  toConcretize = id
+
 -- | `Lens.Lens'` for the 'ToConcretize' in the
 -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'
 stateToConcretize ::
@@ -297,7 +300,6 @@ printConcData ::
   ConcretizedData sym ext argTys ->
   PP.Doc ann
 printConcData addrWidth argNames filt cData =
-  -- TODO: print extra concretized data
   let args = printConcArgs addrWidth argNames filt (concArgs cData)
       fs = printConcFs (concFs cData)
       extra = printConcExtra (concExtra cData)

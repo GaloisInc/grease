@@ -1123,7 +1123,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
 
   profFeatLog <-
     traverse
-      (greaseProfilerFeature @() @sym @CLLVM.LLVM @(C.RegEntry sym ret))
+      (greaseProfilerFeature @(Conc.ToConcretize sym) @sym @CLLVM.LLVM @(C.RegEntry sym ret))
       (simProfileTo simOpts)
 
   C.Refl <-
@@ -1150,7 +1150,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
           modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
     let llvmExtImpl = CLLVM.llvmExtensionImpl ?memOpts
     (fs0, fs, globals, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
-    st <- LLVM.initState bak la llvmExtImpl halloc (simErrorSymbolicFunCalls simOpts) setupMem fs globals initFsOv llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
+    let p = Conc.ToConcretize []  -- personality
+    st <- LLVM.initState bak la llvmExtImpl p halloc (simErrorSymbolicFunCalls simOpts) setupMem fs globals initFsOv llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
     let cmdExt = Debug.llvmCommandExt
     debuggerFeat <-
       liftIO $

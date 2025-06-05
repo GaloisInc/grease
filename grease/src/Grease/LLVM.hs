@@ -17,6 +17,7 @@ import Control.Lens ((^.))
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
+import Grease.Concretize (HasToConcretize)
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.LLVM.SimulatorHooks (greaseLlvmExtImpl)
 import Grease.Options (ErrorSymbolicFunCalls)
@@ -48,6 +49,7 @@ newtype SetupHook sym
       , ArchWidth arch ~ 64
       , Mem.HasPtrWidth (ArchWidth arch)
       , Mem.HasLLVMAnn sym
+      , HasToConcretize p sym
       , ?lc :: TCtx.TypeContext
       , ?memOpts :: Mem.MemOptions
       , ?intrinsicsOpts :: CLLVM.IntrinsicsOptions
@@ -59,7 +61,7 @@ newtype SetupHook sym
       C.OverrideSim p sym LLVM rtp a r ())
 
 initState ::
-  forall sym bak arch m t st fs argTys retTy.
+  forall p sym bak arch m t st fs argTys retTy.
   ( MonadIO m
   , MonadThrow m
   , C.IsSymBackend sym bak
@@ -68,11 +70,15 @@ initState ::
   , ArchWidth arch ~ 64
   , Mem.HasPtrWidth (ArchWidth arch)
   , Mem.HasLLVMAnn sym
+  , HasToConcretize p sym
   , ?memOpts :: Mem.MemOptions
   ) =>
   bak ->
   GreaseLogAction ->
-  C.ExtensionImpl () sym LLVM ->
+  C.ExtensionImpl p sym LLVM ->
+  -- | The initial personality, see
+  -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'
+  p ->
   C.HandleAllocator ->
   ErrorSymbolicFunCalls ->
   SetupMem sym ->
@@ -87,8 +93,8 @@ initState ::
   Maybe (C.SomeCFG LLVM argTys (C.StructType argTys)) ->
   -- | The CFG of the user-requested entrypoint function.
   C.SomeCFG LLVM argTys retTy ->
-  m (C.ExecState () sym LLVM (C.RegEntry sym retTy))
-initState bak la llvmExtImpl halloc errorSymbolicFunCalls mem fs globs (SymIO.SomeOverrideSim initFsOv) llvmCtx setupHook initArgs mbStartupOvCfg (C.SomeCFG cfg) = do
+  m (C.ExecState p sym LLVM (C.RegEntry sym retTy))
+initState bak la llvmExtImpl p halloc errorSymbolicFunCalls mem fs globs (SymIO.SomeOverrideSim initFsOv) llvmCtx setupHook initArgs mbStartupOvCfg (C.SomeCFG cfg) = do
   let dl = TCtx.llvmDataLayout (llvmCtx ^. Trans.llvmTypeCtx)
   let extImpl = greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls llvmExtImpl
   let bindings = C.FnBindings
@@ -100,7 +106,7 @@ initState bak la llvmExtImpl halloc errorSymbolicFunCalls mem fs globs (SymIO.So
         printHandle
         bindings
         extImpl
-        ()
+        p
   let argTys = C.cfgArgTypes cfg
   let args =
         Ctx.generate
