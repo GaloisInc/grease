@@ -97,7 +97,7 @@ doFreshBytes name len =
     v <-
       fmap Vec.fromList $
         liftIO $
-          Monad.forM [0..len] $ \i -> do
+          Monad.forM [0..len - 1] $ \i -> do
             let nm = WI.safeSymbol (Text.unpack name ++ "_" ++ show i)
             WI.freshConstant sym nm (WI.BaseBVRepr (NatRepr.knownNat @8))
 

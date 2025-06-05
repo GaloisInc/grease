@@ -239,6 +239,17 @@ printConcArgs addrWidth argNames filt (ConcArgs cArgs) =
     (ShapePP.PrinterConfig addrWidth rleThreshold)
     (ShapePP.printNamedShapesFiltered argNames filt cShapes)
 
+-- | Helper, not exported
+showHex' :: Integral a => a -> String
+showHex' n = showHex n ""
+
+-- | Helper, not exported
+padHex :: Integral a => Int -> a -> String
+padHex pad v =
+  let initial = showHex' v
+      zs = List.take (pad - List.length initial) (List.repeat '0')
+  in zs List.++ initial
+
 -- | Pretty-print the \"extra\" concretized data
 printConcExtra ::
   [SomeConcretizedValue sym] ->
@@ -248,6 +259,8 @@ printConcExtra vals =
     PP.pretty "Concretized values:" :
       map (PP.indent 2 . ppValue) vals
   where
+    ppBv8 = PP.pretty . padHex 2 . BV.asUnsigned
+
     ppValue :: SomeConcretizedValue sym -> PP.Doc ann
     ppValue (SomeConcretizedValue { concName = name, concTy = ty, concValue = Conc.ConcRV' val }) =
       PP.vsep
@@ -255,7 +268,7 @@ printConcExtra vals =
       , PP.indent 2 $
           case ty of
             C.VectorRepr (C.BVRepr w) | Just C.Refl <- testEquality w (knownNat @8) ->
-              PP.fillSep (List.map (\(Conc.ConcRV' b) -> PP.pretty (BV.ppHex (knownNat @8) b)) (toList val))
+              PP.fillSep (List.map (\(Conc.ConcRV' b) -> ppBv8 b) (toList val))
             -- TODO(#204): Handle more cases
             _ -> PP.pretty "<can't print this value>"
       ]
@@ -270,15 +283,6 @@ printConcFs cFs =
       map (PP.indent 2 . uncurry ppFile) (Map.toList (getConcFs cFs))
   where
     ppWord8 = PP.pretty . padHex 2
-
-    showHex' :: Integral a => a -> String
-    showHex' n = showHex n ""
-
-    padHex :: Integral a => Int -> a -> String
-    padHex pad v =
-      let initial = showHex' v
-          zs = List.take (pad - List.length initial) (List.repeat '0')
-      in zs List.++ initial
 
     ppFile :: SymIO.FDTarget SymIO.In -> [Word8] -> PP.Doc ann
     ppFile tgt content =
@@ -302,7 +306,8 @@ printConcData addrWidth argNames filt cData =
   let args = printConcArgs addrWidth argNames filt (concArgs cData)
       fs = printConcFs (concFs cData)
       extra = printConcExtra (concExtra cData)
-  in PP.vsep $
+      vsep2 = PP.concatWith (\x y -> x <> PP.line <> PP.line <> y)
+  in vsep2 $
        concat $
          [ [args]
          , if Map.null (getConcFs (concFs cData)) then [] else [fs]

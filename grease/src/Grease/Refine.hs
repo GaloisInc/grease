@@ -237,6 +237,7 @@ consumer ::
   ) =>
   bak ->
   Anns.Annotations sym ext argTys ->
+  Conc.ToConcretize sym ->
   GreaseLogAction ->
   [RefineHeuristic sym bak ext argTys] ->
   -- | Argument names
@@ -245,7 +246,7 @@ consumer ::
   Map.Map (Nonce t C.BaseBoolType) (Mem.CallStack, Mem.BadBehavior sym) ->
   Conc.InitialState sym ext argTys ->
   C.ProofConsumer sym t (ProveRefineResult sym ext argTys)
-consumer bak anns la heuristics argNames argShapes bbMap initState =
+consumer bak anns toConc la heuristics argNames argShapes bbMap initState =
   C.ProofConsumer $ \goal result -> do
     let sym = C.backendGetSym bak
     let lp = C.proofGoal goal
@@ -271,7 +272,6 @@ consumer bak anns la heuristics argNames argShapes bbMap initState =
         doLog la (Diag.SolverGoalPassed (C.simErrorLoc simErr))
         pure ProveSuccess
       C.Disproved groundEvalFn _ -> do
-        let toConc = Conc.ToConcretize []  -- TODO: get from personality
         cData <- Conc.makeConcretizedData bak groundEvalFn minfo initState toConc
         doLog la $ Diag.SolverGoalFailed sym lp minfo
         let
@@ -338,6 +338,7 @@ proveAndRefine ::
   bak ->
   Solver ->
   Anns.Annotations sym ext argTys ->
+  Conc.ToConcretize sym ->
   GreaseLogAction ->
   [RefineHeuristic sym bak ext argTys] ->
   -- | Argument names
@@ -347,13 +348,13 @@ proveAndRefine ::
   Map.Map (Nonce t C.BaseBoolType) (Mem.CallStack, Mem.BadBehavior sym) ->
   C.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
-proveAndRefine bak solver anns la heuristics argNames argShapes initState bbMap goals = do
+proveAndRefine bak solver anns toConc la heuristics argNames argShapes initState bbMap goals = do
   -- TODO: Make the timeout configurable at the CLI
   let tout = C.Timeout (C.secondsFromInt 5)
   let sym = C.backendGetSym bak
   let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
   let strat = C.ProofStrategy prover combiner
-  let cons = consumer bak anns la heuristics argNames argShapes bbMap initState
+  let cons = consumer bak anns toConc la heuristics argNames argShapes bbMap initState
   case goals of
     Nothing -> pure ProveSuccess
     Just goals' ->
@@ -372,6 +373,7 @@ execAndRefine ::
   , 16 C.<= w
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth w
+  , Conc.HasToConcretize p sym
   , ?memOpts :: Mem.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
@@ -394,7 +396,9 @@ execAndRefine bak solver _fm la anns heuristics argNames argShapes initState bbM
   (result, goals) <- liftIO (execCfg bak (LoopBound bound) execFeats initialState)
   doLog la (Diag.ExecutionResult result)
   bbMap <- liftIO (readIORef bbMapRef)
-  liftIO (proveAndRefine bak solver anns la heuristics argNames argShapes initState bbMap goals)
+  let simCtx = C.execResultContext result
+  let toConc = simCtx ^. C.cruciblePersonality . Conc.toConcretize
+  liftIO (proveAndRefine bak solver anns toConc la heuristics argNames argShapes initState bbMap goals)
 
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)
