@@ -108,7 +108,9 @@ addToConcretize name0 ent = do
     name <- liftIO (WI.stringLit sym (WI.UnicodeLiteral name0))
     let LCS.RegEntry ty val = ent
     let anyVal = LCS.AnyValue ty val
-    LCS.modifyGlobal concVar $ \toConc -> do
+    LCS.modifyGlobal concVar $ \toConc -> liftIO $ do
       let struct = Ctx.Empty Ctx.:> LCS.RV anyVal Ctx.:> LCS.RV name
-      toConc' <- liftIO (LCSS.consSymSequence sym struct toConc)
-      pure ((), toConc')
+      toConc' <- LCSS.consSymSequence sym struct toConc
+      p <- LCB.getPathCondition bak
+      toConc'' <- liftIO (LCSS.muxSymSequence sym p toConc' toConc)
+      pure ((), toConc'')
