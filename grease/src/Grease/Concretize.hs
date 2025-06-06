@@ -9,11 +9,6 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Concretize
   ( -- * Data to be concretized
     InitialState(..)
-  , ToConcretizeType
-  , HasToConcretize(toConcretize)
-  , readToConcretize
-  , stateToConcretize
-  , addToConcretize
     -- * Concretization
   , ConcMem(..)
   , ConcArgs(..)
@@ -27,9 +22,7 @@ module Grease.Concretize
   , printConcData
   ) where
 
-import Control.Lens qualified as Lens
 import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.State (gets)
 import Data.BitVector.Sized qualified as BV
 import Data.Foldable (toList)
 import Data.Functor.Const (Const)
@@ -37,13 +30,13 @@ import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe qualified as Maybe
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
 import Data.Text (Text)
 import Data.Type.Equality (testEquality)
 import Data.Word (Word8)
+import Grease.Concretize.ToConcretize (ToConcretizeType)
 import Grease.Setup (Args(Args), InitialMem(..))
 import Grease.Shape (Shape, ExtShape)
 import Grease.Shape qualified as Shape
@@ -60,8 +53,6 @@ import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Simulator.ExecutionTree qualified as C
-import Lang.Crucible.Simulator.GlobalState qualified as C
 import Lang.Crucible.Simulator.SymSequence qualified as C
 import Lang.Crucible.SymIO qualified as SymIO
 import Numeric (showHex)
@@ -80,66 +71,6 @@ data InitialState sym ext argTys
     , initStateFs :: SymIO.InitialFileSystemContents sym
     , initStateMem :: InitialMem sym
     }
-
--- | The type of a global variable containing data to be concretized.
---
--- The first component of the struct is a name (generally expected, but not
--- required, to be concrete), and the second component is the value to be
--- concretized.
-type ToConcretizeType
-  = C.SequenceType (C.StructType (Ctx.EmptyCtx Ctx.::> C.AnyType Ctx.::> C.StringType WI.Unicode))
-
--- | A class for Crucible personality types @p@ (see
--- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality') which contain a
--- 'ToConcretize'.
-class HasToConcretize p where
-  toConcretize :: Lens.Lens' p (C.GlobalVar ToConcretizeType)
-
-instance HasToConcretize (C.GlobalVar ToConcretizeType) where
-  toConcretize = id
-
--- | Read the value of the global variable of type 'ToConcretizeType' from
--- a 'C.ExecResult'.
---
--- If the global is not present, returns 'C.SymSequenceNil'.
-readToConcretize ::
-  C.IsSymInterface sym =>
-  HasToConcretize p =>
-  C.ExecResult p sym ext r ->
-  IO (C.RegValue sym ToConcretizeType)
-readToConcretize result = do
-  let simCtx = C.execResultContext result
-  let toConcVar = simCtx Lens.^. C.cruciblePersonality . toConcretize
-  globs <- liftIO (C.execResultGlobals result)
-  pure (Maybe.fromMaybe C.SymSequenceNil (C.lookupGlobal toConcVar globs))
-
--- | `Lens.Lens'` for the 'ToConcretize' in the
--- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'
-stateToConcretize ::
-  HasToConcretize p =>
-  Lens.Lens' (C.SimState p sym ext r f a) (C.GlobalVar ToConcretizeType)
-stateToConcretize = C.stateContext . C.cruciblePersonality . toConcretize
-
--- | Add a value to the 'ToConcretize' in the 'C.SimState'.
-addToConcretize ::
-  forall p sym ext rtp args ret ty.
-  C.IsSymInterface sym =>
-  HasToConcretize p =>
-  -- | Name to be displayed when pretty-printing
-  Text ->
-  C.RegEntry sym ty ->
-  C.OverrideSim p sym ext rtp args ret ()
-addToConcretize name0 ent = do
-  concVar <- gets (Lens.view stateToConcretize)
-  C.ovrWithBackend $ \bak -> do
-    let sym = C.backendGetSym bak
-    name <- liftIO (WI.stringLit sym (WI.UnicodeLiteral name0))
-    let C.RegEntry ty val = ent
-    let anyVal = C.AnyValue ty val
-    C.modifyGlobal concVar $ \toConc -> do
-      let struct = Ctx.Empty Ctx.:> C.RV anyVal Ctx.:> C.RV name
-      toConc' <- liftIO (C.consSymSequence sym struct toConc)
-      pure ((), toConc')
 
 ---------------------------------------------------------------------
 -- * Concretization

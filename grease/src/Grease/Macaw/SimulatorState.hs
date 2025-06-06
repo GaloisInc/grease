@@ -31,7 +31,7 @@ import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
-import Grease.Concretize qualified as Conc
+import Grease.Concretize.ToConcretize qualified as ToConc
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Simulator qualified as C
 import Stubs.Syscall qualified as Stubs
@@ -43,7 +43,7 @@ data GreaseSimulatorState sym arch = GreaseSimulatorState
     -- function is discovered (see @Note [Incremental code discovery]@), it will
     -- be added to this map so that it can be looked up in future invocations of
     -- that function.
-  , _toConcretize :: C.GlobalVar Conc.ToConcretizeType
+  , _toConcretize :: C.GlobalVar ToConc.ToConcretizeType
     -- ^ Values created during runtime to be passed to the concretization
     -- functionality and generally displayed to the user.
   , _syscallHandles :: MapF.MapF Stubs.SyscallNumRepr Stubs.SyscallFnHandle
@@ -76,7 +76,7 @@ data GreaseSimulatorState sym arch = GreaseSimulatorState
 
 -- | An initial value for 'GreaseSimulatorState'.
 emptyGreaseSimulatorState ::
-  C.GlobalVar Conc.ToConcretizeType ->
+  C.GlobalVar ToConc.ToConcretizeType ->
   GreaseSimulatorState sym arch
 emptyGreaseSimulatorState toConcVar = GreaseSimulatorState
   { _discoveredFnHandles = Map.empty
@@ -118,7 +118,7 @@ type MacawOverride p sym arch =
 
 makeLenses ''GreaseSimulatorState
 
-instance Conc.HasToConcretize (GreaseSimulatorState sym arch) where
+instance ToConc.HasToConcretize (GreaseSimulatorState sym arch) where
   toConcretize = toConcretize
 
 instance (MC.ArchAddrWidth arch ~ w) =>

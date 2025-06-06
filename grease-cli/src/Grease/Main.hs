@@ -102,6 +102,7 @@ import Grease.Bug qualified as Bug
 import Grease.Cli (optsFromArgs)
 import Grease.Concretize (ConcretizedData, ConcArgs(..))
 import Grease.Concretize qualified as Conc
+import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Concretize.JSON (concArgsToJson)
 import Grease.Cursor.Pointer ()
 import Grease.Diagnostic
@@ -1129,7 +1130,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
 
   profFeatLog <-
     traverse
-      (greaseProfilerFeature @(C.GlobalVar Conc.ToConcretizeType) @sym @CLLVM.LLVM @(C.RegEntry sym ret))
+      (greaseProfilerFeature @(C.GlobalVar ToConc.ToConcretizeType) @sym @CLLVM.LLVM @(C.RegEntry sym ret))
       (simProfileTo simOpts)
 
   C.Refl <-

@@ -32,7 +32,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Proxy (Proxy(..))
 import Data.Sequence qualified as Seq
-import Grease.Concretize qualified as Conc
+import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.FunctionOverride.SExp (tryBindTypedOverride, freshBytesOverride)
 import Grease.Macaw.Arch
@@ -237,7 +237,7 @@ registerMacawSexpProgForwardDeclarations ::
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
-  , Conc.HasToConcretize p
+  , ToConc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   ) =>
   bak ->
@@ -262,7 +262,7 @@ registerMacawOvForwardDeclarations ::
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
   , Mem.HasPtrWidth w
-  , Conc.HasToConcretize p
+  , ToConc.HasToConcretize p
   ) =>
   bak ->
   Map.Map W4.FunctionName (MacawFunctionOverride p sym arch)
@@ -283,7 +283,7 @@ registerMacawForwardDeclarations ::
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
   , Mem.HasPtrWidth w
-  , Conc.HasToConcretize p
+  , ToConc.HasToConcretize p
   ) =>
   bak ->
   Map.Map W4.FunctionName (MacawFunctionOverride p sym arch)

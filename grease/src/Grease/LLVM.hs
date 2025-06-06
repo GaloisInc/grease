@@ -17,7 +17,7 @@ import Control.Lens ((^.))
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
-import Grease.Concretize (HasToConcretize)
+import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.LLVM.SimulatorHooks (greaseLlvmExtImpl)
 import Grease.Options (ErrorSymbolicFunCalls)
