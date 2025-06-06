@@ -634,11 +634,11 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         -- use an empty map instead. (See gitlab#118 for more discussion on this point.)
         let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` ssaCfgHdl) mbCfgAddr
         toConcVar <- liftIO (C.freshGlobalVar halloc "to-concretize" W4.knownRepr)
-        let globals = C.insertGlobal toConcVar C.SymSequenceNil globals0
+        let globals1 = C.insertGlobal toConcVar C.SymSequenceNil globals0
         let personality =
               emptyGreaseSimulatorState toConcVar &
                 discoveredFnHandles .~ discoveredHdls
-        st <- initState bak la macawExtImpl halloc mvar mem' globals initFsOv archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa'
+        st <- initState bak la macawExtImpl halloc mvar mem' globals1 initFsOv archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa'
         pure (fs0, st)
 
   doLog la (Diag.TargetCFG ssaCfg)
@@ -1157,8 +1157,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
     let llvmExtImpl = CLLVM.llvmExtensionImpl ?memOpts
     (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
     p <- C.freshGlobalVar halloc "to-concretize" W4.knownRepr
-    let globals = C.insertGlobal p C.SymSequenceNil globals0
-    st <- LLVM.initState bak la llvmExtImpl p halloc (simErrorSymbolicFunCalls simOpts) setupMem fs globals initFsOv llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
+    let globals1 = C.insertGlobal p C.SymSequenceNil globals0
+    st <- LLVM.initState bak la llvmExtImpl p halloc (simErrorSymbolicFunCalls simOpts) setupMem fs globals1 initFsOv llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
     let cmdExt = Debug.llvmCommandExt
     debuggerFeat <-
       liftIO $
