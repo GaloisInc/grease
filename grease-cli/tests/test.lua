@@ -14,17 +14,3 @@ function no_heuristic() check 'Unable to find a heuristic for any goal' end
 function req_failed() check 'One or more assertions failed' end
 
 function uninit_stack() check 'Likely bug: uninitialized stack read' end
-
--- TODO: Upstream to Oughta
-function check_not(needle)
-  if needle == "" then
-    match(0)
-    return
-  end
-  local start, _ = string.find(text, needle, 1, true)
-  if start == nil then
-    match(0)
-  else
-    fail()
-  end
-end
