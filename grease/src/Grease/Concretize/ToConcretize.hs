@@ -7,9 +7,9 @@ during simulation (generally by overrides) and should be concretized when a
 goal fails.
 
 It stores to-be-concretized values in a Crucible global variable of type
-'ToConcretizeType'. This variable is stored in the Crucible personality (see
-'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'), and access is
-provided via 'HasToConcretize'. TODO: Make it read-only.
+'ToConcretizeType'. This variable is stored in the Crucible personality
+(see 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'),
+and read-only access is provided via 'HasToConcretize'.
 See this thread for a discussion of this choice:
 <https://github.com/GaloisInc/grease/pull/203#discussion_r2132431744>.
 -}
@@ -54,7 +54,7 @@ type ToConcretizeType
 -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality') which contain a
 -- @'C.GlobalVar' 'ToConcretize'@.
 class HasToConcretize p where
-  toConcretize :: Lens.Lens' p (LCS.GlobalVar ToConcretizeType)
+  toConcretize :: p -> LCS.GlobalVar ToConcretizeType
 
 instance HasToConcretize (LCS.GlobalVar ToConcretizeType) where
   toConcretize = id
@@ -79,18 +79,20 @@ readToConcretize ::
   IO (LCS.RegValue sym ToConcretizeType)
 readToConcretize result = do
   let simCtx = LCS.execResultContext result
-  let toConcVar = simCtx Lens.^. LCS.cruciblePersonality . toConcretize
+  let toConcVar = simCtx Lens.^. LCS.cruciblePersonality . Lens.to toConcretize
   globs <- liftIO (LCSE.execResultGlobals result)
   pure (Maybe.fromMaybe LCSS.SymSequenceNil (LCSG.lookupGlobal toConcVar globs))
 
--- | `Lens.Lens'` for the 'ToConcretize' in the
+-- | Getter for the @'LCS.GlobalVar' 'ToConcretizeType'@ in the
 -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'
 stateToConcretize ::
   HasToConcretize p =>
-  Lens.Lens' (LCS.SimState p sym ext r f a) (LCS.GlobalVar ToConcretizeType)
-stateToConcretize = LCSE.stateContext . LCSE.cruciblePersonality . toConcretize
+  LCS.SimState p sym ext r f a -> LCS.GlobalVar ToConcretizeType
+stateToConcretize =
+  Lens.view (LCSE.stateContext . LCSE.cruciblePersonality . Lens.to toConcretize)
 
--- | Add a value to the 'ToConcretize' in the 'C.SimState'.
+-- | Add a value to the @'LCS.GlobalVar' 'ToConcretizeType'@ in the
+-- 'C.SimState'.
 addToConcretize ::
   forall p sym ext rtp args ret ty.
   LCB.IsSymInterface sym =>
@@ -100,7 +102,7 @@ addToConcretize ::
   LCS.RegEntry sym ty ->
   LCS.OverrideSim p sym ext rtp args ret ()
 addToConcretize name0 ent = do
-  concVar <- State.gets (Lens.view stateToConcretize)
+  concVar <- State.gets stateToConcretize
   LCS.ovrWithBackend $ \bak -> do
     let sym = LCB.backendGetSym bak
     name <- liftIO (WI.stringLit sym (WI.UnicodeLiteral name0))
