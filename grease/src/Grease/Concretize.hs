@@ -120,13 +120,13 @@ data SomeConcretizedValue sym
     , concValue :: Conc.ConcRV' sym ty
     }
 
--- | Concretized version of 'InitialState' plus 'ToConcretize'
+-- | Concretized version of 'InitialState' plus @GlobalVar 'ToConcretizeType'@
 --
 -- Produced by 'makeConcretizedData'
 data ConcretizedData sym ext argTys
   = ConcretizedData
     { concArgs :: ConcArgs sym ext argTys
-      -- | Concretized values from 'ToConcretize'
+      -- | Concretized values from the @GlobalVar 'ToConcretizeType'@
     , concExtra :: [SomeConcretizedValue sym]
     , concFs :: ConcFs
     , concMem :: ConcMem sym
@@ -138,7 +138,6 @@ makeConcretizedData ::
   OnlineSolverAndBackend solver sym bak t st fm =>
   Mem.HasPtrWidth wptr =>
   (ExtShape ext ~ PtrShape ext wptr) =>
-  (WI.SymExpr sym ~ W4.Expr t) =>
   bak ->
   W4.GroundEvalFn t ->
   Maybe (Mem.CallStack, Mem.BadBehavior sym) ->
