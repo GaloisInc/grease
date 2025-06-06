@@ -25,6 +25,7 @@ module Grease.Macaw.SimulatorState
   ) where
 
 import Control.Lens (Lens')
+import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
@@ -119,7 +120,7 @@ type MacawOverride p sym arch =
 makeLenses ''GreaseSimulatorState
 
 instance ToConc.HasToConcretize (GreaseSimulatorState sym arch) where
-  toConcretize = toConcretize
+  toConcretize = Lens.view toConcretize
 
 instance (MC.ArchAddrWidth arch ~ w) =>
          Symbolic.HasMacawLazySimulatorState
