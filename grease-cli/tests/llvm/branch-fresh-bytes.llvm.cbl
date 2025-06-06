@@ -20,5 +20,5 @@
     (funcall @abort)
     (return ())))
 
-; TODO: Check that the bytes are *not* in the output
 ;; check "Call to abort"
+;; check_not "Concretized values:"
