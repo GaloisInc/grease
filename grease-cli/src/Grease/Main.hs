@@ -171,9 +171,7 @@ import Lang.Crucible.SymIO qualified as SymIO
 import Lang.Crucible.SymIO.Loader qualified as SymIO.Loader
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Simulator.GlobalState qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
-import Lang.Crucible.Simulator.SymSequence qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Lumberjack qualified as LJ
@@ -634,8 +632,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         -- Grease.Macaw.SimulatorState.) If we are simulating an S-expression program,
         -- use an empty map instead. (See gitlab#118 for more discussion on this point.)
         let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` ssaCfgHdl) mbCfgAddr
-        toConcVar <- liftIO (C.freshGlobalVar halloc "to-concretize" W4.knownRepr)
-        let globals1 = C.insertGlobal toConcVar C.SymSequenceNil globals0
+        (toConcVar, globals1) <- liftIO $ ToConc.newToConcretize halloc globals0
         let personality =
               emptyGreaseSimulatorState toConcVar &
                 discoveredFnHandles .~ discoveredHdls
@@ -1157,8 +1154,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
           modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
     let llvmExtImpl = CLLVM.llvmExtensionImpl ?memOpts
     (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
-    p <- C.freshGlobalVar halloc "to-concretize" W4.knownRepr
-    let globals1 = C.insertGlobal p C.SymSequenceNil globals0
+    (p, globals1) <- liftIO $ ToConc.newToConcretize halloc globals0
     st <- LLVM.initState bak la llvmExtImpl p halloc (simErrorSymbolicFunCalls simOpts) setupMem fs globals1 initFsOv llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
     let cmdExt = Debug.llvmCommandExt
     debuggerFeat <-

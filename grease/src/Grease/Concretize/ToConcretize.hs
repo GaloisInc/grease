@@ -14,9 +14,12 @@ See this thread for a discussion of this choice:
 <https://github.com/GaloisInc/grease/pull/203#discussion_r2132431744>.
 -}
 
+{-# LANGUAGE OverloadedStrings #-}
+
 module Grease.Concretize.ToConcretize
   ( ToConcretizeType
   , HasToConcretize(toConcretize)
+  , newToConcretize
   , readToConcretize
   , stateToConcretize
   , addToConcretize
@@ -26,9 +29,12 @@ import Control.Lens qualified as Lens
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State.Class qualified as State
 import Data.Maybe qualified as Maybe
+import Data.Parameterized.Classes (knownRepr)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Text (Text)
 import Lang.Crucible.Backend qualified as LCB
+import Lang.Crucible.CFG.Generator qualified as LCCG
+import Lang.Crucible.FunctionHandle qualified as LCF
 import Lang.Crucible.Simulator qualified as LCS
 import Lang.Crucible.Simulator.ExecutionTree qualified as LCSE
 import Lang.Crucible.Simulator.GlobalState qualified as LCSG
@@ -52,6 +58,15 @@ class HasToConcretize p where
 
 instance HasToConcretize (LCS.GlobalVar ToConcretizeType) where
   toConcretize = id
+
+-- | Create and initialize a @'LCS.GlobalVar' 'ToConcretizeType'@.
+newToConcretize ::
+  LCF.HandleAllocator ->
+  LCSG.SymGlobalState sym ->
+  IO (LCS.GlobalVar ToConcretizeType, LCSG.SymGlobalState sym)
+newToConcretize halloc globals = do
+  g <- LCCG.freshGlobalVar halloc "to-concretize" knownRepr
+  pure (g, LCSG.insertGlobal g LCSS.SymSequenceNil globals)
 
 -- | Read the value of the global variable of type 'ToConcretizeType' from
 -- a 'C.ExecResult'.
