@@ -11,6 +11,7 @@ module Grease.Concretize
     InitialState(..)
   , ToConcretizeType
   , HasToConcretize(toConcretize)
+  , readToConcretize
   , stateToConcretize
   , addToConcretize
     -- * Concretization
@@ -36,6 +37,7 @@ import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Maybe qualified as Maybe
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
@@ -58,6 +60,8 @@ import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator.ExecutionTree qualified as C
+import Lang.Crucible.Simulator.GlobalState qualified as C
 import Lang.Crucible.Simulator.SymSequence qualified as C
 import Lang.Crucible.SymIO qualified as SymIO
 import Numeric (showHex)
@@ -93,6 +97,21 @@ class HasToConcretize p where
 
 instance HasToConcretize (C.GlobalVar ToConcretizeType) where
   toConcretize = id
+
+-- | Read the value of the global variable of type 'ToConcretizeType' from
+-- a 'C.ExecResult'.
+--
+-- If the global is not present, returns 'C.SymSequenceNil'.
+readToConcretize ::
+  C.IsSymInterface sym =>
+  HasToConcretize p =>
+  C.ExecResult p sym ext r ->
+  IO (C.RegValue sym ToConcretizeType)
+readToConcretize result = do
+  let simCtx = C.execResultContext result
+  let toConcVar = simCtx Lens.^. C.cruciblePersonality . toConcretize
+  globs <- liftIO (C.execResultGlobals result)
+  pure (Maybe.fromMaybe C.SymSequenceNil (C.lookupGlobal toConcVar globs))
 
 -- | `Lens.Lens'` for the 'ToConcretize' in the
 -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'
