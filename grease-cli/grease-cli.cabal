@@ -218,7 +218,7 @@ test-suite grease-tests
     , hedgehog ^>= 1.5
     , hslua ^>= 2.3.1
     , lumberjack ^>= 1.0
-    , oughta ^>= 0.2
+    , oughta ^>= 0.3
     , parameterized-utils ^>= 2.1.10
     , prettyprinter ^>= 1.7.1
     , tasty ^>= 1.5.3
