@@ -126,10 +126,7 @@ import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.BoundedExec qualified as C
 import Lang.Crucible.Simulator.BoundedRecursion qualified as C
-import Lang.Crucible.Simulator.ExecutionTree qualified as C
-import Lang.Crucible.Simulator.GlobalState qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
-import Lang.Crucible.Simulator.SymSequence qualified as C
 import Lang.Crucible.Utils.Seconds qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
@@ -399,10 +396,7 @@ execAndRefine bak solver _fm la anns heuristics argNames argShapes initState bbM
   (result, goals) <- liftIO (execCfg bak (LoopBound bound) execFeats initialState)
   doLog la (Diag.ExecutionResult result)
   bbMap <- liftIO (readIORef bbMapRef)
-  let simCtx = C.execResultContext result
-  let toConcVar = simCtx ^. C.cruciblePersonality . Conc.toConcretize
-  globs <- liftIO (C.execResultGlobals result)
-  let toConc = Maybe.fromMaybe C.SymSequenceNil (C.lookupGlobal toConcVar globs)
+  toConc <- liftIO (Conc.readToConcretize result)
   liftIO (proveAndRefine bak solver anns toConc la heuristics argNames argShapes initState bbMap goals)
 
 data RefinementSummary sym ext tys
