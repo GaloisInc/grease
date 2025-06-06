@@ -27,7 +27,7 @@ import Data.List qualified as List
 import Data.Map qualified as Map
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
-import Grease.Concretize qualified as Conc
+import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction, Diagnostic(LLVMOverridesDiagnostic))
 import Grease.FunctionOverride (basicLLVMOverrides)
 import Grease.FunctionOverride.SExp (freshBytesOverride, tryBindTypedOverride)
@@ -199,7 +199,7 @@ registerLLVMOverrides ::
   ( C.IsSymBackend sym bak
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth 64
-  , Conc.HasToConcretize p
+  , ToConc.HasToConcretize p
   , ?lc :: TypeContext
   , ?memOpts :: Mem.MemOptions
   ) =>
@@ -292,7 +292,7 @@ registerLLVMSexpOverrides ::
   ( C.IsSymBackend sym bak
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth 64
-  , Conc.HasToConcretize p
+  , ToConc.HasToConcretize p
   , ?lc :: TypeContext
   , ?memOpts :: Mem.MemOptions
   ) =>
@@ -325,7 +325,7 @@ registerLLVMModuleOverrides ::
   ( C.IsSymBackend sym bak
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth 64
-  , Conc.HasToConcretize p
+  , ToConc.HasToConcretize p
   , ?lc :: TypeContext
   , ?memOpts :: Mem.MemOptions
   ) =>
@@ -352,7 +352,7 @@ registerLLVMSexpProgForwardDeclarations ::
   ( C.IsSymInterface sym
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth 64
-  , Conc.HasToConcretize p
+  , ToConc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   ) =>
   GreaseLogAction ->
@@ -374,7 +374,7 @@ registerLLVMOvForwardDeclarations ::
   ( C.IsSymInterface sym
   , Mem.HasPtrWidth w
   , Mem.HasLLVMAnn sym
-  , Conc.HasToConcretize p
+  , ToConc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   ) =>
   C.GlobalVar Mem.Mem ->
@@ -394,7 +394,7 @@ registerLLVMForwardDeclarations ::
   ( C.IsSymInterface sym
   , Mem.HasPtrWidth w
   , Mem.HasLLVMAnn sym
-  , Conc.HasToConcretize p
+  , ToConc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   ) =>
   C.GlobalVar Mem.Mem ->

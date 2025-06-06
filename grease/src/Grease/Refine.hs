@@ -106,6 +106,7 @@ import Data.Type.Equality (type (~))
 import Grease.Bug qualified as Bug
 import Grease.Concretize (ConcretizedData)
 import Grease.Concretize qualified as Conc
+import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic
 import Grease.Heuristic
 import Grease.Options (LoopBound(..), Milliseconds(..))
@@ -237,7 +238,7 @@ consumer ::
   ) =>
   bak ->
   Anns.Annotations sym ext argTys ->
-  C.RegValue sym Conc.ToConcretizeType ->
+  C.RegValue sym ToConc.ToConcretizeType ->
   GreaseLogAction ->
   [RefineHeuristic sym bak ext argTys] ->
   -- | Argument names
@@ -338,7 +339,7 @@ proveAndRefine ::
   bak ->
   Solver ->
   Anns.Annotations sym ext argTys ->
-  C.RegValue sym Conc.ToConcretizeType ->
+  C.RegValue sym ToConc.ToConcretizeType ->
   GreaseLogAction ->
   [RefineHeuristic sym bak ext argTys] ->
   -- | Argument names
@@ -373,7 +374,7 @@ execAndRefine ::
   , 16 C.<= w
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth w
-  , Conc.HasToConcretize p
+  , ToConc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
@@ -396,7 +397,7 @@ execAndRefine bak solver _fm la anns heuristics argNames argShapes initState bbM
   (result, goals) <- liftIO (execCfg bak (LoopBound bound) execFeats initialState)
   doLog la (Diag.ExecutionResult result)
   bbMap <- liftIO (readIORef bbMapRef)
-  toConc <- liftIO (Conc.readToConcretize result)
+  toConc <- liftIO (ToConc.readToConcretize result)
   liftIO (proveAndRefine bak solver anns toConc la heuristics argNames argShapes initState bbMap goals)
 
 data RefinementSummary sym ext tys

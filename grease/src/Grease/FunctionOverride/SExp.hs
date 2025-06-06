@@ -17,7 +17,7 @@ import Data.Text qualified as Text
 import Data.Type.Equality ((:~:)(Refl), testEquality)
 import Data.Type.Ord (type (<=))
 import Data.Vector qualified as Vec
-import Grease.Concretize qualified as Conc
+import Grease.Concretize.ToConcretize qualified as ToConc
 import Lang.Crucible.Backend qualified as LCB
 import Lang.Crucible.FunctionHandle qualified as LCF
 import Lang.Crucible.Simulator qualified as LCS
@@ -48,7 +48,7 @@ tryBindTypedOverride hdl ov =
 -- function will generate an assertion failure.
 freshBytesOverride ::
   ( 1 <= w
-  , Conc.HasToConcretize p
+  , ToConc.HasToConcretize p
   , LCB.IsSymInterface sym
   ) =>
   NatRepr.NatRepr w ->
@@ -66,7 +66,7 @@ freshBytesOverride w =
 -- function will generate an assertion failure.
 freshBytes ::
   ( 1 <= w
-  , Conc.HasToConcretize p
+  , ToConc.HasToConcretize p
   , LCB.IsSymInterface sym
   ) =>
   LCS.RegValue' sym (LCT.StringType WI.Unicode) ->
@@ -85,7 +85,7 @@ freshBytes name0 bv0 =
         Just bv -> doFreshBytes name (BV.asUnsigned bv)
 
 doFreshBytes ::
-  ( Conc.HasToConcretize p
+  ( ToConc.HasToConcretize p
   , LCB.IsSymInterface sym
   ) =>
   Text ->
@@ -103,6 +103,6 @@ doFreshBytes name len =
 
     let ty = LCT.VectorRepr (LCT.BVRepr (NatRepr.knownNat @8))
     let entry = LCS.RegEntry ty v
-    Conc.addToConcretize name entry
+    ToConc.addToConcretize name entry
 
     pure v

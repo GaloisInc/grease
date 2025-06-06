@@ -48,7 +48,7 @@ import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Data.Type.Equality ((:~:)(Refl))
 import Data.Word (Word8, Word64)
-import Grease.Concretize (HasToConcretize)
+import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic
 import Grease.Macaw.Arch
 import Grease.Macaw.FunctionOverride
