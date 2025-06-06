@@ -4,7 +4,6 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 -}
 
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 -- | Functionality for logging diagnostic messages in @grease@.
 module Grease.Diagnostic
@@ -15,8 +14,6 @@ module Grease.Diagnostic
   ) where
 
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Time.Clock qualified as Time
-import Data.Time.Format qualified as Time
 import Grease.BranchTracer.Diagnostic qualified as BranchTracer
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Heuristic.Diagnostic qualified as Heuristic
@@ -89,7 +86,5 @@ type GreaseLogAction = forall m. MonadIO m => LJ.LogAction m Diagnostic
 -- | Log a message to 'stderr' along with the current time.
 log :: MonadIO m => PP.Doc a -> m ()
 log msg = do
-  t <- liftIO Time.getCurrentTime
-  let time = Time.formatTime Time.defaultTimeLocale "[%F %T]" t
-  liftIO $ PP.hPutDoc stderr $ PP.pretty time PP.<+> msg
+  liftIO $ PP.hPutDoc stderr msg
   liftIO $ PP.hPutDoc stderr PP.line
