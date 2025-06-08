@@ -1,6 +1,6 @@
 # Summary
 
-- [Overview](./overview.md)
+[Overview](./overview.md)
 
 # User guide
 
