@@ -25,8 +25,8 @@
 
 # Developer documentation
 
-- [Development](./dev.md)
-- [Practices](./practices.md)
-- [Profiling](./profiling.md)
-- [Style](./style.md)
-- [Test suite](./tests.md)
+- [Development](dev/dev.md)
+- [Practices](dev/practices.md)
+- [Profiling](dev/profiling.md)
+- [Style](dev/style.md)
+- [Test suite](dev/tests.md)
