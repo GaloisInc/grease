@@ -9,7 +9,7 @@
 - [Usage](./usage.md)
 - [Ghidra plugin](./ghidra-plugin.md)
 - [Overrides](./overrides.md)
-- [Writing S-expression programs](./sexp.md)
+- [The S-expression language](./sexp.md)
 
 # Reference
 
@@ -20,6 +20,7 @@
 - [Refinement](./refinement.md)
 - [Requirements](./requirements.md)
 - [Rust programs](./rust-programs.md)
+- [S-expression programs](./sexp-progs.md)
 - [Shape DSL](./shape-dsl.md)
 - [Shared libraries](./shared-libraries.md)
 - [System calls](./syscalls.md)
