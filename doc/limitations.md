@@ -105,7 +105,7 @@ It is possible for machine code to exhibit behaviors that are not possible at th
 - It's [difficult to detect PLT stubs](shared-libraries.md#limitations-of-plt-stub-detection).
 - GREASE does not [currently](https://github.com/GaloisInc/grease/issues/33) detect stack buffer overflows.
 - GREASE does not currently support code that runs before `main`, e.g., C's `__attribute__ ((constructor))`, ELF's `.init`/`.ctors`/`.init_array`, LLVM's [`@llvm.global_ctors`][llvm-global-ctors], or Rust's [`_init`][rust-init].
-- GREASE currently does not cope well with calls to symbolic function pointers or addresses. By default, GREASE's default behavior is to skip over calls to function pointers or addresses that it cannot resolve as concrete. GREASE also includes a `--error-symbolic-fun-calls` command-line option that causes GREASE to error if it attempts to invoke a symbolic function call.
+- GREASE currently does not cope well with calls to symbolic function pointers or addresses (or syscalls with symbolic numbers). GREASE's default behavior is to skip over calls to function pointers or addresses that it cannot resolve as concrete. GREASE also includes a `--error-symbolic-fun-calls` command-line option that causes GREASE to error if it attempts to invoke a symbolic function call.
 
 [llvm-global-ctors]: https://llvm.org/docs/LangRef.html#the-llvm-global-ctors-global-variable
 [rust-init]: https://users.rust-lang.org/t/generating-a-cdylib-crate-without-an-init/85267

@@ -23,6 +23,8 @@ import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 
 -- | All of the overrides that work across all supported configurations.
+--
+-- This list is documented in @doc/syscalls.md@.
 builtinGenericSyscalls ::
   Mem.HasPtrWidth w =>
   Map.Map W4.FunctionName (Stubs.SomeSyscall p sym arch)
@@ -49,6 +51,8 @@ buildGetppidOverride =
 -----
 
 -- | Override for the @getppid(2)@ system call.
+--
+-- The behavior of this override is documented in @doc/syscalls.md@.
 callGetppid ::
   ( C.IsSymBackend sym bak
   , Mem.HasPtrWidth w
