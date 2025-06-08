@@ -4,6 +4,7 @@
 
 # User guide
 
+- [Quick start](./quickstart.md)
 - [Installation](./install.md)
 - [Usage](./usage.md)
 - [Ghidra plugin](./ghidra-plugin.md)
