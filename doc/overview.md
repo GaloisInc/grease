@@ -1,6 +1,8 @@
 # Overview
 
-`grease` is a CLI tool that analyzes binaries using under-constrained symbolic execution. `grease` supports analysis of ELF executables or shared objects containing ARMv7l, PowerPC, or x86_64 code. `grease` can also analyze LLVM bitcode.
+GREASE is command-line tool, Ghidra plug-in, and Haskell library that checks properties about binaries using under-constrained symbolic execution.
+
+`grease` supports analysis of ELF executables or shared objects containing AArch32, PowerPC, or x86_64 code. `grease` can also analyze LLVM bitcode.
 
 <img src="logo.png" alt="GREASE logo" width="50%" />
 
