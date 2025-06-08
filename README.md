@@ -1,6 +1,6 @@
-# grease
+# GREASE
 
-`grease` is a library and CLI tool that checks properties about binaries using under-constrained symbolic execution.
+GREASE is command-line tool, Ghidra plug-in, and Haskell library that checks properties about binaries using under-constrained symbolic execution.
 
 For more information, see [the blog post introducing GREASE](https://www.galois.com/articles/introducing-grease), or [the documentation](https://galoisinc.github.io/grease).
 
