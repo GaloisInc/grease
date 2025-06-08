@@ -185,6 +185,14 @@ simOpts = do
                         [ "Throw an error if attempting to call a symbolic function handle or pointer"
                         , "(by default, these calls will be skipped)"
                         ]))
+  simErrorSymbolicSyscalls <-
+    GO.ErrorSymbolicSyscalls <$>
+    Opt.switch ( Opt.long "error-symbolic-syscalls"
+                 <> Opt.help
+                      (String.unlines
+                        [ "Throw an error if attempting to make a syscall with a symbolic number"
+                        , "(by default, these calls will be skipped)"
+                        ]))
   simRust <-
     Opt.switch ( Opt.long "rust"
                  <> Opt.help "Use simulator settings that are more likely to work for Rust programs"

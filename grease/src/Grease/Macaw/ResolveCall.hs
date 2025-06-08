@@ -59,7 +59,7 @@ import Grease.Macaw.ResolveCall.Diagnostic qualified as Diag
 import Grease.Macaw.SimulatorState
 import Grease.Macaw.SkippedCall (SkippedFunctionCall(..), SkippedSyscall(..))
 import Grease.Macaw.Syscall
-import Grease.Options (ErrorSymbolicFunCalls(..))
+import Grease.Options (ErrorSymbolicFunCalls(..), ErrorSymbolicSyscalls (..))
 import Grease.Utility (OnlineSolverAndBackend, declaredFunNotFound, segoffToAbsoluteAddr)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.Backend qualified as C
@@ -398,6 +398,8 @@ newtype LookupSyscallDispatch p sym arch = LookupSyscallDispatch
 -- | An implementation of 'LookupSyscallDispatch' that attempts to invoke
 -- syscall overrides if they can be found. If an override cannot be found, the
 -- syscall is simulated as a no-op.
+--
+-- The behavior of this function is documented in @doc/syscalls.md@.
 defaultLookupSyscallDispatch ::
   OnlineSolverAndBackend solver sym bak t st fs =>
   bak ->
@@ -453,6 +455,8 @@ data LookupSyscallResult p sym arch atps rtps where
     LookupSyscallResult p sym arch atps rtps
 
 -- | Attempt to look up a syscall override.
+--
+-- The behavior of this function is documented in @doc/syscalls.md@.
 lookupSyscallResult ::
   ( C.IsSymBackend sym bak
   , HasGreaseSimulatorState p sym arch
@@ -463,16 +467,22 @@ lookupSyscallResult ::
   Map.Map
     W4.FunctionName
     (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
+  ErrorSymbolicSyscalls ->
   Ctx.Assignment C.TypeRepr atps ->
   Ctx.Assignment C.TypeRepr rtps ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
   C.RegEntry sym (C.StructType atps) ->
   IO (LookupSyscallResult p sym arch atps rtps)
-lookupSyscallResult bak arch syscallOvs atps rtps st regs = do
+lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs = do
   symSyscallBV <- (arch ^. archSyscallNumberRegister) bak atps regs
   case W4.asBV (C.regValue symSyscallBV) of
     Nothing ->
-      pure $ SkippedSyscall SymbolicSyscallNumber
+      if getErrorSymbolicSyscalls errorSymbolicSyscalls
+        then C.addFailedAssertion bak $
+             C.AssertFailureSimError
+               "Failed to execute syscall"
+               "Cannot resolve a symbolic syscall number"
+        else pure $ SkippedSyscall SymbolicSyscallNumber
     Just syscallBV ->
       let syscallNum = fromIntegral @Integer @Int $ BV.asUnsigned syscallBV in
       case IntMap.lookup syscallNum (arch ^. archSyscallCodeMapping) of
@@ -503,13 +513,14 @@ lookupSyscallHandle ::
   Map.Map
     W4.FunctionName
     (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
+  ErrorSymbolicSyscalls ->
   -- | Dispatch on the result of looking up a syscall override.
   LookupSyscallDispatch p sym arch ->
   Symbolic.LookupSyscallHandle p sym arch
-lookupSyscallHandle bak arch syscallOvs lsd =
+lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd =
   Symbolic.LookupSyscallHandle $ \atps rtps st regs -> do
     let LookupSyscallDispatch dispatch = lsd
-    res <- lookupSyscallResult bak arch syscallOvs atps rtps st regs
+    res <- lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs
     dispatch atps rtps st regs res
 
 -- | Perform code discovery on the function address (see @Note [Incremental

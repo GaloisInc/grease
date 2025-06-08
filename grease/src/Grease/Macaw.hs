@@ -441,12 +441,13 @@ memConfigWithHandles ::
   -- | Map of names of overridden syscalls to their implementations
   Map.Map W4.FunctionName (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
   Opts.ErrorSymbolicFunCalls ->
+  Opts.ErrorSymbolicSyscalls ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem
-memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs syscallOvs errorSymbolicFunCalls memCfg =
+memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs syscallOvs errorSymbolicFunCalls errorSymbolicSyscalls memCfg =
   memCfg
   { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls lfhd
-  , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs lsd
+  , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd
   }
   where
     lfhd = ResolveCall.defaultLookupFunctionHandleDispatch bak logAction halloc arch memory funOvs

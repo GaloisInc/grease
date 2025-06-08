@@ -14,6 +14,7 @@ module Grease.Options
   , allMutableGlobalStates
   , ExtraStackSlots(..)
   , ErrorSymbolicFunCalls(..)
+  , ErrorSymbolicSyscalls(..)
   , SimOpts(..)
   , Opts(..)
   ) where
@@ -60,6 +61,13 @@ newtype ErrorSymbolicFunCalls =
   -- See Note [Derive Read/Show instances the with newtype strategy]
   deriving newtype (Enum, Eq, Ord, Read, Show)
 
+-- | If 'True', throw an error if attempting a system call with a symbolic
+-- number. If 'False', skip over such calls.
+newtype ErrorSymbolicSyscalls =
+  ErrorSymbolicSyscalls { getErrorSymbolicSyscalls :: Bool }
+  -- See Note [Derive Read/Show instances the with newtype strategy]
+  deriving newtype (Enum, Eq, Ord, Read, Show)
+
 {-
 Note [Derive Read/Show instances with newtype strategy]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -82,6 +90,8 @@ data SimOpts
     , simEntryPoints :: [Entrypoint]
       -- | Default: 'False'.
     , simErrorSymbolicFunCalls :: ErrorSymbolicFunCalls
+      -- | Default: 'False'.
+    , simErrorSymbolicSyscalls :: ErrorSymbolicSyscalls
       -- | Path containing initial function preconditions in shapes DSL
     , simInitialPreconditions :: Maybe FilePath
       -- | Maximum number of iterations of each program loop/maximum number of

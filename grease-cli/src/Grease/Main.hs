@@ -530,8 +530,6 @@ simulateMacawCfg ::
   IO BatchStatus
 simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfgAddr entrypointCfgs = do
   let sym = C.backendGetSym bak
-  let userOvPaths = simOverrides simOpts
-  let errorSymbolicFunCalls = simErrorSymbolicFunCalls simOpts
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory (simMutGlobs simOpts) relocs
@@ -621,8 +619,11 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
         (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
         let builtinOvs = builtinStubsOverrides bak mvar memCfg0 archCtx fs
+        let userOvPaths = simOverrides simOpts
         fnOvsMap <- liftIO $ Macaw.mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
-        let memCfg1 = memConfigWithHandles bak la halloc archCtx memory symMap pltStubs dynFunMap fnOvsMap builtinGenericSyscalls errorSymbolicFunCalls memCfg0
+        let errorSymbolicFunCalls = simErrorSymbolicFunCalls simOpts
+        let errorSymbolicSyscalls = simErrorSymbolicSyscalls simOpts
+        let memCfg1 = memConfigWithHandles bak la halloc archCtx memory symMap pltStubs dynFunMap fnOvsMap builtinGenericSyscalls errorSymbolicFunCalls errorSymbolicSyscalls memCfg0
         evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @arch (archCtx ^. archVals) sym pure
         let macawExtImpl = Symbolic.macawExtensions evalFn mvar memCfg1
         let ssaCfgHdl = C.cfgHandle ssaCfg'
