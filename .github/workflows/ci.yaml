@@ -89,8 +89,9 @@ jobs:
       run: .github/ci.sh install_system_deps
       env:
         BIN_ZIP_FILE: ${{ matrix.os }}-${{ runner.arch }}-bin.zip
-        # The solver package snapshot date. If you update this, make sure to also
-        # update it in the Dockerfile.
+        # The solver package snapshot date. If you update this, make sure to
+        # also update it in the Dockerfile. Also make sure to update the version
+        # of Yices mentioned in the installation instructions.
         SOLVER_PKG_VERSION: "snapshot-20241119"
 
     - name: Check .cabal files

@@ -1,22 +1,32 @@
 # Usage
 
-## Prerequisites
+This page describes the usage of the GREASE command-line interface.
 
-GREASE requires one of the following SMT solvers at run-time:
+## Running the Docker image
 
-- `cvc4` 1.8 or greater
-- `cvc5` 1.0.5 or greater
-- `yices` 2.6.2 or greater
-- `z3` 4.8.14 or greater
+To run GREASE from the Docker image:
 
-They are already installed in the GREASE Docker image. By default, `grease`
-will default to `yices` unless you manually specify a solver using the
-`--solver` option.
+```sh
+docker run grease:latest <args>
+```
+
+For `<args>`, see below.
+
+Some helpful Docker flags:
+
+- `--rm`: Delete the container after it exits
+- `-v "$PWD:$PWD" -w "$PWD"`: Mount your current directory into the Docker image
+  and set it as the working directory
+
+All together:
+```sh
+docker run --rm -v "$PWD:$PWD" -w "$PWD" grease:latest <args>
+```
 
 ## Running a standalone binary
 
 ```sh
-$ grease -- <filename>
+grease -- <filename>
 ```
 
 By default, GREASE analyzes every known function in the input program. You can
@@ -52,10 +62,6 @@ PowerPC frontend currently requires a binary in order to work. See [this
 upstream issue](https://github.com/GaloisInc/macaw/issues/415) for more
 details.)
 
-## Running the Docker image
-
-```sh
-$ docker run --rm -v "$PWD:$PWD" -w "$PWD" grease:latest <filename> --symbol <entrypoint>
-```
+Try `--help` to see additional options.
 
 <!-- Copyright (c) Galois, Inc. 2024. -->

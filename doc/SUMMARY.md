@@ -5,9 +5,9 @@
 # User guide
 
 - [Installation](./install.md)
-- [Overrides](./overrides.md)
 - [Usage](./usage.md)
 - [Ghidra plugin](./ghidra-plugin.md)
+- [Overrides](./overrides.md)
 - [Writing S-expression programs](./sexp.md)
 
 # Reference
