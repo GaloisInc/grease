@@ -10,8 +10,8 @@ from libc, such as `malloc`. Users may also provide overrides, which take
 priority over both built-in overrides and functions defined in the program under
 analysis.
 
-User-provided overrides are written in the Crucible S-expression language. For
-information about this language, see [Writing S-expression programs](sexp.md).
+User-provided overrides are written in the [Crucible S-expression
+language](sexp.md).
 
 ## LLVM example
 

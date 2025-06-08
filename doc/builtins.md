@@ -204,7 +204,7 @@ available:
 ### S-expression-specific overrides
 
 The following overrides are only available in S-expression files (programs or overrides).
-See [Writing S-expression programs](sexp.md) for more details.
+See [The S-expression language](sexp.md) for more details.
 
 ```
 (declare @fresh-bytes ((name (String Unicode)) (num (Bitvector w))) (Vector (Bitvector 8)))
