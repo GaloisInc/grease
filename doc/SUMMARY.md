@@ -26,6 +26,7 @@
 # Developer documentation
 
 - [Development](dev/dev.md)
+- [On-boarding](dev/on-boarding.md)
 - [Practices](dev/practices.md)
 - [Profiling](dev/profiling.md)
 - [Style](dev/style.md)
