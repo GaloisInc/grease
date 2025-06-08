@@ -35,7 +35,7 @@ docker build . --tag grease:latest
 
 ## Building a binary from source
 
-See the [developer's guide](dev.md) for how to build `grease` from source.
+See the [developer's guide](dev/dev.md) for how to build `grease` from source.
 
 When run as a standalone binary, GREASE requires a recent version of one of the
 following SMT solvers: `cvc4`, `cvc5`, `yices`, or `z3`. GREASE is currently
