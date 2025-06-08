@@ -222,6 +222,8 @@ data LookupFunctionHandleResult p sym arch where
     LookupFunctionHandleResult p sym arch
 
 -- | Attempt to look up a function handle.
+--
+-- The behavior of this function is documented in @doc/function-calls.md@.
 lookupFunctionHandleResult ::
   forall arch sym bak solver scope st fs p rtp blocks r ctx.
   ( OnlineSolverAndBackend solver sym bak scope st fs
@@ -285,6 +287,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
 
       in case Loader.resolveAbsoluteAddress memory bvMemWord of
         Nothing ->
+          -- TODO(#137): Make this an error by default.
           pure (SkippedFunctionCall (InvalidAddress (BV.ppHex knownNat bv)), st)
         Just funcAddrOff -> go funcAddrOff
   where
@@ -325,6 +328,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
                     )
                 -- ...otherwise, skip the PLT call entirely.
                 Nothing ->
+                  -- TODO(#182): Option to make this an error
                   pure
                     ( SkippedFunctionCall $
                       PltNoOverride funcAddrOff pltStubName
