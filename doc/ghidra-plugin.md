@@ -13,8 +13,8 @@ Ghidra](https://github.com/NationalSecurityAgency/ghidra/releases). We require
 Ghidra version or 11.0 or later, as this is when Ghidra introduced initial
 support for Rust binaries.
 
-You will also need to build a `grease` binary from source as described in the
-[developers' guide](./dev.md).
+You will also need install a stadalone `grease` binary, see
+[Installation](install.md).
 
 You may optionally specify the path to your `grease` binary by setting the
 `GHIDRA_GREASE_BIN` environment variable. If not set, the Ghidra plugin will
@@ -26,8 +26,8 @@ variable. If not set, the Ghidra plugin will prompt for a directory.
 
 ## Plugin installation
 
-Before starting, make sure you have installed Ghidra and built GREASE from
-source, as described in the "Prerequisites" section above. Then perform the
+Before starting, make sure you have installed Ghidra and installed the `grease`
+binary, as described in the "Prerequisites" section above. Then perform the
 following steps:
 
 1. In Ghidra, use `CodeBrowser Script Manager -> Manage Script Directories` to
