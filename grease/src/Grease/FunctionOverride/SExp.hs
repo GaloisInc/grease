@@ -3,7 +3,8 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 
 module Grease.FunctionOverride.SExp
-  ( tryBindTypedOverride
+  ( checkTypedOverrideHandleCompat
+  , tryBindTypedOverride
   , freshBytesOverride
   ) where
 
@@ -24,20 +25,27 @@ import Lang.Crucible.Simulator qualified as LCS
 import Lang.Crucible.Types qualified as LCT
 import What4.Interface qualified as WI
 
+-- | Check if a 'LCS.TypedOverride' is compatible with a 'LCF.FnHandle'
+checkTypedOverrideHandleCompat ::
+  LCF.FnHandle args ret ->
+  LCS.TypedOverride p sym ext args' ret' ->
+  Maybe (args :~: args', ret :~: ret')
+checkTypedOverrideHandleCompat hdl ov = do
+  rArgs <- testEquality (LCF.handleArgTypes hdl) (LCS.typedOverrideArgs ov)
+  rRet <- testEquality (LCF.handleReturnType hdl) (LCS.typedOverrideRet ov)
+  pure (rArgs, rRet)
+
 -- | The return value indicates whether the override was bound.
 tryBindTypedOverride ::
   LCF.FnHandle args ret ->
   LCS.TypedOverride p sym ext args' ret' ->
   LCS.OverrideSim p sym ext rtp args'' ret'' Bool
 tryBindTypedOverride hdl ov =
-  case testEquality (LCF.handleArgTypes hdl) (LCS.typedOverrideArgs ov) of
+  case checkTypedOverrideHandleCompat hdl ov of
     Nothing -> pure False
-    Just Refl ->
-      case testEquality (LCF.handleReturnType hdl) (LCS.typedOverrideRet ov) of
-        Nothing -> pure False
-        Just Refl -> do
-          LCS.bindTypedOverride hdl ov
-          pure True
+    Just (Refl, Refl) -> do
+      LCS.bindTypedOverride hdl ov
+      pure True
 
 -- | Override for @fresh-bytes@.
 --

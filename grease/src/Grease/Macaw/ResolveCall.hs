@@ -51,6 +51,7 @@ import Data.Parameterized.NatRepr (knownNat)
 import Data.Text (Text)
 import Data.Type.Equality (type (~))
 import GHC.Word (Word64)
+import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (Diagnostic(..), GreaseLogAction)
 import Grease.Macaw.Arch
 import Grease.Macaw.Discovery (discoverFunction)
@@ -138,6 +139,8 @@ defaultLookupFunctionHandleDispatch ::
   ( OnlineSolverAndBackend solver sym bak t st fs
   , Symbolic.SymArchConstraints arch
   , Mem.HasLLVMAnn sym
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , HasToConcretize p
   , HasGreaseSimulatorState p sym arch
   ) =>
   bak ->
@@ -565,6 +568,8 @@ useMacawFunctionOverride ::
   , W4.OnlineSolver solver
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , HasToConcretize p
   ) =>
   bak ->
   GreaseLogAction ->
@@ -602,6 +607,8 @@ extendHandleMap ::
   , W4.OnlineSolver solver
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , HasToConcretize p
   ) =>
   bak ->
   -- | Map of names of overridden functions to their implementations
@@ -644,7 +651,9 @@ extendHandleMap bak allOvs = go
               Nothing ->
                 case Map.lookup fwdDecName allOvs of
                   Nothing ->
-                    declaredFunNotFound fwdDecName
+                    case lookupMacawForwardDeclarationOverride bak allOvs fwdDecName fwdDecHdl of
+                      Just ov -> pure (C.insertHandleMap fwdDecHdl (C.UseOverride ov) binds)
+                      Nothing -> declaredFunNotFound fwdDecName
                   Just (MacawFunctionOverride _ _
                          someForwardedOv@(Stubs.SomeFunctionOverride forwardedOv)) ->
                     let forwardedOvSim =
