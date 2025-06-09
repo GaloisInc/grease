@@ -301,8 +301,8 @@ registerMacawForwardDeclarations bak funOvs cannotResolve fwdDecs =
   Foldable.forM_ (Map.toList fwdDecs) $ \(decName, C.SomeHandle hdl) ->
     registerMacawForwardDeclaration bak funOvs cannotResolve decName hdl
 
--- | Redirect handles for forward declarations in an S-expression file to
--- actually call the corresponding Macaw overrides. If a forward declaration
+-- | Redirect a handle for a forward declaration in an S-expression file to
+-- actually call the corresponding Macaw override. If the forward declaration
 -- name cannot be resolved to an override, then perform the supplied action.
 registerMacawForwardDeclaration ::
   ( C.IsSymBackend sym bak
@@ -330,7 +330,7 @@ registerMacawForwardDeclaration bak funOvs cannotResolve decName hdl =
     Nothing -> cannotResolve decName hdl
     Just ov -> C.bindFnHandle hdl (C.UseOverride ov)
 
--- | Lookup an override for a function handle from a forward declaration
+-- | Lookup an override for a function handle from a forward declaration.
 lookupMacawForwardDeclarationOverride ::
   forall p sym bak arch scope st fs solver args ret.
   ( C.IsSymBackend sym bak
