@@ -321,9 +321,9 @@ registerMacawForwardDeclaration ::
     C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ())
     {- ^ What to do when a forward declaration cannot be resolved. -} ->
   W4.FunctionName
-    {-^ Name of the forward declaration -} ->
+    {- ^ Name of the forward declaration -} ->
   C.FnHandle args' ret'
-    {-^ Handle to bind -} ->
+    {- ^ Handle to bind -} ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerMacawForwardDeclaration bak funOvs cannotResolve decName hdl =
   case lookupMacawForwardDeclarationOverride bak funOvs decName hdl of
