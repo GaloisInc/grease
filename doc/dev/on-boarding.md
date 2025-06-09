@@ -19,11 +19,15 @@ This page provides learning resources for new GREASE developers.
 ### Try it out!
 
 - [ ] Use bintools
-  - [ ] Read `objdump` tldr, disassemble something!
-  - [ ] Read `readelf` tldr, examine an ELF file!
-  - [ ] Read `nm` tldr, look at some symbols!
+  - [ ] Read [`objdump` tldr], disassemble something!
+  - [ ] Read [`readelf` tldr], examine an ELF file!
+  - [ ] Read [`nm` tldr], look at some symbols!
 - [ ] - Use `llvm-dwarfdump`
 - [ ] Download Ghidra, look at an ELF program
+
+[`objdump` tldr]: https://tldr.inbrowser.app/pages/common/objdump
+[`readelf` tldr]: https://tldr.inbrowser.app/pages/common/readelf
+[`nm` tldr]: https://tldr.inbrowser.app/pages/common/nm
 
 ## LLVM
 
@@ -111,8 +115,9 @@ Pass `--crucible` to see the Crucible CFGs too.
 Crucible is an imperative IR. It has an SSA format with basic blocks. It uses
 dependently-typed programming to enforce well-typedness and the SSA invariant.
 It comes with a symbolic execution engine. There are many frontends that
-translate other languages into the Crucible IR, e.g., LLVM, JVM, WebAssembly,
-and crucially for us, machine code (via Macaw).
+translate other languages into the Crucible IR, e.g., LLVM (e.g., from C and
+C++ via Clang), JVM (e.g., from Java), MIR (e.g., from Rust), WebAssembly, and
+crucially for us, machine code (via Macaw).
 
 - [GitHub](https://github.com/GaloisInc/crucible)
 - [API documentation on Hackage](https://hackage.haskell.org/package/crucible)

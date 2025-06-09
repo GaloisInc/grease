@@ -13,7 +13,7 @@ Ghidra](https://github.com/NationalSecurityAgency/ghidra/releases). We require
 Ghidra version or 11.0 or later, as this is when Ghidra introduced initial
 support for Rust binaries.
 
-You will also need install a stadalone `grease` binary, see
+You will also need install a standalone `grease` binary, see
 [Installation](install.md).
 
 You may optionally specify the path to your `grease` binary by setting the
