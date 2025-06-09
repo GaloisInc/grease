@@ -31,11 +31,46 @@ There are a few overrides that are only available in S-expression files
 ```
 
 The bytes created using `fresh-bytes` will be concretized and printed to the
-terminal if GREASE finds a possible bug. `fresh-bytes` can be used to create
-overrides for functions that do I/O, such as the following basic override for
-`recv`:
+terminal if GREASE finds a possible bug.
+
+`fresh-bytes` can be used to create overrides for functions that do I/O, such
+as the following basic override for `recv`, shown for x86_64 and LLVM:
+
 ```
-; Basic override for `recv`.
+; Basic x86_64 override for `recv`.
+;
+; Ignores `socket` and `flags`, always reads exactly `length` bytes.
+
+(declare @fresh-bytes ((name (String Unicode)) (num (Bitvector 64))) (Vector (Bitvector 8)))
+
+; `man 2 recv`: ssize_t recv(int socket, void *buffer, size_t length, int flags)
+(defun @recv ((socket (Ptr 64)) (buffer (Ptr 64)) (length (Ptr 64)) (flags (Ptr 64))) (Ptr 64)
+  (registers
+    ($ctr (Bitvector 64))  ; loop counter (going down)
+    ($idx Nat)             ; index into vector of bytes
+    ($ptr (Ptr 64)))       ; pointer to write the next byte into
+  (start start:
+    (let length-bv (pointer-to-bits length))
+    (let bytes (funcall @fresh-bytes "recv" length-bv))
+
+    (set-register! $ctr length-bv)
+    (set-register! $idx 0)
+    (set-register! $ptr buffer)
+    (jump loop:))
+  (defblock loop:
+    (let byte (vector-get bytes $idx))
+    (pointer-write (Bitvector 8) le $ptr byte)
+
+    (set-register! $ctr (- $ctr (bv 64 1)))
+    (set-register! $idx (+ $idx 1))
+    (let ptr (pointer-add $ptr (bv 64 1)))
+    (set-register! $ptr ptr)
+    (branch (equal? $ctr (bv 64 0)) end: loop:))
+  (defblock end:
+    (return length)))
+```
+```
+; Basic LLVM override for `recv`.
 ;
 ; Ignores `socket` and `flags`. Always reads exactly `length` bytes.
 
@@ -43,12 +78,29 @@ overrides for functions that do I/O, such as the following basic override for
 
 ; `man 2 recv`: ssize_t recv(int socket, void *buffer, size_t length, int flags)
 (defun @recv ((socket (Ptr 32)) (buffer (Ptr 64)) (length (Ptr 64)) (flags (Ptr 32))) (Ptr 64)
+  (registers
+    ($ctr (Bitvector 64))  ; loop counter (going down)
+    ($idx Nat)             ; index into vector of bytes
+    ($ptr (Ptr 64)))       ; pointer to write the next byte into
   (start start:
     (let length-bv (ptr-offset 64 length))
     (let bytes (funcall @fresh-bytes "recv" length-bv))
-    (let byte (vector-get bytes 0))
+
+    (set-register! $ctr length-bv)
+    (set-register! $idx 0)
+    (set-register! $ptr buffer)
+    (jump loop:))
+  (defblock loop:
+    (let byte (vector-get bytes $idx))
     (let byte-ptr (ptr 8 0 byte))
-    (store none i8 buffer byte-ptr)
+    (store none i8 $ptr byte-ptr)
+
+    (set-register! $ctr (- $ctr (bv 64 1)))
+    (set-register! $idx (+ $idx 1))
+    (let ptr (ptr-add-offset $ptr (bv 64 1)))
+    (set-register! $ptr ptr)
+    (branch (equal? $ctr (bv 64 0)) end: loop:))
+  (defblock end:
     (return length)))
 ```
 
