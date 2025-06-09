@@ -40,3 +40,24 @@ values in `R0` and `R1`:
 For more information about this struct, see [the Macaw documentation].
 
 [the Macaw documentation]: https://github.com/GaloisInc/macaw/blob/master/doc/Design.md#translation
+
+## Register names
+
+Each extension to the Crucible S-expression language has its own documentation,
+but for the sake of convenience we reproduce the register naming schemes here:
+
+- [AArch32][macaw-aarch32-syntax]:
+  - General purpose registers: `r0`, ..., `r10`, `fp` (AKA `r11`), `ip` (AKA `r12`), `sp` (AKA `r13`), and `lr` (AKA `r14`)
+  - Floating-point registers: `v0`, ..., `v31`
+- [PowerPC][macaw-ppc-syntax]:
+  - General purpose registers: `ip`, `lnk`, `ctr`, `xer`, `cr`, `fpscr`, `vscr`, `r0`, ..., `r31`
+  - Floating-point registers: `f0`, ..., `f31`
+- [x86_64][macaw-x86-syntax]:
+  - General purpose registers: `rip`, `rax`, `rbx`, `rcx`, `rdx`, `rsp`, `rbp`, `rsi`, `rdi`, `r8`, ..., `r15`
+  - Floating-point registers: (no syntax)
+
+Each extension exports `get-reg` and `set-reg` operations, as shown above for AArch32.
+
+[macaw-aarch32-syntax]: https://github.com/GaloisInc/macaw/tree/master/macaw-aarch32-syntax
+[macaw-ppc-syntax]: https://github.com/GaloisInc/macaw/tree/master/macaw-ppc-syntax
+[macaw-x86-syntax]: https://github.com/GaloisInc/macaw/tree/master/macaw-x86-syntax
