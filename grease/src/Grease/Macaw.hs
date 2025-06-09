@@ -424,6 +424,8 @@ memConfigWithHandles ::
   , ?memOpts :: Mem.MemOptions
   , Mem.HasLLVMAnn sym
   , HasGreaseSimulatorState p sym arch
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , HasToConcretize p
   ) =>
   bak ->
   GreaseLogAction ->

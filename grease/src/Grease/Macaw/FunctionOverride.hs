@@ -4,6 +4,7 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 -}
 
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ImplicitParams #-}
 
@@ -17,10 +18,10 @@ module Grease.Macaw.FunctionOverride
   , mkMacawOverrideMap
   , registerMacawSexpProgForwardDeclarations
   , registerMacawOvForwardDeclarations
+  , lookupMacawForwardDeclarationOverride
   ) where
 
 import Control.Lens ((^.))
-import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Foldable qualified as Foldable
 import Data.List.NonEmpty qualified as NE
@@ -34,7 +35,7 @@ import Data.Proxy (Proxy(..))
 import Data.Sequence qualified as Seq
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.FunctionOverride.SExp (tryBindTypedOverride, freshBytesOverride)
+import Grease.FunctionOverride.SExp qualified as SExp
 import Grease.Macaw.Arch
 import Grease.Macaw.SimulatorState
 import Grease.Skip (registerSkipOverride)
@@ -261,7 +262,7 @@ registerMacawOvForwardDeclarations ::
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
-  , Mem.HasPtrWidth w
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
   ) =>
   bak ->
@@ -282,7 +283,7 @@ registerMacawForwardDeclarations ::
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
-  , Mem.HasPtrWidth w
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
   ) =>
   bak ->
@@ -298,21 +299,72 @@ registerMacawForwardDeclarations ::
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerMacawForwardDeclarations bak funOvs cannotResolve fwdDecs =
   Foldable.forM_ (Map.toList fwdDecs) $ \(decName, C.SomeHandle hdl) ->
-    case Map.lookup decName funOvs of
-      Nothing ->
-        -- These overrides are *only* callable from S-expression files with
-        -- forward-declarations of them.
-        case decName of
-          "fresh-bytes" -> do
-            ok <- tryBindTypedOverride hdl (freshBytesOverride ?ptrWidth)
-            Monad.unless ok (cannotResolve decName hdl)
-          _ -> cannotResolve decName hdl
-      Just mfo -> do
-        let someForwardedOv = mfoSomeFunctionOverride mfo
-            forwardedOv =
-              Stubs.mkForwardDeclarationOverride
-                bak
-                -- We don't use parent overrides, hence the []
-                (someForwardedOv NE.:| [])
-                decName hdl
-        C.bindFnHandle hdl (C.UseOverride forwardedOv)
+    registerMacawForwardDeclaration bak funOvs cannotResolve decName hdl
+
+-- | Redirect handles for forward declarations in an S-expression file to
+-- actually call the corresponding Macaw overrides. If a forward declaration
+-- name cannot be resolved to an override, then perform the supplied action.
+registerMacawForwardDeclaration ::
+  ( C.IsSymBackend sym bak
+  , sym ~ W4.ExprBuilder scope st fs
+  , bak ~ C.OnlineBackend solver scope st fs
+  , W4.OnlineSolver solver
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , ToConc.HasToConcretize p
+  ) =>
+  bak ->
+  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch)
+    {- ^ The map of public function names to their overrides. -} ->
+  (forall args ret.
+    W4.FunctionName ->
+    C.FnHandle args ret ->
+    C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ())
+    {- ^ What to do when a forward declaration cannot be resolved. -} ->
+  W4.FunctionName
+    {-^ Name of the forward declaration -} ->
+  C.FnHandle args' ret'
+    {-^ Handle to bind -} ->
+  C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
+registerMacawForwardDeclaration bak funOvs cannotResolve decName hdl =
+  case lookupMacawForwardDeclarationOverride bak funOvs decName hdl of
+    Nothing -> cannotResolve decName hdl
+    Just ov -> C.bindFnHandle hdl (C.UseOverride ov)
+
+-- | Lookup an override for a function handle from a forward declaration
+lookupMacawForwardDeclarationOverride ::
+  forall p sym bak arch scope st fs solver args ret.
+  ( C.IsSymBackend sym bak
+  , sym ~ W4.ExprBuilder scope st fs
+  , bak ~ C.OnlineBackend solver scope st fs
+  , W4.OnlineSolver solver
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , ToConc.HasToConcretize p
+  ) =>
+  bak ->
+  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch)
+    {- ^ The map of public function names to their overrides. -} ->
+  W4.FunctionName
+    {-^ Name of the forward declaration -} ->
+  C.FnHandle args ret
+    {-^ Handle to bind -} ->
+  Maybe (C.Override p sym (Symbolic.MacawExt arch) args ret)
+lookupMacawForwardDeclarationOverride bak funOvs decName hdl =
+  case Map.lookup decName funOvs of
+    Nothing ->
+      -- These overrides are *only* callable from S-expression files with
+      -- forward-declarations of them.
+      case decName of
+        "fresh-bytes" -> do
+          let ov = SExp.freshBytesOverride @_ @p @sym @(Symbolic.MacawExt arch) ?ptrWidth
+          (C.Refl, C.Refl) <- SExp.checkTypedOverrideHandleCompat hdl ov
+          Just (C.runTypedOverride (C.handleName hdl) ov)
+        _ -> Nothing
+    Just mfo -> do
+      let someForwardedOv = mfoSomeFunctionOverride mfo
+          forwardedOv =
+            Stubs.mkForwardDeclarationOverride
+              bak
+              -- We don't use parent overrides, hence the []
+              (someForwardedOv NE.:| [])
+              decName hdl
+      Just forwardedOv
