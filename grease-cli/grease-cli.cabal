@@ -27,9 +27,11 @@ common shared
   build-depends: base >= 4.17 && < 4.20
 
   -- See doc/style.md
+  --
+  -- We can't use `-Werror=prepositive...` because of ndmitchell/ghcid#358.
   ghc-options:
     -Werror=missing-export-lists
-    -Werror=prepositive-qualified-module
+    -Wprepositive-qualified-module
 
   -- Specifying -Wall and -Werror can cause the project to fail to build on
   -- newer versions of GHC simply due to new warnings being added to -Wall. To
