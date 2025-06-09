@@ -575,9 +575,13 @@ useMacawFunctionOverride ::
   MacawFunctionOverride p sym arch ->
   C.SimState p sym (Symbolic.MacawExt arch) r f a ->
   IO (MacawFnHandle arch, C.SimState p sym (Symbolic.MacawExt arch) r f a)
-useMacawFunctionOverride bak la halloc arch allOvs
-      (MacawFunctionOverride publicOvHdl publicOv (Stubs.SomeFunctionOverride fnOv)) st0 =
- do let C.FnBindings fnHdlMap0 = st0 ^. C.stateContext . C.functionBindings
+useMacawFunctionOverride bak la halloc arch allOvs mOv st0 =
+ do MacawFunctionOverride
+      { mfoPublicFnHandle = publicOvHdl
+      , mfoPublicOverride = publicOv
+      , mfoSomeFunctionOverride = Stubs.SomeFunctionOverride fnOv
+      } <- pure mOv
+    let C.FnBindings fnHdlMap0 = st0 ^. C.stateContext . C.functionBindings
         fnOvName = Stubs.functionName fnOv
     doLog la $ Diag.FunctionOverride fnOvName
     fnHdlMap1 <- extendHandleMap bak allOvs fnOv fnHdlMap0
