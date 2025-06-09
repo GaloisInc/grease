@@ -54,7 +54,7 @@ In the context of GREASE, "memory" may refer to:
 - DWARF: This is not an acronym, but is a binary format for debugging information designed for use with ELF
 - ELF: Executable and Linkable Format
 - GHA: GitHub Actions
-- GHC: Haskell compiler
+- GHC: Glasgow Haskell compiler
 - GOT: Global offset table
 - IR: Intermediate representation, usually of a compiler (e.g., LLVM IR)
 - ISA: Instruction set architecture, e.g., AArch32 or x86_64
