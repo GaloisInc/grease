@@ -2,6 +2,12 @@
 
 module Grease.Macaw.SetupHook
   ( SetupHook(..)
+  , registerOverrideCfgs
+  , registerOverrideForwardDeclarations
+  , registerOverrideHandles
+  , registerSyntaxCfgs
+  , registerSyntaxForwardDeclarations
+  , registerSyntaxHandles
   , syntaxSetupHook
   , binSetupHook
   ) where
@@ -51,6 +57,120 @@ newtype SetupHook sym arch
       Map.Map WF.FunctionName (MacawFunctionOverride p sym arch) ->
       LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ())
 
+-- | Register overrides, both user-defined ones and ones that are hard-coded
+-- into GREASE itself.
+registerOverrideCfgs ::
+  Map.Map WF.FunctionName (MacawFunctionOverride p sym arch) ->
+  LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+registerOverrideCfgs funOvs =
+  Monad.forM_ (Map.elems funOvs) $ \mfo -> do
+    let publicOvHdl = GMFO.mfoPublicFnHandle mfo
+        publicOv = GMFO.mfoPublicOverride mfo
+    Stubs.SomeFunctionOverride fnOv <- pure $ GMFO.mfoSomeFunctionOverride mfo
+    LCS.bindFnHandle publicOvHdl (LCS.UseOverride publicOv)
+    let auxFns = Stubs.functionAuxiliaryFnBindings fnOv
+    Monad.forM_ auxFns $ \(LCS.FnBinding auxHdl auxSt) -> LCS.bindFnHandle auxHdl auxSt
+
+-- | Redirect function handles from forward declarations appearing in
+-- 'MacawFunctionOverride's to their implementations.
+registerOverrideForwardDeclarations ::
+  ( LCLM.HasPtrWidth (ArchAddrWidth arch)
+  , LCB.IsSymBackend sym bak
+  , WPO.OnlineSolver solver
+  , sym ~ WEB.ExprBuilder scope st fs
+  , bak ~ LCB.OnlineBackend solver scope st fs
+  , HasToConcretize p
+  ) =>
+  bak ->
+  Map.Map WF.FunctionName (MacawFunctionOverride p sym arch) ->
+  LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+registerOverrideForwardDeclarations bak funOvs =
+  Monad.forM_ (Map.elems funOvs) $ \mfo ->
+    case GMFO.mfoSomeFunctionOverride mfo of
+      Stubs.SomeFunctionOverride fnOv ->
+        GMFO.registerMacawOvForwardDeclarations bak funOvs (Stubs.functionForwardDeclarations fnOv)
+
+-- | Register all handles from a 'MacawFunctionOverride'.
+--
+-- Calls 'registerOverrides' and 'registerOverrideForwardDeclarations'.
+registerOverrideHandles ::
+  ( LCLM.HasPtrWidth (ArchAddrWidth arch)
+  , LCB.IsSymBackend sym bak
+  , WPO.OnlineSolver solver
+  , sym ~ WEB.ExprBuilder scope st fs
+  , bak ~ LCB.OnlineBackend solver scope st fs
+  , HasToConcretize p
+  ) =>
+  bak ->
+  Map.Map WF.FunctionName (MacawFunctionOverride p sym arch) ->
+  LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+registerOverrideHandles bak funOvs = do
+  registerOverrideCfgs funOvs
+  registerOverrideForwardDeclarations bak funOvs
+
+-- | Register defined functions from an S-expression program
+-- ('CSyn.ParsedProgram').
+registerSyntaxCfgs ::
+  DMS.SymArchConstraints arch =>
+  CSyn.ParsedProgram (DMS.MacawExt arch) ->
+  LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+registerSyntaxCfgs prog =
+  Monad.forM_ (CSyn.parsedProgCFGs prog) $ \(LCCR.AnyCFG defCfg) -> do
+    LCCC.SomeCFG defSsa <- pure $ toSSA defCfg
+    -- This could probably be a helper defined in Crucible...
+    let bindCfg c = LCS.bindFnHandle (LCCC.cfgHandle c) (LCS.UseCFG c (postdomInfo c))
+    bindCfg defSsa
+
+-- | Redirect function handles from forward declarations appearing in an
+-- S-expression program ('CSyn.ParsedProgram') to their implementations.
+registerSyntaxForwardDeclarations ::
+  ( LCLM.HasPtrWidth (ArchAddrWidth arch)
+  , DMS.SymArchConstraints arch
+  , sym ~ WEB.ExprBuilder scope st fs
+  , bak ~ LCB.OnlineBackend solver scope st fs
+  , LCLM.HasLLVMAnn sym
+  , LCB.IsSymBackend sym bak
+  , WPO.OnlineSolver solver
+  , HasToConcretize p
+  , ?memOpts :: LCLM.MemOptions
+  ) =>
+  bak ->
+  GreaseLogAction ->
+  DataLayout ->
+  LCS.GlobalVar LCLM.Mem ->
+  -- | Map of names of overridden functions to their implementations
+  Map.Map WF.FunctionName (MacawFunctionOverride p sym arch) ->
+  CSyn.ParsedProgram (DMS.MacawExt arch) ->
+  LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+registerSyntaxForwardDeclarations bak la dl mvar funOvs prog =
+  GMFO.registerMacawSexpProgForwardDeclarations bak la dl mvar funOvs (CSyn.parsedProgForwardDecs prog)
+
+-- | Register all handles from a an S-expression program ('CSyn.ParsedProgram').
+--
+-- Calls 'registerSyntaxCfgs' and 'registerSyntaxForwardDeclarations'.
+registerSyntaxHandles :: 
+  ( LCLM.HasPtrWidth (ArchAddrWidth arch)
+  , DMS.SymArchConstraints arch
+  , sym ~ WEB.ExprBuilder scope st fs
+  , bak ~ LCB.OnlineBackend solver scope st fs
+  , LCLM.HasLLVMAnn sym
+  , LCB.IsSymBackend sym bak
+  , WPO.OnlineSolver solver
+  , HasToConcretize p
+  , ?memOpts :: LCLM.MemOptions
+  ) =>
+  bak ->
+  GreaseLogAction ->
+  DataLayout ->
+  LCS.GlobalVar LCLM.Mem ->
+  -- | Map of names of overridden functions to their implementations
+  Map.Map WF.FunctionName (MacawFunctionOverride p sym arch) ->
+  CSyn.ParsedProgram (DMS.MacawExt arch) ->
+  LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+registerSyntaxHandles bak la dl mvar funOvs prog = do
+  registerSyntaxCfgs prog
+  registerSyntaxForwardDeclarations bak la dl mvar funOvs prog
+
 -- | A 'SetupHook' for Macaw CFGs from S-expression programs.
 syntaxSetupHook ::
   ( LCLM.HasPtrWidth (ArchAddrWidth arch)
@@ -64,34 +184,15 @@ syntaxSetupHook ::
   SetupHook sym arch
 syntaxSetupHook la dl cfgs prog =
   SetupHook $ \bak mvar funOvs -> do
-    -- Register overrides, both user-defined ones and ones that are
-    -- hard-coded into GREASE itself.
-    Monad.forM_ (Map.elems funOvs) $ \mfo -> do
-      let publicOvHdl = GMFO.mfoPublicFnHandle mfo
-          publicOv = GMFO.mfoPublicOverride mfo
-      Stubs.SomeFunctionOverride fnOv <- pure $ GMFO.mfoSomeFunctionOverride mfo
-      LCS.bindFnHandle publicOvHdl (LCS.UseOverride publicOv)
-      let auxFns = Stubs.functionAuxiliaryFnBindings fnOv
-      Monad.forM_ auxFns $ \(LCS.FnBinding auxHdl auxSt) -> LCS.bindFnHandle auxHdl auxSt
+    registerOverrideHandles bak funOvs
+    registerSyntaxHandles bak la dl mvar funOvs prog
 
-    -- In addition to binding function handles for the user overrides,
-    -- we must also redirect function handles resulting from parsing
-    -- forward declarations (`declare`) to actually call the overrides.
-    GMFO.registerMacawSexpProgForwardDeclarations bak la dl mvar funOvs (CSyn.parsedProgForwardDecs prog)
-    Monad.forM_ (Map.elems funOvs) $ \mfo ->
-      case GMFO.mfoSomeFunctionOverride mfo of
-        Stubs.SomeFunctionOverride fnOv ->
-          GMFO.registerMacawOvForwardDeclarations bak funOvs (Stubs.functionForwardDeclarations fnOv)
+    -- Redirect function handles resulting from parsing forward declarations
+    -- (`declare`s) to their implementations.
     Monad.forM_ (Map.elems cfgs) $ \entrypointCfgs ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
         GMFO.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
 
-    -- Register defined functions.
-    Monad.forM_ (CSyn.parsedProgCFGs prog) $ \(LCCR.AnyCFG defCfg) -> do
-      LCCC.SomeCFG defSsa <- pure $ toSSA defCfg
-      -- This could probably be a helper defined in Crucible...
-      let bindCfg c = LCS.bindFnHandle (LCCC.cfgHandle c) (LCS.UseCFG c (postdomInfo c))
-      bindCfg defSsa
 
 -- | A 'SetupHook' for Macaw CFGs from binaries.
 --
