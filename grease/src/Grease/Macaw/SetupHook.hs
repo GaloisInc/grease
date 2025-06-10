@@ -21,7 +21,6 @@ import Grease.Diagnostic (GreaseLogAction)
 import Grease.Entrypoint qualified as GE
 import Grease.Macaw.FunctionOverride as GMFO
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
-import Lang.Crucible.Analysis.Postdom (postdomInfo)
 import Lang.Crucible.Backend qualified as LCB
 import Lang.Crucible.Backend.Online qualified as LCB
 import Lang.Crucible.CFG.Core qualified as LCCC
@@ -117,9 +116,7 @@ registerSyntaxCfgs ::
 registerSyntaxCfgs prog =
   Monad.forM_ (CSyn.parsedProgCFGs prog) $ \(LCCR.AnyCFG defCfg) -> do
     LCCC.SomeCFG defSsa <- pure $ toSSA defCfg
-    -- This could probably be a helper defined in Crucible...
-    let bindCfg c = LCS.bindFnHandle (LCCC.cfgHandle c) (LCS.UseCFG c (postdomInfo c))
-    bindCfg defSsa
+    LCS.bindCFG defSsa
 
 -- | Redirect function handles from forward declarations appearing in an
 -- S-expression program ('CSyn.ParsedProgram') to their implementations.
