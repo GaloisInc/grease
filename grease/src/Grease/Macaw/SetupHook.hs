@@ -1,0 +1,119 @@
+{-# LANGUAGE ImplicitParams #-}
+
+module Grease.Macaw.SetupHook
+  ( SetupHook(..)
+  , syntaxSetupHook
+  , binSetupHook
+  ) where
+
+import Control.Monad qualified as Monad
+import Data.Macaw.CFG.Core (ArchAddrWidth)
+import Data.Macaw.Symbolic qualified as DMS
+import Data.Map.Strict qualified as Map
+import Grease.Concretize.ToConcretize (HasToConcretize)
+import Grease.Diagnostic (GreaseLogAction)
+import Grease.Entrypoint qualified as GE
+import Grease.Macaw.FunctionOverride as GMFO
+import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
+import Lang.Crucible.Analysis.Postdom (postdomInfo)
+import Lang.Crucible.Backend qualified as LCB
+import Lang.Crucible.Backend.Online qualified as LCB
+import Lang.Crucible.CFG.Core qualified as LCCC
+import Lang.Crucible.CFG.Reg qualified as LCCR
+import Lang.Crucible.CFG.SSAConversion (toSSA)
+import Lang.Crucible.LLVM.DataLayout (DataLayout)
+import Lang.Crucible.LLVM.MemModel qualified as LCLM
+import Lang.Crucible.Simulator qualified as LCS
+import Lang.Crucible.Syntax.Concrete qualified as CSyn
+import Stubs.FunctionOverride qualified as Stubs
+import What4.Expr.Builder qualified as WEB
+import What4.FunctionName qualified as WF
+import What4.Protocol.Online qualified as WPO
+
+-- | Hook to run before executing a CFG.
+--
+-- Note that @sym@ is a type parameter so that users can define 'SetupHook's
+-- that reference a fixed @sym@ type. Same with @arch@.
+newtype SetupHook sym arch
+  = SetupHook
+    (forall bak rtp a r solver scope st fs p.
+      ( LCB.IsSymBackend sym bak
+      , sym ~ WEB.ExprBuilder scope st fs
+      , bak ~ LCB.OnlineBackend solver scope st fs
+      , WPO.OnlineSolver solver
+      , LCLM.HasLLVMAnn sym
+      , HasGreaseSimulatorState p sym arch
+      , HasToConcretize p
+      ) =>
+      bak ->
+      LCS.GlobalVar LCLM.Mem ->
+      -- Map of names of overridden functions to their implementations
+      Map.Map WF.FunctionName (MacawFunctionOverride p sym arch) ->
+      LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ())
+
+-- | A 'SetupHook' for Macaw CFGs from S-expression programs.
+syntaxSetupHook ::
+  ( LCLM.HasPtrWidth (ArchAddrWidth arch)
+  , DMS.SymArchConstraints arch
+  , ?memOpts :: LCLM.MemOptions
+  ) =>
+  GreaseLogAction ->
+  DataLayout ->
+  Map.Map GE.Entrypoint (GE.EntrypointCfgs (LCCR.AnyCFG (DMS.MacawExt arch))) ->
+  CSyn.ParsedProgram (DMS.MacawExt arch) ->
+  SetupHook sym arch
+syntaxSetupHook la dl cfgs prog =
+  SetupHook $ \bak mvar funOvs -> do
+    -- Register overrides, both user-defined ones and ones that are
+    -- hard-coded into GREASE itself.
+    Monad.forM_ (Map.elems funOvs) $ \mfo -> do
+      let publicOvHdl = GMFO.mfoPublicFnHandle mfo
+          publicOv = GMFO.mfoPublicOverride mfo
+      Stubs.SomeFunctionOverride fnOv <- pure $ GMFO.mfoSomeFunctionOverride mfo
+      LCS.bindFnHandle publicOvHdl (LCS.UseOverride publicOv)
+      let auxFns = Stubs.functionAuxiliaryFnBindings fnOv
+      Monad.forM_ auxFns $ \(LCS.FnBinding auxHdl auxSt) -> LCS.bindFnHandle auxHdl auxSt
+
+    -- In addition to binding function handles for the user overrides,
+    -- we must also redirect function handles resulting from parsing
+    -- forward declarations (`declare`) to actually call the overrides.
+    GMFO.registerMacawSexpProgForwardDeclarations bak la dl mvar funOvs (CSyn.parsedProgForwardDecs prog)
+    Monad.forM_ (Map.elems funOvs) $ \mfo ->
+      case GMFO.mfoSomeFunctionOverride mfo of
+        Stubs.SomeFunctionOverride fnOv ->
+          GMFO.registerMacawOvForwardDeclarations bak funOvs (Stubs.functionForwardDeclarations fnOv)
+    Monad.forM_ (Map.elems cfgs) $ \entrypointCfgs ->
+      Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
+        GMFO.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
+
+    -- Register defined functions.
+    Monad.forM_ (CSyn.parsedProgCFGs prog) $ \(LCCR.AnyCFG defCfg) -> do
+      LCCC.SomeCFG defSsa <- pure $ toSSA defCfg
+      -- This could probably be a helper defined in Crucible...
+      let bindCfg c = LCS.bindFnHandle (LCCC.cfgHandle c) (LCS.UseCFG c (postdomInfo c))
+      bindCfg defSsa
+
+-- | A 'SetupHook' for Macaw CFGs from binaries.
+--
+-- This setup hook does much less than 'syntaxSetupHook'. We don't need
+-- to register most functions here because that happens incrementally in
+-- 'Grease.Macaw.ResolveCall.lookupFunctionHandle'. S-expression programs, on
+-- the other hand, looks up functions in a different way, so 'syntaxSetupHook'
+-- must eagerly register all functions it might call ahead of time.
+--
+-- The exception to this rule is startup overrides. If a startup override exists
+-- and it contains forward declarations, then we redirect the function handles
+-- to actually call the respective overrides. (Alternatively, we could plumb
+-- the startup overrides' forward declarations into `lookupFunctionHandle`
+-- and register them incrementally, but that is more work. Given that startup
+-- overrides can't invoke anything defined in the main program itself, it's much
+-- less work to register them ahead of time here.)
+binSetupHook ::
+  LCLM.HasPtrWidth (ArchAddrWidth arch) =>
+  Map.Map GE.Entrypoint (GE.MacawEntrypointCfgs arch) ->
+  SetupHook sym arch
+binSetupHook cfgs =
+  SetupHook $ \bak _mvar funOvs ->
+    Monad.forM_ (Map.elems cfgs) $ \(GE.MacawEntrypointCfgs entrypointCfgs _) ->
+      Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
+        GMFO.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs

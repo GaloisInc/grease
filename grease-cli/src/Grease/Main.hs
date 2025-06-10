@@ -113,7 +113,6 @@ import Grease.Heuristic
 import Grease.LLVM qualified as LLVM
 import Grease.LLVM.Overrides qualified as LLVM
 import Grease.Macaw
-import Grease.Macaw qualified as Macaw (SetupHook(..))
 import Grease.Macaw.Arch
 import Grease.Macaw.Arch.AArch32 (armCtx)
 import Grease.Macaw.Arch.PPC32 (ppc32Ctx)
@@ -125,6 +124,7 @@ import Grease.Macaw.Load (LoadedProgram(..), load)
 import Grease.Macaw.Load.Relocation (RelocType(..), elfRelocationMap)
 import Grease.Macaw.PLT
 import Grease.Macaw.RegName (RegName(..), RegNames(..), regNames, getRegName, mkRegName, regNameToString)
+import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
 import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, emptyGreaseSimulatorState)
 import Grease.Main.Diagnostic qualified as Diag
 import Grease.MustFail qualified as MustFail
@@ -178,7 +178,6 @@ import Lumberjack qualified as LJ
 import Prelude (Num(..), fromIntegral, Integral)
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
-import Stubs.FunctionOverride qualified as Stubs
 import System.Directory (Permissions, getPermissions)
 import System.FilePath (FilePath)
 import System.IO (IO)
@@ -940,36 +939,8 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
   let cfgs' = Map.map (\cfg -> MacawEntrypointCfgs cfg Nothing) cfgs
   let memory = MC.emptyMemory (archCtx ^. archInfo . to MI.archAddrWidth)
   let dl = macawDataLayout archCtx
-  let setupHook :: forall sym. SetupHook sym arch
-      setupHook = Macaw.SetupHook $ \bak mvar funOvs -> do
-        -- Register overrides, both user-defined ones and ones that are
-        -- hard-coded into GREASE itself.
-        forM_ (Map.elems funOvs) $ \mfo -> do
-          let publicOvHdl = Macaw.mfoPublicFnHandle mfo
-              publicOv = Macaw.mfoPublicOverride mfo
-          Stubs.SomeFunctionOverride fnOv <- pure $ Macaw.mfoSomeFunctionOverride mfo
-          C.bindFnHandle publicOvHdl (C.UseOverride publicOv)
-          let auxFns = Stubs.functionAuxiliaryFnBindings fnOv
-          forM_ auxFns $ \(C.FnBinding auxHdl auxSt) -> C.bindFnHandle auxHdl auxSt
-
-        -- In addition to binding function handles for the user overrides,
-        -- we must also redirect function handles resulting from parsing
-        -- forward declarations (`declare`) to actually call the overrides.
-        Macaw.registerMacawSexpProgForwardDeclarations bak la dl mvar funOvs (CSyn.parsedProgForwardDecs prog)
-        forM_ (Map.elems funOvs) $ \mfo ->
-          case Macaw.mfoSomeFunctionOverride mfo of
-            Stubs.SomeFunctionOverride fnOv ->
-              Macaw.registerMacawOvForwardDeclarations bak funOvs (Stubs.functionForwardDeclarations fnOv)
-        forM_ (Map.elems cfgs) $ \entrypointCfgs ->
-          forM_ (startupOvForwardDecs <$> entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-            Macaw.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
-
-        -- Register defined functions.
-        forM_ (CSyn.parsedProgCFGs prog) $ \(C.Reg.AnyCFG defCfg) -> do
-          C.SomeCFG defSsa <- pure $ C.toSSA defCfg
-          -- This could probably be a helper defined in Crucible...
-          let bindCfg c = C.bindFnHandle (C.cfgHandle c) (C.UseCFG c (C.postdomInfo c))
-          bindCfg defSsa
+  let setupHook :: forall sym. Macaw.SetupHook sym arch
+      setupHook = Macaw.syntaxSetupHook la dl cfgs prog
   let macawCfgConfig =
         MacawCfgConfig
           { mcDataLayout = dl
@@ -1067,25 +1038,8 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
               }
       pure (entry, MacawEntrypointCfgs entrypointCfgs (Just entryAddr))
 
-  -- This setup hook does much less than the setup hook in simulateMacawSyntax.
-  -- We don't need to register most functions here because that happens
-  -- incrementally in Grease.Macaw.ResolveCall.lookupFunctionHandle.
-  -- simulateMacawSyntax, on the other hand, looks up functions in a different
-  -- way, so it must eagerly register all functions it might call ahead of time.
-  --
-  -- The exception to this rule is startup overrides. If a startup override
-  -- exists and it contains forward declarations, then we redirect the function
-  -- handles to actually call the respective overrides. (Alternatively, we could
-  -- plumb the startup overrides' forward declarations into
-  -- `lookupFunctionHandle` and register them incrementally, but that is more
-  -- work. Given that startup overrides can't invoke anything defined in the
-  -- main program itself, it's much less work to register them ahead of time
-  -- here.)
   let setupHook :: forall sym. SetupHook sym arch
-      setupHook = Macaw.SetupHook $ \bak _mvar funOvs ->
-        forM_ (Map.elems cfgs) $ \(MacawEntrypointCfgs entrypointCfgs _) ->
-          forM_ (startupOvForwardDecs <$> entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-            Macaw.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
+      setupHook = Macaw.binSetupHook cfgs
 
   let macawCfgConfig =
         MacawCfgConfig
