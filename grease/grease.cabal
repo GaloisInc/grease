@@ -202,7 +202,6 @@ library
     Grease.LLVM.Overrides
     Grease.LLVM.Overrides.Declare
     Grease.LLVM.Overrides.Diagnostic
-    -- Grease.LLVM.SetupHook
     Grease.LLVM.SimulatorHooks
     Grease.LLVM.SimulatorHooks.Diagnostic
     Grease.Macaw
