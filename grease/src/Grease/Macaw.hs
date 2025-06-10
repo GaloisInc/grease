@@ -54,8 +54,9 @@ import Grease.Macaw.Arch
 import Grease.Macaw.FunctionOverride
 import Grease.Macaw.Load.Relocation (RelocType(..))
 import Grease.Macaw.ResolveCall qualified as ResolveCall
+import Grease.Macaw.SetupHook (SetupHook(SetupHook))
 import Grease.Macaw.SimulatorHooks
-import Grease.Macaw.SimulatorState
+import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
 import Grease.Options qualified as Opts
 import Grease.Panic (panic)
 import Grease.Setup
@@ -80,27 +81,6 @@ import What4.Expr qualified as W4
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 import What4.Protocol.Online qualified as W4
-
--- | Hook to run before executing a CFG.
---
--- Note that @sym@ is a type parameter so that users can define 'SetupHook's
--- that reference a fixed @sym@ type.
-newtype SetupHook sym arch
-  = SetupHook
-    (forall bak rtp a r solver scope st fs p.
-      ( C.IsSymBackend sym bak
-      , sym ~ W4.ExprBuilder scope st fs
-      , bak ~ C.OnlineBackend solver scope st fs
-      , W4.OnlineSolver solver
-      , Mem.HasLLVMAnn sym
-      , HasGreaseSimulatorState p sym arch
-      , HasToConcretize p
-      ) =>
-      bak ->
-      C.GlobalVar Mem.Mem ->
-      -- Map of names of overridden functions to their implementations
-      Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
-      C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ())
 
 emptyMacawMem ::
   forall (arch :: Type) (sym :: Type) (bak :: Type) (m :: Type -> Type) t st fs.
