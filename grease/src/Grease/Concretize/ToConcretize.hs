@@ -14,6 +14,7 @@ See this thread for a discussion of this choice:
 <https://github.com/GaloisInc/grease/pull/203#discussion_r2132431744>.
 -}
 
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Grease.Concretize.ToConcretize
@@ -40,6 +41,8 @@ import Lang.Crucible.Simulator.ExecutionTree qualified as LCSE
 import Lang.Crucible.Simulator.GlobalState qualified as LCSG
 import Lang.Crucible.Simulator.SymSequence qualified as LCSS
 import Lang.Crucible.Types qualified as LCT
+import What4.Expr.Builder qualified as WEB
+import What4.Expr.GroundEval qualified as WEG
 import What4.Interface qualified as WI
 
 -- | The type of a global variable containing data to be concretized.
@@ -68,19 +71,54 @@ newToConcretize halloc globals = do
   g <- LCCG.freshGlobalVar halloc "to-concretize" knownRepr
   pure (g, LCSG.insertGlobal g LCSS.SymSequenceNil globals)
 
+-- | Like 'Lang.Crucible.Simulator.ExecutionTree.abortedGlobals', but
+-- grounded to a single branch.
+abortedGroundGlobals ::
+  (sym ~ WEB.ExprBuilder t st fs) =>
+  WEG.GroundEvalFn t ->
+  LCS.IntrinsicTypes sym ->
+  LCS.AbortedResult sym ext ->
+  IO (LCSG.SymGlobalState sym)
+abortedGroundGlobals groundFn iTypes =
+  \case
+    LCSE.AbortedExec _ gp -> pure (gp Lens.^. LCSE.gpGlobals)
+    LCSE.AbortedExit _ gp -> pure (gp Lens.^. LCSE.gpGlobals)
+    LCSE.AbortedBranch _loc p rl rr -> do
+      b <- WEG.groundEval groundFn p
+      if b
+      then abortedGroundGlobals groundFn iTypes rl
+      else abortedGroundGlobals groundFn iTypes rr
+
+-- | Like 'Lang.Crucible.Simulator.ExecutionTree.execResultGlobals', but
+-- grounded to a single branch.
+execResultGroundGlobals ::
+  LCB.IsSymInterface sym =>
+  (sym ~ WEB.ExprBuilder t st fs) =>
+  WEG.GroundEvalFn t ->
+  LCSE.ExecResult p sym ext rtp ->
+  IO (LCSG.SymGlobalState sym)
+execResultGroundGlobals groundFn =
+  \case
+    LCSE.FinishedResult _ctx partial -> pure (partial Lens.^. LCSE.partialValue . LCSE.gpGlobals)
+    LCSE.TimeoutResult st -> LCSE.execStateGlobals st
+    LCSE.AbortedResult simCtx aborted ->
+      abortedGroundGlobals groundFn (LCS.ctxIntrinsicTypes simCtx) aborted
+
 -- | Read the value of the global variable of type 'ToConcretizeType' from
 -- a 'C.ExecResult'.
 --
 -- If the global is not present, returns 'C.SymSequenceNil'.
 readToConcretize ::
   LCB.IsSymInterface sym =>
+  (sym ~ WEB.ExprBuilder t st fs) =>
   HasToConcretize p =>
+  WEG.GroundEvalFn t ->
   LCS.ExecResult p sym ext r ->
   IO (LCS.RegValue sym ToConcretizeType)
-readToConcretize result = do
+readToConcretize groundFn result = do
   let simCtx = LCS.execResultContext result
   let toConcVar = simCtx Lens.^. LCS.cruciblePersonality . Lens.to toConcretize
-  globs <- liftIO (LCSE.execResultGlobals result)
+  globs <- liftIO (execResultGroundGlobals groundFn result)
   pure (Maybe.fromMaybe LCSS.SymSequenceNil (LCSG.lookupGlobal toConcVar globs))
 
 -- | Getter for the @'LCS.GlobalVar' 'ToConcretizeType'@ in the
