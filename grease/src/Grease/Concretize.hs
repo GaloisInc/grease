@@ -168,7 +168,9 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
           , concTy = ty
           , concValue = cVal
           }
-  cExtra <- toList <$> liftIO (C.concretizeSymSequence gFn concStruct extra)
+  -- re: reverse: The sequence is a cons-list, so the values appear in
+  -- reverse-chronological (LIFO) order from when they were created.
+  cExtra <- List.reverse . toList <$> liftIO (C.concretizeSymSequence gFn concStruct extra)
   cFs <- traverse (traverse (fmap toWord8 . gFn)) (SymIO.symbolicFiles initFs)
   cMem <- Mem.concMemImpl sym gFn initMem
   cErr <- traverse (\(_, bb) -> Mem.concBadBehavior sym gFn bb) minfo
