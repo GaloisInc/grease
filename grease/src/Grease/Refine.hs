@@ -227,18 +227,19 @@ combiner = C.Combiner $ \mr1 mr2 -> do
 
 -- | How to consume the results of trying to prove a goal. Not exported.
 consumer ::
-  forall ext solver sym bak t st argTys w fm.
+  forall p ext r solver sym bak t st argTys w fm.
   ( C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st fm
   , 16 C.<= w
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth w
+  , ToConc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
   Anns.Annotations sym ext argTys ->
-  C.RegValue sym ToConc.ToConcretizeType ->
+  C.ExecResult p sym ext r ->
   GreaseLogAction ->
   [RefineHeuristic sym bak ext argTys] ->
   -- | Argument names
@@ -247,7 +248,7 @@ consumer ::
   Map.Map (Nonce t C.BaseBoolType) (Mem.CallStack, Mem.BadBehavior sym) ->
   Conc.InitialState sym ext argTys ->
   C.ProofConsumer sym t (ProveRefineResult sym ext argTys)
-consumer bak anns toConc la heuristics argNames argShapes bbMap initState =
+consumer bak anns execResult la heuristics argNames argShapes bbMap initState =
   C.ProofConsumer $ \goal result -> do
     let sym = C.backendGetSym bak
     let lp = C.proofGoal goal
@@ -273,6 +274,7 @@ consumer bak anns toConc la heuristics argNames argShapes bbMap initState =
         doLog la (Diag.SolverGoalPassed (C.simErrorLoc simErr))
         pure ProveSuccess
       C.Disproved groundEvalFn _ -> do
+        toConc <- ToConc.readToConcretize groundEvalFn execResult
         cData <- Conc.makeConcretizedData bak groundEvalFn minfo initState toConc
         doLog la $ Diag.SolverGoalFailed sym lp minfo
         let
@@ -307,6 +309,7 @@ execCfg ::
   , 16 C.<= w
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth w
+  , ToConc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   ) =>
   bak ->
@@ -327,19 +330,20 @@ execCfg bak (LoopBound bound) execFeats initialState = do
 
 -- | Helper, not exported
 proveAndRefine ::
-  forall ext solver sym bak t st argTys w fm.
+  forall p ext r solver sym bak t st argTys w fm.
   ( C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st fm
   , 16 C.<= w
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth w
+  , ToConc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
   Solver ->
   Anns.Annotations sym ext argTys ->
-  C.RegValue sym ToConc.ToConcretizeType ->
+  C.ExecResult p sym ext r ->
   GreaseLogAction ->
   [RefineHeuristic sym bak ext argTys] ->
   -- | Argument names
@@ -349,13 +353,13 @@ proveAndRefine ::
   Map.Map (Nonce t C.BaseBoolType) (Mem.CallStack, Mem.BadBehavior sym) ->
   C.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
-proveAndRefine bak solver anns toConc la heuristics argNames argShapes initState bbMap goals = do
+proveAndRefine bak solver anns execResult la heuristics argNames argShapes initState bbMap goals = do
   -- TODO: Make the timeout configurable at the CLI
   let tout = C.Timeout (C.secondsFromInt 5)
   let sym = C.backendGetSym bak
   let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
   let strat = C.ProofStrategy prover combiner
-  let cons = consumer bak anns toConc la heuristics argNames argShapes bbMap initState
+  let cons = consumer bak anns execResult la heuristics argNames argShapes bbMap initState
   case goals of
     Nothing -> pure ProveSuccess
     Just goals' ->
@@ -397,8 +401,7 @@ execAndRefine bak solver _fm la anns heuristics argNames argShapes initState bbM
   (result, goals) <- liftIO (execCfg bak (LoopBound bound) execFeats initialState)
   doLog la (Diag.ExecutionResult result)
   bbMap <- liftIO (readIORef bbMapRef)
-  toConc <- liftIO (ToConc.readToConcretize result)
-  liftIO (proveAndRefine bak solver anns toConc la heuristics argNames argShapes initState bbMap goals)
+  liftIO (proveAndRefine bak solver anns result la heuristics argNames argShapes initState bbMap goals)
 
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)
