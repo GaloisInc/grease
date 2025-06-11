@@ -109,18 +109,18 @@ However, this *is* possible using `do`-notation. Since our `Some` is just a
 pure value (not a monadic action), we have to "inject" it into the monad using
 `pure`:
 ```haskell
-printWasItJust :: Some Maybe -> IO ()
-printWasItJust someMaybe = do
-  Some x <- pure someMaybe
+printWasItJust :: IO ()
+printWasItJust = do
+  Some x <- pure (makeSome 5)
   -- Again, can use x here, but only polymorphically
   when (isJust x) $
     putStrLn "it was Just"
 ```
 To understand why this works, desugar the `do` notation:
 ```haskell
-printWasItJust :: Some Maybe -> IO ()
-printWasItJust someMaybe =
-  pure someMaybe >>= \(Some x) -> when (isJust x) (putStrLn "it was Just")
+printWasItJust :: IO ()
+printWasItJust =
+  pure (makeSome 5) >>= \(Some x) -> when (isJust x) (putStrLn "it was Just")
 ```
 That's why you might see `do pat <- pure val`.
 
