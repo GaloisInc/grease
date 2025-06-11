@@ -29,6 +29,7 @@
 # Developer documentation
 
 - [Development](dev/dev.md)
+- [Fancy Haskell idioms](dev/haskell-idioms.md)
 - [On-boarding](dev/on-boarding.md)
 - [Glossary](dev/glossary.md)
 - [Practices](dev/practices.md)

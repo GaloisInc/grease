@@ -72,6 +72,11 @@ This is our core dependently-typed programming library.
 - [API documentation on Hackage](https://hackage.haskell.org/package/parameterized-utils)
 - [Simply-typed lambda calculus example](https://github.com/robdockins/param-tlc)
 
+### Idioms
+
+See [Fancy Haskell idioms](haskell-idioms.md) for some examples of idioms that
+arise when doing "fancy" Haskell programming.
+
 ### Try it out!
 
 [Exercises](https://github.com/i-am-tom/haskell-exercises)
