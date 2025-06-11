@@ -12,7 +12,7 @@ emulated with [GADT]s like so:
 {-# LANGUAGE GADTs #-}
 
 data Some f where
-  Some :: f x -> Some f  -- the type does not mention `x`
+  Some :: f x -> Some f  -- the return type does not mention `x`
 ```
 (`Some` is canonically available as [`Data.Parameterized.Some.Some`].) As
 defined above, `Some` has kind `forall k. (k -> Type) -> Type`. What if you want
@@ -64,33 +64,36 @@ foo _x _y = ()
 {-# LANGUAGE GADTs #-}
 
 data Some f where
-  Some :: f x -> Some f  -- the type does not mention `x`
+  Some :: f x -> Some f  -- the return type does not mention `x`
 ```
 (`Some` is canonically available as [`Data.Parameterized.Some.Some`].) To use
-a `Some`, you generally pattern match on it. This brings the captured variable
-into scope (though just as an unconstrained variable, so any code you write
-after the pattern match has to be polymorphic over it).
+a `Some` value, you generally pattern match on it. This brings the captured
+variable into scope (though just as an unconstrained variable, so any code you
+write after the pattern match has to be polymorphic over it).
 ```haskell
-wasItJust :: Some Maybe -> String
-wasItJust someMaybe =
+someLength :: Some [] -> Int
+someLength someList =
   case someMaybe of
-    -- Can use _x here, but have to be completely polymorphic over its type. Not
-    -- really much you *can* do with a value of an unknown type.
-    Some (Just _x) -> "it was Just"
-    Some Nothing -> "it was Nothing"
+    -- Can use l here, but have to be completely polymorphic over the element
+    -- type. We can use `length`, because it is polymorphic enough (it has type
+    -- `forall a. [a] -> Int`).
+    Some l -> length l
 
 main :: IO ()
 main = putStrLn (wasItJust (Some (Just "ok")))
 ```
 Sometimes, we want to bring the variable into scope by pattern-matching on
 the constructor, but we'd rather not use a `case` statement, as it increases
-indentation (e.g., we might be pattern-matching on several `Some`s in a row). We
-can't do this with `let`, because the type variable is only in scope for the RHS
-of the `=`.
+indentation (e.g., we might be pattern-matching on several `Some`s in a row).
+We can't do this with `let`, because the type variable is only in scope for the
+right-hand side of the `=`.
 ```haskell
-wontWork :: Some Maybe -> IO ()
-wontWork someMaybe = do
-  let Some x = someMaybe
+makeSome :: Int -> Some Maybe
+makeSome = _ -- ...
+
+wontWork :: IO ()
+wontWork = do
+  let Some x = makeSome 4
   -- try something with x...
   pure ()
 ```
@@ -140,8 +143,11 @@ showIt (Showable x) = show x  -- pattern matching brings Show a into scope
 main :: IO ()
 main = putStrLn (showIt (Showable "hello"))
 ```
-(Operationally, the GADT constructor holds the vtable for the class.) GHC's
-built-in type equality constraint `~` is often "captured" this way, e.g.,
+(Operationally, the GADT constructor holds the dictionary for
+the class, which is like a C++ vtable, see ["Internals of Type
+Classes"](https://nikivazou.github.io/CMSC498V/lectures/TypeClasses.html)
+for more information.) GHC's built-in type equality constraint `~` is often
+"captured" this way, e.g.,
 ```haskell
 {-# LANGUAGE GADTs #-}
 
@@ -157,11 +163,19 @@ main :: IO ()
 main = putStrLn (isStr IsString "hello")
 ```
 The canonical constructor for capturing equality constraints is called
-[`Data.Type.Equality.Refl`]. Sometimes, we want to bring the constraint into
-scope by pattern-matching on the constructor, but we'd rather not use a `case`
-statement, as it increases indentation (e.g., we might be pattern-matching on
-several `Refl`s in a row). This is possible using `do`-notation and pattern
-matching on a `pure` value, just like with `Some`:
+[`Data.Type.Equality.Refl`]. Note that the above definition of `IsString` is
+equivalent to writing
+```haskell
+data IsString a where
+  IsString :: IsString String
+```
+which more analogous to how `Refl` is defined.
+
+Sometimes, we want to bring the constraint into scope by pattern-matching on
+the constructor, but we'd rather not use a `case` statement, as it increases
+indentation (e.g., we might be pattern-matching on several `Refl`s in a row).
+This is possible using `do`-notation and pattern matching on a `pure` value,
+just like with `Some`:
 ```haskell
 {-# LANGUAGE GADTs #-}
 
