@@ -822,7 +822,7 @@ simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs = do
       let expectedRet = regStructRepr archCtx
       let argTys = C.Reg.cfgArgTypes regCfg
       let ret = C.Reg.cfgReturnType regCfg
-      let url = "https://galoisinc.github.io/grease/sexp.html"
+      let url = "https://galoisinc.github.io/grease/sexp-progs.html"
       let doThrow :: Text.Text -> IO a
           doThrow msg =
             throw (GreaseException (msg <> "\n" <> "For more information, see " <> url))
