@@ -14,32 +14,44 @@ module Grease.FunctionOverride
   ( builtinStubsOverrides
   , basicLLVMOverrides
   , builtinLLVMOverrides
+  , parseOverridesYaml
+  , resolveOverridesYaml
   ) where
 
+import Control.Exception qualified as X
 import Control.Lens ((^.), to)
+import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State (MonadState(..), StateT(..), evalStateT)
+import Data.Aeson qualified as Aeson
+import Data.Aeson.Key qualified as Key
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.BitVector.Sized qualified as BV
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
 import Data.Functor.Identity (Identity(Identity, runIdentity))
 import Data.List qualified as List
 import Data.Macaw.Architecture.Info qualified as MI
+import Data.Macaw.BinaryLoader.ELF qualified as Loader
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Memory.LoadCommon qualified as MML
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map qualified as Map
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (toListFC)
 import Data.Sequence qualified as Seq
 import Data.Set (Set)
 import Data.Set qualified as Set
+import Data.Text qualified as Text
 import Data.Vector qualified as Vec
+import Data.Word (Word64)
+import Data.Yaml qualified as Yaml
 import Grease.Macaw.Arch (ArchContext, archInfo)
 import Grease.Macaw.Memory (loadConcreteString)
 import Grease.Panic qualified as Panic
-import Grease.Utility (OnlineSolverAndBackend, llvmOverrideName)
+import Grease.Utility (GreaseException(..), OnlineSolverAndBackend, llvmOverrideName, tshow)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Intrinsics qualified as Mem
@@ -53,6 +65,7 @@ import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as C
 import Stubs.FunctionOverride qualified as Stubs
 import Text.LLVM.AST qualified as L
+import Text.Read qualified as Read
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 
@@ -615,3 +628,81 @@ callStackChkFail fnName =
     C.assert bak (W4.falsePred sym) err
     loc <- W4.getCurrentProgramLoc sym
     C.abortExecBecause $ C.EarlyExit loc
+
+-----
+-- TODO RGS
+-----
+
+-- TODO RGS: More docs for everything
+-- TODO RGS: Introduce newtypes for the Maps below?
+
+parseOverridesYaml ::
+  FilePath ->
+  IO (Map.Map Word64 W4.FunctionName)
+parseOverridesYaml yamlPath = do
+  res <- Yaml.decodeFileEither yamlPath
+  case res of
+    Left ex -> X.throw $ GreaseException $ Text.pack $ Yaml.prettyPrintParseException ex
+    Right val -> parseFunctionAddressOverrides val
+
+resolveOverridesYaml ::
+  MM.MemWidth w =>
+  MML.LoadOptions ->
+  MM.Memory w ->
+  Set.Set W4.FunctionName ->
+  Map.Map Word64 W4.FunctionName ->
+  IO (Map.Map (MM.MemSegmentOff w) W4.FunctionName)
+resolveOverridesYaml loadOpts mem fnOvsMap =
+    fmap Map.fromList
+  . traverse
+      (\(addr, funName) -> do
+        let addrWord = MM.memWord $ addr + loadOffset
+        addrSegOff <-
+          case Loader.resolveAbsoluteAddress mem addrWord of
+            Just addrSegOff -> pure addrSegOff
+            Nothing -> X.throw $ GreaseException $
+              "Could not resolve " <> tshow addrWord <>
+              "to an address in the binary."
+        unless (Set.member funName fnOvsMap) $
+          X.throw $ GreaseException $
+            "Could not find an override for a function named '" <>
+            W4.functionName funName <> "'"
+        pure (addrSegOff, funName))
+  . Map.toList
+  where
+    loadOffset = fromMaybe 0 $ MML.loadOffset loadOpts
+
+parseFunctionAddressOverrides ::
+  Aeson.Value ->
+  IO (Map.Map Word64 W4.FunctionName)
+parseFunctionAddressOverrides val = do
+  obj <- asObject val
+  case KeyMap.lookup "function address overrides" obj of
+    Nothing -> pure mempty
+    Just funAddrOvs -> do
+      funAddrOvsObj <- asObject funAddrOvs
+      Map.fromList <$>
+        traverse
+          (\(addrKey, funName) -> do
+            addr <-
+              case Read.readMaybe (Key.toString addrKey) of
+                Just addr -> pure addr
+                -- TODO RGS: Make this error message a bit better
+                Nothing -> X.throw $ GreaseException "Expected address in overrides YAML file"
+            funNameText <- asString funName
+            pure (addr, W4.functionNameFromText funNameText))
+          (KeyMap.toList funAddrOvsObj)
+
+-- | Assert that a JSON 'Aeson.Value' is a 'Aeson.String'. If this is the case,
+-- return the underlying text. Otherwise, throw an exception.
+asString :: Aeson.Value -> IO Text.Text
+asString (Aeson.String t) = pure t
+-- TODO RGS: Make this error message a bit better
+asString _ = X.throw $ GreaseException "Expected string in overrides YAML file"
+
+-- | Assert that a JSON 'Aeson.Value' is an 'Aeson.Object'. If this is the case,
+-- return the underlying object. Otherwise, throw an exception.
+asObject :: Aeson.Value -> IO Aeson.Object
+asObject (Aeson.Object o) = pure o
+-- TODO RGS: Make this error message a bit better
+asObject _ = X.throw $ GreaseException "Expected object in overrides YAML file"

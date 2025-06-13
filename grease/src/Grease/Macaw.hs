@@ -420,15 +420,17 @@ memConfigWithHandles ::
   Map.Map W4.FunctionName (MC.ArchSegmentOff arch) ->
   -- | Map of names of overridden functions to their implementations
   Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
+  -- | TODO RGS: Docs
+  Map.Map (MC.ArchSegmentOff arch) W4.FunctionName ->
   -- | Map of names of overridden syscalls to their implementations
   Map.Map W4.FunctionName (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
   Opts.ErrorSymbolicFunCalls ->
   Opts.ErrorSymbolicSyscalls ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem
-memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs syscallOvs errorSymbolicFunCalls errorSymbolicSyscalls memCfg =
+memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs errorSymbolicFunCalls errorSymbolicSyscalls memCfg =
   memCfg
-  { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls lfhd
+  { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls lfhd
   , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd
   }
   where

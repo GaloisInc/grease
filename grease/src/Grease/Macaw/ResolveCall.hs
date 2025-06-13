@@ -246,13 +246,15 @@ lookupFunctionHandleResult ::
   Map.Map W4.FunctionName (MC.ArchSegmentOff arch) ->
   -- | Map of names of overridden functions to their implementations
   Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
+  -- | TODO RGS: Docs
+  Map.Map (MC.ArchSegmentOff arch) W4.FunctionName ->
   ErrorSymbolicFunCalls ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
   Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
   IO ( LookupFunctionHandleResult p sym arch
      , C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
      )
-lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls st regs = do
+lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls st regs = do
   -- First, obtain the address contained in the instruction pointer.
   symAddr0 <- (arch ^. archGetIP) regs
   -- Next, attempt to concretize the address. We must do this because it is
@@ -294,6 +296,15 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
           pure (SkippedFunctionCall (InvalidAddress (BV.ppHex knownNat bv)), st)
         Just funcAddrOff -> go funcAddrOff
   where
+    lookupOv ::
+      W4.FunctionName ->
+      MC.ArchSegmentOff arch ->
+      Maybe (MacawFunctionOverride p sym arch)
+    lookupOv funcName funcAddrOff =
+      case Map.lookup funcAddrOff funAddrOvs of
+        Just ovName -> Map.lookup ovName funOvs
+        Nothing -> Map.lookup funcName funOvs
+
     -- Given a resolved function address, compute a
     -- 'LookupFunctionHandleResult'. This function is recursive because we may
     -- need to handle PLT stubs that jump to other addresses within the same
@@ -309,7 +320,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
       | Just hdl <- Map.lookup funcAddrOff (st ^. stateDiscoveredFnHandles) =
         pure
           ( CachedFnHandle funcAddrOff hdl $
-            Map.lookup (C.handleName hdl) funOvs
+            lookupOv (C.handleName hdl) funcAddrOff
           , st
           )
 
@@ -321,7 +332,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
            -> do doLog la $ Diag.PltCall pltStubName funcAddrOff pltCallAddr
                  go pltCallAddr
            |  otherwise
-           -> case Map.lookup pltStubName funOvs of
+           -> case lookupOv pltStubName funcAddrOff of
                 -- ...otherwise, if there is an override for the PLT stub,
                 -- use it...
                 Just macawFnOv ->
@@ -353,7 +364,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
           discoverFuncAddr la halloc arch memory symMap pltStubs funcAddrOff st
         pure
           ( DiscoveredFnHandle funcAddrOff hdl $
-            Map.lookup (C.handleName hdl) funOvs
+            lookupOv (C.handleName hdl) funcAddrOff
           , st'
           )
 
@@ -378,12 +389,14 @@ lookupFunctionHandle ::
   Map.Map W4.FunctionName (MC.ArchSegmentOff arch) ->
   -- | Map of names of overridden functions to their implementations
   Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
+  -- | TODO RGS: Docs
+  Map.Map (MC.ArchSegmentOff arch) W4.FunctionName ->
   ErrorSymbolicFunCalls ->
   LookupFunctionHandleDispatch p sym arch ->
   Symbolic.LookupFunctionHandle p sym arch
-lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
+lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
   let LookupFunctionHandleDispatch dispatch = lfhd
-  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls st regs
+  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls st regs
   dispatch st' mem regs res
 
 -- | Dispatch on the result of looking up a syscall override. The

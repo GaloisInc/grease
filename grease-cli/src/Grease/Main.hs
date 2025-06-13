@@ -108,7 +108,7 @@ import Grease.Cursor.Pointer ()
 import Grease.Diagnostic
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint
-import Grease.FunctionOverride (builtinLLVMOverrides, builtinStubsOverrides)
+import Grease.FunctionOverride (builtinLLVMOverrides, builtinStubsOverrides, parseOverridesYaml, resolveOverridesYaml)
 import Grease.Heuristic
 import Grease.LLVM qualified as LLVM
 import Grease.LLVM.Overrides qualified as LLVM
@@ -620,9 +620,11 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         let builtinOvs = builtinStubsOverrides bak mvar memCfg0 archCtx fs
         let userOvPaths = simOverrides simOpts
         fnOvsMap <- liftIO $ Macaw.mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
+        fnAddrOvsRaw <- liftIO $ Map.unions <$> traverse parseOverridesYaml (simOverridesYaml simOpts)
+        fnAddrOvs <- liftIO $ resolveOverridesYaml loadOpts memory (Map.keysSet fnOvsMap) fnAddrOvsRaw
         let errorSymbolicFunCalls = simErrorSymbolicFunCalls simOpts
         let errorSymbolicSyscalls = simErrorSymbolicSyscalls simOpts
-        let memCfg1 = memConfigWithHandles bak la halloc archCtx memory symMap pltStubs dynFunMap fnOvsMap builtinGenericSyscalls errorSymbolicFunCalls errorSymbolicSyscalls memCfg0
+        let memCfg1 = memConfigWithHandles bak la halloc archCtx memory symMap pltStubs dynFunMap fnOvsMap fnAddrOvs builtinGenericSyscalls errorSymbolicFunCalls errorSymbolicSyscalls memCfg0
         evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @arch (archCtx ^. archVals) sym pure
         let macawExtImpl = Symbolic.macawExtensions evalFn mvar memCfg1
         let ssaCfgHdl = C.cfgHandle ssaCfg'
@@ -739,6 +741,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
     MacawCfgConfig
       { mcDataLayout = dl
       , mcMprotectAddr = mprotectAddr
+      , mcLoadOptions = loadOpts
       , mcSymMap = symMap
       , mcPltStubs = pltStubs
       , mcDynFunMap = dynFunMap
