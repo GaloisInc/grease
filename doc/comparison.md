@@ -1,4 +1,4 @@
-# Comparison
+# Comparison with other tools
 
 | Tool    | Binary | Source Code/LLVM | Available Under-constrained Algorithm |
 |---------|--------|------------------|---------------------------------------|
