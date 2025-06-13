@@ -5,13 +5,15 @@
 | [angr](https://angr.io/)    | Yes    | No*              | Yes*                                   |
 | [Grease](https://github.com/GaloisInc/grease)  | Yes    | Yes              | Yes                                   |
 | [KLEE](https://github.com/klee/klee)  | No     | Yes              | No                                    |
-| UC-KLEE | No     | Yes              | Yes                                   |
+| UC-KLEE | No*     | Yes              | Yes                                   |
 | [UC-Crux](https://www.galois.com/articles/under-constrained-symbolic-execution-with-crucible) | No     | Yes              | Yes                                   |
 | [Macaw](https://github.com/GaloisInc/macaw)   | Yes    | No               | No                                    |
 
 Notes: *angr has some support for JVM bytecode although the extent of support is unclear. 
 Similarly there is a UNDER_CONSTRAINED_SYMEXEC option that populates unbound pointers with a fresh region sufficient for the load
 it is unclear how well this interacts with angr's concretizing memory model (e.g. pointers to regions with pointers etc)*
+
+*Binary to LLVM lifters do exist allowing some tooling which targets LLVM bitcode to be applied to binaries even when source is not available. As an example [KLEE-Native](https://github.com/lifting-bits/klee) emulates the binary via liftings provided by [remill](https://github.com/lifting-bits/remill). These liftings are low-level and typically lose effeciencies provided by high-level rperesentations like abstract memory locations.*
 
 Grease focuses on providing a seamless out of the box under-constrained symbolic execution tool that allows analysts to find and fix bugs. The tool provides a "it just works" (subject to [limitations](limitations.md)) command line interface that allows engineers to directly symbolically execute arbitrary functions within a target binary or LLVM program and find bugs. This capability arises from a unique combination of a focus on scalable and relatively automated techniques (underconstrained symbolic execution), use of a generic [symbolic execution framework and memory model](https://github.com/GaloisInc/crucible/blob/master/crucible-llvm/doc/memory-model.md) that enables support for both binaries and LLVM programs, and wrapping these capabilities in an easy to use interface.
 
@@ -21,5 +23,5 @@ Below we highlight some general categories of tools that offer points of compari
 
 * **Source analyzers/Symbolic execution engines**: [KLEE](https://github.com/klee/klee) performs forward symbolic execution on LLVM bitcode. Performing analysis on bitcode allows KLEE to use more efficient memory models that split memory into separate abstract objects. Unfortunately, the tight integration of KLEE with LLVM means that KLEE cannot perform analysis on binaries. The tool also suffers from path explosion on large programs when exploring from an entrypoint.
 
-* **Source-level Underconstrained Symbolic Execution Engines**: [UC-Crux](https://www.galois.com/articles/under-constrained-symbolic-execution-with-crucible) and UC-KLEE perform underconstrained symbolic execution on LLVM bitcode, enabling automated symbolic execution of arbitrary functions within a target binary with minimal configuration. Due to the use of LLVM, these tools are limited to programs where the source code is available and can be compiled to LLVM bitcode.   
+* **Source-level Underconstrained Symbolic Execution Engines**: [UC-Crux](https://www.galois.com/articles/under-constrained-symbolic-execution-with-crucible) and UC-KLEE perform underconstrained symbolic execution on LLVM bitcode, enabling automated symbolic execution of arbitrary functions within a target binary with minimal configuration. Due to the use of LLVM, these tools are limited to programs where the source code is available and can be compiled to LLVM bitcode or a whole program lifting to LLVM.   
 
