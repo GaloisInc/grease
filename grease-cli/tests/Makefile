@@ -54,7 +54,7 @@ DYNAMIC_PIE_ARM_EXES   = $(addsuffix /test.armv7l.elf,$(DYNAMIC_PIE_DIRS))
 DYNAMIC_PIE_PPC32_EXES = $(addsuffix /test.ppc32.elf,$(DYNAMIC_PIE_DIRS))
 
 # This test case requires the use of stripped binaries.
-STRIPPED_STATIC_DIRS = refine/pos/stripped
+STRIPPED_STATIC_DIRS = refine/pos/stripped refine/pos/stripped_with_overrides
 STRIPPED_STATIC_ARM_EXES   = $(addsuffix /test.armv7l.elf,$(STRIPPED_STATIC_DIRS))
 STRIPPED_STATIC_X64_EXES   = $(addsuffix /test.x64.elf,$(STRIPPED_STATIC_DIRS))
 STRIPPED_STATIC_PPC32_EXES = $(addsuffix /test.ppc32.elf,$(STRIPPED_STATIC_DIRS))

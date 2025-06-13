@@ -63,6 +63,7 @@ import Grease.Setup
 import Grease.Shape
 import Grease.Shape.NoTag (NoTag(NoTag))
 import Grease.Shape.Pointer
+import Grease.Syntax (ResolvedOverridesYaml)
 import Grease.Utility
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.Backend qualified as C
@@ -420,6 +421,7 @@ memConfigWithHandles ::
   Map.Map W4.FunctionName (MC.ArchSegmentOff arch) ->
   -- | Map of names of overridden functions to their implementations
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
   -- | Map of names of overridden syscalls to their implementations
   Map.Map W4.FunctionName (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
   Opts.ErrorSymbolicFunCalls ->
@@ -427,9 +429,9 @@ memConfigWithHandles ::
   Opts.SkipInvalidCallAddrs ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem
-memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs syscallOvs errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddress memCfg =
+memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddress memCfg =
   memCfg
-  { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls skipInvalidCallAddress lfhd
+  { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddress lfhd
   , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd
   }
   where

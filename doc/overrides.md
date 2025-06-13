@@ -151,6 +151,60 @@ grease prog.bc --overrides id_ptr.llvm.cbl --overrides id_ptr2.llvm.cbl
 the public function of the same name. If `grease` cannot find a public function
 for an override named `id_ptr`, then `grease` will raise an error.
 
+## Overrides YAML files
+
+In addition to specifying function overrides by name via the `--overrides`
+flag, `grease` also supports specifying function overrides by _address_ via the
+`--overrides-yaml <FILE>.yaml` flag. `<FILE>.yaml` should be a YAML file with
+the following schema:
+
+```yaml
+function address overrides:
+  ADDR_1: "NAME_1"
+  ...
+  ADDR_n: "NAME_n"
+```
+
+Whenever `grease` calls a function at one of the `ADDR_i` addresses, it will
+resolve the function to the override with the name `NAME_i`. Two examples of
+scenarios where you may want to use this feature:
+
+* Stripped binaries lack function symbols, which makes it impossible to
+  associate function overrides to names in the binary. As such, the only way to
+  specify overrides for stripped binaries is to use `--overrides-yaml`.
+
+* Let's suppose you want to create an override for a built-in function such as
+  `malloc`, except that you want your override to do something slightly
+  different from the default override that `grease` uses. We could image a
+  version of `malloc` that prints a message whenever it is called:
+
+  ```
+  ; The built-in override for malloc
+  (declare @malloc ((size (Bitvector 64))) (Ptr 64))
+
+  ; The custom version of malloc, which prints a message
+  (defun @chatty_malloc ((size (Bitvector 64))) (Ptr 64)
+    (start start:
+      (println "Calling malloc!")
+      (let ptr (funcall @malloc size))
+      (return ptr)))
+  ```
+
+  Passing `--overrides chatty_malloc.x86.cbl` won't work, however, since the
+  name of the function in the binary is `malloc`, not `chatty_malloc`. Nor
+  would it work to rename `chatty_malloc` to `malloc`, as that name would clash
+  with the built-in override, which we need to use in the implementation of the
+  custom override.
+
+  Overrides YAML files offer a solution to this problem. We can pass
+  `--overrides-yaml overrides.yaml` to `grease`, where the contents of
+  `overrides.yaml` look something like this:
+
+  ```yaml
+  function address overrides:
+    0x1234: "malloc" # Assume that malloc's address is 0x1234
+  ```
+
 ## Startup overrides
 
 Startup overrides are a special form of override that runs before the execution

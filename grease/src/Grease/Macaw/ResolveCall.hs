@@ -62,6 +62,7 @@ import Grease.Macaw.SimulatorState
 import Grease.Macaw.SkippedCall (SkippedFunctionCall(..), SkippedSyscall(..))
 import Grease.Macaw.Syscall
 import Grease.Options (SkipInvalidCallAddrs(..), ErrorSymbolicFunCalls(..), ErrorSymbolicSyscalls (..))
+import Grease.Syntax (ResolvedOverridesYaml(..))
 import Grease.Utility (OnlineSolverAndBackend, declaredFunNotFound, segoffToAbsoluteAddr)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.Backend qualified as C
@@ -247,6 +248,7 @@ lookupFunctionHandleResult ::
   Map.Map W4.FunctionName (MC.ArchSegmentOff arch) ->
   -- | Map of names of overridden functions to their implementations
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
   ErrorSymbolicFunCalls ->
   SkipInvalidCallAddrs ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
@@ -254,7 +256,7 @@ lookupFunctionHandleResult ::
   IO ( LookupFunctionHandleResult p sym arch
      , C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
      )
-lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls skipInvalidCallAddrs st regs = do
+lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddrs st regs = do
   -- First, obtain the address contained in the instruction pointer.
   symAddr0 <- (arch ^. archGetIP) regs
   -- Next, attempt to concretize the address. We must do this because it is
@@ -292,13 +294,22 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
 
       in case Loader.resolveAbsoluteAddress memory bvMemWord of
         Nothing ->
-          let addrString = BV.ppHex knownNat bv in 
-          if getSkipInvalidCallAddrs skipInvalidCallAddrs then 
+          let addrString = BV.ppHex knownNat bv in
+          if getSkipInvalidCallAddrs skipInvalidCallAddrs then
             pure (SkippedFunctionCall (InvalidAddress addrString), st)
           else
             C.addFailedAssertion bak $ C.AssertFailureSimError "Failed to call function" ("Invalid address: " ++ addrString)
         Just funcAddrOff -> go funcAddrOff
   where
+    lookupOv ::
+      W4.FunctionName ->
+      MC.ArchSegmentOff arch ->
+      Maybe (MacawSExpOverride p sym arch)
+    lookupOv funcName funcAddrOff =
+      case Map.lookup funcAddrOff (getResolvedOverridesYaml funAddrOvs) of
+        Just ovName -> Map.lookup ovName funOvs
+        Nothing -> Map.lookup funcName funOvs
+
     -- Given a resolved function address, compute a
     -- 'LookupFunctionHandleResult'. This function is recursive because we may
     -- need to handle PLT stubs that jump to other addresses within the same
@@ -314,7 +325,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
       | Just hdl <- Map.lookup funcAddrOff (st ^. stateDiscoveredFnHandles) =
         pure
           ( CachedFnHandle funcAddrOff hdl $
-            Map.lookup (C.handleName hdl) funOvs
+            lookupOv (C.handleName hdl) funcAddrOff
           , st
           )
 
@@ -326,7 +337,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
            -> do doLog la $ Diag.PltCall pltStubName funcAddrOff pltCallAddr
                  go pltCallAddr
            |  otherwise
-           -> case Map.lookup pltStubName funOvs of
+           -> case lookupOv pltStubName funcAddrOff of
                 -- ...otherwise, if there is an override for the PLT stub,
                 -- use it...
                 Just macawFnOv ->
@@ -358,7 +369,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
           discoverFuncAddr la halloc arch memory symMap pltStubs funcAddrOff st
         pure
           ( DiscoveredFnHandle funcAddrOff hdl $
-            Map.lookup (C.handleName hdl) funOvs
+            lookupOv (C.handleName hdl) funcAddrOff
           , st'
           )
 
@@ -383,13 +394,14 @@ lookupFunctionHandle ::
   Map.Map W4.FunctionName (MC.ArchSegmentOff arch) ->
   -- | Map of names of overridden functions to their implementations
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
   ErrorSymbolicFunCalls ->
   SkipInvalidCallAddrs ->
   LookupFunctionHandleDispatch p sym arch ->
   Symbolic.LookupFunctionHandle p sym arch
-lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls skipInvalidCallAddrs lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
+lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddrs lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
   let LookupFunctionHandleDispatch dispatch = lfhd
-  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls skipInvalidCallAddrs st regs
+  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddrs st regs
   dispatch st' mem regs res
 
 -- | Dispatch on the result of looking up a syscall override. The

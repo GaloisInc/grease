@@ -114,6 +114,8 @@ data SimOpts
     , simNoHeuristics :: Bool
       -- | User-specified overrides in Crucible S-expression syntax
     , simOverrides :: [FilePath]
+      -- | Overrides in YAML format
+    , simOverridesYaml :: [FilePath]
       -- | Path to program to simulate
     , simProgPath :: FilePath
       -- | User-specified PLT stubs to consider in addition to the stubs that
