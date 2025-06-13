@@ -97,7 +97,7 @@ The analysis performed is roughly the following:
 
 For more details, see [Refinement](refinement.md).
 
-For a capability comparison with other similar tools, see [Comparison](comparison.md)
+For a capability comparison with other similar tools, see [Comparison](comparison.md).
 
 ## Acknowledgements
 
