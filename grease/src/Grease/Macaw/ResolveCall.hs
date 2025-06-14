@@ -72,7 +72,7 @@ import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lumberjack qualified as LJ
-import Prelude (Integer, fromIntegral, otherwise, toInteger)
+import Prelude (Integer, fromIntegral, otherwise, toInteger, (++))
 import Stubs.FunctionOverride qualified as Stubs
 import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
 import Stubs.Memory.Common qualified as Stubs
@@ -291,7 +291,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
       in case Loader.resolveAbsoluteAddress memory bvMemWord of
         Nothing ->
           -- TODO(#137): Make this an error by default.
-          pure (SkippedFunctionCall (InvalidAddress (BV.ppHex knownNat bv)), st)
+          C.addFailedAssertion bak $ C.AssertFailureSimError "Failed to call function" ("Invalid address: " ++ BV.ppHex knownNat bv)
         Just funcAddrOff -> go funcAddrOff
   where
     -- Given a resolved function address, compute a
