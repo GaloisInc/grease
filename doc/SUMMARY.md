@@ -25,6 +25,7 @@
 - [Shared libraries](./shared-libraries.md)
 - [System calls](./syscalls.md)
 - [Undefined behavior](./undefined-behavior.md)
+- [Comparison with other tools](./comparison.md)
 
 # Developer documentation
 
