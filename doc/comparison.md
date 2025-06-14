@@ -3,7 +3,7 @@
 | Tool    | Binary | Source Code/LLVM | Available Under-constrained Algorithm |
 |---------|--------|------------------|---------------------------------------|
 | [angr](https://angr.io/)    | Yes    | No*              | Yes*                                   |
-| [Grease](https://github.com/GaloisInc/grease)  | Yes    | Yes              | Yes                                   |
+| [GREASE](https://github.com/GaloisInc/GREASE)  | Yes    | Yes              | Yes                                   |
 | [KLEE](https://github.com/klee/klee)  | No     | Yes              | No                                    |
 | UC-KLEE | No*     | Yes              | Yes                                   |
 | [UC-Crux](https://www.galois.com/articles/under-constrained-symbolic-execution-with-crucible) | No     | Yes              | Yes                                   |
@@ -15,7 +15,7 @@ it is unclear how well this interacts with angr's concretizing memory model (e.g
 
 *Binary to LLVM lifters do exist allowing some tooling which targets LLVM bitcode to be applied to binaries even when source is not available. As an example [KLEE-Native](https://github.com/lifting-bits/klee) emulates the binary via liftings provided by [remill](https://github.com/lifting-bits/remill). These liftings are low-level and typically lose effeciencies provided by high-level rperesentations like abstract memory locations.*
 
-Grease focuses on providing a seamless out of the box under-constrained symbolic execution tool that allows analysts to find and fix bugs. The tool provides a "it just works" (subject to [limitations](limitations.md)) command line interface that allows engineers to directly symbolically execute arbitrary functions within a target binary or LLVM program and find bugs. This capability arises from a unique combination of a focus on scalable and relatively automated techniques (underconstrained symbolic execution), use of a generic [symbolic execution framework and memory model](https://github.com/GaloisInc/crucible/blob/master/crucible-llvm/doc/memory-model.md) that enables support for both binaries and LLVM programs, and wrapping these capabilities in an easy to use interface.
+GREASE focuses on providing a seamless out of the box under-constrained symbolic execution tool that allows analysts to find and fix bugs. The tool provides a "it just works" (subject to [limitations](limitations.md)) command line interface that allows engineers to directly symbolically execute arbitrary functions within a target binary or LLVM program and find bugs. This capability arises from a unique combination of a focus on scalable and relatively automated techniques (underconstrained symbolic execution), use of a generic [symbolic execution framework and memory model](https://github.com/GaloisInc/crucible/blob/master/crucible-llvm/doc/memory-model.md) that enables support for both binaries and LLVM programs, and wrapping these capabilities in an easy to use interface.
 
 Below we highlight some general categories of tools that offer points of comparison
 
