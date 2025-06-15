@@ -1,0 +1,13 @@
+/* Copyright (c) Galois, Inc. 2024 */
+
+// all: flags {"--symbol", "test"}
+// all: flags {"--req", "in-text"}
+// all: go(prog)
+
+int test() {
+    long x = 0xDEADBEEF;
+    int(*fptr)()=(int(*)()) x;
+    return fptr() + 1;
+}
+
+// all: check "Invalid address: 0xdeadbeef"
