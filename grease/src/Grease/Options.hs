@@ -15,6 +15,7 @@ module Grease.Options
   , ExtraStackSlots(..)
   , ErrorSymbolicFunCalls(..)
   , ErrorSymbolicSyscalls(..)
+  , SkipInvalidCallAddrs(..)
   , SimOpts(..)
   , Opts(..)
   ) where
@@ -61,6 +62,12 @@ newtype ErrorSymbolicFunCalls =
   -- See Note [Derive Read/Show instances the with newtype strategy]
   deriving newtype (Enum, Eq, Ord, Read, Show)
 
+-- | If 'True', skip calls to invalid addresses in binaries instead of erroring.
+newtype SkipInvalidCallAddrs = 
+  SkipInvalidCallAddrs { getSkipInvalidCallAddrs :: Bool }
+  -- See Note [Derive Read/Show instances the with newtype strategy]
+  deriving newtype (Enum, Eq, Ord, Read, Show)
+
 -- | If 'True', throw an error if attempting a system call with a symbolic
 -- number. If 'False', skip over such calls.
 newtype ErrorSymbolicSyscalls =
@@ -92,6 +99,7 @@ data SimOpts
     , simErrorSymbolicFunCalls :: ErrorSymbolicFunCalls
       -- | Default: 'False'.
     , simErrorSymbolicSyscalls :: ErrorSymbolicSyscalls
+    , simSkipInvalidCallAddrs :: SkipInvalidCallAddrs
       -- | Path containing initial function preconditions in shapes DSL
     , simInitialPreconditions :: Maybe FilePath
       -- | Maximum number of iterations of each program loop/maximum number of
