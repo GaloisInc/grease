@@ -193,6 +193,14 @@ simOpts = do
                         [ "Throw an error if attempting to make a syscall with a symbolic number"
                         , "(by default, these calls will be skipped)"
                         ]))
+  simSkipInvalidCallAddrs <-
+    GO.SkipInvalidCallAddrs <$>
+    Opt.switch ( Opt.long "skip-invalid-call-addrs"
+                 <> Opt.help
+                      (String.unlines
+                        [ "Skip calls to invalid addresses."
+                        , "(by default, these calls will result in an error)"
+                        ]))
   simRust <-
     Opt.switch ( Opt.long "rust"
                  <> Opt.help "Use simulator settings that are more likely to work for Rust programs"

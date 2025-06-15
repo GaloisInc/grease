@@ -60,7 +60,7 @@ import Grease.Macaw.ResolveCall.Diagnostic qualified as Diag
 import Grease.Macaw.SimulatorState
 import Grease.Macaw.SkippedCall (SkippedFunctionCall(..), SkippedSyscall(..))
 import Grease.Macaw.Syscall
-import Grease.Options (ErrorSymbolicFunCalls(..), ErrorSymbolicSyscalls (..))
+import Grease.Options (SkipInvalidCallAddrs(..), ErrorSymbolicFunCalls(..), ErrorSymbolicSyscalls (..))
 import Grease.Utility (OnlineSolverAndBackend, declaredFunNotFound, segoffToAbsoluteAddr)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.Backend qualified as C
@@ -72,7 +72,7 @@ import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lumberjack qualified as LJ
-import Prelude (Integer, fromIntegral, otherwise, toInteger)
+import Prelude (Integer, fromIntegral, otherwise, toInteger, (++))
 import Stubs.FunctionOverride qualified as Stubs
 import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
 import Stubs.Memory.Common qualified as Stubs
@@ -247,12 +247,13 @@ lookupFunctionHandleResult ::
   -- | Map of names of overridden functions to their implementations
   Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
   ErrorSymbolicFunCalls ->
+  SkipInvalidCallAddrs ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
   Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
   IO ( LookupFunctionHandleResult p sym arch
      , C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
      )
-lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls st regs = do
+lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls skipInvalidCallAddrs st regs = do
   -- First, obtain the address contained in the instruction pointer.
   symAddr0 <- (arch ^. archGetIP) regs
   -- Next, attempt to concretize the address. We must do this because it is
@@ -290,8 +291,11 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
 
       in case Loader.resolveAbsoluteAddress memory bvMemWord of
         Nothing ->
-          -- TODO(#137): Make this an error by default.
-          pure (SkippedFunctionCall (InvalidAddress (BV.ppHex knownNat bv)), st)
+          let addrString = BV.ppHex knownNat bv in 
+          if getSkipInvalidCallAddrs skipInvalidCallAddrs then 
+            pure (SkippedFunctionCall (InvalidAddress addrString), st)
+          else
+            C.addFailedAssertion bak $ C.AssertFailureSimError "Failed to call function" ("Invalid address: " ++ addrString)
         Just funcAddrOff -> go funcAddrOff
   where
     -- Given a resolved function address, compute a
@@ -379,11 +383,12 @@ lookupFunctionHandle ::
   -- | Map of names of overridden functions to their implementations
   Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
   ErrorSymbolicFunCalls ->
+  SkipInvalidCallAddrs ->
   LookupFunctionHandleDispatch p sym arch ->
   Symbolic.LookupFunctionHandle p sym arch
-lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
+lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls skipInvalidCallAddrs lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
   let LookupFunctionHandleDispatch dispatch = lfhd
-  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls st regs
+  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs errorSymbolicFunCalls skipInvalidCallAddrs st regs
   dispatch st' mem regs res
 
 -- | Dispatch on the result of looking up a syscall override. The

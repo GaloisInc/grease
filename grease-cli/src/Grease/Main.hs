@@ -622,7 +622,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         fnOvsMap <- liftIO $ Macaw.mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
         let errorSymbolicFunCalls = simErrorSymbolicFunCalls simOpts
         let errorSymbolicSyscalls = simErrorSymbolicSyscalls simOpts
-        let memCfg1 = memConfigWithHandles bak la halloc archCtx memory symMap pltStubs dynFunMap fnOvsMap builtinGenericSyscalls errorSymbolicFunCalls errorSymbolicSyscalls memCfg0
+        let skipInvalidCallAddrs = simSkipInvalidCallAddrs simOpts
+        let memCfg1 = memConfigWithHandles bak la halloc archCtx memory symMap pltStubs dynFunMap fnOvsMap builtinGenericSyscalls errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddrs memCfg0
         evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @arch (archCtx ^. archVals) sym pure
         let macawExtImpl = Symbolic.macawExtensions evalFn mvar memCfg1
         let ssaCfgHdl = C.cfgHandle ssaCfg'
