@@ -9,4 +9,6 @@ int test() {
     return fptr() + 1;
 }
 
-// all: ok()
+// arm: check "TopV where PSTATE_T expected"
+// x64: ok()
+// ppc32: ok()
