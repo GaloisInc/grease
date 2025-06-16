@@ -11,6 +11,6 @@ int test() {
 
 
 // arm: check "Invalid address: 0xdeadbeef"
-//TODO: This looks like a ppc32 bug?
+// on ppc the last two bits are cleared
 // ppc32: check "Invalid address: 0xdeadbeec"
 // x64: check "Invalid address: 0xdeadbeef"
