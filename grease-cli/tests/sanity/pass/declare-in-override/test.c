@@ -7,9 +7,15 @@
 // all: go(prog)
 
 #include <stdint.h>
+#include <stddef.h>
 
-extern void* my_malloc(void);
-extern void free(void* ptr);
+void* my_malloc(void) {
+    return NULL;
+}
+
+void free(void* ptr) {
+    return;
+}
 
 void test(void) {
     int32_t* p = my_malloc();
@@ -17,6 +23,5 @@ void test(void) {
     free(p);
 }
 // arm: ok()
-// TODO: Why does PPC fail here?
-// ppc32: check "PPCInvalidInstruction"
+// ppc32: ok()
 // x64: ok()

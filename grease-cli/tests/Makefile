@@ -43,7 +43,8 @@ DYNAMIC_DIRS = \
   refine/pos/excluded_overrides \
   refine/pos/malloc \
   refine/pos/malloc-free-external \
-  refine/pos/printf
+  refine/pos/printf \
+  sanity/pass/startup-override
 DYNAMIC_ARM_EXES   = $(addsuffix /test.armv7l.elf,$(DYNAMIC_DIRS))
 DYNAMIC_PPC32_EXES = $(addsuffix /test.ppc32.elf,$(DYNAMIC_DIRS))
 
