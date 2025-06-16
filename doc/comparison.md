@@ -4,8 +4,8 @@
 |---------|--------|------------------|---------------------------------------|
 | [angr](https://angr.io/)    | Yes    | No*              | Yes*                                   |
 | [GREASE](https://github.com/GaloisInc/GREASE)  | Yes    | Yes              | Yes                                   |
-| [KLEE](https://github.com/klee/klee)  | No     | Yes              | No                                    |
-| UC-KLEE | No*     | Yes              | Yes                                   |
+| [KLEE](https://github.com/klee/klee)  | No*     | Yes              | No                                    |
+| UC-KLEE | No     | Yes              | Yes                                   |
 | [UC-Crux](https://www.galois.com/articles/under-constrained-symbolic-execution-with-crucible) | No     | Yes              | Yes                                   |
 | [Macaw](https://github.com/GaloisInc/macaw)   | Yes    | No               | No                                    |
 
