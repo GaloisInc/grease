@@ -7,9 +7,15 @@
 // all: go(prog)
 
 #include <stdint.h>
+#include <stddef.h>
 
-extern void* my_malloc(void);
-extern void free(void* ptr);
+void* my_malloc(void) {
+    return NULL;
+}
+
+void free(void* ptr) {
+    return;
+}
 
 void test(void) {
     int32_t* p = my_malloc();
