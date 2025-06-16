@@ -14,6 +14,5 @@ void test(uint8_t *buf, size_t sz) {
   memset(buf, 'a', sz);
 }
 // arm: ok()
-// TODO: Why does PPC fail here?
-// ppc32: check "PPCInvalidInstruction"
+// ppc32: ok()
 // x64: ok()

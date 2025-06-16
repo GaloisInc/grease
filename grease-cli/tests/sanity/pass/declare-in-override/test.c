@@ -23,6 +23,5 @@ void test(void) {
     free(p);
 }
 // arm: ok()
-// TODO: Why does PPC fail here?
-// ppc32: check "PPCInvalidInstruction"
+// ppc32: ok()
 // x64: ok()
