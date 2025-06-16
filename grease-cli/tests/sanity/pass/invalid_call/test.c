@@ -1,7 +1,6 @@
 /* Copyright (c) Galois, Inc. 2025 */
 
-// all: flags {"--symbol", "test", "--skip-invalid-call-addrs"}
-// all: flags {"--req", "in-text"}
+// all: flags {"--symbol", "test"}
 // all: go(prog)
 
 int test() {
@@ -10,4 +9,4 @@ int test() {
     return fptr() + 1;
 }
 
-// all: ok()
+// all: check "Invalid address: 0xdeadbeef"
