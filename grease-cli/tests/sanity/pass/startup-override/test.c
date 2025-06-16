@@ -14,5 +14,5 @@ void test(uint8_t *buf, size_t sz) {
   memset(buf, 'a', sz);
 }
 // arm: ok()
-// ppc32: ok()
+// ppc32: check "Could not identify block at"
 // x64: ok()
