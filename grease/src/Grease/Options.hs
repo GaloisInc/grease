@@ -99,6 +99,7 @@ data SimOpts
     , simErrorSymbolicFunCalls :: ErrorSymbolicFunCalls
       -- | Default: 'False'.
     , simErrorSymbolicSyscalls :: ErrorSymbolicSyscalls
+      -- | Default: 'False'.
     , simSkipInvalidCallAddrs :: SkipInvalidCallAddrs
       -- | Path containing initial function preconditions in shapes DSL
     , simInitialPreconditions :: Maybe FilePath
