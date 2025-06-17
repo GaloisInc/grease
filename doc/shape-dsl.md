@@ -78,10 +78,10 @@ numbers of that bit-width, namely 8 for 32-bit and 16 for 64-bit. This scheme
 ensures that pointers have the same textual width as a pointer-width sequence
 of bytes.
 
-Long, repeated sequences of symbolic or uninitialized bytes can be written with
-*run-length encoding*. For example, a sequence of 64 uninitialized bytes would
-be `##*00000040`. Just as for pointer offsets, the run length is represented as
-a hexadecimal number of the size of the machine bit-width.
+Long, repeated sequences of bytes can be written with *run-length encoding*.
+For example, a sequence of 64 uninitialized bytes would be `##*00000040`. Just
+as for pointer offsets, the run length is represented as a hexadecimal number
+of the size of the machine bit-width.
 
 ## Specifying initial preconditions
 
