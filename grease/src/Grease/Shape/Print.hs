@@ -50,14 +50,12 @@ import Data.Void (Void)
 import Data.Void qualified as Void
 import Grease.Shape (Shape, ExtShape)
 import Grease.Shape qualified as Shape
-import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Pointer (PtrShape, BlockId(BlockId))
 import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Numeric (showHex)
 import Prettyprinter qualified as PP
 import Prettyprinter ((<+>))
-
-newtype BlockId = BlockId Int
 
 data Allocs
   = Allocs
@@ -95,14 +93,16 @@ evalPrinter cfg p =
   then doc
   else doc PP.<> PP.line PP.<> PP.line PP.<> printAllocs (cfgAddrWidth cfg) as
 
-printerAlloc :: Printer w (PP.Doc Void) -> Printer w BlockId
-printerAlloc computeDoc = do
+printerAlloc :: Printer w (PP.Doc Void) -> Maybe BlockId -> Printer w BlockId
+printerAlloc computeDoc bid = do
   -- The sequencing of block number allocations is important for legibility: It's
   -- nicer when pointers have lower block numbers than the pointers inside the
   -- allocation that they point to, because then allocation numbers increase
   -- while reading right-to-left, top-to-bottom.
   as <- State.get
-  let (blk@(BlockId k), as') = allocNext as
+  let (blk@(BlockId k), as') = (case bid of
+        Nothing -> allocNext as
+        Just bid' -> (bid', as))
   State.put as'
   doc <- computeDoc
   State.modify (\as''-> as'' { allocs = IntMap.insert k doc (allocs as'') })
@@ -203,8 +203,8 @@ printPtr =
   \case
     PtrShape.ShapePtrBV _tag w -> printBv w
     PtrShape.ShapePtrBVLit _tag w bv -> printBvLit w bv
-    PtrShape.ShapePtr _tag offset tgt -> do
-      blk <- printerAlloc (printTgt tgt)
+    PtrShape.ShapePtr _tag offset tgt@(PtrShape.PtrTarget _ bid) -> do
+      blk <- printerAlloc (printTgt tgt) bid 
       printBlockOffset blk offset
 
 printBv :: NatRepr w' -> Printer w (PP.Doc ann)
@@ -286,8 +286,8 @@ printMemShape :: PtrShape.MemShape w tag -> Printer w (PP.Doc Void)
 printMemShape = \case
   PtrShape.Uninitialized bytes -> printRle '#' (bytesToInt bytes)
   PtrShape.Initialized _tag bytes -> printRle 'X' (bytesToInt bytes)
-  PtrShape.Pointer _tag off target -> do
-      blk <- printerAlloc (printTgt target)
+  PtrShape.Pointer _tag off target@(PtrShape.PtrTarget _ bid) -> do
+      blk <- printerAlloc (printTgt target) bid
       printBlockOffset blk off
   PtrShape.Exactly bytes ->
     let ppWord8 = PP.pretty . padHex 2 in
