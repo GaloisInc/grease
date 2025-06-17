@@ -17,6 +17,7 @@ module Grease.Shape.Pointer
   ( TaggedByte(..)
   , traverseTaggedByte
   , MemShape(..)
+  , BlockId(..)
   , traverseMemShapeWithType
   , memShapeSize
   , PtrTarget(..)
@@ -71,6 +72,10 @@ import Lang.Crucible.LLVM.Bytes (Bytes(..))
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Prettyprinter qualified as PP
+
+
+newtype BlockId = BlockId { getBlockId :: Int }
+  deriving (Eq, Ord, Show)
 
 -- | A byte ('Word8') along with a @tag@ (see 'Grease.Shape.Shape').
 data TaggedByte tag
@@ -238,7 +243,7 @@ initializeMemShape tag =
 --
 -- * @wptr@: Width of a pointer, in bits
 -- * @tag@: See 'Grease.Shape.Shape'
-newtype PtrTarget wptr tag = PtrTarget (Seq (MemShape wptr tag))
+data PtrTarget wptr tag = PtrTarget (Seq (MemShape wptr tag)) (Maybe BlockId)
 
 instance TF.FunctorF (PtrTarget wptr) where
   fmapF = TF.fmapFDefault
@@ -247,7 +252,7 @@ instance TF.FoldableF (PtrTarget wptr) where
   foldMapF = TF.foldMapFDefault
 
 instance TF.TraversableF (PtrTarget wptr) where
-  traverseF f (PtrTarget tgt) = PtrTarget <$> traverse (TF.traverseF f) tgt
+  traverseF f (PtrTarget tgt bid) = flip PtrTarget bid <$> traverse (TF.traverseF f) tgt
 
 deriving instance
   ( Eq (tag (Mem.LLVMPointerType 8))
@@ -262,15 +267,16 @@ traversePtrTargetWithType ::
   (forall x. C.TypeRepr x -> tag x -> m (tag' x)) ->
   PtrTarget wptr tag ->
   m (PtrTarget wptr tag')
-traversePtrTargetWithType f (PtrTarget tgt) =
-  PtrTarget <$> traverse (traverseMemShapeWithType f) tgt
+traversePtrTargetWithType f (PtrTarget tgt bid) =
+  flip PtrTarget bid <$> traverse (traverseMemShapeWithType f) tgt
 
 -- | Smart constructor that merges compatible adjacent shapes.
 ptrTarget ::
   Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
+  Maybe BlockId ->
   Seq (MemShape wptr tag) ->
   PtrTarget wptr tag
-ptrTarget = PtrTarget . Foldable.foldl' go Seq.empty
+ptrTarget bid = flip PtrTarget bid . Foldable.foldl' go Seq.empty
   where
     go s (Uninitialized 0) = s
     go s (Initialized _tag 0) = s
@@ -287,7 +293,7 @@ ptrTargetSize ::
   proxy w ->
   PtrTarget wptr tag ->
   Bytes
-ptrTargetSize proxy (PtrTarget s) = Foldable.sum (fmap (memShapeSize proxy) s)
+ptrTargetSize proxy (PtrTarget s _) = Foldable.sum (fmap (memShapeSize proxy) s)
 
 -- | Grow an allocation by adding some uninitialized bytes to the end
 growPtrTargetBy ::
@@ -295,7 +301,7 @@ growPtrTargetBy ::
   Bytes ->
   PtrTarget wptr tag ->
   PtrTarget wptr tag
-growPtrTargetBy amount (PtrTarget s) = ptrTarget (s Seq.|> Uninitialized amount)
+growPtrTargetBy amount (PtrTarget s bid) = ptrTarget bid (s Seq.|> Uninitialized amount) 
 
 -- | Grow an allocation by adding uninitialized bytes to the end, up to the
 -- given size (or at least by 1).
@@ -323,8 +329,8 @@ initializePtrTarget ::
   tag (C.VectorType (Mem.LLVMPointerType 8)) ->
   PtrTarget wptr tag ->
   PtrTarget wptr tag
-initializePtrTarget tag (PtrTarget ms) =
-  ptrTarget (fmap (initializeMemShape tag) ms)
+initializePtrTarget tag (PtrTarget ms bid) =
+  ptrTarget bid (fmap (initializeMemShape tag) ms)
 
 -- | Initialize all uninitialized parts of an allocation, or if it is already
 -- fully initialized, grow it by one uninitialized byte.
@@ -334,7 +340,7 @@ initializeOrGrowPtrTarget ::
   tag (C.VectorType (Mem.LLVMPointerType 8)) ->
   PtrTarget wptr tag ->
   PtrTarget wptr tag
-initializeOrGrowPtrTarget tag t@(PtrTarget ms) =
+initializeOrGrowPtrTarget tag t@(PtrTarget ms bid) =
   if Foldable.all isInit ms
   then growPtrTarget t
   else initializePtrTarget tag t
@@ -360,16 +366,17 @@ ptrTargetToPtrs proxy tag tgt =
       (nPtrs, remBytes) = sz `divMod` ptrBytes
       nPtrs' = Bytes.bytesToInteger $ if remBytes == 0 then nPtrs else nPtrs + 1
       genSeq n x = Seq.iterateN n id x
-  in PtrTarget $
+  in (PtrTarget $
      genSeq (fromIntegral nPtrs') $
      Pointer tag (Offset 0) $
-     ptrTarget Seq.Empty
+     ptrTarget Nothing Seq.Empty ) Nothing
 
 instance MC.PrettyF tag => PP.Pretty (PtrTarget wptr tag) where
+  pretty :: MC.PrettyF tag => PtrTarget wptr tag -> PP.Doc ann
   pretty =
     \case
-      PtrTarget Seq.Empty -> "<unallocated>"
-      PtrTarget ms -> PP.list (Foldable.toList (fmap PP.pretty ms))
+      PtrTarget Seq.Empty _ -> "<unallocated>"
+      PtrTarget ms _ -> PP.list (Foldable.toList (fmap PP.pretty ms))
 
 newtype Offset = Offset { getOffset :: Bytes }
   deriving (Eq, Show)
@@ -519,7 +526,7 @@ minimalPtrShape mkTag w =
   let tag = mkTag (Mem.LLVMPointerRepr w) in
   case C.testEquality w ?ptrWidth of
     Just C.Refl ->
-      ShapePtr <$> tag <*> pure (Offset 0) <*> pure (ptrTarget Seq.empty)
+      ShapePtr <$> tag <*> pure (Offset 0) <*> pure (ptrTarget Nothing Seq.empty)
     Nothing -> ShapePtrBV <$> tag <*> pure w
 
 -- | The x86_64 stack pointer points to the end of a large, fresh, mostly-
@@ -542,7 +549,7 @@ x64StackPtrShape returnAddrBytes stackArgSlots =
       (returnAddr, returnAddrSize) = returnAddrMemShape returnAddrBytes ptrWidth
       (stackArgs, stackArgsSize) = stackArgMemShapes stackArgSlots ptrWidth
       uninit = stackSizeInMiB - returnAddrSize - stackArgsSize
-      tgt = ptrTarget $ Seq.fromList $
+      tgt = ptrTarget Nothing $ Seq.fromList $
             [Uninitialized uninit, returnAddr] List.++ stackArgs
   in ShapePtr NoTag (Offset uninit) tgt
 
@@ -573,7 +580,7 @@ ppcStackPtrShape returnAddrBytes stackArgSlots =
       backChainSize = ptrWidth
       (stackArgs, stackArgsSize) = stackArgMemShapes stackArgSlots ptrWidth
       uninit = stackSizeInMiB - returnAddrSize - backChainSize - stackArgsSize
-      tgt = ptrTarget $ Seq.fromList $
+      tgt = ptrTarget Nothing $ Seq.fromList $
             [Uninitialized uninit, returnAddr, backChain] List.++ stackArgs
   in ShapePtr NoTag (Offset uninit) tgt
 
@@ -591,7 +598,7 @@ armStackPtrShape stackArgSlots =
   let ptrWidth = Bytes 4
       (stackArgs, stackArgsSize) = stackArgMemShapes stackArgSlots ptrWidth
       uninit = stackSizeInMiB - stackArgsSize
-      tgt = ptrTarget $ Seq.fromList $
+      tgt = ptrTarget Nothing $ Seq.fromList $
             Uninitialized uninit : stackArgs
   in ShapePtr NoTag (Offset uninit) tgt
 
@@ -640,12 +647,12 @@ bytesToPointers proxy tag path tgt =
     (Here _, _) -> pure (ptrTargetToPtrs proxy tag tgt)
 
     -- Need to keep dereferencing as specified by the path
-    (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget ms) ->
+    (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget ms bid) ->
       case ms Seq.!? idx of
         Just (Pointer tag' off subTgt) -> do
           C.Refl <- pure $ lastCons (Proxy @(Mem.LLVMPointerType w)) (Proxy @ts')
           subTgt' <- bytesToPointers proxy tag rest subTgt
-          pure (ptrTarget (Seq.update idx (Pointer tag' off subTgt') ms))
+          pure (ptrTarget Nothing (Seq.update idx (Pointer tag' off subTgt') ms))
         Just Exactly{} -> pure (ptrTargetToPtrs proxy tag tgt)
         Just Initialized{} -> pure (ptrTargetToPtrs proxy tag tgt)
         Just Uninitialized{} -> pure (ptrTargetToPtrs proxy tag tgt)
@@ -676,12 +683,12 @@ modifyPtrTarget proxy modify path tgt =
     (Here _, _) -> modify tgt
 
     -- Need to keep dereferencing as specified by the path
-    (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget ms) ->
+    (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget ms bid) ->
       case ms Seq.!? idx of
         Just (Pointer tag off subTgt) -> do
           C.Refl <- pure $ lastCons (Proxy @(Mem.LLVMPointerType w)) (Proxy @ts')
           subTgt' <- modifyPtrTarget proxy modify rest subTgt
-          pure (ptrTarget (Seq.update idx (Pointer tag off subTgt') ms))
+          pure (ptrTarget Nothing (Seq.update idx (Pointer tag off subTgt') ms))
         Just _ -> throw $ GreaseException $ "Internal error: mismatched selector and pointer target!"
         Nothing -> throw $ GreaseException $ "Internal error: path index out of bounds!"
 

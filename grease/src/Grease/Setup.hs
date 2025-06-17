@@ -155,15 +155,15 @@ setupPtr la bak layout nm sel target = do
   let align = Mem.maxAlignment layout
   let sym = C.backendGetSym bak
   case target of
-    PtrTarget Seq.Empty -> do
+    PtrTarget Seq.Empty bid -> do
       -- See Note [Initializing empty pointer shapes]
       ptr <- liftIO $ do
         offset <- W4.freshConstant sym (safeSymbol (addSuffix nm "_offset")) (W4.BaseBVRepr ?ptrWidth)
         Mem.llvmPointer_bv sym offset
       p <- zoom setupAnns (Anns.annotatePtr sym sel ptr)
-      pure (p, PtrTarget Seq.Empty)
-    PtrTarget ms -> do
-      mem <- use setupMem
+      pure (p, PtrTarget Seq.Empty bid)
+    PtrTarget ms bid -> do
+      mem <- use setupMem 
       let bytes = ptrTargetSize ?ptrWidth target
       sz <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral bytes)))
       let loc = "grease setup (" <> show (ppSelector (PtrCursor.ppDereference @ext) sel) <> ")"
@@ -172,7 +172,7 @@ setupPtr la bak layout nm sel target = do
       -- write nested shapes to memory
       (_, _, ms') <- foldM go (0, ptr, Seq.empty) ms
       p <- zoom setupAnns (Anns.annotatePtr sym sel ptr)
-      pure (p, PtrTarget ms')
+      pure (p, PtrTarget ms' bid)
   where
     makeKnownBytes ::
       forall ts'.

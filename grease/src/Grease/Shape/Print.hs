@@ -55,6 +55,7 @@ import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Numeric (showHex)
 import Prettyprinter qualified as PP
+import Prettyprinter ((<+>))
 
 newtype BlockId = BlockId Int
 
@@ -268,9 +269,9 @@ printRle c n = do
 
 -- | Ignores @tag@s.
 printTgt :: PtrShape.PtrTarget w tag -> Printer w (PP.Doc Void)
-printTgt (PtrShape.PtrTarget memShapes) = do
+printTgt (PtrShape.PtrTarget memShapes bid) = do
   docs <- traverse printMemShape memShapes
-  pure (PP.align (PP.fillSep (Foldable.toList docs)))
+  pure (PP.viaShow bid <+> PP.align (PP.fillSep (Foldable.toList docs)))
 
 -- | Helper, not exported
 integerToInt :: Integer -> Int

@@ -41,7 +41,7 @@ concMemShape =
 concPtrTarget ::
   PtrShape.PtrTarget wptr (Conc.ConcRV' sym) ->
   PtrShape.PtrTarget wptr (Conc.ConcRV' sym)
-concPtrTarget (PtrShape.PtrTarget s) = PtrShape.PtrTarget (fmap concMemShape s)
+concPtrTarget (PtrShape.PtrTarget s bid) = PtrShape.PtrTarget (fmap concMemShape s) bid
 
 -- | Turns 'PtrShape.ShapePtrBV' into 'PtrShape.ShapePtrBVLit', calls 'concPtrTarget'.
 concPtrShape ::

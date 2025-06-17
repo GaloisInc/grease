@@ -323,7 +323,7 @@ minimalArgShapes _bak arch mbEntryAddr = do
              MT.BoolTypeRepr -> pure (ShapeBool NoTag)
              MT.BVTypeRepr w ->
                case testEquality w $ MT.knownNat @(MC.ArchAddrWidth arch) of
-                 Just C.Refl -> pure $ ShapeExt (ShapePtr NoTag (Offset 0) (ptrTarget Seq.Empty))
+                 Just C.Refl -> pure $ ShapeExt (ShapePtr NoTag (Offset 0) (ptrTarget Nothing Seq.Empty))
                  Nothing -> pure $ ShapeExt (ShapePtrBV NoTag w)
              MT.TupleTypeRepr P.List.Nil -> pure $ ShapeStruct NoTag Ctx.empty
              _ -> throw $ GreaseException "Could not determine minimal shape for register"
