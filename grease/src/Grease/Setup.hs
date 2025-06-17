@@ -71,6 +71,7 @@ import Prelude (Int, Num(..), fromIntegral)
 import System.IO (IO)
 import Text.Show (show)
 import What4.Interface qualified as W4
+import qualified Data.Map as Map
 
 -- | Name for fresh symbolic values, passed to 'W4.safeSymbol'. The phantom
 -- type parameter prevents making recursive calls without changing the name.
@@ -95,17 +96,20 @@ safeSymbol = W4.safeSymbol . getValueName
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (SetupDiagnostic diag)
 
-data SetupState sym ext argTys = SetupState
+
+type SetupRes sym w = (C.RegValue sym (Mem.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
+data SetupState sym ext argTys w = SetupState
   { _setupMem :: Mem.MemImpl sym
   , _setupAnns :: Anns.Annotations sym ext argTys
+  , _setupRes :: Map.Map BlockId (SetupRes sym w)
   }
 makeLenses ''SetupState
 
 -- | Setup monad
-type Setup sym ext argTys a = StateT (SetupState sym ext argTys) IO a
+type Setup sym ext argTys w a = StateT (SetupState sym ext argTys w) IO a
 
 annotatePtrBv ::
-  forall sym ext argTys ts regTy w.
+  forall sym ext argTys ts regTy w  w'.
   ( C.IsSymInterface sym
   , Cursor.Last (regTy ': ts) ~ Mem.LLVMPointerType w
   , 1 C.<= w
@@ -113,13 +117,13 @@ annotatePtrBv ::
   sym ->
   Selector ext argTys ts regTy ->
   C.RegValue sym (C.BVType w) ->
-  Setup sym ext argTys (Mem.LLVMPtr sym w)
+  Setup sym ext argTys w' (Mem.LLVMPtr sym w)
 annotatePtrBv sym sel bv = do
   ptr <- liftIO (Mem.llvmPointer_bv sym bv)
   zoom setupAnns (Anns.annotatePtr sym sel ptr)
 
 freshPtrBv ::
-  forall sym ext argTys ts regTy w.
+  forall sym ext argTys ts regTy w w'.
   ( C.IsSymInterface sym
   , Cursor.Last (regTy ': ts) ~ Mem.LLVMPointerType w
   , 1 C.<= w
@@ -128,9 +132,9 @@ freshPtrBv ::
   Selector ext argTys ts regTy ->
   ValueName (Mem.LLVMPointerType w) ->
   NatRepr w ->
-  Setup sym ext argTys (Mem.LLVMPtr sym w)
+  Setup sym ext argTys w' (Mem.LLVMPtr sym w)
 freshPtrBv sym sel nm w =
-  annotatePtrBv sym sel
+  annotatePtrBv sym sel 
     =<< liftIO (W4.freshConstant sym (safeSymbol nm) (W4.BaseBVRepr w))
 
 -- | Ignores tags.
@@ -150,7 +154,7 @@ setupPtr ::
   ValueName (Mem.LLVMPointerType w) ->
   Selector ext argTys ts regTy ->
   PtrTarget w tag ->
-  Setup sym ext argTys (C.RegValue sym (Mem.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
+  Setup sym ext argTys w (C.RegValue sym (Mem.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
 setupPtr la bak layout nm sel target = do
   let align = Mem.maxAlignment layout
   let sym = C.backendGetSym bak
@@ -180,7 +184,7 @@ setupPtr la bak layout nm sel target = do
       sym ->
       Selector ext argTys ts' regTy ->
       [Word8] ->
-      Setup sym ext argTys (Vec.Vector (Mem.LLVMPtr sym 8))
+      Setup sym ext argTys w (Vec.Vector (Mem.LLVMPtr sym 8))
     makeKnownBytes sym sel' bytes =
       flip Vec.unfoldrM (List.zip [(1 :: Int)..] bytes) $
         \case
@@ -203,7 +207,7 @@ setupPtr la bak layout nm sel target = do
       -- | Pointer to write bytes to
       C.RegValue sym (Mem.LLVMPointerType w) ->
       [Word8] ->
-      Setup sym ext argTys (Mem.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
+      Setup sym ext argTys w (Mem.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
     writeKnownBytes sym m sel' ptr bytes = do
       let i8 = Mem.bitvectorType (Bytes.toBytes (1 :: Int))
       vals <- makeKnownBytes sym sel' bytes
@@ -219,7 +223,7 @@ setupPtr la bak layout nm sel target = do
       sym ->
       Selector ext argTys ts' regTy ->
       Bytes ->
-      Setup sym ext argTys (Vec.Vector (Mem.LLVMPtr sym 8))
+      Setup sym ext argTys w (Vec.Vector (Mem.LLVMPtr sym 8))
     makeFreshBytes sym sel' bytes =
       Vec.generateM (fromIntegral (Bytes.bytesToInteger bytes)) $ \i -> do
         let sel'' = sel' & selectorPath %~ PtrCursor.addByteIndex i
@@ -238,7 +242,7 @@ setupPtr la bak layout nm sel target = do
       -- | Pointer to write bytes to
       C.RegValue sym (Mem.LLVMPointerType w) ->
       Bytes ->
-      Setup sym ext argTys (Mem.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
+      Setup sym ext argTys  w (Mem.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
     writeFreshBytes sym m sel' ptr bytes = do
       let i8 = Mem.bitvectorType (Bytes.toBytes (1 :: Int))
       vals <- makeFreshBytes sym sel' bytes
@@ -258,7 +262,7 @@ setupPtr la bak layout nm sel target = do
       , Seq.Seq (MemShape w (C.RegValue' sym))
       ) ->
       MemShape w tag ->
-      Setup sym ext argTys (Int, C.RegValue sym (Mem.LLVMPointerType w), Seq.Seq (MemShape w (C.RegValue' sym)))
+      Setup sym ext argTys w (Int, C.RegValue sym (Mem.LLVMPointerType w), Seq.Seq (MemShape w (C.RegValue' sym)))
     go (idx, ptr, written) memShape = do
       let sym = C.backendGetSym bak
       let sel' = sel & selectorPath %~ PtrCursor.addIndex idx
@@ -350,7 +354,7 @@ setupShape ::
   C.TypeRepr t ->
   Selector ext argTys ts regTy ->
   Shape ext tag t ->
-  Setup sym ext argTys (Shape ext (C.RegValue' sym) t)
+  Setup sym ext argTys w (Shape ext (C.RegValue' sym) t)
 setupShape la bak layout nm tRepr sel s = do
   let sym = C.backendGetSym bak
   Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @ts)
@@ -403,7 +407,7 @@ setupArgs ::
   Ctx.Assignment ValueName argTys ->
   Ctx.Assignment C.TypeRepr argTys ->
   Ctx.Assignment (Shape ext tag) argTys ->
-  Setup sym ext argTys (Args sym ext argTys)
+  Setup sym ext argTys w (Args sym ext argTys)
 setupArgs la bak layout argNames argTys =
   fmap Args .
     Ctx.traverseWithIndex
@@ -458,7 +462,7 @@ runSetup ::
   , MonadCatch m
   ) =>
   InitialMem sym ->
-  Setup sym ext argTys a ->
+  Setup sym ext argTys w a ->
   m a
 runSetup mem act =
   liftIO (evalStateT act initial)
