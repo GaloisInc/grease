@@ -147,20 +147,23 @@ genPtrShape =
            Either.Left Equality.Refl -> Monad.fail "Impossible"
            Either.Right NatRepr.LeqProof ->
              pure (Some (PtrShape.ShapePtrBVLit NoTag w' bv))
-    , do tgt <- genPtrTarget
-         let sz = PtrShape.ptrTargetSize ?ptrWidth tgt
-         offsetInt <- HG.integral (HR.linear 0 (Bytes.bytesToInteger sz))
-         let offset = PtrShape.Offset (Bytes.toBytes offsetInt)
+    , do (tgt, offset) <- genPtrTarget
          pure (Some (PtrShape.ShapePtr NoTag offset tgt))
     ]
 
-genPtrTarget :: H.Gen (PtrShape.PtrTarget wptr NoTag)
+genPtrTarget ::
+  Mem.HasPtrWidth wptr =>
+  H.Gen (PtrShape.PtrTarget wptr NoTag, PtrShape.Offset)
 genPtrTarget = do
   memShapes <- HG.list (HR.linear 0 16) genMemShape
   -- Use smart constructor to avoid "non-canonical" instances
-  pure (PtrShape.ptrTarget (Seq.fromList memShapes))
+  let tgt = PtrShape.ptrTarget (Seq.fromList memShapes)
+  let sz = PtrShape.ptrTargetSize ?ptrWidth tgt
+  offsetInt <- HG.integral (HR.linear 0 (Bytes.bytesToInteger sz))
+  let offset = PtrShape.Offset (Bytes.toBytes offsetInt)
+  pure (tgt, offset)
 
-genMemShape :: H.Gen (PtrShape.MemShape wptr NoTag)
+genMemShape :: Mem.HasPtrWidth wptr => H.Gen (PtrShape.MemShape wptr NoTag)
 genMemShape = do
   -- Don't generate zero bytes, because then printing then parsing doesn't
   -- roundtrip
@@ -176,7 +179,8 @@ genMemShape = do
           (HR.linear minBytes 32)
           (PtrShape.TaggedByte NoTag Functor.<$> HG.word8 (HR.linear minBound maxBound))
     ]
-    [ PtrShape.Pointer NoTag Functor.<$> genPtrTarget ]
+    [ do (tgt, offset) <- genPtrTarget
+         pure $ PtrShape.Pointer NoTag offset tgt ]
 
 printCfg :: Print.PrinterConfig 64
 printCfg =
@@ -220,9 +224,12 @@ testParse testName shapeSource shapeExpected = do
         let shapeActualTxt = doPrintNamed shapeName shapeActual
         TH.assertEqual testName shapeExpectedTxt shapeActualTxt
 
-ptrShape :: [PtrShape.MemShape 64 NoTag] -> Shape LLVM NoTag (LLVMPointerType 64)
-ptrShape =
-  Shape.ShapeExt . PtrShape.ShapePtr NoTag (PtrShape.Offset 0) . PtrShape.PtrTarget . Seq.fromList
+ptrShape ::
+  PtrShape.Offset ->
+  [PtrShape.MemShape 64 NoTag] ->
+  Shape LLVM NoTag (LLVMPointerType 64)
+ptrShape offset =
+  Shape.ShapeExt . PtrShape.ShapePtr NoTag offset . PtrShape.PtrTarget . Seq.fromList
 
 printThenParse :: Shape LLVM NoTag t -> IO (Some (Shape LLVM NoTag))
 printThenParse s = do
@@ -263,15 +270,15 @@ shapeTests =
   , testParse
     "Parse Initialized RLE"
     "000000+0000000000000000\n\n000000: XX*4"
-    (ptrShape [PtrShape.Initialized NoTag 4])
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Initialized NoTag 4])
   , testParse
     "Parse Uninitialized RLE"
     "000000+0000000000000000\n\n000000: ##*4"
-    (ptrShape [PtrShape.Uninitialized 4])
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Uninitialized 4])
   , testParse
     "Parse Exactly RLE"
     "000000+0000000000000000\n\n000000: de*4"
-    (ptrShape [PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) [0xde, 0xde, 0xde, 0xde])])
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) [0xde, 0xde, 0xde, 0xde])])
 
   , testPrint
     "Print ShapeBool"
@@ -308,21 +315,25 @@ shapeTests =
   , testPrint
     "Print ShapePtr (64-bit)"
     "000000+00000000000000ff\n\n000000: "
-    (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.Offset 0xff) (PtrShape.PtrTarget Seq.empty)))
+    (ptrShape (PtrShape.Offset 0xff) [])
   , testPrint
     "Print Initialized"
     "000000+0000000000000000\n\n000000: XX XX XX XX"
-    (ptrShape [PtrShape.Initialized NoTag 4])
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Initialized NoTag 4])
   , testPrint
     "Print Uninitialized"
     "000000+0000000000000000\n\n000000: ## ## ## ## ## ##"
-    (ptrShape [PtrShape.Uninitialized 6])
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Uninitialized 6])
   , testPrint
     "Print Exactly"
     "000000+0000000000000000\n\n000000: de ad be ef"
-    (ptrShape [PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) [0xde, 0xad, 0xbe, 0xef])])
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) [0xde, 0xad, 0xbe, 0xef])])
   , testPrint
     "Print Pointer"
     "000000+0000000000000000\n\n000000: 000001+0000000000000000\n000001: "
-    (ptrShape [PtrShape.Pointer NoTag (PtrShape.PtrTarget Seq.Empty)])
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0) (PtrShape.PtrTarget Seq.Empty)])
+  , testPrint
+    "Print Pointer with non-zero offset"
+    "000000+0000000000000000\n\n000000: 000001+00000000000000ff\n000001: "
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0xff) (PtrShape.PtrTarget Seq.Empty)])
   ]

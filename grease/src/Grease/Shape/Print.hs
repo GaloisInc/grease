@@ -285,9 +285,9 @@ printMemShape :: PtrShape.MemShape w tag -> Printer w (PP.Doc Void)
 printMemShape = \case
   PtrShape.Uninitialized bytes -> printRle '#' (bytesToInt bytes)
   PtrShape.Initialized _tag bytes -> printRle 'X' (bytesToInt bytes)
-  PtrShape.Pointer _tag target -> do
+  PtrShape.Pointer _tag off target -> do
       blk <- printerAlloc (printTgt target)
-      printBlockOffset blk (PtrShape.Offset (Bytes.Bytes 0))
+      printBlockOffset blk off
   PtrShape.Exactly bytes ->
     let ppWord8 = PP.pretty . padHex 2 in
     pure (PP.fillSep (List.map (ppWord8 . PtrShape.taggedByteValue) bytes))

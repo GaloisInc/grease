@@ -35,7 +35,7 @@ concMemShape =
           toWord8 = fromIntegral . BV.asUnsigned in
       let concByte b = PtrShape.TaggedByte b (toWord8 (Mem.concOffset (Conc.unConcRV' b))) in
       PtrShape.Exactly (List.map concByte (Vec.toList tag))
-    PtrShape.Pointer tag tgt -> PtrShape.Pointer tag (concPtrTarget tgt)
+    PtrShape.Pointer tag off tgt -> PtrShape.Pointer tag off (concPtrTarget tgt)
     PtrShape.Exactly bs -> PtrShape.Exactly bs
 
 concPtrTarget ::
