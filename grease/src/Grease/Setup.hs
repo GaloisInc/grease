@@ -31,7 +31,7 @@ import Control.Lens.TH (makeLenses)
 import Control.Lens.Zoom (zoom)
 import Control.Monad (foldM, (=<<))
 import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.Trans.State (StateT(..), evalStateT)
+import Control.Monad.Trans.State (StateT(..), evalStateT, put, get)
 import Data.BitVector.Sized qualified as BV
 import Data.Eq (Eq((==)))
 import Data.Function (($), (.), (&), flip)
@@ -67,7 +67,7 @@ import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
-import Prelude (Int, Num(..), fromIntegral)
+import Prelude (Int, Num(..), fromIntegral, putStrLn)
 import System.IO (IO)
 import Text.Show (show)
 import What4.Interface qualified as W4
@@ -137,6 +137,48 @@ freshPtrBv sym sel nm w =
   annotatePtrBv sym sel 
     =<< liftIO (W4.freshConstant sym (safeSymbol nm) (W4.BaseBVRepr w))
 
+
+
+
+
+
+setupPtrMem ::
+  forall sym bak ext tag w argTys ts regTy.
+  ( C.IsSymBackend sym bak
+  , C.IsSyntaxExtension ext
+  , Mem.HasPtrWidth w
+  , Mem.HasLLVMAnn sym
+  , ?memOpts :: Mem.MemOptions
+  , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
+  , Cursor.Last (regTy ': ts) ~ Mem.LLVMPointerType w
+  ) =>
+  GreaseLogAction ->
+  bak ->
+  Mem.DataLayout ->
+  ValueName (Mem.LLVMPointerType w) ->
+  Selector ext argTys ts regTy ->
+  PtrTarget w tag ->
+  Setup sym ext argTys w (C.RegValue sym (Mem.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
+setupPtrMem la bak layout nm sel (PtrTarget smem bid) = 
+  let r = setupPtr la bak layout nm sel (PtrTarget smem bid) in 
+  case bid of 
+    Just bid' -> do 
+      s <- get
+      let resmap = _setupRes s
+      let mres = Map.lookup bid' resmap
+      case mres of 
+        Just memoized_res -> do
+          _ <- liftIO $ putStrLn $ "Retrieving a memoized result " List.++ show bid
+          pure memoized_res
+        Nothing ->
+          do
+            nv <- r
+            _ <- liftIO $ putStrLn $ "memoizing a value with block id " List.++ show bid
+            let newmap = Map.insert bid' nv resmap 
+            _ <- put  (s {_setupRes = newmap})
+            pure nv
+    Nothing -> r
+
 -- | Ignores tags.
 setupPtr ::
   forall sym bak ext tag w argTys ts regTy.
@@ -170,6 +212,7 @@ setupPtr la bak layout nm sel target = do
       mem <- use setupMem 
       let bytes = ptrTargetSize ?ptrWidth target
       sz <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral bytes)))
+      _ <- liftIO $ putStrLn "allocing"
       let loc = "grease setup (" <> show (ppSelector (PtrCursor.ppDereference @ext) sel) <> ")"
       (ptr, mem') <- liftIO $ Mem.doMalloc bak Mem.HeapAlloc Mem.Mutable loc mem sz align
       setupMem .= mem'
@@ -286,7 +329,7 @@ setupPtr la bak layout nm sel target = do
               pure (Initialized (C.RV byteVals) bytes)
           Pointer _tag off tgt -> do  -- recursive case
             let nm' = addIndex nm idx
-            (val, tgt') <- setupPtr la bak layout nm' sel' tgt
+            (val, tgt') <- setupPtrMem la bak layout nm' sel' tgt
             let storTy = Mem.bitvectorType (Bytes.bitsToBytes (natValue ?ptrWidth))
             m <- use setupMem
             m' <- liftIO $ Mem.doStore bak m ptr (Mem.LLVMPointerRepr ?ptrWidth) storTy Mem.noAlignment val
@@ -370,7 +413,7 @@ setupShape la bak layout nm tRepr sel s = do
       bv' <- liftIO (Mem.llvmPointer_bv sym =<< W4.bvLit sym w bv)
       pure (ShapeExt (ShapePtrBV (C.RV bv') w))
     ShapeExt (ShapePtr _tag offset target) -> do
-      (basePtr, target') <- setupPtr la bak layout nm sel target
+      (basePtr, target') <- setupPtrMem la bak layout nm sel target
       offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset offset))))
       p <- liftIO (Mem.ptrAdd sym ?ptrWidth basePtr offsetBv)
       pure (ShapeExt (ShapePtr (C.RV p) offset target'))
