@@ -470,6 +470,7 @@ runSetup mem act =
     initial = SetupState
       { _setupMem = getInitialMem mem
       , _setupAnns = Anns.empty
+      , _setupRes = Map.empty
       }
 
 -- | Create symbolic values ('Args') from 'Shape's.
@@ -502,6 +503,7 @@ setup la bak layout argNames argTys (ArgShapes shapes) mem = do
         SetupState
           { _setupMem = getInitialMem mem
           , _setupAnns = Anns.empty
+          , _setupRes = Map.empty
           }
   (result, state) <-
     liftIO . flip runStateT initial $ do
