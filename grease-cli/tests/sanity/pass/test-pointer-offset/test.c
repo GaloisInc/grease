@@ -1,6 +1,6 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// all: flags {"--symbol", "test", "--initial-precondition",  "init.shape"}
+// x64: flags {"--symbol", "test", "--no-heuristics", "--initial-precondition", "tests/sanity/pass/test-pointer-offset/init.shape"}
 // x64: go(prog)
 
 struct foo {
