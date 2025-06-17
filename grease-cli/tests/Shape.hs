@@ -30,6 +30,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Pair (Pair(Pair))
 import Data.Parameterized.Some (Some(Some))
+import Data.Semigroup ((<>))
 import Data.Sequence qualified as Seq
 import Data.String (String)
 import Data.Text (Text)
@@ -198,6 +199,27 @@ testPrint :: String -> Text -> Shape LLVM NoTag ty -> TT.TestTree
 testPrint name printed s =
   TH.testCase name (TH.assertEqual name printed (doPrint s))
 
+testParse :: String -> Text -> Shape LLVM NoTag ty -> TT.TestTree
+testParse testName shapeSource shapeExpected = do
+  let ?ptrWidth = NatRepr.knownNat @64
+  let shapeName = "test"
+  let shapeSource' = shapeName <> ": " <> shapeSource
+  TH.testCase testName $
+    case Parse.parseShapes @LLVM (Text.unpack shapeName) shapeSource' of
+      Either.Left err ->
+        TH.assertFailure $
+          List.unlines
+            [ "unexpected parse error:"
+            , show (PP.pretty err)
+            , "tried to parse shape:"
+            , Text.unpack shapeSource'
+            ]
+      Either.Right (Parse.ParsedShapes shapes) -> do
+        Some shapeActual <- pure $ Maybe.fromJust $ Map.lookup shapeName shapes
+        let shapeExpectedTxt = doPrintNamed shapeName shapeExpected
+        let shapeActualTxt = doPrintNamed shapeName shapeActual
+        TH.assertEqual testName shapeExpectedTxt shapeActualTxt
+
 ptrShape :: [PtrShape.MemShape 64 NoTag] -> Shape LLVM NoTag (LLVMPointerType 64)
 ptrShape =
   Shape.ShapeExt . PtrShape.ShapePtr NoTag (PtrShape.Offset 0) . PtrShape.PtrTarget . Seq.fromList
@@ -237,6 +259,19 @@ shapeTests =
         let ?ptrWidth = NatRepr.knownNat @64
         Some s <- H.forAll (genShape @LLVM genPtrShape)
         show s H.=== show s
+
+  , testParse
+    "Parse Initialized RLE"
+    "000000+0000000000000000\n\n000000: XX*4"
+    (ptrShape [PtrShape.Initialized NoTag 4])
+  , testParse
+    "Parse Uninitialized RLE"
+    "000000+0000000000000000\n\n000000: ##*4"
+    (ptrShape [PtrShape.Uninitialized 4])
+  , testParse
+    "Parse Exactly RLE"
+    "000000+0000000000000000\n\n000000: de*4"
+    (ptrShape [PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) [0xde, 0xde, 0xde, 0xde])])
 
   , testPrint
     "Print ShapeBool"

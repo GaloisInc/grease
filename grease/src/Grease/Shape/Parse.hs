@@ -282,18 +282,20 @@ parseUninitExplicit :: Parser Bytes.Bytes
 parseUninitExplicit =
   Bytes.toBytes . List.length Functor.<$> trySepBy1 (MP.chunk "##") memShapeSep
 
-parseRle :: Char -> Parser Bytes
-parseRle c =
-  Bytes.toBytes @Int Functor.<$> do
-    -- The `try` is necessary to disambiguate from explicit bytes
-    _ <- MP.try $ do
-           _ <- MP.single c
-           _ <- MP.single c
-           MP.single '*'
-    MPCL.hexadecimal
+parseRle :: Parser Char -> Parser (Char, Char, Bytes)
+parseRle parseChar = do
+  -- The `try` is necessary to disambiguate from explicit bytes
+  (c1, c2) <-
+    MP.try $ do
+      c1 <- parseChar
+      c2 <- parseChar
+      _ <- MP.single '*'
+      pure (c1, c2)
+  rl <- MPCL.hexadecimal
+  pure (c1, c2, Bytes.toBytes @Int rl)
 
 parseUninitRle :: Parser Bytes.Bytes
-parseUninitRle = parseRle '#'
+parseUninitRle = thd Functor.<$> parseRle (MP.single '#')
 
 parseInit :: Parser Bytes.Bytes
 parseInit = parseInitRle MP.<|> parseInitExplicit
@@ -303,14 +305,26 @@ parseInitExplicit =
   Bytes.toBytes . List.length Functor.<$> trySepBy1 (MP.chunk "XX") memShapeSep
 
 parseInitRle :: Parser Bytes.Bytes
-parseInitRle = parseRle 'X'
+parseInitRle = thd Functor.<$> parseRle (MP.single 'X')
 
 -- | Helper, not exported. Requires actual hex 'Char's.
 hexCharsToWord8 :: Char -> Char -> Word8
 hexCharsToWord8 c1 c2 = Tuple.fst (List.head (Numeric.readHex (c1:c2:[])))
 
+-- | Helper, not exported.
+thd :: (a, b, c) -> c
+thd (_, _, z) = z
+
 parseExactly :: Parser [Word8]
-parseExactly =
+parseExactly = parseExactlyRle MP.<|> parseExactlyExplicit
+
+parseExactlyRle :: Parser [Word8]
+parseExactlyRle = do
+  (c1, c2, rl) <- parseRle MPC.hexDigitChar
+  pure $ replicate (fromIntegral @Bytes @Int rl) $ hexCharsToWord8 c1 c2
+
+parseExactlyExplicit :: Parser [Word8]
+parseExactlyExplicit =
   Functor.fmap (Tuple.uncurry hexCharsToWord8) Functor.<$>
     trySepBy1 (MP.lookAhead justTwoHex Applicative.*> twoHex) memShapeSep
   where twoHex = (,) Functor.<$> MPC.hexDigitChar Applicative.<*> MPC.hexDigitChar
