@@ -117,8 +117,9 @@ data MemShape wptr tag
     Uninitialized !Bytes
     -- | Some number of symbolically-initialized bytes
   | Initialized (tag (C.VectorType (Mem.LLVMPointerType 8))) !Bytes
-    -- | Several (generally 4 or 8) initialized bytes that form a pointer
-  | Pointer (tag (Mem.LLVMPointerType wptr)) (PtrTarget wptr tag)
+    -- | Several (generally 4 or 8) initialized bytes that form a pointer, plus
+    -- an offset into that pointer
+  | Pointer (tag (Mem.LLVMPointerType wptr)) !Offset (PtrTarget wptr tag)
     -- | Some concrete bytes
   | Exactly [TaggedByte tag]
 
@@ -139,12 +140,14 @@ instance MC.PrettyF tag => PP.Pretty (MemShape wptr tag) where
         , "x "
         , PP.viaShow (Bytes.bytesToInteger bs)
         ]
-      Pointer tag tgt ->
+      Pointer tag (Offset off) tgt ->
         PP.hcat
         [ "ptr"
         , ppTag tag
         , ":"
         , PP.pretty tgt
+        , "+"
+        , PP.viaShow off
         ]
       Exactly bs -> "exactly:" PP.<+> PP.pretty bs
 
@@ -159,7 +162,7 @@ instance TF.TraversableF (MemShape wptr) where
     \case
       Uninitialized bs -> pure (Uninitialized bs)
       Initialized tag bs -> Initialized <$> f tag <*> pure bs
-      Pointer tag tgt -> Pointer <$> f tag <*> TF.traverseF f tgt
+      Pointer tag off tgt -> Pointer <$> f tag <*> pure off <*> TF.traverseF f tgt
       Exactly bs -> Exactly <$> traverse (TF.traverseF f) bs
 
 -- | Like 'TF.traverseF', but with access to the appropriate 'C.TypeRepr'.
@@ -176,9 +179,10 @@ traverseMemShapeWithType f =
       Initialized
       <$> f (C.VectorRepr (Mem.LLVMPointerRepr C.knownNat)) tag
       <*> pure bs
-    Pointer tag tgt ->
+    Pointer tag off tgt ->
       Pointer
       <$> f (Mem.LLVMPointerRepr ?ptrWidth) tag
+      <*> pure off
       <*> traversePtrTargetWithType f tgt
     Exactly bs ->
       Exactly
@@ -206,7 +210,7 @@ memShapeSize _proxy =
   \case
     Uninitialized bs -> bs
     Initialized _tag bs -> bs
-    Pointer _ _ -> Bytes.bitsToBytes (C.widthVal ?ptrWidth)
+    Pointer _ _ _ -> Bytes.bitsToBytes (C.widthVal ?ptrWidth)
     Exactly bs -> Bytes.Bytes (fromIntegral (List.length bs))
 
 initializeMemShape ::
@@ -356,7 +360,10 @@ ptrTargetToPtrs proxy tag tgt =
       (nPtrs, remBytes) = sz `divMod` ptrBytes
       nPtrs' = Bytes.bytesToInteger $ if remBytes == 0 then nPtrs else nPtrs + 1
       genSeq n x = Seq.iterateN n id x
-  in PtrTarget (genSeq (fromIntegral nPtrs') (Pointer tag (ptrTarget Seq.Empty)))
+  in PtrTarget $
+     genSeq (fromIntegral nPtrs') $
+     Pointer tag (Offset 0) $
+     ptrTarget Seq.Empty
 
 instance MC.PrettyF tag => PP.Pretty (PtrTarget wptr tag) where
   pretty =
@@ -635,10 +642,10 @@ bytesToPointers proxy tag path tgt =
     -- Need to keep dereferencing as specified by the path
     (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget ms) ->
       case ms Seq.!? idx of
-        Just (Pointer tag' subTgt) -> do
+        Just (Pointer tag' off subTgt) -> do
           C.Refl <- pure $ lastCons (Proxy @(Mem.LLVMPointerType w)) (Proxy @ts')
           subTgt' <- bytesToPointers proxy tag rest subTgt
-          pure (ptrTarget (Seq.update idx (Pointer tag' subTgt') ms))
+          pure (ptrTarget (Seq.update idx (Pointer tag' off subTgt') ms))
         Just Exactly{} -> pure (ptrTargetToPtrs proxy tag tgt)
         Just Initialized{} -> pure (ptrTargetToPtrs proxy tag tgt)
         Just Uninitialized{} -> pure (ptrTargetToPtrs proxy tag tgt)
@@ -671,10 +678,10 @@ modifyPtrTarget proxy modify path tgt =
     -- Need to keep dereferencing as specified by the path
     (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget ms) ->
       case ms Seq.!? idx of
-        Just (Pointer tag subTgt) -> do
+        Just (Pointer tag off subTgt) -> do
           C.Refl <- pure $ lastCons (Proxy @(Mem.LLVMPointerType w)) (Proxy @ts')
           subTgt' <- modifyPtrTarget proxy modify rest subTgt
-          pure (ptrTarget (Seq.update idx (Pointer tag subTgt') ms))
+          pure (ptrTarget (Seq.update idx (Pointer tag off subTgt') ms))
         Just _ -> throw $ GreaseException $ "Internal error: mismatched selector and pointer target!"
         Nothing -> throw $ GreaseException $ "Internal error: path index out of bounds!"
 

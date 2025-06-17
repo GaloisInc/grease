@@ -60,7 +60,7 @@ import Grease.Panic (panic)
 import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag(NoTag))
-import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Pointer (Offset, PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes (Bytes)
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
@@ -89,8 +89,9 @@ data ParseMemShape
   =  Uninitialized !Bytes
     -- | Some number of symbolically-initialized bytes
   | Initialized !Bytes
-    -- | Several (generally 4 or 8) initialized bytes that form a pointer
-  | Pointer BlockId
+    -- | Several (generally 4 or 8) initialized bytes that form a pointer, plus
+    -- an offset into that pointer
+  | Pointer BlockId !Offset
     -- | Some concrete bytes
   | Exactly [Word8]
   deriving Show
@@ -113,8 +114,8 @@ memShape allocs =
     Initialized bs -> Either.Right (PtrShape.Initialized NoTag bs)
     Exactly wds ->
       Either.Right (PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) wds))
-    Pointer blk ->
-      PtrShape.Pointer NoTag Functor.<$>
+    Pointer blk off ->
+      PtrShape.Pointer NoTag off Functor.<$>
         case lookupAlloc blk allocs of
           Maybe.Just tgt -> ptrTarget (removeAlloc blk allocs) tgt
           Maybe.Nothing -> Either.Left blk
@@ -259,16 +260,15 @@ parseMemShape =
   Applicative.asum @[]
   [ Uninitialized Functor.<$> parseUninit
   , Initialized Functor.<$> parseInit
-  , Pointer Functor.<$> do
-      -- The `try` is needed to disambiguate the block number from the bytes
-      -- of `Exactly`
-      blk <-
-        MP.try (do
-          blk <- BlockId Functor.<$> MPCL.hexadecimal
-          _ <- MP.chunk "+"
-          Applicative.pure blk)
-      _ <- MP.some (MP.chunk "0")
-      Applicative.pure blk
+  , do -- The `try` is needed to disambiguate the block number from the bytes
+       -- of `Exactly`
+       blk <-
+         MP.try (do
+           blk <- BlockId Functor.<$> MPCL.hexadecimal
+           _ <- MP.chunk "+"
+           Applicative.pure blk)
+       off <- parseOffset
+       Applicative.pure $ Pointer blk off
   , Exactly Functor.<$> parseExactly
   ]
 

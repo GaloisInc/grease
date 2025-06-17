@@ -280,14 +280,14 @@ setupPtr la bak layout nm sel target = do
               (m', byteVals) <- writeFreshBytes sym m sel' ptr bytes
               setupMem .= m'
               pure (Initialized (C.RV byteVals) bytes)
-          Pointer _tag tgt -> do  -- recursive case
+          Pointer _tag off tgt -> do  -- recursive case
             let nm' = addIndex nm idx
             (val, tgt') <- setupPtr la bak layout nm' sel' tgt
             let storTy = Mem.bitvectorType (Bytes.bitsToBytes (natValue ?ptrWidth))
             m <- use setupMem
             m' <- liftIO $ Mem.doStore bak m ptr (Mem.LLVMPointerRepr ?ptrWidth) storTy Mem.noAlignment val
             setupMem .= m'
-            pure (Pointer (C.RV val) tgt')
+            pure (Pointer (C.RV val) off tgt')
 
       let offset = memShapeSize ?ptrWidth memShape
       offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral offset)))
