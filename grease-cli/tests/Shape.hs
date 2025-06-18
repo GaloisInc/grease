@@ -58,6 +58,8 @@ import Test.Tasty qualified as TT
 import Test.Tasty.HUnit qualified as TH
 import Test.Tasty.Hedgehog qualified as TTH
 import Text.Show (show)
+import Data.Maybe
+import Data.Function (flip)
 
 eqShape ::
   (forall t1' t2'. ExtShape ext NoTag t1' -> ExtShape ext NoTag t2' -> Bool) ->
@@ -157,7 +159,7 @@ genPtrTarget ::
 genPtrTarget = do
   memShapes <- HG.list (HR.linear 0 16) genMemShape
   -- Use smart constructor to avoid "non-canonical" instances
-  let tgt = PtrShape.ptrTarget (Seq.fromList memShapes)
+  let tgt = PtrShape.ptrTarget Nothing (Seq.fromList memShapes)
   let sz = PtrShape.ptrTargetSize ?ptrWidth tgt
   offsetInt <- HG.integral (HR.linear 0 (Bytes.bytesToInteger sz))
   let offset = PtrShape.Offset (Bytes.toBytes offsetInt)
@@ -229,7 +231,7 @@ ptrShape ::
   [PtrShape.MemShape 64 NoTag] ->
   Shape LLVM NoTag (LLVMPointerType 64)
 ptrShape offset =
-  Shape.ShapeExt . PtrShape.ShapePtr NoTag offset . PtrShape.PtrTarget . Seq.fromList
+  Shape.ShapeExt . PtrShape.ShapePtr NoTag offset . flip PtrShape.PtrTarget Nothing . Seq.fromList
 
 printThenParse :: Shape LLVM NoTag t -> IO (Some (Shape LLVM NoTag))
 printThenParse s = do
@@ -331,9 +333,9 @@ shapeTests =
   , testPrint
     "Print Pointer"
     "000000+0000000000000000\n\n000000: 000001+0000000000000000\n000001: "
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0) (PtrShape.PtrTarget Seq.Empty)])
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0) (PtrShape.PtrTarget Seq.Empty Nothing)])
   , testPrint
     "Print Pointer with non-zero offset"
     "000000+0000000000000000\n\n000000: 000001+00000000000000ff\n000001: "
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0xff) (PtrShape.PtrTarget Seq.Empty)])
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0xff) (PtrShape.PtrTarget Seq.Empty Nothing)])
   ]
