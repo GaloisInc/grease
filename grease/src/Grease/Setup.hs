@@ -67,12 +67,11 @@ import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
-import Prelude (Int, Num(..), fromIntegral, putStrLn)
+import Prelude (Int, Num(..), fromIntegral)
 import System.IO (IO)
 import Text.Show (show)
 import What4.Interface qualified as W4
 import qualified Data.Map as Map
-import Data.List ((++))
 
 -- | Name for fresh symbolic values, passed to 'W4.safeSymbol'. The phantom
 -- type parameter prevents making recursive calls without changing the name.
@@ -166,14 +165,11 @@ setupPtrMem la bak layout nm sel (PtrTarget smem bid) =
     Just bid' -> do 
       resmap <- use setupRes
       case Map.lookup bid' resmap of 
-        Just memoizeRes -> do
-          _ <- liftIO $ putStrLn $ "Retrieving a memoized result " List.++ show bid
-          pure memoizeRes
+        Just memoizeRes -> pure memoizeRes
         Nothing ->
           do
             nv <- r
             s <- get
-            _ <- liftIO $ putStrLn $ "memoizing a value with block id " List.++ show bid
             let newmap = Map.insert bid' nv resmap 
             _ <- put  (s {_setupRes = newmap})
             pure nv
@@ -212,7 +208,6 @@ setupPtr la bak layout nm sel target = do
       mem <- use setupMem 
       let bytes = ptrTargetSize ?ptrWidth target
       sz <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral bytes)))
-      _ <- liftIO $ putStrLn "allocing"
       let loc = "grease setup (" <> show (ppSelector (PtrCursor.ppDereference @ext) sel) <> ")"
       (ptr, mem') <- liftIO $ Mem.doMalloc bak Mem.HeapAlloc Mem.Mutable loc mem sz align
       setupMem .= mem'
@@ -257,7 +252,6 @@ setupPtr la bak layout nm sel target = do
       let mkInt bv = Mem.LLVMValInt (Mem.llvmPointerBlock bv) (Mem.llvmPointerOffset bv)
       let val = Mem.LLVMValArray i8 (Vec.map mkInt vals)
       let storTy = Mem.arrayType (fromIntegral (List.length bytes)) i8
-      _ <- liftIO $ putStrLn "Doing raw known bytes store"
       m' <- liftIO $ Mem.storeRaw bak m ptr storTy Mem.noAlignment val
       pure (m', vals)
 
@@ -333,7 +327,6 @@ setupPtr la bak layout nm sel target = do
             (val, tgt') <- setupPtrMem la bak layout nm' sel' tgt
             let storTy = Mem.bitvectorType (Bytes.bitsToBytes (natValue ?ptrWidth))
             m <- use setupMem
-            _ <- liftIO $ putStrLn $ ("Do store off: " ++ show off)
             offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset off))))
             val' <- liftIO $ Mem.ptrAdd sym ?ptrWidth val offsetBv
             m' <- liftIO $ Mem.doStore bak m ptr (Mem.LLVMPointerRepr ?ptrWidth) storTy Mem.noAlignment val' 
