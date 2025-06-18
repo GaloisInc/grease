@@ -108,7 +108,6 @@ import Grease.Cursor.Pointer ()
 import Grease.Diagnostic
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint
-import Grease.FunctionOverride (builtinStubsOverrides)
 import Grease.Heuristic
 import Grease.LLVM qualified as LLVM
 import Grease.LLVM.Overrides qualified as LLVM
@@ -120,9 +119,10 @@ import Grease.Macaw.Arch.PPC32 (ppc32Ctx)
 import Grease.Macaw.Arch.PPC64 (ppc64Ctx)
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
-import Grease.Macaw.FunctionOverride qualified as Macaw
+import Grease.Macaw.FunctionOverride (mkMacawOverrideMap)
 import Grease.Macaw.Load (LoadedProgram(..), load)
 import Grease.Macaw.Load.Relocation (RelocType(..), elfRelocationMap)
+import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
 import Grease.Macaw.PLT
 import Grease.Macaw.RegName (RegName(..), RegNames(..), regNames, getRegName, mkRegName, regNameToString)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
@@ -620,7 +620,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
         let builtinOvs = builtinStubsOverrides bak mvar memCfg0 archCtx fs
         let userOvPaths = simOverrides simOpts
-        fnOvsMap <- liftIO $ Macaw.mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
+        fnOvsMap <- liftIO $ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
         let errorSymbolicFunCalls = simErrorSymbolicFunCalls simOpts
         let errorSymbolicSyscalls = simErrorSymbolicSyscalls simOpts
         let skipInvalidCallAddrs = simSkipInvalidCallAddrs simOpts

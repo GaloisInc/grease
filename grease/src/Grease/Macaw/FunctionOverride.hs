@@ -33,11 +33,11 @@ import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Sequence qualified as Seq
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.FunctionOverride.SExp qualified as SExp
 import Grease.Macaw.Arch
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride(..), loadOverrides)
 import Grease.Macaw.SimulatorState (MacawFnHandle, MacawOverride)
 import Grease.Skip (registerSkipOverride)
+import Grease.Syntax.Overrides as SExp
 import Grease.Utility (declaredFunNotFound)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C

@@ -27,12 +27,12 @@ import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction, Diagnostic(LLVMOverridesDiagnostic))
-import Grease.FunctionOverride.SExp (freshBytesOverride, tryBindTypedOverride)
 import Grease.LLVM.Overrides.Builtin (basicLLVMOverrides)
 import Grease.LLVM.Overrides.Declare (mkDeclare)
 import Grease.LLVM.Overrides.Diagnostic as Diag
 import Grease.LLVM.Overrides.SExp (LLVMSExpOverride(..), loadOverrides)
 import Grease.Skip (declSkipOverride, registerSkipOverride)
+import Grease.Syntax.Overrides (freshBytesOverride, tryBindTypedOverride)
 import Grease.Utility (declaredFunNotFound, llvmOverrideName)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
