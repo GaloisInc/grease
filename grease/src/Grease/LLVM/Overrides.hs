@@ -137,7 +137,7 @@ registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx fs decls = do
           (\(CLLVM.SomeLLVMOverride ov) -> CLLVM.llvmOverride_declare ov)
           (Foldable.toList (basicLLVMOverrides fs))
   let fwdDeclLLVMDecls =
-        List.concatMap (\(_, lfo) -> forwardDeclDecls (lfoForwardDeclarations lfo)) userOvs
+        List.concatMap (\(_, lso) -> forwardDeclDecls (lsoForwardDeclarations lso)) userOvs
   let allDecls = decls List.++ basicDecls List.++ fwdDeclLLVMDecls
   Foldable.forM_ allDecls $ \decl -> do
     doLog la (Diag.FoundDeclare decl)
@@ -166,9 +166,9 @@ registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx fs decls = do
       pure (nm, sov)
 
   userOvs' <-
-    forM userOvs $ \(nm, lfo) -> do
-     let publicOv = lfoPublicOverride lfo
-         auxOvs = lfoAuxiliaryOverrides lfo
+    forM userOvs $ \(nm, lso) -> do
+     let publicOv = lsoPublicOverride lso
+         auxOvs = lsoAuxiliaryOverrides lso
      registerOv publicOv
      Foldable.traverse_ registerOv auxOvs
      pure (nm, publicOv)
@@ -178,9 +178,9 @@ registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx fs decls = do
   -- Next, register the handles for forward declarations in user-defined
   -- overrides. We only do this after registering all of the public functions
   -- so as to ensure that we get the dependencies correct.
-  Foldable.for_ userOvs $ \(_, lfo) ->
+  Foldable.for_ userOvs $ \(_, lso) ->
     registerLLVMOvForwardDeclarations mvar allOvs $
-    lfoForwardDeclarations lfo
+    lsoForwardDeclarations lso
   pure allOvs
   where
     registerOv ::
