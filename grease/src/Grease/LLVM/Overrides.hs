@@ -16,7 +16,7 @@ module Grease.LLVM.Overrides
   , registerLLVMModuleOverrides
   , registerLLVMSexpProgForwardDeclarations
   , registerLLVMOvForwardDeclarations
-  , LLVMFunctionOverride(..)
+  , LLVMSExpOverride(..)
   ) where
 
 import Control.Exception.Safe (throw)
@@ -68,7 +68,7 @@ loadOverrides ::
   [FilePath] ->
   C.HandleAllocator ->
   C.GlobalVar Mem.Mem ->
-  IO (Seq.Seq (W4.FunctionName, LLVMFunctionOverride p sym))
+  IO (Seq.Seq (W4.FunctionName, LLVMSExpOverride p sym))
 loadOverrides paths halloc mvar =
   traverse (\path -> loadOverride path halloc mvar) (Seq.fromList paths)
 
@@ -79,7 +79,7 @@ loadOverride ::
   FilePath ->
   C.HandleAllocator ->
   C.GlobalVar Mem.Mem ->
-  IO (W4.FunctionName, LLVMFunctionOverride p sym)
+  IO (W4.FunctionName, LLVMSExpOverride p sym)
 loadOverride path halloc mvar = do
   let ?parserHooks = llvmParserHooks emptyParserHooks mvar
   prog <- parseProgram halloc path
@@ -95,7 +95,7 @@ loadOverride path halloc mvar = do
       let fwdDecs = CSyn.parsedProgForwardDecs prog
       pure
         ( fnName
-        , LLVMFunctionOverride
+        , LLVMSExpOverride
             { lfoPublicOverride = publicOv
             , lfoAuxiliaryOverrides = auxOvs
             , lfoForwardDeclarations = fwdDecs
@@ -435,8 +435,8 @@ registerLLVMForwardDeclarations mvar funOvs cannotResolve fwdDecs =
           _ -> cannotResolve fwdDecName hdl
 
 -- | An LLVM function override, corresponding to a single S-expression file.
-data LLVMFunctionOverride p sym =
-  LLVMFunctionOverride
+data LLVMSExpOverride p sym =
+  LLVMSExpOverride
     { lfoPublicOverride :: CLLVM.SomeLLVMOverride p sym CLLVM.LLVM
       -- ^ The override for the public function, whose name matches that of the
       -- S-expression file.
