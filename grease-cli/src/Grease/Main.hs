@@ -108,10 +108,11 @@ import Grease.Cursor.Pointer ()
 import Grease.Diagnostic
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint
-import Grease.FunctionOverride (builtinLLVMOverrides, builtinStubsOverrides)
+import Grease.FunctionOverride (builtinStubsOverrides)
 import Grease.Heuristic
 import Grease.LLVM qualified as LLVM
 import Grease.LLVM.Overrides qualified as LLVM
+import Grease.LLVM.Overrides.Builtin (builtinLLVMOverrides)
 import Grease.Macaw
 import Grease.Macaw.Arch
 import Grease.Macaw.Arch.AArch32 (armCtx)

@@ -200,6 +200,7 @@ library
     Grease.Heuristic.Result
     Grease.LLVM
     Grease.LLVM.Overrides
+    Grease.LLVM.Overrides.Builtin
     Grease.LLVM.Overrides.Declare
     Grease.LLVM.Overrides.Diagnostic
     Grease.LLVM.Overrides.SExp
