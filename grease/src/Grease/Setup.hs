@@ -163,16 +163,15 @@ setupPtrMem la bak layout nm sel (PtrTarget smem bid) =
   let r = setupPtr la bak layout nm sel (PtrTarget smem bid) in 
   case bid of 
     Just bid' -> do 
-      s <- get
-      let resmap = _setupRes s
-      let mres = Map.lookup bid' resmap
-      case mres of 
-        Just memoized_res -> do
+      resmap <- use setupRes
+      case Map.lookup bid' resmap of 
+        Just memoizeRes -> do
           _ <- liftIO $ putStrLn $ "Retrieving a memoized result " List.++ show bid
-          pure memoized_res
+          pure memoizeRes
         Nothing ->
           do
             nv <- r
+            s <- get
             _ <- liftIO $ putStrLn $ "memoizing a value with block id " List.++ show bid
             let newmap = Map.insert bid' nv resmap 
             _ <- put  (s {_setupRes = newmap})
@@ -257,6 +256,7 @@ setupPtr la bak layout nm sel target = do
       let mkInt bv = Mem.LLVMValInt (Mem.llvmPointerBlock bv) (Mem.llvmPointerOffset bv)
       let val = Mem.LLVMValArray i8 (Vec.map mkInt vals)
       let storTy = Mem.arrayType (fromIntegral (List.length bytes)) i8
+      _ <- liftIO $ putStrLn "Doing raw known bytes store"
       m' <- liftIO $ Mem.storeRaw bak m ptr storTy Mem.noAlignment val
       pure (m', vals)
 
@@ -332,6 +332,7 @@ setupPtr la bak layout nm sel target = do
             (val, tgt') <- setupPtrMem la bak layout nm' sel' tgt
             let storTy = Mem.bitvectorType (Bytes.bitsToBytes (natValue ?ptrWidth))
             m <- use setupMem
+            _ <- liftIO $ putStrLn $ "Do store"
             m' <- liftIO $ Mem.doStore bak m ptr (Mem.LLVMPointerRepr ?ptrWidth) storTy Mem.noAlignment val
             setupMem .= m'
             pure (Pointer (C.RV val) off tgt')
