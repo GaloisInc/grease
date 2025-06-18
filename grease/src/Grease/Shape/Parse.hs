@@ -283,20 +283,19 @@ parseUninitExplicit :: Parser Bytes.Bytes
 parseUninitExplicit =
   Bytes.toBytes . List.length Functor.<$> trySepBy1 (MP.chunk "##") memShapeSep
 
-parseRle :: Parser Char -> Parser (Char, Char, Bytes)
+parseRle :: Parser Char -> Parser Bytes
 parseRle parseChar = do
   -- The `try` is necessary to disambiguate from explicit bytes
-  (c1, c2) <-
-    MP.try $ do
-      c1 <- parseChar
-      c2 <- parseChar
-      _ <- MP.single '*'
-      pure (c1, c2)
+  MP.try $ do
+    _ <- parseChar
+    _ <- parseChar
+    _ <- MP.single '*'
+    pure ()
   rl <- MPCL.hexadecimal
-  pure (c1, c2, Bytes.toBytes @Int rl)
+  pure (Bytes.toBytes @Int rl)
 
 parseUninitRle :: Parser Bytes.Bytes
-parseUninitRle = thd Functor.<$> parseRle (MP.single '#')
+parseUninitRle = parseRle (MP.single '#')
 
 parseInit :: Parser Bytes.Bytes
 parseInit = parseInitRle MP.<|> parseInitExplicit
@@ -306,28 +305,25 @@ parseInitExplicit =
   Bytes.toBytes . List.length Functor.<$> trySepBy1 (MP.chunk "XX") memShapeSep
 
 parseInitRle :: Parser Bytes.Bytes
-parseInitRle = thd Functor.<$> parseRle (MP.single 'X')
+parseInitRle = parseRle (MP.single 'X')
 
 -- | Helper, not exported. Requires actual hex 'Char's.
 hexCharsToWord8 :: Char -> Char -> Word8
 hexCharsToWord8 c1 c2 = Tuple.fst (List.head (Numeric.readHex (c1:c2:[])))
 
--- | Helper, not exported.
-thd :: (a, b, c) -> c
-thd (_, _, z) = z
-
 parseExactly :: Parser (Seq Word8)
-parseExactly =
-  mconcat <$>
-    trySepBy1 (MP.lookAhead parseExactlyByte Applicative.*> parseExactlyByte) memShapeSep
+parseExactly = mconcat <$> trySepBy1 parseExactlyByte memShapeSep
 
 -- | Parse either a byte (e.g., @e0@) or a RLE'd byte (e.g., @e0*0a@).
 parseExactlyByte :: Parser (Seq Word8)
 parseExactlyByte = do
-  (c0, c1) <- (,) Functor.<$> MPC.hexDigitChar Applicative.<*> MPC.hexDigitChar
-  num <-
-    (MPC.char '*' Applicative.*> MPCL.hexadecimal) MP.<|>
-      (MP.notFollowedBy MPC.hexDigitChar Applicative.*> Applicative.pure 1)
+  -- We don't use parseRle because it led to a conflict between the RLE and
+  -- non-RLE parsers, see #238.
+  c0 <- MPC.hexDigitChar
+  c1 <- MPC.hexDigitChar
+  let rle = MPC.char '*' Applicative.*> MPCL.hexadecimal
+  let nonRle = MP.notFollowedBy MPC.hexDigitChar Applicative.*> Applicative.pure 1
+  num <- rle MP.<|> nonRle
   pure (Seq.replicate num (hexCharsToWord8 c0 c1))
 
 parseShape ::
