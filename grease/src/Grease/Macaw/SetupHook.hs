@@ -53,13 +53,13 @@ newtype SetupHook sym arch
       bak ->
       LCS.GlobalVar LCLM.Mem ->
       -- Map of names of overridden functions to their implementations
-      Map.Map WF.FunctionName (MacawFunctionOverride p sym arch) ->
+      Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
       LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ())
 
 -- | Register overrides, both user-defined ones and ones that are hard-coded
 -- into GREASE itself.
 registerOverrideCfgs ::
-  Map.Map WF.FunctionName (MacawFunctionOverride p sym arch) ->
+  Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideCfgs funOvs =
   Monad.forM_ (Map.elems funOvs) $ \mfo -> do
@@ -71,7 +71,7 @@ registerOverrideCfgs funOvs =
     Monad.forM_ auxFns $ \(LCS.FnBinding auxHdl auxSt) -> LCS.bindFnHandle auxHdl auxSt
 
 -- | Redirect function handles from forward declarations appearing in
--- 'MacawFunctionOverride's to their implementations.
+-- 'MacawSExpOverride's to their implementations.
 registerOverrideForwardDeclarations ::
   ( LCLM.HasPtrWidth (ArchAddrWidth arch)
   , LCB.IsSymBackend sym bak
@@ -81,7 +81,7 @@ registerOverrideForwardDeclarations ::
   , HasToConcretize p
   ) =>
   bak ->
-  Map.Map WF.FunctionName (MacawFunctionOverride p sym arch) ->
+  Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideForwardDeclarations bak funOvs =
   Monad.forM_ (Map.elems funOvs) $ \mfo ->
@@ -89,7 +89,7 @@ registerOverrideForwardDeclarations bak funOvs =
       Stubs.SomeFunctionOverride fnOv ->
         GMFO.registerMacawOvForwardDeclarations bak funOvs (Stubs.functionForwardDeclarations fnOv)
 
--- | Register all handles from a 'MacawFunctionOverride'.
+-- | Register all handles from a 'MacawSExpOverride'.
 --
 -- Calls 'registerOverrides' and 'registerOverrideForwardDeclarations'.
 registerOverrideHandles ::
@@ -101,7 +101,7 @@ registerOverrideHandles ::
   , HasToConcretize p
   ) =>
   bak ->
-  Map.Map WF.FunctionName (MacawFunctionOverride p sym arch) ->
+  Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideHandles bak funOvs = do
   registerOverrideCfgs funOvs
@@ -136,7 +136,7 @@ registerSyntaxForwardDeclarations ::
   DataLayout ->
   LCS.GlobalVar LCLM.Mem ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map WF.FunctionName (MacawFunctionOverride p sym arch) ->
+  Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerSyntaxForwardDeclarations bak la dl mvar funOvs prog =
@@ -161,7 +161,7 @@ registerSyntaxHandles ::
   DataLayout ->
   LCS.GlobalVar LCLM.Mem ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map WF.FunctionName (MacawFunctionOverride p sym arch) ->
+  Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerSyntaxHandles bak la dl mvar funOvs prog = do

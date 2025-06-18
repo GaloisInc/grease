@@ -11,7 +11,7 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 -- | Functionality for converting 'Stubs.FunctionOverride's into functions
 -- that can be simulated within @macaw-symbolic@.
 module Grease.Macaw.FunctionOverride
-  ( MacawFunctionOverride(..)
+  ( MacawSExpOverride(..)
   , MacawFnHandle
   , MacawOverride
   , macawOverride
@@ -60,8 +60,8 @@ import What4.FunctionName qualified as W4
 import What4.Protocol.Online qualified as W4
 
 -- | A Macaw function override, corresponding to a single S-expression file.
-data MacawFunctionOverride p sym arch =
-  MacawFunctionOverride
+data MacawSExpOverride p sym arch =
+  MacawSExpOverride
     { mfoPublicFnHandle :: MacawFnHandle arch
       -- ^ The handle for the public function, whose name matches that of the
       -- S-expression file.
@@ -145,7 +145,7 @@ massageRegAssignment ::
 massageRegAssignment = C.unRV . Ctx.last . fmapFC (C.RV . C.regValue)
 
 -- | Construct a 'Map.Map' of names of function overrides to their corresponding
--- 'MacawFunctionOverride's, suitable for use within @macaw-symbolic@. The
+-- 'MacawSExpOverride's, suitable for use within @macaw-symbolic@. The
 -- overrides are taken from the following sources:
 --
 -- * Generic function overrides (e.g., from 'builtinStubsOverrides')
@@ -170,7 +170,7 @@ mkMacawOverrideMap ::
   C.HandleAllocator ->
   C.GlobalVar Mem.Mem ->
   ArchContext arch ->
-  IO (Map.Map W4.FunctionName (MacawFunctionOverride p sym arch))
+  IO (Map.Map W4.FunctionName (MacawSExpOverride p sym arch))
 mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
   userOvs <- loadOverrides userOvPaths halloc
   -- Note the order here: due to how Map.fromList works, user-specified
@@ -187,7 +187,7 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
             halloc (C.overrideName macawPublicOv)
             (Ctx.singleton regsRepr) regsRepr
         let macawFnOv =
-              MacawFunctionOverride
+              MacawSExpOverride
                 { mfoPublicFnHandle = macawPublicHdl
                 , mfoPublicOverride = macawPublicOv
                 , mfoSomeFunctionOverride = someFnOv
@@ -245,7 +245,7 @@ registerMacawSexpProgForwardDeclarations ::
   GreaseLogAction ->
   CLLVM.DataLayout ->
   C.GlobalVar Mem.Mem ->
-  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch)
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch)
     {- ^ The map of public function names to their overrides. -} ->
   Map.Map W4.FunctionName C.SomeHandle
     {- ^ The map of forward declaration names to their handles. -} ->
@@ -266,7 +266,7 @@ registerMacawOvForwardDeclarations ::
   , ToConc.HasToConcretize p
   ) =>
   bak ->
-  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch)
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch)
     {- ^ The map of public function names to their overrides. -} ->
   Map.Map W4.FunctionName C.SomeHandle
     {- ^ The map of forward declaration names to their handles. -} ->
@@ -287,7 +287,7 @@ registerMacawForwardDeclarations ::
   , ToConc.HasToConcretize p
   ) =>
   bak ->
-  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch)
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch)
     {- ^ The map of public function names to their overrides. -} ->
   (forall args ret.
     W4.FunctionName ->
@@ -313,7 +313,7 @@ registerMacawForwardDeclaration ::
   , ToConc.HasToConcretize p
   ) =>
   bak ->
-  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch)
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch)
     {- ^ The map of public function names to their overrides. -} ->
   (forall args ret.
     W4.FunctionName ->
@@ -341,7 +341,7 @@ lookupMacawForwardDeclarationOverride ::
   , ToConc.HasToConcretize p
   ) =>
   bak ->
-  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch)
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch)
     {- ^ The map of public function names to their overrides. -} ->
   W4.FunctionName
     {-^ Name of the forward declaration -} ->
