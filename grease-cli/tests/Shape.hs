@@ -279,6 +279,10 @@ shapeTests =
     "Parse Exactly RLE"
     "000000+0000000000000000\n\n000000: de*4"
     (ptrShape (PtrShape.Offset 0) [PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) [0xde, 0xde, 0xde, 0xde])])
+  , testParse
+    "Parse Exactly byte then RLE"
+    "000000+0000000000000000\n\n000000: 01 00*2 03"
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) [0x01, 0x00, 0x00, 0x03])])
 
   , testPrint
     "Print ShapeBool"
