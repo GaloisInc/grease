@@ -89,11 +89,11 @@ eqShapes eqExt c1 c2 =
 
 eqMemShape :: PtrShape.MemShape w NoTag -> PtrShape.MemShape w NoTag -> Bool
 eqMemShape (PtrShape.Pointer ty off tgt) (PtrShape.Pointer ty' off' tgt') = ty == ty' && off == off' && eqPtrTarget tgt tgt'
-eqMemShape x y = x == y  
+eqMemShape x y = x == y
 
 eqPtrTarget :: PtrShape.PtrTarget w NoTag -> PtrShape.PtrTarget w NoTag  -> Bool
-eqPtrTarget (PtrShape.PtrTarget mems _)  (PtrShape.PtrTarget mems' _) = 
-  Seq.length mems == Seq.length mems' && foldl (\acc (x,y) -> acc && eqMemShape x y) True (Seq.zip mems mems') 
+eqPtrTarget (PtrShape.PtrTarget mems _)  (PtrShape.PtrTarget mems' _) =
+  Seq.length mems == Seq.length mems' && foldl (\acc (x,y) -> acc && eqMemShape x y) True (Seq.zip mems mems')
 
 eqPtrShape ::
   PtrShape w ext NoTag t1 ->
