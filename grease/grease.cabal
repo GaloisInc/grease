@@ -213,6 +213,7 @@ library
     Grease.Macaw.Load.Diagnostic
     Grease.Macaw.Load.Relocation
     Grease.Macaw.Memory
+    Grease.Macaw.Overrides.SExp
     Grease.Macaw.PLT
     Grease.Macaw.SetupHook
     Grease.Macaw.SimulatorHooks

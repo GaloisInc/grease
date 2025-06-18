@@ -27,19 +27,17 @@ import Data.Foldable qualified as Foldable
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
-import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC)
-import Data.Proxy (Proxy(..))
 import Data.Sequence qualified as Seq
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.FunctionOverride.SExp qualified as SExp
 import Grease.Macaw.Arch
-import Grease.Macaw.SimulatorState
+import Grease.Macaw.Overrides.SExp (MacawSExpOverride(..), loadOverrides)
+import Grease.Macaw.SimulatorState (MacawFnHandle, MacawOverride)
 import Grease.Skip (registerSkipOverride)
-import Grease.Syntax (parseProgram)
 import Grease.Utility (declaredFunNotFound)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
@@ -47,34 +45,13 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.Syntax (emptyParserHooks)
 import Lang.Crucible.LLVM.TypeContext (TypeContext)
 import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Syntax.Concrete qualified as CSyn
-import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Stubs.FunctionOverride qualified as Stubs
 import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
-import Stubs.Wrapper qualified as Stubs
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as W4
 import What4.Protocol.Online qualified as W4
-
--- | A Macaw function override, corresponding to a single S-expression file.
-data MacawSExpOverride p sym arch =
-  MacawSExpOverride
-    { mfoPublicFnHandle :: MacawFnHandle arch
-      -- ^ The handle for the public function, whose name matches that of the
-      -- S-expression file.
-    , mfoPublicOverride :: MacawOverride p sym arch
-      -- ^ The override for the public function, whose name matches that of the
-      -- S-expression file.
-    , mfoSomeFunctionOverride :: Stubs.SomeFunctionOverride p sym arch
-      -- ^ The 'SomeFunctionOverride' value for S-expression file. This is
-      -- primarily needed to compute the 'MacawOverride' above, but it is still
-      -- convenient to keep the 'SomeFunctionOverride' value around to access
-      -- the argument types, result type, auxiliary function bindings, forward
-      -- declarations, etc.
-    }
 
 -- | Convert a 'Stubs.FunctionOverride' to a 'MacawOverride'. Really, this
 -- functionality ought to be exposed from @stubs-common@. See
@@ -201,31 +178,6 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
       Symbolic.crucArchRegTypes $
       Symbolic.archFunctions $
       archCtx ^. archVals
-
--- | Parse overrides in the Macaw S-expression syntax.
-loadOverrides ::
-  Symbolic.SymArchConstraints arch =>
-  [FilePath] ->
-  C.HandleAllocator ->
-  IO (Seq.Seq (Stubs.SomeFunctionOverride p sym arch))
-loadOverrides paths halloc =
-  traverse
-    (\path -> loadOverride path halloc)
-    (Seq.fromList paths)
-
--- | Parse an override in the Macaw S-expression syntax. An override
--- cannot use @extern@.
-loadOverride ::
-  forall sym arch p.
-  Symbolic.SymArchConstraints arch =>
-  FilePath ->
-  C.HandleAllocator ->
-  IO (Stubs.SomeFunctionOverride p sym arch)
-loadOverride path halloc = do
-  let ?parserHooks = machineCodeParserHooks Proxy emptyParserHooks
-  prog <- parseProgram halloc path
-  CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
-  Stubs.parsedProgToFunctionOverride path prog
 
 -- | Redirect handles for forward declarations in an S-expression file to
 -- actually call the corresponding Macaw overrides. Treat any calls to unresolved
