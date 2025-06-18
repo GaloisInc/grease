@@ -9,7 +9,7 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.FunctionOverride
+module Grease.Macaw.Overrides.Builtin
   ( builtinStubsOverrides
   ) where
 

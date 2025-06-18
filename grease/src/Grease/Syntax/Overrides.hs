@@ -1,8 +1,14 @@
+{-|
+Copyright        : (c) Galois, Inc. 2025
+Maintainer       : GREASE Maintainers <grease@galois.com>
+-}
+
+
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 
-module Grease.FunctionOverride.SExp
+module Grease.Syntax.Overrides
   ( checkTypedOverrideHandleCompat
   , tryBindTypedOverride
   , freshBytesOverride

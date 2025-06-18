@@ -193,8 +193,6 @@ library
     Grease.Diagnostic
     Grease.Diagnostic.Severity
     Grease.Entrypoint
-    Grease.FunctionOverride
-    Grease.FunctionOverride.SExp
     Grease.Heuristic
     Grease.Heuristic.Diagnostic
     Grease.Heuristic.Result
@@ -214,6 +212,7 @@ library
     Grease.Macaw.Load.Diagnostic
     Grease.Macaw.Load.Relocation
     Grease.Macaw.Memory
+    Grease.Macaw.Overrides.Builtin
     Grease.Macaw.Overrides.SExp
     Grease.Macaw.PLT
     Grease.Macaw.SetupHook
@@ -247,6 +246,7 @@ library
     Grease.Skip.Diagnostic
     Grease.Solver
     Grease.Syntax
+    Grease.Syntax.Overrides
     Grease.Syscall
     Grease.Time
     Grease.Utility
