@@ -588,9 +588,9 @@ useMacawSExpOverride ::
   IO (MacawFnHandle arch, C.SimState p sym (Symbolic.MacawExt arch) r f a)
 useMacawSExpOverride bak la halloc arch allOvs mOv st0 =
  do MacawSExpOverride
-      { mfoPublicFnHandle = publicOvHdl
-      , mfoPublicOverride = publicOv
-      , mfoSomeFunctionOverride = Stubs.SomeFunctionOverride fnOv
+      { msoPublicFnHandle = publicOvHdl
+      , msoPublicOverride = publicOv
+      , msoSomeFunctionOverride = Stubs.SomeFunctionOverride fnOv
       } <- pure mOv
     let C.FnBindings fnHdlMap0 = st0 ^. C.stateContext . C.functionBindings
         fnOvName = Stubs.functionName fnOv

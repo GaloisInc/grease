@@ -26,13 +26,13 @@ import Stubs.Wrapper qualified as Stubs
 -- | A Macaw function override, corresponding to a single S-expression file.
 data MacawSExpOverride p sym arch =
   MacawSExpOverride
-    { mfoPublicFnHandle :: MacawFnHandle arch
+    { msoPublicFnHandle :: MacawFnHandle arch
       -- ^ The handle for the public function, whose name matches that of the
       -- S-expression file.
-    , mfoPublicOverride :: MacawOverride p sym arch
+    , msoPublicOverride :: MacawOverride p sym arch
       -- ^ The override for the public function, whose name matches that of the
       -- S-expression file.
-    , mfoSomeFunctionOverride :: Stubs.SomeFunctionOverride p sym arch
+    , msoSomeFunctionOverride :: Stubs.SomeFunctionOverride p sym arch
       -- ^ The 'SomeFunctionOverride' value for S-expression file. This is
       -- primarily needed to compute the 'MacawOverride' above, but it is still
       -- convenient to keep the 'SomeFunctionOverride' value around to access

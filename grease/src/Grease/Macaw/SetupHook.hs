@@ -62,10 +62,10 @@ registerOverrideCfgs ::
   Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideCfgs funOvs =
-  Monad.forM_ (Map.elems funOvs) $ \mfo -> do
-    let publicOvHdl = GMO.mfoPublicFnHandle mfo
-        publicOv = GMO.mfoPublicOverride mfo
-    Stubs.SomeFunctionOverride fnOv <- pure $ GMO.mfoSomeFunctionOverride mfo
+  Monad.forM_ (Map.elems funOvs) $ \mso -> do
+    let publicOvHdl = GMO.msoPublicFnHandle mso
+        publicOv = GMO.msoPublicOverride mso
+    Stubs.SomeFunctionOverride fnOv <- pure $ GMO.msoSomeFunctionOverride mso
     LCS.bindFnHandle publicOvHdl (LCS.UseOverride publicOv)
     let auxFns = Stubs.functionAuxiliaryFnBindings fnOv
     Monad.forM_ auxFns $ \(LCS.FnBinding auxHdl auxSt) -> LCS.bindFnHandle auxHdl auxSt
@@ -84,8 +84,8 @@ registerOverrideForwardDeclarations ::
   Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideForwardDeclarations bak funOvs =
-  Monad.forM_ (Map.elems funOvs) $ \mfo ->
-    case GMO.mfoSomeFunctionOverride mfo of
+  Monad.forM_ (Map.elems funOvs) $ \mso ->
+    case GMO.msoSomeFunctionOverride mso of
       Stubs.SomeFunctionOverride fnOv ->
         GMO.registerMacawOvForwardDeclarations bak funOvs (Stubs.functionForwardDeclarations fnOv)
 
