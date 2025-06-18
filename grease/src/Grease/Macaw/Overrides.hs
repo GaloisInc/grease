@@ -165,9 +165,9 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
             (Ctx.singleton regsRepr) regsRepr
         let macawFnOv =
               MacawSExpOverride
-                { mfoPublicFnHandle = macawPublicHdl
-                , mfoPublicOverride = macawPublicOv
-                , mfoSomeFunctionOverride = someFnOv
+                { msoPublicFnHandle = macawPublicHdl
+                , msoPublicOverride = macawPublicOv
+                , msoSomeFunctionOverride = someFnOv
                 }
         pure (Stubs.functionName fnOv, macawFnOv))
       allOvs
@@ -311,8 +311,8 @@ lookupMacawForwardDeclarationOverride bak funOvs decName hdl =
           (C.Refl, C.Refl) <- SExp.checkTypedOverrideHandleCompat hdl ov
           Just (C.runTypedOverride (C.handleName hdl) ov)
         _ -> Nothing
-    Just mfo -> do
-      let someForwardedOv = mfoSomeFunctionOverride mfo
+    Just mso -> do
+      let someForwardedOv = msoSomeFunctionOverride mso
           forwardedOv =
             Stubs.mkForwardDeclarationOverride
               bak
