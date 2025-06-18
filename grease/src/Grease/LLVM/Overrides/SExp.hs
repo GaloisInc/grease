@@ -37,12 +37,12 @@ import What4.FunctionName qualified as W4
 -- | An LLVM function override, corresponding to a single S-expression file.
 data LLVMSExpOverride p sym =
   LLVMSExpOverride
-    { lfoPublicOverride :: CLLVM.SomeLLVMOverride p sym CLLVM.LLVM
+    { lsoPublicOverride :: CLLVM.SomeLLVMOverride p sym CLLVM.LLVM
       -- ^ The override for the public function, whose name matches that of the
       -- S-expression file.
-    , lfoAuxiliaryOverrides :: [CLLVM.SomeLLVMOverride p sym CLLVM.LLVM]
+    , lsoAuxiliaryOverrides :: [CLLVM.SomeLLVMOverride p sym CLLVM.LLVM]
       -- ^ Overrides for the auxiliary functions in the S-expression file.
-    , lfoForwardDeclarations :: Map.Map W4.FunctionName C.SomeHandle
+    , lsoForwardDeclarations :: Map.Map W4.FunctionName C.SomeHandle
       -- ^ The map of names of forward declarations in the S-expression file to
       -- their handles.
     }
@@ -81,9 +81,9 @@ loadOverride path halloc mvar = do
       pure
         ( fnName
         , LLVMSExpOverride
-            { lfoPublicOverride = publicOv
-            , lfoAuxiliaryOverrides = auxOvs
-            , lfoForwardDeclarations = fwdDecs
+            { lsoPublicOverride = publicOv
+            , lsoAuxiliaryOverrides = auxOvs
+            , lsoForwardDeclarations = fwdDecs
             }
         )
     [] ->
