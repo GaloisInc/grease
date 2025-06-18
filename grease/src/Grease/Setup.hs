@@ -72,6 +72,7 @@ import System.IO (IO)
 import Text.Show (show)
 import What4.Interface qualified as W4
 import qualified Data.Map as Map
+import Data.List ((++))
 
 -- | Name for fresh symbolic values, passed to 'W4.safeSymbol'. The phantom
 -- type parameter prevents making recursive calls without changing the name.
@@ -332,8 +333,10 @@ setupPtr la bak layout nm sel target = do
             (val, tgt') <- setupPtrMem la bak layout nm' sel' tgt
             let storTy = Mem.bitvectorType (Bytes.bitsToBytes (natValue ?ptrWidth))
             m <- use setupMem
-            _ <- liftIO $ putStrLn $ "Do store"
-            m' <- liftIO $ Mem.doStore bak m ptr (Mem.LLVMPointerRepr ?ptrWidth) storTy Mem.noAlignment val
+            _ <- liftIO $ putStrLn $ ("Do store off: " ++ show off)
+            offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset off))))
+            val' <- liftIO $ Mem.ptrAdd sym ?ptrWidth val offsetBv
+            m' <- liftIO $ Mem.doStore bak m ptr (Mem.LLVMPointerRepr ?ptrWidth) storTy Mem.noAlignment val' 
             setupMem .= m'
             pure (Pointer (C.RV val) off tgt')
 
