@@ -51,8 +51,8 @@ import Data.Word (Word8, Word64)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic
 import Grease.Macaw.Arch
-import Grease.Macaw.FunctionOverride
 import Grease.Macaw.Load.Relocation (RelocType(..))
+import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.ResolveCall qualified as ResolveCall
 import Grease.Macaw.SetupHook (SetupHook(SetupHook))
 import Grease.Macaw.SimulatorHooks
