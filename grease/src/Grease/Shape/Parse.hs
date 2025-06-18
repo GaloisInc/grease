@@ -31,6 +31,7 @@ import Data.BitVector.Sized (BV)
 import Data.BitVector.Sized qualified as BV
 import Data.Coerce (coerce)
 import Data.Either qualified as Either
+import Data.Foldable qualified as Foldable
 import Data.Functor qualified as Functor
 import Data.Functor.Const qualified as Const
 import Data.IntMap (IntMap)
@@ -269,7 +270,7 @@ parseMemShape =
            Applicative.pure blk)
        off <- parseOffset
        Applicative.pure $ Pointer blk off
-  , Exactly Functor.<$> parseExactly
+  , Exactly . Foldable.toList Functor.<$> parseExactly
   ]
 
 trySepBy1 :: Parser a -> Parser sep -> Parser [a]
@@ -315,20 +316,19 @@ hexCharsToWord8 c1 c2 = Tuple.fst (List.head (Numeric.readHex (c1:c2:[])))
 thd :: (a, b, c) -> c
 thd (_, _, z) = z
 
-parseExactly :: Parser [Word8]
-parseExactly = parseExactlyRle MP.<|> parseExactlyExplicit
+parseExactly :: Parser (Seq Word8)
+parseExactly =
+  mconcat <$>
+    trySepBy1 (MP.lookAhead parseExactlyByte Applicative.*> parseExactlyByte) memShapeSep
 
-parseExactlyRle :: Parser [Word8]
-parseExactlyRle = do
-  (c1, c2, rl) <- parseRle MPC.hexDigitChar
-  pure $ replicate (fromIntegral @Bytes @Int rl) $ hexCharsToWord8 c1 c2
-
-parseExactlyExplicit :: Parser [Word8]
-parseExactlyExplicit =
-  Functor.fmap (Tuple.uncurry hexCharsToWord8) Functor.<$>
-    trySepBy1 (MP.lookAhead justTwoHex Applicative.*> twoHex) memShapeSep
-  where twoHex = (,) Functor.<$> MPC.hexDigitChar Applicative.<*> MPC.hexDigitChar
-        justTwoHex = twoHex Applicative.<* MP.notFollowedBy MPC.hexDigitChar
+-- | Parse either a byte (e.g., @e0@) or a RLE'd byte (e.g., @e0*0a@).
+parseExactlyByte :: Parser (Seq Word8)
+parseExactlyByte = do
+  (c0, c1) <- (,) Functor.<$> MPC.hexDigitChar Applicative.<*> MPC.hexDigitChar
+  num <-
+    (MPC.char '*' Applicative.*> MPCL.hexadecimal) MP.<|>
+      (MP.notFollowedBy MPC.hexDigitChar Applicative.*> Applicative.pure 1)
+  pure (Seq.replicate num (hexCharsToWord8 c0 c1))
 
 parseShape ::
   ExtShape ext ~ PtrShape ext w =>
