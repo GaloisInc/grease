@@ -50,7 +50,7 @@ import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel.Pointer (LLVMPointerType)
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-import Prelude (error, maxBound, (*), minBound, Integral)
+import Prelude (error, maxBound, (*), minBound, Integral, Foldable (..))
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import System.IO (IO)
@@ -87,6 +87,17 @@ eqShapes eqExt c1 c2 =
       eqShape eqExt x1 x2 && eqShapes eqExt c1' c2'
     (_, _) -> False
 
+
+
+eqMemShape :: PtrShape.MemShape w NoTag -> PtrShape.MemShape w NoTag -> Bool
+eqMemShape (PtrShape.Pointer ty off tgt) (PtrShape.Pointer ty' off' tgt') = 
+  ty == ty' && off == off' && eqPtrTarget tgt tgt'
+eqMemShape x y = x == y  
+
+eqPtrTarget :: PtrShape.PtrTarget w NoTag -> PtrShape.PtrTarget w NoTag  -> Bool
+eqPtrTarget (PtrShape.PtrTarget mems _)  (PtrShape.PtrTarget mems' _) = 
+  Seq.length mems == Seq.length mems' && foldl (\acc (x,y) -> acc && eqMemShape x y) True (Seq.zip mems mems') 
+
 eqPtrShape ::
   PtrShape w ext NoTag t1 ->
   PtrShape w ext NoTag t2 ->
@@ -100,7 +111,7 @@ eqPtrShape s1 s2 =
         Maybe.Nothing -> False
         Maybe.Just Equality.Refl -> bv == bv'
     (PtrShape.ShapePtr NoTag off1 tgt1, PtrShape.ShapePtr NoTag off2 tgt2) ->
-      off1 == off2 && tgt1 == tgt2
+      off1 == off2 && eqPtrTarget tgt1 tgt2
     (_, _) -> False
 
 genShapes ::
