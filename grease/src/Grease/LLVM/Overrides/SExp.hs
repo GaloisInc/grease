@@ -1,5 +1,5 @@
 {-|
-Copyright        : (c) Galois, Inc. 2024
+Copyright        : (c) Galois, Inc. 2025
 Description      : Support for LLVM overrides written in the S-expression syntax
 Maintainer       : GREASE Maintainers <grease@galois.com>
 -}

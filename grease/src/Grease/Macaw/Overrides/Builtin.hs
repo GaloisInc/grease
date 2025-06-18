@@ -1,5 +1,5 @@
 {-|
-Copyright        : (c) Galois, Inc. 2024
+Copyright        : (c) Galois, Inc. 2025
 Maintainer       : GREASE Maintainers <grease@galois.com>
 -}
 
