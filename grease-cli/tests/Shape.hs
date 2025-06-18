@@ -87,8 +87,6 @@ eqShapes eqExt c1 c2 =
       eqShape eqExt x1 x2 && eqShapes eqExt c1' c2'
     (_, _) -> False
 
-
-
 eqMemShape :: PtrShape.MemShape w NoTag -> PtrShape.MemShape w NoTag -> Bool
 eqMemShape (PtrShape.Pointer ty off tgt) (PtrShape.Pointer ty' off' tgt') = 
   ty == ty' && off == off' && eqPtrTarget tgt tgt'
