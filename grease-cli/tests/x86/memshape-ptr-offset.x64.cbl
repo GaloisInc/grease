@@ -11,9 +11,7 @@
   (start start:
     (let rdi (get-reg rdi regs))
     (let rdi-ptr (pointer-read (Ptr 64) le rdi))
-    (let offset (bv 64 8))
-    (let rdi-ptr-offset (pointer-add rdi-ptr offset))
-    (let rdi-ptr-offset-contents (pointer-read (Bitvector 64) le rdi-ptr-offset))
+    (let rdi-ptr-offset-contents (pointer-read (Bitvector 64) le rdi-ptr))
     (assert! (equal? rdi-ptr-offset-contents (bv 64 42)) "Value not 42")
     (return regs)))
 
