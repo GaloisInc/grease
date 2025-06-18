@@ -255,4 +255,5 @@ library
     Paths_grease
   other-modules:
     Grease.GitRev
+    Grease.Macaw.Overrides.Defs
     Paths_grease
