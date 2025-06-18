@@ -419,7 +419,7 @@ memConfigWithHandles ::
   -- | Map of dynamic function names to their addresses
   Map.Map W4.FunctionName (MC.ArchSegmentOff arch) ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   -- | Map of names of overridden syscalls to their implementations
   Map.Map W4.FunctionName (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
   Opts.ErrorSymbolicFunCalls ->
@@ -507,7 +507,7 @@ initState ::
   -- | The initial register state.
   ArchRegs sym arch ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   -- | An optional startup override to run just before the entrypoint function.
   Maybe (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   -- | The 'C.CFG' of the user-requested entrypoint function.

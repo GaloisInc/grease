@@ -149,7 +149,7 @@ defaultLookupFunctionHandleDispatch ::
   ArchContext arch ->
   EL.Memory (MC.ArchAddrWidth arch) ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   LookupFunctionHandleDispatch p sym arch
 defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs =
   LookupFunctionHandleDispatch $ \st mem regs lfhr -> do
@@ -158,7 +158,7 @@ defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs =
         callHandle hdl mbOv st' =
           case mbOv of
             Just macawFnOv ->
-              useMacawFunctionOverride bak la halloc arch funOvs macawFnOv st'
+              useMacawSExpOverride bak la halloc arch funOvs macawFnOv st'
             Nothing ->
               pure (hdl, st')
 
@@ -187,7 +187,7 @@ defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs =
         callHandle hdl mbOv st
       PltStubOverride pltStubAddrOff pltStubName macawFnOv -> do
         logFunctionCall pltStubName pltStubAddrOff
-        useMacawFunctionOverride bak la halloc arch funOvs macawFnOv st
+        useMacawSExpOverride bak la halloc arch funOvs macawFnOv st
 
 -- | The result of looking up a function handle.
 data LookupFunctionHandleResult p sym arch where
@@ -203,7 +203,7 @@ data LookupFunctionHandleResult p sym arch where
     -- | The function's handle.
     MacawFnHandle arch ->
     -- | The function's override (if one exists).
-    Maybe (MacawFunctionOverride p sym arch) ->
+    Maybe (MacawSExpOverride p sym arch) ->
     LookupFunctionHandleResult p sym arch
   -- | This is a newly discovered function handle.
   DiscoveredFnHandle ::
@@ -212,7 +212,7 @@ data LookupFunctionHandleResult p sym arch where
     -- | The function's handle.
     MacawFnHandle arch ->
     -- | The function's override (if one exists).
-    Maybe (MacawFunctionOverride p sym arch) ->
+    Maybe (MacawSExpOverride p sym arch) ->
     LookupFunctionHandleResult p sym arch
   -- | This is a PLT stub function with a corresponding override.
   PltStubOverride ::
@@ -221,7 +221,7 @@ data LookupFunctionHandleResult p sym arch where
     -- | The PLT stub's name.
     W4.FunctionName ->
     -- | The PLT stub's override.
-    MacawFunctionOverride p sym arch ->
+    MacawSExpOverride p sym arch ->
     LookupFunctionHandleResult p sym arch
 
 -- | Attempt to look up a function handle.
@@ -245,7 +245,7 @@ lookupFunctionHandleResult ::
   -- | Map of dynamic function names to their addresses
   Map.Map W4.FunctionName (MC.ArchSegmentOff arch) ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   ErrorSymbolicFunCalls ->
   SkipInvalidCallAddrs ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
@@ -381,7 +381,7 @@ lookupFunctionHandle ::
   -- | Map of dynamic function names to their addresses
   Map.Map W4.FunctionName (MC.ArchSegmentOff arch) ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   ErrorSymbolicFunCalls ->
   SkipInvalidCallAddrs ->
   LookupFunctionHandleDispatch p sym arch ->
@@ -565,10 +565,10 @@ discoverFuncAddr logAction halloc arch memory symMap pltStubs addr st0 = do
   let st1 = st0 & stateDiscoveredFnHandles %~ Map.insert addr cfgHdl
   pure $ useFnHandleAndState cfgHdl (C.UseCFG funcCFG (C.postdomInfo funcCFG)) st1
 
--- | Bind the public function defined in a 'MacawFunctionOverride' to its
+-- | Bind the public function defined in a 'MacawSExpOverride' to its
 -- 'MacawOverride', bind the auxiliary functions to their corresponding CFGs,
 -- and redirect any forward declarations to their corresponding overrides.
-useMacawFunctionOverride ::
+useMacawSExpOverride ::
   ( C.IsSymBackend sym bak
   , W4.OnlineSolver solver
   , sym ~ W4.ExprBuilder scope st fs
@@ -581,12 +581,12 @@ useMacawFunctionOverride ::
   C.HandleAllocator ->
   ArchContext arch ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
-  MacawFunctionOverride p sym arch ->
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  MacawSExpOverride p sym arch ->
   C.SimState p sym (Symbolic.MacawExt arch) r f a ->
   IO (MacawFnHandle arch, C.SimState p sym (Symbolic.MacawExt arch) r f a)
-useMacawFunctionOverride bak la halloc arch allOvs mOv st0 =
- do MacawFunctionOverride
+useMacawSExpOverride bak la halloc arch allOvs mOv st0 =
+ do MacawSExpOverride
       { mfoPublicFnHandle = publicOvHdl
       , mfoPublicOverride = publicOv
       , mfoSomeFunctionOverride = Stubs.SomeFunctionOverride fnOv
@@ -617,7 +617,7 @@ extendHandleMap ::
   ) =>
   bak ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawFunctionOverride p sym arch) ->
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   -- | The override that needs to be registered
   Stubs.FunctionOverride p sym args arch ret ->
   -- | The initial function handle map
@@ -659,7 +659,7 @@ extendHandleMap bak allOvs = go
                     case lookupMacawForwardDeclarationOverride bak allOvs fwdDecName fwdDecHdl of
                       Just ov -> pure (C.insertHandleMap fwdDecHdl (C.UseOverride ov) binds)
                       Nothing -> declaredFunNotFound fwdDecName
-                  Just (MacawFunctionOverride _ _
+                  Just (MacawSExpOverride _ _
                          someForwardedOv@(Stubs.SomeFunctionOverride forwardedOv)) ->
                     let forwardedOvSim =
                           Stubs.mkForwardDeclarationOverride
