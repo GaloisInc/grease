@@ -19,7 +19,7 @@ import Data.Map.Strict qualified as Map
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Entrypoint qualified as GE
-import Grease.Macaw.FunctionOverride as GMFO
+import Grease.Macaw.Overrides as GMO
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
 import Lang.Crucible.Backend qualified as LCB
 import Lang.Crucible.Backend.Online qualified as LCB
@@ -63,9 +63,9 @@ registerOverrideCfgs ::
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideCfgs funOvs =
   Monad.forM_ (Map.elems funOvs) $ \mfo -> do
-    let publicOvHdl = GMFO.mfoPublicFnHandle mfo
-        publicOv = GMFO.mfoPublicOverride mfo
-    Stubs.SomeFunctionOverride fnOv <- pure $ GMFO.mfoSomeFunctionOverride mfo
+    let publicOvHdl = GMO.mfoPublicFnHandle mfo
+        publicOv = GMO.mfoPublicOverride mfo
+    Stubs.SomeFunctionOverride fnOv <- pure $ GMO.mfoSomeFunctionOverride mfo
     LCS.bindFnHandle publicOvHdl (LCS.UseOverride publicOv)
     let auxFns = Stubs.functionAuxiliaryFnBindings fnOv
     Monad.forM_ auxFns $ \(LCS.FnBinding auxHdl auxSt) -> LCS.bindFnHandle auxHdl auxSt
@@ -85,9 +85,9 @@ registerOverrideForwardDeclarations ::
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideForwardDeclarations bak funOvs =
   Monad.forM_ (Map.elems funOvs) $ \mfo ->
-    case GMFO.mfoSomeFunctionOverride mfo of
+    case GMO.mfoSomeFunctionOverride mfo of
       Stubs.SomeFunctionOverride fnOv ->
-        GMFO.registerMacawOvForwardDeclarations bak funOvs (Stubs.functionForwardDeclarations fnOv)
+        GMO.registerMacawOvForwardDeclarations bak funOvs (Stubs.functionForwardDeclarations fnOv)
 
 -- | Register all handles from a 'MacawSExpOverride'.
 --
@@ -140,7 +140,7 @@ registerSyntaxForwardDeclarations ::
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerSyntaxForwardDeclarations bak la dl mvar funOvs prog =
-  GMFO.registerMacawSexpProgForwardDeclarations bak la dl mvar funOvs (CSyn.parsedProgForwardDecs prog)
+  GMO.registerMacawSexpProgForwardDeclarations bak la dl mvar funOvs (CSyn.parsedProgForwardDecs prog)
 
 -- | Register all handles from a an S-expression program ('CSyn.ParsedProgram').
 --
@@ -188,7 +188,7 @@ syntaxSetupHook la dl cfgs prog =
     -- (`declare`s) to their implementations.
     Monad.forM_ (Map.elems cfgs) $ \entrypointCfgs ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-        GMFO.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
+        GMO.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
 
 
 -- | A 'SetupHook' for Macaw CFGs from binaries.
@@ -214,4 +214,4 @@ binSetupHook cfgs =
   SetupHook $ \bak _mvar funOvs ->
     Monad.forM_ (Map.elems cfgs) $ \(GE.MacawEntrypointCfgs entrypointCfgs _) ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-        GMFO.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
+        GMO.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs

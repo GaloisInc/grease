@@ -55,7 +55,8 @@ import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (Diagnostic(..), GreaseLogAction)
 import Grease.Macaw.Arch
 import Grease.Macaw.Discovery (discoverFunction)
-import Grease.Macaw.FunctionOverride
+import Grease.Macaw.Overrides (lookupMacawForwardDeclarationOverride)
+import Grease.Macaw.Overrides.SExp (MacawSExpOverride(..))
 import Grease.Macaw.ResolveCall.Diagnostic qualified as Diag
 import Grease.Macaw.SimulatorState
 import Grease.Macaw.SkippedCall (SkippedFunctionCall(..), SkippedSyscall(..))

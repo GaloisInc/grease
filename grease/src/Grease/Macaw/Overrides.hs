@@ -1,6 +1,8 @@
 {-|
 Copyright        : (c) Galois, Inc. 2024
 Maintainer       : GREASE Maintainers <grease@galois.com>
+
+Registering Macaw overrides
 -}
 
 {-# LANGUAGE ExplicitNamespaces #-}
@@ -8,9 +10,7 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ImplicitParams #-}
 
--- | Functionality for converting 'Stubs.FunctionOverride's into functions
--- that can be simulated within @macaw-symbolic@.
-module Grease.Macaw.FunctionOverride
+module Grease.Macaw.Overrides
   ( MacawSExpOverride(..)
   , MacawFnHandle
   , MacawOverride
