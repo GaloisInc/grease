@@ -159,8 +159,8 @@ setupPtrMem ::
   Selector ext argTys ts regTy ->
   PtrTarget w tag ->
   Setup sym ext argTys w (C.RegValue sym (Mem.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
-setupPtrMem la bak layout nm sel (PtrTarget smem bid) = 
-  let r = setupPtr la bak layout nm sel (PtrTarget smem bid) in 
+setupPtrMem la bak layout nm sel tgt@(PtrTarget _ bid) = 
+  let r = setupPtr la bak layout nm sel tgt in 
   case bid of 
     Just bid' -> do 
       resmap <- use setupRes
