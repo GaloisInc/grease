@@ -37,6 +37,7 @@ import Data.Eq (Eq((==)))
 import Data.Function (($), (.), (&), flip)
 import Data.Functor (fmap)
 import Data.List qualified as List
+import Data.Map qualified as Map
 import Data.Maybe (Maybe(..))
 import Data.Parameterized.Classes (ixF')
 import Data.Parameterized.Context qualified as Ctx
@@ -71,7 +72,6 @@ import Prelude (Int, Num(..), fromIntegral)
 import System.IO (IO)
 import Text.Show (show)
 import What4.Interface qualified as W4
-import qualified Data.Map as Map
 
 -- | Name for fresh symbolic values, passed to 'W4.safeSymbol'. The phantom
 -- type parameter prevents making recursive calls without changing the name.
@@ -97,7 +97,12 @@ doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (SetupDiagnostic diag)
 
 
-type SetupRes sym w = (C.RegValue sym (Mem.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
+-- | The result of setting up a pointer. `setupResPtr` represents the runtime value of the pointer and
+-- `setupResTgt` stores the runtime representation of what is stored in that pointer. These 
+-- results are memoized during setup based on `BlockId` so that a given block is only given 
+-- one runtime value.
+data SetupRes sym w = SetupRes { setupResPtr :: C.RegValue sym (Mem.LLVMPointerType w), setupResTgt ::  PtrTarget w (C.RegValue' sym)}
+
 data SetupState sym ext argTys w = SetupState
   { _setupMem :: Mem.MemImpl sym
   , _setupAnns :: Anns.Annotations sym ext argTys
@@ -165,14 +170,14 @@ setupPtrMem la bak layout nm sel tgt@(PtrTarget bid _) =
     Just bid' -> do 
       resmap <- use setupRes
       case Map.lookup bid' resmap of 
-        Just memoizeRes -> pure memoizeRes
+        Just memoizeRes -> pure (setupResPtr memoizeRes, setupResTgt memoizeRes)
         Nothing ->
           do
-            nv <- r
+            (ptr, rtgt) <- r
             s <- get
-            let newmap = Map.insert bid' nv resmap 
+            let newmap = Map.insert bid' (SetupRes {setupResPtr=ptr, setupResTgt=rtgt}) resmap 
             _ <- put  (s {_setupRes = newmap})
-            pure nv
+            pure (ptr, rtgt)
     Nothing -> r
 
 -- | Ignores tags.
