@@ -91,6 +91,13 @@ eqMemShape (PtrShape.Pointer ty off tgt) (PtrShape.Pointer ty' off' tgt') = ty =
  && eqPtrTarget tgt tgt'
 eqMemShape x y = x == y
 
+
+{- In parse tests we ignore the blockID. This is because Nothing is equivalent to a fresh identifier
+That is PtrTarget(Nothing), PtrTarget(Nothing) will result in a print of
+0: x
+1: y
+
+The parser will then parse the blockIDs as 0 and 1 accordingly.  -}
 eqPtrTarget :: PtrShape.PtrTarget w NoTag -> PtrShape.PtrTarget w NoTag  -> Bool
 eqPtrTarget (PtrShape.PtrTarget _ mems)  (PtrShape.PtrTarget _ mems') =
   Seq.length mems == Seq.length mems' && 
