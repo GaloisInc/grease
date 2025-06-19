@@ -18,6 +18,7 @@ import Grease.BranchTracer.Diagnostic qualified as BranchTracer
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Heuristic.Diagnostic qualified as Heuristic
 import Grease.LLVM.Overrides.Diagnostic qualified as LLVMOverrides
+import Grease.LLVM.SetupHook.Diagnostic qualified as LLVMSetupHook
 import Grease.LLVM.SimulatorHooks.Diagnostic qualified as LLVMSimulatorHooks
 import Grease.Macaw.Load.Diagnostic qualified as Load
 import Grease.Macaw.ResolveCall.Diagnostic qualified as ResolveCall
@@ -39,6 +40,7 @@ data Diagnostic where
   BranchTracerDiagnostic :: BranchTracer.Diagnostic -> Diagnostic
   HeuristicDiagnostic :: Heuristic.Diagnostic -> Diagnostic
   LLVMOverridesDiagnostic :: LLVMOverrides.Diagnostic -> Diagnostic
+  LLVMSetupHookDiagnostic :: LLVMSetupHook.Diagnostic -> Diagnostic
   LLVMSimulatorHooksDiagnostic :: LLVMSimulatorHooks.Diagnostic -> Diagnostic
   LoadDiagnostic :: Load.Diagnostic -> Diagnostic
   MainDiagnostic :: Main.Diagnostic -> Diagnostic
@@ -54,6 +56,7 @@ instance PP.Pretty Diagnostic where
       BranchTracerDiagnostic diag -> PP.pretty diag
       HeuristicDiagnostic diag -> PP.pretty diag
       LLVMOverridesDiagnostic diag -> PP.pretty diag
+      LLVMSetupHookDiagnostic diag -> PP.pretty diag
       LLVMSimulatorHooksDiagnostic diag -> PP.pretty diag
       LoadDiagnostic diag -> PP.pretty diag
       MainDiagnostic diag -> PP.pretty diag
@@ -69,6 +72,7 @@ severity =
     BranchTracerDiagnostic diag -> BranchTracer.severity diag
     HeuristicDiagnostic diag -> Heuristic.severity diag
     LLVMOverridesDiagnostic diag -> LLVMOverrides.severity diag
+    LLVMSetupHookDiagnostic diag -> LLVMSetupHook.severity diag
     LLVMSimulatorHooksDiagnostic diag -> LLVMSimulatorHooks.severity diag
     LoadDiagnostic diag -> Load.severity diag
     MainDiagnostic diag -> Main.severity diag

@@ -8,8 +8,7 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE ImplicitParams #-}
 
 module Grease.LLVM
-  ( SetupHook(..)
-  , initState
+  ( initState
   ) where
 
 import Control.Exception.Safe (MonadThrow)
@@ -19,6 +18,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (GreaseLogAction)
+import Grease.LLVM.SetupHook (SetupHook(SetupHook))
 import Grease.LLVM.SimulatorHooks (greaseLlvmExtImpl)
 import Grease.Options (ErrorSymbolicFunCalls)
 import Grease.Setup (SetupMem(getSetupMem))
@@ -36,29 +36,6 @@ import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.GlobalState qualified as C
 import What4.Expr qualified as W4
-
--- | Hook to run before executing a CFG.
---
--- Note that @sym@ is a type parameter so that users can define 'SetupHook's
--- that reference a fixed @sym@ type.
-newtype SetupHook sym
-  = SetupHook
-    (forall arch p bak rtp a r.
-      ( C.IsSymBackend sym bak
-      , 16 C.<= ArchWidth arch
-      , ArchWidth arch ~ 64
-      , Mem.HasPtrWidth (ArchWidth arch)
-      , Mem.HasLLVMAnn sym
-      , HasToConcretize p
-      , ?lc :: TCtx.TypeContext
-      , ?memOpts :: Mem.MemOptions
-      , ?intrinsicsOpts :: CLLVM.IntrinsicsOptions
-      ) =>
-      bak ->
-      C.HandleAllocator ->
-      Trans.LLVMContext arch ->
-      SymIO.LLVMFileSystem (ArchWidth arch) ->
-      C.OverrideSim p sym LLVM rtp a r ())
 
 initState ::
   forall p sym bak arch m t st fs argTys retTy.
@@ -86,7 +63,7 @@ initState ::
   C.SymGlobalState sym ->
   SymIO.SomeOverrideSim sym () ->
   Trans.LLVMContext arch ->
-  SetupHook sym ->
+  SetupHook sym arch ->
   -- | The initial arguments to the entrypoint function.
   Ctx.Assignment (C.RegValue' sym) argTys ->
   -- | An optional startup override to run just before the entrypoint function.

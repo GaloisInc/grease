@@ -22,9 +22,7 @@ import Grease.Time (Nanoseconds, nanosToMillis)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
-import Lang.Crucible.LLVM.Translation qualified as Trans
 import Prettyprinter qualified as PP
-import Text.LLVM.AST qualified as L
 
 data Diagnostic where
   AnalyzedEntrypoint ::
@@ -35,8 +33,6 @@ data Diagnostic where
     EntrypointLocation -> Nanoseconds -> Diagnostic
   NoEntrypoints ::
     Diagnostic
-  LLVMTranslationWarning ::
-    Trans.LLVMTranslationWarning -> Diagnostic
   SimulationTestingRequirements ::
     [Requirement] -> Diagnostic
   SimulationAllGoalsPassed ::
@@ -68,8 +64,6 @@ instance PP.Pretty Diagnostic where
         ]
       NoEntrypoints ->
         "No entry points specified, analyzing all known functions."
-      LLVMTranslationWarning (Trans.LLVMTranslationWarning (L.Symbol symbol) pos warn) ->
-        PP.pretty symbol <> ":" <> PP.pretty pos <> ":" PP.<+> PP.pretty warn
       SimulationTestingRequirements rs ->
         if List.null rs
         then "Not testing any requirements beyond memory safety"
@@ -94,7 +88,6 @@ severity =
     AnalyzingEntrypoint {} -> Info
     FinishedAnalyzingEntrypoint {} -> Debug
     NoEntrypoints -> Warn
-    LLVMTranslationWarning{} -> Warn
     SimulationTestingRequirements{} -> Info
     SimulationAllGoalsPassed{} -> Info
     SimulationGoalsFailed{} -> Info

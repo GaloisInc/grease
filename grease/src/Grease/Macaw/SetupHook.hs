@@ -1,5 +1,6 @@
 {-# LANGUAGE ImplicitParams #-}
 
+-- | c.f. "Grease.LLVM.SetupHook"
 module Grease.Macaw.SetupHook
   ( SetupHook(..)
   , registerOverrideCfgs
@@ -39,6 +40,8 @@ import What4.Protocol.Online qualified as WPO
 --
 -- Note that @sym@ is a type parameter so that users can define 'SetupHook's
 -- that reference a fixed @sym@ type. Same with @arch@.
+--
+-- c.f. 'Grease.LLVM.SetupHook.SetupHook'
 newtype SetupHook sym arch
   = SetupHook
     (forall bak rtp a r solver scope st fs p.
