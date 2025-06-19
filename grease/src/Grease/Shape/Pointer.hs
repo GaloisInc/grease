@@ -73,7 +73,6 @@ import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Prettyprinter qualified as PP
 
-
 newtype BlockId = BlockId { getBlockId :: Int }
   deriving (Eq, Ord, Show)
 

@@ -209,7 +209,7 @@ setupPtr la bak layout nm sel target = do
       p <- zoom setupAnns (Anns.annotatePtr sym sel ptr)
       pure (p, PtrTarget bid Seq.Empty)
     PtrTarget bid ms -> do
-      mem <- use setupMem 
+      mem <- use setupMem
       let bytes = ptrTargetSize ?ptrWidth target
       sz <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral bytes)))
       let loc = "grease setup (" <> show (ppSelector (PtrCursor.ppDereference @ext) sel) <> ")"
