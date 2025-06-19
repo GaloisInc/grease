@@ -14,6 +14,7 @@
 # Reference
 
 - [Built-in overrides](./builtins.md)
+- [Comparison with other tools](./comparison.md)
 - [Function calls](./function-calls.md)
 - [Limitations](./limitations.md)
 - [Memory model](./memory-model.md)
@@ -25,7 +26,6 @@
 - [Shared libraries](./shared-libraries.md)
 - [System calls](./syscalls.md)
 - [Undefined behavior](./undefined-behavior.md)
-- [Comparison with other tools](./comparison.md)
 
 # Developer documentation
 
