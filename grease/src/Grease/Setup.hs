@@ -140,14 +140,12 @@ freshPtrBv ::
   NatRepr w ->
   Setup sym ext argTys w' (Mem.LLVMPtr sym w)
 freshPtrBv sym sel nm w =
-  annotatePtrBv sym sel 
+  annotatePtrBv sym sel
     =<< liftIO (W4.freshConstant sym (safeSymbol nm) (W4.BaseBVRepr w))
 
-
-
-
-
-
+-- | Memoizes calls to `setupPtr`. Results are stored in the `SetupState` based on the `BlockId`.
+-- Only a single runtime value is produced per `BlockId` allowing for mutliple ptrs to the same block in a 
+-- shape.
 setupPtrMem ::
   forall sym bak ext tag w argTys ts regTy.
   ( C.IsSymBackend sym bak
@@ -165,21 +163,21 @@ setupPtrMem ::
   Selector ext argTys ts regTy ->
   PtrTarget w tag ->
   Setup sym ext argTys w (C.RegValue sym (Mem.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
-setupPtrMem la bak layout nm sel tgt@(PtrTarget bid _) = 
-  let r = setupPtr la bak layout nm sel tgt in 
+setupPtrMem la bak dl nm sel tgt@(PtrTarget bid _) = 
+  let unseenFallback = setupPtr la bak dl nm sel tgt in 
   case bid of 
     Just bid' -> do 
-      resmap <- use setupRes
-      case Map.lookup bid' resmap of 
+      resMap <- use setupRes
+      case Map.lookup bid' resMap of 
         Just memoizeRes -> pure (setupResPtr memoizeRes, setupResTgt memoizeRes)
         Nothing ->
           do
-            (ptr, rtgt) <- r
+            (ptr, rtgt) <- unseenFallback
             s <- get
-            let newmap = Map.insert bid' (SetupRes {setupResPtr=ptr, setupResTgt=rtgt}) resmap 
+            let newmap = Map.insert bid' (SetupRes {setupResPtr=ptr, setupResTgt=rtgt}) resMap 
             _ <- put  (s {_setupRes = newmap})
             pure (ptr, rtgt)
-    Nothing -> r
+    Nothing -> unseenFallback
 
 -- | Ignores tags.
 setupPtr ::
