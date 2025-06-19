@@ -170,13 +170,12 @@ setupPtrMem la bak dl nm sel tgt@(PtrTarget bid _) =
       resMap <- use setupRes
       case Map.lookup bid' resMap of 
         Just memoizeRes -> pure (setupResPtr memoizeRes, setupResTgt memoizeRes)
-        Nothing ->
-          do
-            (ptr, rtgt) <- unseenFallback
-            s <- get
-            let newmap = Map.insert bid' (SetupRes {setupResPtr=ptr, setupResTgt=rtgt}) resMap 
-            _ <- put  (s {_setupRes = newmap})
-            pure (ptr, rtgt)
+        Nothing -> do
+          (ptr, rtgt) <- unseenFallback
+          s <- get
+          let newmap = Map.insert bid' (SetupRes {setupResPtr=ptr, setupResTgt=rtgt}) resMap 
+          _ <- put  (s {_setupRes = newmap})
+          pure (ptr, rtgt)
     Nothing -> unseenFallback
 
 -- | Ignores tags.
