@@ -234,7 +234,9 @@ initializeMemShape tag =
 --
 -- The `BlockId` is used to deduplicate target blocks during setup. If a `BlockId` is present 
 -- a single block will be allocated for that identifier. If the identifier is `Nothing` then 
--- a fresh identifier will be generated.
+-- a fresh identifier will be generated. Invariant: it is expected that any two 'PtrTarget's with the same 'BlockId'
+-- used within the same context will have the same shape. Violating this invariant will mean that 'setup' will produce
+-- incorrect blocks for the second time a 'BlockId' is used.
 --
 -- There are \"non-canonical\" instances of this type, e.g., those that involve
 -- @'Uninitialized' 0@ or two 'Initialized' that are adjacent and could be
