@@ -232,6 +232,10 @@ initializeMemShape tag =
 -- allocated space. Otherwise, the pointer points to an allocation large enough
 -- to hold all the 'MemShape's in the 'Seq' (see 'ptrTargetSize').
 --
+-- The `BlockId` is used to deduplicate target blocks during setup. If a `BlockId` is present 
+-- a single block will be allocated for that identifier. If the identifier is `Nothing` then 
+-- a fresh identifier will be generated.
+--
 -- There are \"non-canonical\" instances of this type, e.g., those that involve
 -- @'Uninitialized' 0@ or two 'Initialized' that are adjacent and could be
 -- merged. This isn\'t really a problem for any of the code that consumes
