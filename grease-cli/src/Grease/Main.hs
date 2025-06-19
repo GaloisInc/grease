@@ -10,6 +10,7 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Grease.Main
   ( main
@@ -110,8 +111,7 @@ import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint
 import Grease.Heuristic
 import Grease.LLVM qualified as LLVM
-import Grease.LLVM.Overrides qualified as LLVM
-import Grease.LLVM.Overrides.Builtin (builtinLLVMOverrides)
+import Grease.LLVM.SetupHook qualified as LLVM (SetupHook, moduleSetupHook, syntaxSetupHook)
 import Grease.Macaw
 import Grease.Macaw.Arch
 import Grease.Macaw.Arch.AArch32 (armCtx)
@@ -128,6 +128,7 @@ import Grease.Macaw.RegName (RegName(..), RegNames(..), regNames, getRegName, mk
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
 import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, emptyGreaseSimulatorState)
 import Grease.Main.Diagnostic qualified as Diag
+import Grease.LLVM.SetupHook.Diagnostic qualified as LDiag (Diagnostic(LLVMTranslationWarning))
 import Grease.MustFail qualified as MustFail
 import Grease.Options
 import Grease.Output
@@ -147,7 +148,6 @@ import Grease.Syntax (parseProgram, parsedProgramCfgMap)
 import Grease.Syscall
 import Grease.Time (time)
 import Grease.Utility
-import Lang.Crucible.Analysis.Postdom qualified as C (postdomInfo)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
@@ -162,7 +162,6 @@ import Lang.Crucible.LLVM.DataLayout qualified as DataLayout
 import Lang.Crucible.LLVM.Debug qualified as Debug
 import Lang.Crucible.LLVM.Extension qualified as CLLVM
 import Lang.Crucible.LLVM.Globals qualified as CLLVM
-import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.LLVM.SymIO qualified as CLLVM.SymIO
@@ -1071,7 +1070,7 @@ simulateLlvmCfg ::
   C.HandleAllocator ->
   Trans.LLVMContext arch ->
   InitialMem sym ->
-  LLVM.SetupHook sym ->
+  LLVM.SetupHook sym arch ->
   -- | An optional startup override to run just before the entrypoint function.
   Maybe (C.SomeCFG CLLVM.LLVM argTys (C.StructType argTys)) ->
   -- | The CFG of the user-requested entrypoint function.
@@ -1175,7 +1174,7 @@ simulateLlvmCfgs ::
   C.HandleAllocator ->
   Trans.LLVMContext arch ->
   (forall sym bak. C.IsSymBackend sym bak => bak -> IO (InitialMem sym)) ->
-  (forall sym. LLVM.SetupHook sym) ->
+  (forall sym. LLVM.SetupHook sym arch) ->
   Map Entrypoint (EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
   IO Results
 simulateLlvmCfgs la simOpts halloc llvmCtx mkMem setupHook cfgs = do
@@ -1248,34 +1247,8 @@ simulateLlvmSyntax simOpts la = do
         , Trans.llvmGlobalAliases = Map.empty
         , Trans.llvmFunctionAliases = Map.empty
         }
-  let setupHook :: forall sym. LLVM.SetupHook sym
-      setupHook = LLVM.SetupHook $ \bak halloc' llvmCtx' fs -> do
-        -- Register built-in and user overrides.
-        funOvs <-
-          LLVM.registerLLVMSexpOverrides la (builtinLLVMOverrides fs) (simOverrides simOpts) bak halloc' llvmCtx' fs prog
-
-        -- In addition to binding function handles for the user overrides,
-        -- we must also redirect function handles resulting from parsing
-        -- forward declarations (`declare`) to actually call the overrides.
-        LLVM.registerLLVMSexpProgForwardDeclarations la dl mvar funOvs (CSyn.parsedProgForwardDecs prog)
-        forM_ (Map.elems cfgs) $ \entrypointCfgs ->
-          forM_ (startupOvForwardDecs <$> entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-            LLVM.registerLLVMSexpProgForwardDeclarations la dl mvar funOvs startupOvFwdDecs
-
-        -- Register defined functions. If there is a user override of the same
-        -- name, use the override's definition instead so that it takes
-        -- precedence.
-        forM_ (CSyn.parsedProgCFGs prog) $ \(C.Reg.AnyCFG defCfg) -> do
-          let defHdl = C.Reg.cfgHandle defCfg
-          let defName = C.handleName defHdl
-          case Map.lookup defName funOvs of
-            Nothing -> do
-              C.SomeCFG defSsa <- pure $ C.toSSA defCfg
-              -- This could probably be a helper defined in Crucible...
-              let bindCfg c = C.bindFnHandle (C.cfgHandle c) (C.UseCFG c (C.postdomInfo c))
-              bindCfg defSsa
-            Just (CLLVM.SomeLLVMOverride llvmOverride) ->
-              LLVM.bindLLVMOverrideFnHandle mvar defHdl llvmOverride
+  let setupHook :: forall sym arch. LLVM.SetupHook sym arch
+      setupHook = LLVM.syntaxSetupHook la (simOverrides simOpts) prog cfgs
   simulateLlvmCfgs la simOpts halloc llvmCtx mkMem setupHook cfgs
 
 simulateLlvm ::
@@ -1291,7 +1264,7 @@ simulateLlvm transOpts simOpts la = do
         Right m -> pure m
   halloc <- C.newHandleAllocator
   mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
-  C.Some trans <- do
+  C.Some @_ @_ @arch trans <- do
     let ?transOpts = transOpts
     Trans.translateModule halloc mvar llvmMod
 
@@ -1332,7 +1305,8 @@ simulateLlvm transOpts simOpts la = do
           EntrypointSymbolName nm ->
             Trans.getTranslatedCFG trans (L.Symbol (Text.unpack nm)) >>= \case
               Just (_decl, cfg, warns) -> do
-                forM_ warns $ \warn -> doLog la (Diag.LLVMTranslationWarning warn)
+                forM_ warns $ \warn ->
+                  LJ.writeLog la (LLVMSetupHookDiagnostic (LDiag.LLVMTranslationWarning warn))
                 mbStartupOv <-
                   traverse (parseEntrypointStartupOv halloc)
                            (entrypointStartupOvPath entry)
@@ -1345,24 +1319,8 @@ simulateLlvm transOpts simOpts la = do
                 pure (entry, entrypointCfgs)
               Nothing -> throw $ GreaseException $ "Could not find function: " <> nm
 
-    let dl = TCtx.llvmDataLayout (llvmCtxt ^. Trans.llvmTypeCtx)
-    let setupHook :: forall sym. LLVM.SetupHook sym
-        setupHook = LLVM.SetupHook $ \bak halloc' llvmCtx fs -> do
-          -- Register defined functions...
-          let handleTranslationWarning warn = doLog la (Diag.LLVMTranslationWarning warn)
-          Trans.llvmPtrWidth llvmCtxt $ \ptrW' -> Mem.withPtrWidth ptrW' $
-            CLLVM.registerLazyModule handleTranslationWarning trans
-          -- ...and then register overrides. We register overrides *after*
-          -- registering defined functions so that overrides take precedence over
-          -- defined functions.
-          funOvs <-
-            LLVM.registerLLVMModuleOverrides la (builtinLLVMOverrides fs) (simOverrides simOpts) bak halloc' llvmCtx fs llvmMod
-          -- If a startup override exists and it contains forward declarations,
-          -- redirect then we redirect the function handles to actually call the
-          -- respective overrides.
-          forM_ (Map.elems cfgs) $ \entrypointCfgs ->
-            forM_ (startupOvForwardDecs <$> entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-              LLVM.registerLLVMSexpProgForwardDeclarations la dl mvar funOvs startupOvFwdDecs
+    let setupHook :: forall sym. LLVM.SetupHook sym arch
+        setupHook = LLVM.moduleSetupHook la (simOverrides simOpts) trans cfgs
 
     simulateLlvmCfgs la simOpts halloc llvmCtxt mkMem setupHook cfgs
 
