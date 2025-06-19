@@ -374,12 +374,16 @@ ptrTargetToPtrs proxy tag tgt =
      Pointer tag (Offset 0) $
      ptrTarget Nothing Seq.Empty) 
 
+
+instance PP.Pretty BlockId where
+  pretty bid = "blockid:" PP.<+> (PP.pretty $ getBlockId bid)
+
 instance MC.PrettyF tag => PP.Pretty (PtrTarget wptr tag) where
   pretty :: MC.PrettyF tag => PtrTarget wptr tag -> PP.Doc ann
   pretty =
     \case
-      PtrTarget _ Seq.Empty -> "<unallocated>"
-      PtrTarget _ ms -> PP.list (Foldable.toList (fmap PP.pretty ms))
+      PtrTarget bid Seq.Empty -> PP.pretty bid PP.<+> "<unallocated>"
+      PtrTarget bid ms ->  PP.pretty bid PP.<+> PP.list (Foldable.toList (fmap PP.pretty ms))
 
 newtype Offset = Offset { getOffset :: Bytes }
   deriving (Eq, Show)
