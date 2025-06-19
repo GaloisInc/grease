@@ -144,7 +144,7 @@ freshPtrBv sym sel nm w =
     =<< liftIO (W4.freshConstant sym (safeSymbol nm) (W4.BaseBVRepr w))
 
 -- | Memoizes calls to `setupPtr`. Results are stored in the `SetupState` based on the `BlockId`.
--- Only a single runtime value is produced per `BlockId` allowing for mutliple ptrs to the same block in a 
+-- Only a single runtime value is produced per `BlockId` allowing for mutliple pointers to the same block in a 
 -- shape.
 setupPtrMem ::
   forall sym bak ext tag w argTys ts regTy.
