@@ -12,16 +12,11 @@ module Shape
   ( shapeTests
   ) where
 
-import Control.Applicative (pure)
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.BitVector.Sized qualified as BV
-import Data.Bool (Bool(..), (&&))
 import Data.Either qualified as Either
-import Data.Eq ((==))
-import Data.Function (($), (.))
 import Data.Functor qualified as Functor
-import Data.Int (Int)
 import Data.List qualified as List
 import Data.Macaw.CFG (AddrWidthRepr(Addr64))
 import Data.Map qualified as Map
@@ -30,12 +25,9 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Pair (Pair(Pair))
 import Data.Parameterized.Some (Some(Some))
-import Data.Semigroup ((<>))
 import Data.Sequence qualified as Seq
-import Data.String (String)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Tuple (uncurry)
 import Data.Type.Equality (testEquality)
 import Data.Type.Equality qualified as Equality
 import Grease.Shape as Shape
@@ -51,14 +43,11 @@ import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel.Pointer (LLVMPointerType)
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-import Prelude (error, maxBound, (*), minBound, Integral, all)
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
-import System.IO (IO)
 import Test.Tasty qualified as TT
 import Test.Tasty.HUnit qualified as TH
 import Test.Tasty.Hedgehog qualified as TTH
-import Text.Show (show)
 
 eqShape ::
   (forall t1' t2'. ExtShape ext NoTag t1' -> ExtShape ext NoTag t2' -> Bool) ->
