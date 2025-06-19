@@ -14,6 +14,7 @@
 # Reference
 
 - [Built-in overrides](./builtins.md)
+- [Comparison with other tools](./comparison.md)
 - [Function calls](./function-calls.md)
 - [Limitations](./limitations.md)
 - [Memory model](./memory-model.md)
