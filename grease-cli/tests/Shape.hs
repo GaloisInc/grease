@@ -35,6 +35,7 @@ import Data.Sequence qualified as Seq
 import Data.String (String)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Tuple (uncurry)
 import Data.Type.Equality (testEquality)
 import Data.Type.Equality qualified as Equality
 import Grease.Shape as Shape
@@ -50,7 +51,7 @@ import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel.Pointer (LLVMPointerType)
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-import Prelude (error, maxBound, (*), minBound, Integral, Foldable (..))
+import Prelude (error, maxBound, (*), minBound, Integral, all)
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import System.IO (IO)
@@ -92,7 +93,8 @@ eqMemShape x y = x == y
 
 eqPtrTarget :: PtrShape.PtrTarget w NoTag -> PtrShape.PtrTarget w NoTag  -> Bool
 eqPtrTarget (PtrShape.PtrTarget _ mems)  (PtrShape.PtrTarget _ mems') =
-  Seq.length mems == Seq.length mems' && foldl (\acc (x,y) -> acc && eqMemShape x y) True (Seq.zip mems mems')
+  Seq.length mems == Seq.length mems' && 
+    all (uncurry eqMemShape) (Seq.zip mems mems')
 
 eqPtrShape ::
   PtrShape w ext NoTag t1 ->
