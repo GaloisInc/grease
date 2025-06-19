@@ -103,7 +103,7 @@ removeAlloc blk as = Allocs (IntMap.delete (getBlockId blk) (getAllocs as))
 
 ptrTarget :: Allocs -> ParsePtrTarget -> Maybe BlockId -> Either BlockId (PtrShape.PtrTarget wptr NoTag)
 ptrTarget as tgt bid =
-  flip PtrShape.PtrTarget bid Functor.<$>
+  PtrShape.PtrTarget bid Functor.<$>
     Traversable.traverse (memShape as) (getParsePtrTarget tgt)
 
 memShape :: Allocs -> ParseMemShape -> Either BlockId (PtrShape.MemShape wptr NoTag)

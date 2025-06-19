@@ -159,7 +159,7 @@ setupPtrMem ::
   Selector ext argTys ts regTy ->
   PtrTarget w tag ->
   Setup sym ext argTys w (C.RegValue sym (Mem.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
-setupPtrMem la bak layout nm sel tgt@(PtrTarget _ bid) = 
+setupPtrMem la bak layout nm sel tgt@(PtrTarget bid _) = 
   let r = setupPtr la bak layout nm sel tgt in 
   case bid of 
     Just bid' -> do 
@@ -197,14 +197,14 @@ setupPtr la bak layout nm sel target = do
   let align = Mem.maxAlignment layout
   let sym = C.backendGetSym bak
   case target of
-    PtrTarget Seq.Empty bid -> do
+    PtrTarget bid Seq.Empty -> do
       -- See Note [Initializing empty pointer shapes]
       ptr <- liftIO $ do
         offset <- W4.freshConstant sym (safeSymbol (addSuffix nm "_offset")) (W4.BaseBVRepr ?ptrWidth)
         Mem.llvmPointer_bv sym offset
       p <- zoom setupAnns (Anns.annotatePtr sym sel ptr)
-      pure (p, PtrTarget Seq.Empty bid)
-    PtrTarget ms bid -> do
+      pure (p, PtrTarget bid Seq.Empty)
+    PtrTarget bid ms -> do
       mem <- use setupMem 
       let bytes = ptrTargetSize ?ptrWidth target
       sz <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral bytes)))
@@ -214,7 +214,7 @@ setupPtr la bak layout nm sel target = do
       -- write nested shapes to memory
       (_, _, ms') <- foldM go (0, ptr, Seq.empty) ms
       p <- zoom setupAnns (Anns.annotatePtr sym sel ptr)
-      pure (p, PtrTarget ms' bid)
+      pure (p, PtrTarget bid ms')
   where
     makeKnownBytes ::
       forall ts'.

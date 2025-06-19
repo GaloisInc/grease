@@ -202,7 +202,7 @@ printPtr =
   \case
     PtrShape.ShapePtrBV _tag w -> printBv w
     PtrShape.ShapePtrBVLit _tag w bv -> printBvLit w bv
-    PtrShape.ShapePtr _tag offset tgt@(PtrShape.PtrTarget _ bid) -> do
+    PtrShape.ShapePtr _tag offset tgt@(PtrShape.PtrTarget bid _) -> do
       blk <- printerAlloc (printTgt tgt) bid 
       printBlockOffset blk offset
 
@@ -268,7 +268,7 @@ printRle c n = do
 
 -- | Ignores @tag@s.
 printTgt :: PtrShape.PtrTarget w tag -> Printer w (PP.Doc Void)
-printTgt (PtrShape.PtrTarget memShapes _) = do
+printTgt (PtrShape.PtrTarget _ memShapes) = do
   docs <- traverse printMemShape memShapes
   pure (PP.align (PP.fillSep (Foldable.toList docs)))
 
@@ -285,7 +285,7 @@ printMemShape :: PtrShape.MemShape w tag -> Printer w (PP.Doc Void)
 printMemShape = \case
   PtrShape.Uninitialized bytes -> printRle '#' (bytesToInt bytes)
   PtrShape.Initialized _tag bytes -> printRle 'X' (bytesToInt bytes)
-  PtrShape.Pointer _tag off target@(PtrShape.PtrTarget _ bid) -> do
+  PtrShape.Pointer _tag off target@(PtrShape.PtrTarget bid _) -> do
       blk <- printerAlloc (printTgt target) bid
       printBlockOffset blk off
   PtrShape.Exactly bytes ->

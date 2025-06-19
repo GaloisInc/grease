@@ -59,7 +59,6 @@ import Test.Tasty.HUnit qualified as TH
 import Test.Tasty.Hedgehog qualified as TTH
 import Text.Show (show)
 import Data.Maybe
-import Data.Function (flip)
 
 eqShape ::
   (forall t1' t2'. ExtShape ext NoTag t1' -> ExtShape ext NoTag t2' -> Bool) ->
@@ -92,7 +91,7 @@ eqMemShape (PtrShape.Pointer ty off tgt) (PtrShape.Pointer ty' off' tgt') = ty =
 eqMemShape x y = x == y
 
 eqPtrTarget :: PtrShape.PtrTarget w NoTag -> PtrShape.PtrTarget w NoTag  -> Bool
-eqPtrTarget (PtrShape.PtrTarget mems _)  (PtrShape.PtrTarget mems' _) =
+eqPtrTarget (PtrShape.PtrTarget _ mems)  (PtrShape.PtrTarget _ mems') =
   Seq.length mems == Seq.length mems' && foldl (\acc (x,y) -> acc && eqMemShape x y) True (Seq.zip mems mems')
 
 eqPtrShape ::
@@ -239,7 +238,7 @@ ptrShape ::
   [PtrShape.MemShape 64 NoTag] ->
   Shape LLVM NoTag (LLVMPointerType 64)
 ptrShape offset =
-  Shape.ShapeExt . PtrShape.ShapePtr NoTag offset . flip PtrShape.PtrTarget Nothing . Seq.fromList
+  Shape.ShapeExt . PtrShape.ShapePtr NoTag offset . PtrShape.PtrTarget Nothing . Seq.fromList
 
 printThenParse :: Shape LLVM NoTag t -> IO (Some (Shape LLVM NoTag))
 printThenParse s = do
@@ -341,9 +340,9 @@ shapeTests =
   , testPrint
     "Print Pointer"
     "000000+0000000000000000\n\n000000: 000001+0000000000000000\n000001: "
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0) (PtrShape.PtrTarget Seq.Empty Nothing)])
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0) (PtrShape.PtrTarget Nothing Seq.Empty)])
   , testPrint
     "Print Pointer with non-zero offset"
     "000000+0000000000000000\n\n000000: 000001+00000000000000ff\n000001: "
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0xff) (PtrShape.PtrTarget Seq.Empty Nothing)])
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0xff) (PtrShape.PtrTarget Nothing Seq.Empty)])
   ]
