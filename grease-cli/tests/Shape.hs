@@ -100,7 +100,7 @@ That is PtrTarget(Nothing), PtrTarget(Nothing) will result in a print of
 The parser will then parse the blockIDs as 0 and 1 accordingly.  -}
 eqPtrTarget :: PtrShape.PtrTarget w NoTag -> PtrShape.PtrTarget w NoTag  -> Bool
 eqPtrTarget (PtrShape.PtrTarget _ mems)  (PtrShape.PtrTarget _ mems') =
-  Seq.length mems == Seq.length mems' && 
+  Seq.length mems == Seq.length mems' &&
     all (uncurry eqMemShape) (Seq.zip mems mems')
 
 eqPtrShape ::
