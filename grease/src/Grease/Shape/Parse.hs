@@ -61,7 +61,7 @@ import Grease.Panic (panic)
 import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag(NoTag))
-import Grease.Shape.Pointer (Offset, PtrShape)
+import Grease.Shape.Pointer (PtrShape, BlockId(BlockId, getBlockId), Offset)
 import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes (Bytes)
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
@@ -76,8 +76,7 @@ import Text.Megaparsec qualified as MP
 import Text.Megaparsec.Char qualified as MPC
 import Text.Megaparsec.Char.Lexer qualified as MPCL
 
-newtype BlockId = BlockId { getBlockId :: Int }
-  deriving Show
+
 
 newtype Allocs = Allocs { getAllocs :: IntMap ParsePtrTarget }
   deriving Show
@@ -103,9 +102,9 @@ lookupAlloc blk as = IntMap.lookup (getBlockId blk) (getAllocs as)
 removeAlloc :: BlockId -> Allocs -> Allocs
 removeAlloc blk as = Allocs (IntMap.delete (getBlockId blk) (getAllocs as))
 
-ptrTarget :: Allocs -> ParsePtrTarget -> Either BlockId (PtrShape.PtrTarget wptr NoTag)
-ptrTarget as tgt =
-  PtrShape.PtrTarget Functor.<$>
+ptrTarget :: Allocs -> ParsePtrTarget -> Maybe BlockId -> Either BlockId (PtrShape.PtrTarget wptr NoTag)
+ptrTarget as tgt bid =
+  PtrShape.PtrTarget bid Functor.<$>
     Traversable.traverse (memShape as) (getParsePtrTarget tgt)
 
 memShape :: Allocs -> ParseMemShape -> Either BlockId (PtrShape.MemShape wptr NoTag)
@@ -118,7 +117,7 @@ memShape allocs =
     Pointer blk off ->
       PtrShape.Pointer NoTag off Functor.<$>
         case lookupAlloc blk allocs of
-          Maybe.Just tgt -> ptrTarget (removeAlloc blk allocs) tgt
+          Maybe.Just tgt -> ptrTarget (removeAlloc blk allocs) tgt (Just blk)
           Maybe.Nothing -> Either.Left blk
 
 -- | @ext@ type parameter to 'Shape' for use in parsing
@@ -183,7 +182,7 @@ convertShape as =
         Maybe.Nothing -> Either.Left (BlockId blk)
         Maybe.Just tgt ->
           Shape.ShapeExt . PtrShape.ShapePtr NoTag off Functor.<$>
-            ptrTarget as tgt
+            ptrTarget as tgt (Just $ BlockId blk)
 
 -----------------------------------------------------------
 -- * Parsing

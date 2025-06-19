@@ -17,6 +17,7 @@ module Grease.Shape.Pointer
   ( TaggedByte(..)
   , traverseTaggedByte
   , MemShape(..)
+  , BlockId(..)
   , traverseMemShapeWithType
   , memShapeSize
   , PtrTarget(..)
@@ -71,6 +72,9 @@ import Lang.Crucible.LLVM.Bytes (Bytes(..))
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Prettyprinter qualified as PP
+
+newtype BlockId = BlockId { getBlockId :: Int }
+  deriving (Eq, Ord, Show)
 
 -- | A byte ('Word8') along with a @tag@ (see 'Grease.Shape.Shape').
 data TaggedByte tag
@@ -222,11 +226,35 @@ initializeMemShape tag =
     Uninitialized bs -> Initialized tag bs
     ms -> ms
 
+
+
+
+
+{-
+Note [Deduplicating Pointer Targets Based on BlockIDs]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+During parsing of shapes, a given block is parsed as many times as it is needed into a 'PtrTarget'.
+This duplciation of blocks causes 'setup' to lose track of which 'PtrTarget's are identical and should be aliased.
+Indeed, the shapes datastructure does not directly allow for 'PtrTarget's to be aliased. We create aliasing by annotating 'PtrTarget's 
+with an optional 'BlockId'.
+
+'PtrTarget's with a 'BlockId' are deemed equivalent and during 'setup' each use of a given 'BlockId' will be deduplicated into a single runtime value. 
+'PtrTarget's without a 'BlockId' can be thought of as fresh on-the-fly 'BlockId's which is how the printer handles them. Inside of setup, pointer initialization is memoized 
+such that the same result is returned for matching 'BlockId's. This behavior means that for a given list of shapes passed to 'setup' any 'PtrTarget' with a matching 'BlockId' is expected
+to have the same shape, otherwise the first observed 'PtrTarget's shape will win.   
+-}
+
 -- | The target of a pointer.
 --
 -- An empty sequence indicates that the pointer is not yet known to point to
 -- allocated space. Otherwise, the pointer points to an allocation large enough
 -- to hold all the 'MemShape's in the 'Seq' (see 'ptrTargetSize').
+--
+-- The `BlockId` is used to deduplicate target blocks during setup. If a `BlockId` is present 
+-- a single block will be allocated for that identifier. If the identifier is `Nothing` then 
+-- a fresh identifier will be generated. Invariant: it is expected that any two 'PtrTarget's with the same 'BlockId'
+-- used within the same context will have the same shape. Violating this invariant will mean that 'setup' will produce
+-- incorrect blocks for the second time a 'BlockId' is used.
 --
 -- There are \"non-canonical\" instances of this type, e.g., those that involve
 -- @'Uninitialized' 0@ or two 'Initialized' that are adjacent and could be
@@ -238,7 +266,7 @@ initializeMemShape tag =
 --
 -- * @wptr@: Width of a pointer, in bits
 -- * @tag@: See 'Grease.Shape.Shape'
-newtype PtrTarget wptr tag = PtrTarget (Seq (MemShape wptr tag))
+data PtrTarget wptr tag = PtrTarget (Maybe BlockId) (Seq (MemShape wptr tag)) 
 
 instance TF.FunctorF (PtrTarget wptr) where
   fmapF = TF.fmapFDefault
@@ -247,7 +275,7 @@ instance TF.FoldableF (PtrTarget wptr) where
   foldMapF = TF.foldMapFDefault
 
 instance TF.TraversableF (PtrTarget wptr) where
-  traverseF f (PtrTarget tgt) = PtrTarget <$> traverse (TF.traverseF f) tgt
+  traverseF f (PtrTarget bid tgt) = PtrTarget bid <$> traverse (TF.traverseF f) tgt
 
 deriving instance
   ( Eq (tag (Mem.LLVMPointerType 8))
@@ -262,15 +290,16 @@ traversePtrTargetWithType ::
   (forall x. C.TypeRepr x -> tag x -> m (tag' x)) ->
   PtrTarget wptr tag ->
   m (PtrTarget wptr tag')
-traversePtrTargetWithType f (PtrTarget tgt) =
-  PtrTarget <$> traverse (traverseMemShapeWithType f) tgt
+traversePtrTargetWithType f (PtrTarget bid tgt) =
+  PtrTarget bid <$> traverse (traverseMemShapeWithType f) tgt
 
 -- | Smart constructor that merges compatible adjacent shapes.
 ptrTarget ::
   Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
+  Maybe BlockId ->
   Seq (MemShape wptr tag) ->
   PtrTarget wptr tag
-ptrTarget = PtrTarget . Foldable.foldl' go Seq.empty
+ptrTarget bid = PtrTarget bid . Foldable.foldl' go Seq.empty
   where
     go s (Uninitialized 0) = s
     go s (Initialized _tag 0) = s
@@ -287,7 +316,7 @@ ptrTargetSize ::
   proxy w ->
   PtrTarget wptr tag ->
   Bytes
-ptrTargetSize proxy (PtrTarget s) = Foldable.sum (fmap (memShapeSize proxy) s)
+ptrTargetSize proxy (PtrTarget _ s) = Foldable.sum (fmap (memShapeSize proxy) s)
 
 -- | Grow an allocation by adding some uninitialized bytes to the end
 growPtrTargetBy ::
@@ -295,7 +324,7 @@ growPtrTargetBy ::
   Bytes ->
   PtrTarget wptr tag ->
   PtrTarget wptr tag
-growPtrTargetBy amount (PtrTarget s) = ptrTarget (s Seq.|> Uninitialized amount)
+growPtrTargetBy amount (PtrTarget bid s) = ptrTarget bid (s Seq.|> Uninitialized amount) 
 
 -- | Grow an allocation by adding uninitialized bytes to the end, up to the
 -- given size (or at least by 1).
@@ -323,8 +352,8 @@ initializePtrTarget ::
   tag (C.VectorType (Mem.LLVMPointerType 8)) ->
   PtrTarget wptr tag ->
   PtrTarget wptr tag
-initializePtrTarget tag (PtrTarget ms) =
-  ptrTarget (fmap (initializeMemShape tag) ms)
+initializePtrTarget tag (PtrTarget bid ms) =
+  ptrTarget bid (fmap (initializeMemShape tag) ms)
 
 -- | Initialize all uninitialized parts of an allocation, or if it is already
 -- fully initialized, grow it by one uninitialized byte.
@@ -334,7 +363,7 @@ initializeOrGrowPtrTarget ::
   tag (C.VectorType (Mem.LLVMPointerType 8)) ->
   PtrTarget wptr tag ->
   PtrTarget wptr tag
-initializeOrGrowPtrTarget tag t@(PtrTarget ms) =
+initializeOrGrowPtrTarget tag t@(PtrTarget _ ms) =
   if Foldable.all isInit ms
   then growPtrTarget t
   else initializePtrTarget tag t
@@ -360,16 +389,21 @@ ptrTargetToPtrs proxy tag tgt =
       (nPtrs, remBytes) = sz `divMod` ptrBytes
       nPtrs' = Bytes.bytesToInteger $ if remBytes == 0 then nPtrs else nPtrs + 1
       genSeq n x = Seq.iterateN n id x
-  in PtrTarget $
+  in (PtrTarget Nothing $
      genSeq (fromIntegral nPtrs') $
      Pointer tag (Offset 0) $
-     ptrTarget Seq.Empty
+     ptrTarget Nothing Seq.Empty) 
+
+
+instance PP.Pretty BlockId where
+  pretty bid = "blockid:" PP.<+> (PP.pretty $ getBlockId bid)
 
 instance MC.PrettyF tag => PP.Pretty (PtrTarget wptr tag) where
+  pretty :: MC.PrettyF tag => PtrTarget wptr tag -> PP.Doc ann
   pretty =
     \case
-      PtrTarget Seq.Empty -> "<unallocated>"
-      PtrTarget ms -> PP.list (Foldable.toList (fmap PP.pretty ms))
+      PtrTarget bid Seq.Empty -> PP.pretty bid PP.<+> "<unallocated>"
+      PtrTarget bid ms ->  PP.pretty bid PP.<+> PP.list (Foldable.toList (fmap PP.pretty ms))
 
 newtype Offset = Offset { getOffset :: Bytes }
   deriving (Eq, Show)
@@ -519,7 +553,7 @@ minimalPtrShape mkTag w =
   let tag = mkTag (Mem.LLVMPointerRepr w) in
   case C.testEquality w ?ptrWidth of
     Just C.Refl ->
-      ShapePtr <$> tag <*> pure (Offset 0) <*> pure (ptrTarget Seq.empty)
+      ShapePtr <$> tag <*> pure (Offset 0) <*> pure (ptrTarget Nothing Seq.empty)
     Nothing -> ShapePtrBV <$> tag <*> pure w
 
 -- | The x86_64 stack pointer points to the end of a large, fresh, mostly-
@@ -542,7 +576,7 @@ x64StackPtrShape returnAddrBytes stackArgSlots =
       (returnAddr, returnAddrSize) = returnAddrMemShape returnAddrBytes ptrWidth
       (stackArgs, stackArgsSize) = stackArgMemShapes stackArgSlots ptrWidth
       uninit = stackSizeInMiB - returnAddrSize - stackArgsSize
-      tgt = ptrTarget $ Seq.fromList $
+      tgt = ptrTarget Nothing $ Seq.fromList $
             [Uninitialized uninit, returnAddr] List.++ stackArgs
   in ShapePtr NoTag (Offset uninit) tgt
 
@@ -573,7 +607,7 @@ ppcStackPtrShape returnAddrBytes stackArgSlots =
       backChainSize = ptrWidth
       (stackArgs, stackArgsSize) = stackArgMemShapes stackArgSlots ptrWidth
       uninit = stackSizeInMiB - returnAddrSize - backChainSize - stackArgsSize
-      tgt = ptrTarget $ Seq.fromList $
+      tgt = ptrTarget Nothing $ Seq.fromList $
             [Uninitialized uninit, returnAddr, backChain] List.++ stackArgs
   in ShapePtr NoTag (Offset uninit) tgt
 
@@ -591,7 +625,7 @@ armStackPtrShape stackArgSlots =
   let ptrWidth = Bytes 4
       (stackArgs, stackArgsSize) = stackArgMemShapes stackArgSlots ptrWidth
       uninit = stackSizeInMiB - stackArgsSize
-      tgt = ptrTarget $ Seq.fromList $
+      tgt = ptrTarget Nothing $ Seq.fromList $
             Uninitialized uninit : stackArgs
   in ShapePtr NoTag (Offset uninit) tgt
 
@@ -640,12 +674,12 @@ bytesToPointers proxy tag path tgt =
     (Here _, _) -> pure (ptrTargetToPtrs proxy tag tgt)
 
     -- Need to keep dereferencing as specified by the path
-    (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget ms) ->
+    (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget bid ms) ->
       case ms Seq.!? idx of
         Just (Pointer tag' off subTgt) -> do
           C.Refl <- pure $ lastCons (Proxy @(Mem.LLVMPointerType w)) (Proxy @ts')
           subTgt' <- bytesToPointers proxy tag rest subTgt
-          pure (ptrTarget (Seq.update idx (Pointer tag' off subTgt') ms))
+          pure (ptrTarget Nothing (Seq.update idx (Pointer tag' off subTgt') ms))
         Just Exactly{} -> pure (ptrTargetToPtrs proxy tag tgt)
         Just Initialized{} -> pure (ptrTargetToPtrs proxy tag tgt)
         Just Uninitialized{} -> pure (ptrTargetToPtrs proxy tag tgt)
@@ -676,12 +710,12 @@ modifyPtrTarget proxy modify path tgt =
     (Here _, _) -> modify tgt
 
     -- Need to keep dereferencing as specified by the path
-    (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget ms) ->
+    (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget _ ms) ->
       case ms Seq.!? idx of
         Just (Pointer tag off subTgt) -> do
           C.Refl <- pure $ lastCons (Proxy @(Mem.LLVMPointerType w)) (Proxy @ts')
           subTgt' <- modifyPtrTarget proxy modify rest subTgt
-          pure (ptrTarget (Seq.update idx (Pointer tag off subTgt') ms))
+          pure (ptrTarget Nothing (Seq.update idx (Pointer tag off subTgt') ms))
         Just _ -> throw $ GreaseException $ "Internal error: mismatched selector and pointer target!"
         Nothing -> throw $ GreaseException $ "Internal error: path index out of bounds!"
 

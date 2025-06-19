@@ -12,16 +12,11 @@ module Shape
   ( shapeTests
   ) where
 
-import Control.Applicative (pure)
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.BitVector.Sized qualified as BV
-import Data.Bool (Bool(..), (&&))
 import Data.Either qualified as Either
-import Data.Eq ((==))
-import Data.Function (($), (.))
 import Data.Functor qualified as Functor
-import Data.Int (Int)
 import Data.List qualified as List
 import Data.Macaw.CFG (AddrWidthRepr(Addr64))
 import Data.Map qualified as Map
@@ -30,9 +25,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Pair (Pair(Pair))
 import Data.Parameterized.Some (Some(Some))
-import Data.Semigroup ((<>))
 import Data.Sequence qualified as Seq
-import Data.String (String)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (testEquality)
@@ -50,14 +43,11 @@ import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel.Pointer (LLVMPointerType)
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-import Prelude (error, maxBound, (*), minBound, Integral)
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
-import System.IO (IO)
 import Test.Tasty qualified as TT
 import Test.Tasty.HUnit qualified as TH
 import Test.Tasty.Hedgehog qualified as TTH
-import Text.Show (show)
 
 eqShape ::
   (forall t1' t2'. ExtShape ext NoTag t1' -> ExtShape ext NoTag t2' -> Bool) ->
@@ -85,6 +75,23 @@ eqShapes eqExt c1 c2 =
       eqShape eqExt x1 x2 && eqShapes eqExt c1' c2'
     (_, _) -> False
 
+eqMemShape :: PtrShape.MemShape w NoTag -> PtrShape.MemShape w NoTag -> Bool
+eqMemShape (PtrShape.Pointer ty off tgt) (PtrShape.Pointer ty' off' tgt') = ty == ty' && off == off'
+ && eqPtrTarget tgt tgt'
+eqMemShape x y = x == y
+
+
+-- | In parse tests we ignore the blockID. This is because Nothing is equivalent to a fresh identifier
+-- That is 'PtrTarget' Nothing, 'PtrTarget' Nothing will result in a print of
+-- 0: x
+-- 1: y
+-- The parser will then parse the blockIDs as 0 and 1 accordingly.
+
+eqPtrTarget :: PtrShape.PtrTarget w NoTag -> PtrShape.PtrTarget w NoTag  -> Bool
+eqPtrTarget (PtrShape.PtrTarget _ mems)  (PtrShape.PtrTarget _ mems') =
+  Seq.length mems == Seq.length mems' &&
+    all (uncurry eqMemShape) (Seq.zip mems mems')
+
 eqPtrShape ::
   PtrShape w ext NoTag t1 ->
   PtrShape w ext NoTag t2 ->
@@ -98,7 +105,7 @@ eqPtrShape s1 s2 =
         Maybe.Nothing -> False
         Maybe.Just Equality.Refl -> bv == bv'
     (PtrShape.ShapePtr NoTag off1 tgt1, PtrShape.ShapePtr NoTag off2 tgt2) ->
-      off1 == off2 && tgt1 == tgt2
+      off1 == off2 && eqPtrTarget tgt1 tgt2
     (_, _) -> False
 
 genShapes ::
@@ -157,7 +164,7 @@ genPtrTarget ::
 genPtrTarget = do
   memShapes <- HG.list (HR.linear 0 16) genMemShape
   -- Use smart constructor to avoid "non-canonical" instances
-  let tgt = PtrShape.ptrTarget (Seq.fromList memShapes)
+  let tgt = PtrShape.ptrTarget Maybe.Nothing (Seq.fromList memShapes)
   let sz = PtrShape.ptrTargetSize ?ptrWidth tgt
   offsetInt <- HG.integral (HR.linear 0 (Bytes.bytesToInteger sz))
   let offset = PtrShape.Offset (Bytes.toBytes offsetInt)
@@ -229,7 +236,7 @@ ptrShape ::
   [PtrShape.MemShape 64 NoTag] ->
   Shape LLVM NoTag (LLVMPointerType 64)
 ptrShape offset =
-  Shape.ShapeExt . PtrShape.ShapePtr NoTag offset . PtrShape.PtrTarget . Seq.fromList
+  Shape.ShapeExt . PtrShape.ShapePtr NoTag offset . PtrShape.PtrTarget Maybe.Nothing . Seq.fromList
 
 printThenParse :: Shape LLVM NoTag t -> IO (Some (Shape LLVM NoTag))
 printThenParse s = do
@@ -335,9 +342,9 @@ shapeTests =
   , testPrint
     "Print Pointer"
     "000000+0000000000000000\n\n000000: 000001+0000000000000000\n000001: "
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0) (PtrShape.PtrTarget Seq.Empty)])
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0) (PtrShape.PtrTarget Maybe.Nothing Seq.Empty)])
   , testPrint
     "Print Pointer with non-zero offset"
     "000000+0000000000000000\n\n000000: 000001+00000000000000ff\n000001: "
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0xff) (PtrShape.PtrTarget Seq.Empty)])
+    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0xff) (PtrShape.PtrTarget Maybe.Nothing Seq.Empty)])
   ]
