@@ -106,7 +106,7 @@ data SetupRes sym w = SetupRes { setupResPtr :: C.RegValue sym (Mem.LLVMPointerT
 data SetupState sym ext argTys w = SetupState
   { _setupMem :: Mem.MemImpl sym
   , _setupAnns :: Anns.Annotations sym ext argTys
-  -- Setup result for a given block setup
+  -- | Memoization table that maps observed 'BlockId's from 'setupPtrMem' to observed 'SetupRes' results.
   , _setupRes :: Map.Map BlockId (SetupRes sym w)
   }
 makeLenses ''SetupState
