@@ -99,6 +99,7 @@ printerAlloc computeDoc bid = do
   -- allocation that they point to, because then allocation numbers increase
   -- while reading right-to-left, top-to-bottom.
   as <- State.get
+  -- See Note [Deduplicating Pointer Targets Based on BlockIDs] if the block ID is Nothing it is fresh
   let (blk@(BlockId k), as') = case bid of
         Nothing -> allocNext as
         Just bid' -> (bid', as)
