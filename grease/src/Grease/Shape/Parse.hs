@@ -20,6 +20,7 @@ See @doc/shape-dsl.md@ for a description of the syntax.
 module Grease.Shape.Parse
   ( parseShapes
   , ParsedShapes(..)
+  , ParseError(..)
   , TypeMismatch(..)
   , replaceShapes
   ) where
