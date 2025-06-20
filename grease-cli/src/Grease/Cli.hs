@@ -134,12 +134,12 @@ simOpts = do
   simOverrides <-
     Opt.many (Opt.strOption ( Opt.long "overrides"
                               <> Opt.metavar "FILE"
-                              <> Opt.help "function overrides, in Crucible S-expression syntax"
+                              <> Opt.help "overrides, in Crucible S-expression syntax"
                               ))
   simOverridesYaml <-
     Opt.many (Opt.strOption ( Opt.long "overrides-yaml"
                               <> Opt.metavar "FILE"
-                              <> Opt.help "function overrides, in YAML format"
+                              <> Opt.help "overrides, in YAML format"
                               ))
   simTimeout <-
     GO.Milliseconds <$>
