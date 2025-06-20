@@ -205,6 +205,10 @@ scenarios where you may want to use this feature:
     0x1234: "malloc" # Assume that malloc's address is 0x1234
   ```
 
+If you specify an override for a function `f` via `--overrides` and also for
+`f`'s address via `--overrides-yaml`, then the address override will take
+precedence.
+
 ## Startup overrides
 
 Startup overrides are a special form of override that runs before the execution
