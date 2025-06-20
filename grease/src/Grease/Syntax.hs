@@ -150,28 +150,43 @@ resolveOverridesYaml loadOpts mem fnOvNames (ParsedOverridesYaml parsedFunAddrs)
 -- | Helper, not exported.
 --
 -- Parse the contents of an overrides-related @.yaml@ file from a 'Aeson.Value'.
+-- This also ensures that the top-level YAML object does not have any unexpected
+-- keys.
 parseFunctionAddressOverrides ::
   Aeson.Value ->
   IO ParsedOverridesYaml
 parseFunctionAddressOverrides val = do
-  obj <- asObject val
-  case KeyMap.lookup "function address overrides" obj of
+  mbObj <- asNullableObject val
+  case mbObj of
     Nothing -> pure mempty
-    Just funAddrOvs -> do
-      funAddrOvsObj <- asObject funAddrOvs
-      funAddrOvPairs <-
-        traverse
-          (\(addrKey, funName) -> do
-            addr <-
-              case Read.readMaybe (Key.toString addrKey) of
-                Just addr -> pure addr
-                Nothing -> throw $ GreaseException $
-                  "Expected address in overrides YAML file, but encountered " <>
-                  Key.toText addrKey
-            funNameText <- asString funName
-            pure (addr, W4.functionNameFromText funNameText))
-          (KeyMap.toList funAddrOvsObj)
-      pure $ ParsedOverridesYaml $ Map.fromList funAddrOvPairs
+    Just obj -> do
+      let objSansFunAddrOvs = KeyMap.delete funAddrOvsKey obj
+      unless (KeyMap.null objSansFunAddrOvs) $
+        throw $ GreaseException $ Text.unlines $
+          "Unexpected keys in overrides.yaml file:" :
+          map
+            (\key -> "- " <> Key.toText key)
+            (KeyMap.keys objSansFunAddrOvs)
+      case KeyMap.lookup funAddrOvsKey obj of
+        Nothing -> pure mempty
+        Just funAddrOvs -> do
+          funAddrOvsObj <- asObject funAddrOvs
+          funAddrOvPairs <-
+            traverse
+              (\(addrKey, funName) -> do
+                addr <-
+                  case Read.readMaybe (Key.toString addrKey) of
+                    Just addr -> pure addr
+                    Nothing -> throw $ GreaseException $
+                      "Expected address in overrides YAML file, but encountered " <>
+                      Key.toText addrKey
+                funNameText <- asString funName
+                pure (addr, W4.functionNameFromText funNameText))
+              (KeyMap.toList funAddrOvsObj)
+          pure $ ParsedOverridesYaml $ Map.fromList funAddrOvPairs
+  where
+    funAddrOvsKey :: Key.Key
+    funAddrOvsKey = "function address overrides"
 
 -- | Helper, not exported.
 --
@@ -191,4 +206,17 @@ asObject :: Aeson.Value -> IO Aeson.Object
 asObject (Aeson.Object o) = pure o
 asObject v = throw $ GreaseException $
   "Expected object in overrides YAML file, but encountered " <>
+  Text.decodeUtf8 (BS.toStrict (Aeson.encode v))
+
+-- | Helper, not exported.
+--
+-- Assert that a JSON 'Aeson.Value' is an 'Aeson.Object' or 'Aeson.Null'. If it
+-- is an 'Aeson.Object', return 'Just' the underlying object. If it is
+-- 'Aeson.Null', return 'Nothing'. If neither of these are the case, throw an
+-- exception.
+asNullableObject :: Aeson.Value -> IO (Maybe Aeson.Object)
+asNullableObject (Aeson.Object o) = pure $ Just o
+asNullableObject Aeson.Null = pure Nothing
+asNullableObject v = throw $ GreaseException $
+  "Expected null or object in overrides YAML file, but encountered " <>
   Text.decodeUtf8 (BS.toStrict (Aeson.encode v))
