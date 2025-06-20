@@ -1,0 +1,3 @@
+function address overrides:
+  0x401010: "free"
+  0x401000: "malloc"

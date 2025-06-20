@@ -77,6 +77,7 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe(..), fromMaybe, catMaybes)
 import Data.Maybe qualified as Maybe
+import Data.Monoid (mconcat)
 import Data.Ord ((<=))
 import Data.Parameterized.Classes (IxedF'(ixF'))
 import Data.Parameterized.Context qualified as Ctx
@@ -144,7 +145,7 @@ import Grease.Shape.NoTag (NoTag(NoTag))
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Solver (withSolverOnlineBackend)
-import Grease.Syntax (parseProgram, parsedProgramCfgMap)
+import Grease.Syntax (parseProgram, parsedProgramCfgMap, parseOverridesYaml, resolveOverridesYaml)
 import Grease.Syscall
 import Grease.Time (time)
 import Grease.Utility
@@ -620,10 +621,12 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         let builtinOvs = builtinStubsOverrides bak mvar memCfg0 archCtx fs
         let userOvPaths = simOverrides simOpts
         fnOvsMap <- liftIO $ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
+        fnAddrOvsRaw <- liftIO $ mconcat <$> traverse parseOverridesYaml (simOverridesYaml simOpts)
+        fnAddrOvs <- liftIO $ resolveOverridesYaml loadOpts memory (Map.keysSet fnOvsMap) fnAddrOvsRaw
         let errorSymbolicFunCalls = simErrorSymbolicFunCalls simOpts
         let errorSymbolicSyscalls = simErrorSymbolicSyscalls simOpts
         let skipInvalidCallAddrs = simSkipInvalidCallAddrs simOpts
-        let memCfg1 = memConfigWithHandles bak la halloc archCtx memory symMap pltStubs dynFunMap fnOvsMap builtinGenericSyscalls errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddrs memCfg0
+        let memCfg1 = memConfigWithHandles bak la halloc archCtx memory symMap pltStubs dynFunMap fnOvsMap fnAddrOvs builtinGenericSyscalls errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddrs memCfg0
         evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @arch (archCtx ^. archVals) sym pure
         let macawExtImpl = Symbolic.macawExtensions evalFn mvar memCfg1
         let ssaCfgHdl = C.cfgHandle ssaCfg'
@@ -740,6 +743,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
     MacawCfgConfig
       { mcDataLayout = dl
       , mcMprotectAddr = mprotectAddr
+      , mcLoadOptions = loadOpts
       , mcSymMap = symMap
       , mcPltStubs = pltStubs
       , mcDynFunMap = dynFunMap
