@@ -19,7 +19,12 @@ jobs:
         with:
           submodules: false
           fetch-depth: 1
-
+      
+      - uses: haskell-actions/run-fourmolu@v9
+        name: Check formatting with fourmolu
+        with:
+          version: "0.18.0.0"
+          
       - name: Check for trailing whitespace
         run: python3 scripts/lint/whitespace.py grease*/**/*.hs doc/**/*.md
 

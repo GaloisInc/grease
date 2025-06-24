@@ -73,6 +73,19 @@ We have a few Python scripts in `scripts/lint/` that perform one-off
 checks. They generally take some number of paths as arguments, check
 `.github/workflows/lint.yml` to see how they are invoked in CI.
 
+### Fourmolu
+
+This repo enforces Fourmolu formatting based on the committed configuration in `fourmolu.yaml`. Installation and usage directions are available
+[here](https://github.com/fourmolu/fourmolu). In short:
+
+```sh
+cabal install fourmolu
+fourmolu --mode inplace $(git ls-files '*.hs')
+```
+
+One can either configure formatting commands as a [pre-commit hook](https://git-scm.com/docs/githooks#_pre_commit) or [auto-format on save](https://code.visualstudio.com/docs/editing/codebasics#_formatting) to avoid formatting issues.
+The repo is already formatted with fourmolu so new formatting changes should be localized to behavioral changes. Further discussion of the rationale for the enforcement of a fourmolu style and commit hygiene is available in this [formatting discussion](./formatting.md).
+
 ### hlint
 
 We treat a small number of hlint warnings as errors in CI. To run hlint locally, try:
