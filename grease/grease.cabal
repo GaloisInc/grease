@@ -176,6 +176,7 @@ library
     , macaw-symbolic-syntax
     , stubs-common
     , stubs-wrapper
+    , galois-dwarf
     , what4
 
   exposed-modules:

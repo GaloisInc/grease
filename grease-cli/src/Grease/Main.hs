@@ -58,6 +58,7 @@ import Data.Macaw.BinaryLoader.AArch32 ()
 import Data.Macaw.BinaryLoader.X86 ()
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
+import Data.Macaw.Dwarf qualified as Dwarf
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
 import Data.Macaw.Memory.LoadCommon qualified as MML
@@ -598,8 +599,9 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
   initArgs_ <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let argNames = fmapFC (Const . getValueName) rNameAssign
+  dwarfedArgs <- loadDwarfpreconditions (simEnableDWARFPreconditions simOpts) argNames initArgs_ macawCfgConfig mdEntryAbsAddr
   initArgs <-
-    loadInitialPreconditions (simInitialPreconditions simOpts) argNames initArgs_
+    loadInitialPreconditions (simInitialPreconditions simOpts) argNames dwarfedArgs
 
   EntrypointCfgs
     { entrypointStartupOv = mbStartupOvSsa

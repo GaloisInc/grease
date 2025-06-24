@@ -38,6 +38,8 @@ import Data.Functor.Identity (Identity (Identity, runIdentity))
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Dwarf (CompileUnit (cuRanges, cuSubprograms), Range (rangeBegin, rangeEnd), Subprogram (subEntryPC, subParamMap))
+import Data.Macaw.Dwarf qualified as MDwarf
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Classes (ShowF (..))
 import Data.Parameterized.Context qualified as Ctx
@@ -314,3 +316,39 @@ deriving instance (ShowExt ext tag, ShowF tag) => Show (ArgShapes ext tag tys)
 instance (MC.PrettyF tag, PrettyExt ext tag) => PP.Pretty (ArgShapes ext tag tys) where
   pretty (ArgShapes regs) =
     MC.foldlFC (\doc rShape -> PP.vcat [doc, PP.pretty rShape]) "" regs
+
+isInSubProg :: Word64 -> Subprogram -> Bool
+isInSubProg w sub = maybe False id ((==) w <$> subEntryPC sub)
+
+rightToMaybe :: Either a b -> Maybe b
+rightToMaybe (Left _) = Nothing
+rightToMaybe (Right b) = Just b
+
+pointerShapeOfDwarf :: MDwarf.TypeApp -> Maybe (C.Some (PtrShape ext w NoTag))
+pointerShapeOfDwarf (MDwarf.UnsignedIntType w) =
+  case mkNatRepr $ fromIntegral w of
+    C.Some w' -> case C.isPosNat w' of
+      Just C.LeqProof -> Just $ C.Some $ ShapePtrBV NoTag w'
+      _ -> Nothing
+pointerShapeOfDwarf (MDwarf.PointerType (Just _) _) = Nothing
+pointerShapeOfDwarf _ = Nothing
+
+shapeFromDwarf :: Subprogram -> ArgShapes ext NoTag tys
+shapeFromDwarf sub =
+  let ascParams = snd <$> (toAscList $ subParamMap sub)
+      onlyValid = 1
+   in undefined
+
+fromDwarfInfo :: MC.MemWord (MC.RegAddrWidth (MC.ArchReg arch)) -> ArgShapes ext NoTag tys -> [Data.Macaw.Dwarf.CompileUnit] -> ArgShapes ext NoTag tys
+fromDwarfInfo addr initShape cus =
+  let mval = MC.memWordValue addr
+   in let targetCu =
+            List.find
+              ( \x ->
+                  let rs = cuRanges x
+                   in let isInCU = any (\x -> let mval = MC.memWordValue addr in rangeBegin x <= mval && mval < rangeEnd x) rs
+                       in isInCU
+              )
+              cus
+       in let targetSubProg = (\x -> List.find (isInSubProg mval) (cuSubprograms x)) =<< targetCu
+           in maybe initShape shapeFromDwarf targetSubProg

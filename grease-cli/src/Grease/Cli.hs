@@ -21,6 +21,7 @@ import Data.Void (Void)
 import Grease.Diagnostic.Severity qualified as Sev
 import Grease.Entrypoint
 import Grease.Macaw.PLT
+import Grease.Options (SimOpts (simEnableDWARFPreconditions))
 import Grease.Options qualified as GO
 import Grease.Panic (panic)
 import Grease.Requirement (displayReq, reqParser)
