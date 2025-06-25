@@ -110,6 +110,7 @@ import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint
 import Grease.Heuristic
 import Grease.LLVM qualified as LLVM
+import Grease.LLVM.DebugInfo qualified as GLD
 import Grease.LLVM.SetupHook qualified as LLVM (SetupHook, moduleSetupHook, syntaxSetupHook)
 import Grease.LLVM.SetupHook.Diagnostic qualified as LDiag (Diagnostic (LLVMTranslationWarning))
 import Grease.Macaw
@@ -1118,6 +1119,7 @@ simulateLlvmCfg ::
   W4.FloatModeRepr fm ->
   C.HandleAllocator ->
   Trans.LLVMContext arch ->
+  Maybe L.Module ->
   InitialMem sym ->
   LLVM.SetupHook sym arch ->
   -- | An optional startup override to run just before the entrypoint function.
@@ -1125,7 +1127,7 @@ simulateLlvmCfg ::
   -- | The CFG of the user-requested entrypoint function.
   C.SomeCFG CLLVM.LLVM argTys ret ->
   IO BatchStatus
-simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCfg scfg@(C.SomeCFG cfg) = do
+simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbStartupOvCfg scfg@(C.SomeCFG cfg) = do
   let sym = C.backendGetSym bak
 
   doLog la (Diag.TargetCFG cfg)
@@ -1143,7 +1145,10 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
   let argTys = C.cfgArgTypes cfg
       -- Display the arguments as though they are unnamed LLVM virtual registers.
       argNames = imapFC (\i _ -> Const ('%' : show i)) argTys
-  initArgs_ <- traverseFC (minimalShapeWithPtrs (pure . const NoTag)) argTys
+  initArgs_ <-
+    case llvmMod of
+      Nothing -> traverseFC (minimalShapeWithPtrs (pure . const NoTag)) argTys
+      Just div -> GLD.diArgShapes (C.handleName (C.cfgHandle cfg)) argTys div
   initArgs <-
     loadInitialPreconditions (simInitialPreconditions simOpts) argNames (ArgShapes initArgs_)
 
@@ -1225,11 +1230,12 @@ simulateLlvmCfgs ::
   SimOpts ->
   C.HandleAllocator ->
   Trans.LLVMContext arch ->
+  Maybe L.Module ->
   (forall sym bak. C.IsSymBackend sym bak => bak -> IO (InitialMem sym)) ->
   (forall sym. LLVM.SetupHook sym arch) ->
   Map Entrypoint (EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
   IO Results
-simulateLlvmCfgs la simOpts halloc llvmCtx mkMem setupHook cfgs = do
+simulateLlvmCfgs la simOpts halloc llvmCtx llvmMod mkMem setupHook cfgs = do
   let fm = W4.FloatRealRepr
   withSolverOnlineBackend (simSolver simOpts) fm globalNonceGenerator $ \bak -> do
     initMem <- mkMem bak
@@ -1270,7 +1276,7 @@ simulateLlvmCfgs la simOpts halloc llvmCtx mkMem setupHook cfgs = do
                           , "Startup override return type: " <> Text.pack (show actualRetTy)
                           ]
               pure $ C.SomeCFG startupOvCfg'
-          status <- simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvSomeCfg (C.SomeCFG entrypointCfg')
+          status <- simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbStartupOvSomeCfg (C.SomeCFG entrypointCfg')
           let result =
                 Batch
                   { batchStatus = status
@@ -1305,9 +1311,10 @@ simulateLlvmSyntax simOpts la = do
           , Trans.llvmGlobalAliases = Map.empty
           , Trans.llvmFunctionAliases = Map.empty
           }
+  let llvmMod = Nothing
   let setupHook :: forall sym arch. LLVM.SetupHook sym arch
       setupHook = LLVM.syntaxSetupHook la (simOverrides simOpts) prog cfgs
-  simulateLlvmCfgs la simOpts halloc llvmCtx mkMem setupHook cfgs
+  simulateLlvmCfgs la simOpts halloc llvmCtx llvmMod mkMem setupHook cfgs
 
 simulateLlvm ::
   Trans.TranslationOptions ->
@@ -1381,7 +1388,7 @@ simulateLlvm transOpts simOpts la = do
     let setupHook :: forall sym. LLVM.SetupHook sym arch
         setupHook = LLVM.moduleSetupHook la (simOverrides simOpts) trans cfgs
 
-    simulateLlvmCfgs la simOpts halloc llvmCtxt mkMem setupHook cfgs
+    simulateLlvmCfgs la simOpts halloc llvmCtxt (Just llvmMod) mkMem setupHook cfgs
 
 -- | A 'GreaseLogAction' that diagnostics directly to @stderr@.
 logAction :: Severity -> GreaseLogAction
