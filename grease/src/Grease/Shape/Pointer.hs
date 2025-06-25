@@ -261,7 +261,11 @@ to have the same shape, otherwise the first observed 'PtrTarget's shape will win
 --
 -- * @wptr@: Width of a pointer, in bits
 -- * @tag@: See 'Grease.Shape.Shape'
-data PtrTarget wptr tag = PtrTarget (Maybe BlockId) (Seq (MemShape wptr tag))
+data PtrTarget wptr tag
+  = PtrTarget
+  { ptrTargetBlock :: Maybe BlockId
+  , ptrTargetShapes :: Seq (MemShape wptr tag)
+  }
 
 instance TF.FunctorF (PtrTarget wptr) where
   fmapF = TF.fmapFDefault

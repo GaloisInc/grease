@@ -27,7 +27,7 @@ def gather(txt):
     for line in txt.splitlines():
         if line.startswith(COMMENT):
             flags = line.removeprefix(COMMENT)
-            raw_flags.append(flags)
+            raw_flags += flags.split(" ")
     return raw_flags
 
 
@@ -39,7 +39,7 @@ def process(raw_flags):
             try:
                 processed_flags += GROUPS[flag]
             except KeyError:
-                die("unknown flag group: ${flag}")
+                die(f"unknown flag group: ${flag}")
         else:
             processed_flags.append(flag)
     return processed_flags
