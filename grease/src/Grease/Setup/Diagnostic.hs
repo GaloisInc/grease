@@ -1,16 +1,14 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE LambdaCase #-}
 
-module Grease.Setup.Diagnostic
-  ( Diagnostic(..)
-  , severity
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Setup.Diagnostic (
+  Diagnostic (..),
+  severity,
+) where
 
-import Grease.Diagnostic.Severity (Severity(Trace))
+import Grease.Diagnostic.Severity (Severity (Trace))
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Prettyprinter qualified as PP
 import What4.Interface qualified as W4

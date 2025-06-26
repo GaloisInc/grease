@@ -1,11 +1,9 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
-{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
+-- \|
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 import Diagrams.Backend.SVG.CmdLine
 import Diagrams.Prelude
@@ -28,8 +26,7 @@ yAxis = strokeLine $ lineFromVertices [0 ^& 0, 0 ^& h]
 axes :: Dia
 axes =
   yAxis
-  ===
-  xAxis
+    === xAxis
 
 byte :: Dia
 byte = square 1
@@ -56,7 +53,7 @@ evenly maxCoord trans base ds =
   foldl
     (\accum (i, d) -> trans (i * maxCoord / toEnum (length ds)) d `atop` accum)
     base
-    (zip [0..] ds)
+    (zip [0 ..] ds)
 
 evenX :: Dia -> [Dia] -> Dia
 evenX base ds = evenly w translateX base ds
@@ -69,29 +66,30 @@ labeledAxes =
   evenY
     (evenX axes (map (addYGap . rotateBy (1 / 4)) xLabels))
     (map addXGap yLabels)
-  where
-    addXGap = translateX (- 0.5)
-    addYGap = translateY (- 1.5)
+ where
+  addXGap = translateX (-0.5)
+  addYGap = translateY (-1.5)
 
 plot :: Dia
 plot = evenY labeledAxes (map alignXMin (mempty : allocs))
-  where allocs = map (\i -> hcat (replicate i byte)) [4, 8, 2, 12]
+ where
+  allocs = map (\i -> hcat (replicate i byte)) [4, 8, 2, 12]
 
 namedAxes :: Dia
 namedAxes =
-  rotateBy (1 / 4) (text "Block identifier") ||| strutX 2 |||
-    (translateY (-0.5) (centerXY plot)
-    ===
-    strutY 2
-    ===
-    alignedText 0.5 1 "Offset")
+  rotateBy (1 / 4) (text "Block identifier")
+    ||| strutX 2
+    ||| ( translateY (-0.5) (centerXY plot)
+            === strutY 2
+            === alignedText 0.5 1 "Offset"
+        )
 
 legend :: Dia
 legend = fixCutoff $ pad 1.5 byte ||| alignedText 0 0.5 "= a byte"
-  where fixCutoff = padX 6.0  -- o/w the text gets cut off
+ where
+  fixCutoff = padX 6.0 -- o/w the text gets cut off
 
 plotWithLegend :: Dia
 plotWithLegend =
   translateY (h / 8) (translateX ((w / 2) - (w / 8)) legend)
-  `atop` centerXY namedAxes
-
+    `atop` centerXY namedAxes

@@ -1,20 +1,18 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Main.Diagnostic
-  ( Diagnostic(..)
-  , severity
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Main.Diagnostic (
+  Diagnostic (..),
+  severity,
+) where
 
 import Data.List qualified as List
 import Data.Text qualified as Text
 import Data.Void (Void, absurd)
-import Grease.Diagnostic.Severity (Severity(Debug, Info, Warn))
+import Grease.Diagnostic.Severity (Severity (Debug, Info, Warn))
 import Grease.Entrypoint (Entrypoint, EntrypointLocation)
 import Grease.Output (BatchStatus)
 import Grease.Requirement (Requirement, displayReq)
@@ -49,26 +47,27 @@ instance PP.Pretty Diagnostic where
     \case
       AnalyzedEntrypoint entry status ->
         PP.hsep
-        [ "Finished analyzing"
-        , PP.squotes (PP.pretty entry) PP.<> "."
-        , PP.pretty status
-        ]
+          [ "Finished analyzing"
+          , PP.squotes (PP.pretty entry) PP.<> "."
+          , PP.pretty status
+          ]
       AnalyzingEntrypoint entry ->
         "Analyzing from entrypoint" PP.<+> PP.pretty entry
       FinishedAnalyzingEntrypoint entry duration ->
         PP.hsep
-        [ "Analysis of"
-        , PP.squotes (PP.pretty entry)
-        , "took"
-        , PP.pretty (nanosToMillis duration)
-        ]
+          [ "Analysis of"
+          , PP.squotes (PP.pretty entry)
+          , "took"
+          , PP.pretty (nanosToMillis duration)
+          ]
       NoEntrypoints ->
         "No entry points specified, analyzing all known functions."
       SimulationTestingRequirements rs ->
         if List.null rs
-        then "Not testing any requirements beyond memory safety"
-        else PP.pretty $
-               "Testing requirements: " <> Text.intercalate ", " (List.map displayReq rs)
+          then "Not testing any requirements beyond memory safety"
+          else
+            PP.pretty $
+              "Testing requirements: " <> Text.intercalate ", " (List.map displayReq rs)
       SimulationAllGoalsPassed ->
         "All goals passed (with assertions added)!"
       SimulationGoalsFailed ->
@@ -84,9 +83,9 @@ instance PP.Pretty Diagnostic where
 severity :: Diagnostic -> Severity
 severity =
   \case
-    AnalyzedEntrypoint {} -> Info
-    AnalyzingEntrypoint {} -> Info
-    FinishedAnalyzingEntrypoint {} -> Debug
+    AnalyzedEntrypoint{} -> Info
+    AnalyzingEntrypoint{} -> Info
+    FinishedAnalyzingEntrypoint{} -> Debug
     NoEntrypoints -> Warn
     SimulationTestingRequirements{} -> Info
     SimulationAllGoalsPassed{} -> Info

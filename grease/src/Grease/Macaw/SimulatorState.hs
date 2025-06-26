@@ -1,28 +1,28 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Grease.Macaw.SimulatorState
-  ( -- * @GreaseSimulatorState@
-    GreaseSimulatorState(..)
-  , emptyGreaseSimulatorState
-  , HasGreaseSimulatorState(..)
-    -- * Lenses for @GreaseSimulatorState@
-  , discoveredFnHandles
-  , syscallHandles
-  , macawLazySimulatorState
-  , stateDiscoveredFnHandles
-  , stateSyscallHandles
-  , stateMacawLazySimulatorState
-    -- * Auxiliary definitions
-  , MacawFnHandle
-  , MacawOverride
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Macaw.SimulatorState (
+  -- * @GreaseSimulatorState@
+  GreaseSimulatorState (..),
+  emptyGreaseSimulatorState,
+  HasGreaseSimulatorState (..),
+
+  -- * Lenses for @GreaseSimulatorState@
+  discoveredFnHandles,
+  syscallHandles,
+  macawLazySimulatorState,
+  stateDiscoveredFnHandles,
+  stateSyscallHandles,
+  stateMacawLazySimulatorState,
+
+  -- * Auxiliary definitions
+  MacawFnHandle,
+  MacawOverride,
+) where
 
 import Control.Lens (Lens')
 import Control.Lens qualified as Lens
@@ -40,59 +40,63 @@ import Stubs.Syscall qualified as Stubs
 -- | The Crucible state extension for holding @grease@-specific state.
 data GreaseSimulatorState sym arch = GreaseSimulatorState
   { _discoveredFnHandles :: Map.Map (MC.ArchSegmentOff arch) (MacawFnHandle arch)
-    -- ^ A map of discovered function addresses to their handles. Any time a new
-    -- function is discovered (see @Note [Incremental code discovery]@), it will
-    -- be added to this map so that it can be looked up in future invocations of
-    -- that function.
+  -- ^ A map of discovered function addresses to their handles. Any time a new
+  -- function is discovered (see @Note [Incremental code discovery]@), it will
+  -- be added to this map so that it can be looked up in future invocations of
+  -- that function.
   , _toConcretize :: C.GlobalVar ToConc.ToConcretizeType
-    -- ^ Values created during runtime to be passed to the concretization
-    -- functionality and generally displayed to the user.
+  -- ^ Values created during runtime to be passed to the concretization
+  -- functionality and generally displayed to the user.
   , _syscallHandles :: MapF.MapF Stubs.SyscallNumRepr Stubs.SyscallFnHandle
-    -- ^ A map of syscall numbers (that have been invoked thus far during
-    -- simulation) to their handles. Any time a new syscall is simulated, it
-    -- will be added to this map so that it can be looked up in future
-    -- invocations of that syscall.
-    --
-    -- We track syscall handles here for a different reason than why we track
-    -- '_discoveredFnHandles'. The reason we track '_syscallHandles' is a
-    -- practical one: it is difficult to ascertain the types of syscall
-    -- function handles until simulation enters a
-    -- 'Symbolic.LookupSyscallHandle', which quantifies the types of the
-    -- syscall's argument and return registers in a rank-n type. As such, we
-    -- cannot easily create a map of all syscall handles ahead of time.
-    -- Tracking syscall handles in the 'GreaseSimulatorState' avoids this
-    -- problem, as it allows us to wait until we are within a
-    -- 'Symbolic.LookupSyscallHandle', where the syscall register types are
-    -- within reach.
-    --
-    -- Strictly speaking, we don't /have/ to track the syscall handles here, as
-    -- we could simply allocate a new handle every time we invoke any syscall.
-    -- The downside is that if we repeatedly invoked the same syscall, then we
-    -- would constantly overwrite the previous handle that we allocated before
-    -- with a new one.
+  -- ^ A map of syscall numbers (that have been invoked thus far during
+  -- simulation) to their handles. Any time a new syscall is simulated, it
+  -- will be added to this map so that it can be looked up in future
+  -- invocations of that syscall.
+  --
+  -- We track syscall handles here for a different reason than why we track
+  -- '_discoveredFnHandles'. The reason we track '_syscallHandles' is a
+  -- practical one: it is difficult to ascertain the types of syscall
+  -- function handles until simulation enters a
+  -- 'Symbolic.LookupSyscallHandle', which quantifies the types of the
+  -- syscall's argument and return registers in a rank-n type. As such, we
+  -- cannot easily create a map of all syscall handles ahead of time.
+  -- Tracking syscall handles in the 'GreaseSimulatorState' avoids this
+  -- problem, as it allows us to wait until we are within a
+  -- 'Symbolic.LookupSyscallHandle', where the syscall register types are
+  -- within reach.
+  --
+  -- Strictly speaking, we don't /have/ to track the syscall handles here, as
+  -- we could simply allocate a new handle every time we invoke any syscall.
+  -- The downside is that if we repeatedly invoked the same syscall, then we
+  -- would constantly overwrite the previous handle that we allocated before
+  -- with a new one.
   , _macawLazySimulatorState :: Symbolic.MacawLazySimulatorState sym (MC.ArchAddrWidth arch)
-    -- ^ The state used in the lazy @macaw-symbolic@ memory model, on top of
-    -- which @grease@ is built.
+  -- ^ The state used in the lazy @macaw-symbolic@ memory model, on top of
+  -- which @grease@ is built.
   }
 
 -- | An initial value for 'GreaseSimulatorState'.
 emptyGreaseSimulatorState ::
   C.GlobalVar ToConc.ToConcretizeType ->
   GreaseSimulatorState sym arch
-emptyGreaseSimulatorState toConcVar = GreaseSimulatorState
-  { _discoveredFnHandles = Map.empty
-  , _toConcretize = toConcVar
-  , _syscallHandles = MapF.empty
-  , _macawLazySimulatorState = Symbolic.emptyMacawLazySimulatorState
-  }
+emptyGreaseSimulatorState toConcVar =
+  GreaseSimulatorState
+    { _discoveredFnHandles = Map.empty
+    , _toConcretize = toConcVar
+    , _syscallHandles = MapF.empty
+    , _macawLazySimulatorState = Symbolic.emptyMacawLazySimulatorState
+    }
 
 -- | A class for Crucible personality types @p@ which contain a
 -- 'GreaseSimulatorState'. @grease@'s code is polymorphic over
 -- 'HasGreaseSimulatorState' instances so that downstream @grease@ users can
 -- supply their own personality types that extend 'GreaseSimulatorState'
 -- further.
-class Symbolic.HasMacawLazySimulatorState p sym (MC.ArchAddrWidth arch) =>
-      HasGreaseSimulatorState p sym arch | p -> sym arch where
+class
+  Symbolic.HasMacawLazySimulatorState p sym (MC.ArchAddrWidth arch) =>
+  HasGreaseSimulatorState p sym arch
+    | p -> sym arch
+  where
   greaseSimulatorState :: Lens' p (GreaseSimulatorState sym arch)
 
 -----
@@ -108,7 +112,10 @@ type MacawFnHandle arch =
 
 -- | An 'C.Override' suitable for use within @macaw-symbolic@.
 type MacawOverride p sym arch =
-  C.Override p sym (Symbolic.MacawExt arch)
+  C.Override
+    p
+    sym
+    (Symbolic.MacawExt arch)
     (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
     (Symbolic.ArchRegStruct arch)
 
@@ -122,9 +129,13 @@ makeLenses ''GreaseSimulatorState
 instance ToConc.HasToConcretize (GreaseSimulatorState sym arch) where
   toConcretize = Lens.view toConcretize
 
-instance (MC.ArchAddrWidth arch ~ w) =>
-         Symbolic.HasMacawLazySimulatorState
-           (GreaseSimulatorState sym arch) sym w where
+instance
+  (MC.ArchAddrWidth arch ~ w) =>
+  Symbolic.HasMacawLazySimulatorState
+    (GreaseSimulatorState sym arch)
+    sym
+    w
+  where
   macawLazySimulatorState = macawLazySimulatorState
 
 instance HasGreaseSimulatorState (GreaseSimulatorState sym arch) sym arch where
@@ -136,10 +147,10 @@ stateDiscoveredFnHandles ::
     (C.SimState p sym ext r f a)
     (Map.Map (MC.ArchSegmentOff arch) (MacawFnHandle arch))
 stateDiscoveredFnHandles =
-  C.stateContext .
-  C.cruciblePersonality .
-  greaseSimulatorState .
-  discoveredFnHandles
+  C.stateContext
+    . C.cruciblePersonality
+    . greaseSimulatorState
+    . discoveredFnHandles
 
 stateSyscallHandles ::
   HasGreaseSimulatorState p sym arch =>
@@ -147,10 +158,10 @@ stateSyscallHandles ::
     (C.SimState p sym ext r f a)
     (MapF.MapF Stubs.SyscallNumRepr Stubs.SyscallFnHandle)
 stateSyscallHandles =
-  C.stateContext .
-  C.cruciblePersonality .
-  greaseSimulatorState .
-  syscallHandles
+  C.stateContext
+    . C.cruciblePersonality
+    . greaseSimulatorState
+    . syscallHandles
 
 stateMacawLazySimulatorState ::
   HasGreaseSimulatorState p sym arch =>
@@ -158,10 +169,10 @@ stateMacawLazySimulatorState ::
     (C.SimState p sym ext r f a)
     (Symbolic.MacawLazySimulatorState sym (MC.ArchAddrWidth arch))
 stateMacawLazySimulatorState =
-  C.stateContext .
-  C.cruciblePersonality .
-  greaseSimulatorState .
-  macawLazySimulatorState
+  C.stateContext
+    . C.cruciblePersonality
+    . greaseSimulatorState
+    . macawLazySimulatorState
 
 {-
 Note [Incremental code discovery]

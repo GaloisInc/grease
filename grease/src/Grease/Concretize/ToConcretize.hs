@@ -1,30 +1,28 @@
-{-|
-Copyright        : (c) Galois, Inc. 2025
-Maintainer       : GREASE Maintainers <grease@galois.com>
-
-This module defines an interface for tracking symbolic values that are created
-during simulation (generally by overrides) and should be concretized when a
-goal fails.
-
-It stores to-be-concretized values in a Crucible global variable of type
-'ToConcretizeType'. This variable is stored in the Crucible personality
-(see 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'),
-and read-only access is provided via 'HasToConcretize'.
-See this thread for a discussion of this choice:
-<https://github.com/GaloisInc/grease/pull/203#discussion_r2132431744>.
--}
-
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Concretize.ToConcretize
-  ( ToConcretizeType
-  , HasToConcretize(toConcretize)
-  , newToConcretize
-  , readToConcretize
-  , stateToConcretize
-  , addToConcretize
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2025
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+--
+-- This module defines an interface for tracking symbolic values that are created
+-- during simulation (generally by overrides) and should be concretized when a
+-- goal fails.
+--
+-- It stores to-be-concretized values in a Crucible global variable of type
+-- 'ToConcretizeType'. This variable is stored in the Crucible personality
+-- (see 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'),
+-- and read-only access is provided via 'HasToConcretize'.
+-- See this thread for a discussion of this choice:
+-- <https://github.com/GaloisInc/grease/pull/203#discussion_r2132431744>.
+module Grease.Concretize.ToConcretize (
+  ToConcretizeType,
+  HasToConcretize (toConcretize),
+  newToConcretize,
+  readToConcretize,
+  stateToConcretize,
+  addToConcretize,
+) where
 
 import Control.Lens qualified as Lens
 import Control.Monad.IO.Class (liftIO)
@@ -50,8 +48,8 @@ import What4.Interface qualified as WI
 -- The first component of the struct of type 'LCT.StringType' is a name
 -- (generally expected, but not required, to be concrete), and the second
 -- component of type 'LCT.AnyType' is the value to be concretized.
-type ToConcretizeType
-  = LCT.SequenceType (LCT.StructType (Ctx.EmptyCtx Ctx.::> LCT.AnyType Ctx.::> LCT.StringType WI.Unicode))
+type ToConcretizeType =
+  LCT.SequenceType (LCT.StructType (Ctx.EmptyCtx Ctx.::> LCT.AnyType Ctx.::> LCT.StringType WI.Unicode))
 
 -- | A class for Crucible personality types @p@ (see
 -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality') which contain a
@@ -86,8 +84,8 @@ abortedGroundGlobals groundFn iTypes =
     LCSE.AbortedBranch _loc p rl rr -> do
       b <- WEG.groundEval groundFn p
       if b
-      then abortedGroundGlobals groundFn iTypes rl
-      else abortedGroundGlobals groundFn iTypes rr
+        then abortedGroundGlobals groundFn iTypes rl
+        else abortedGroundGlobals groundFn iTypes rr
 
 -- | Like 'Lang.Crucible.Simulator.ExecutionTree.execResultGlobals', but
 -- grounded to a single branch.

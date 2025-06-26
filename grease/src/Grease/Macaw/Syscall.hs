@@ -1,18 +1,17 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE ExplicitNamespaces #-}
 
--- | Functionality for converting 'Stubs.Syscall's into functions
+-- \| Functionality for converting 'Stubs.Syscall's into functions
 -- that can be simulated within @macaw-symbolic@.
-module Grease.Macaw.Syscall
-  ( macawSyscallOverride
-  ) where
+
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Macaw.Syscall (
+  macawSyscallOverride,
+) where
 
 import Control.Lens ((^.))
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC)
@@ -31,10 +30,10 @@ import What4.Protocol.Online qualified as W4
 macawSyscallOverride ::
   forall sym bak p arch syscallArgs syscallRet regArgs regRets solver scope st fs.
   ( C.IsSymInterface sym
-    -- For silly reasons, `stubs` requires the use of an online SMT solver
+  , -- For silly reasons, `stubs` requires the use of an online SMT solver
     -- connection in order to call `syscallOverride`. See
     -- https://github.com/GaloisInc/stubs/issues/28.
-  , W4.OnlineSolver solver
+    W4.OnlineSolver solver
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   ) =>
@@ -45,29 +44,38 @@ macawSyscallOverride ::
   Stubs.Syscall p sym syscallArgs (Symbolic.MacawExt arch) syscallRet ->
   C.Override p sym (Symbolic.MacawExt arch) regArgs (C.StructType regRets)
 macawSyscallOverride bak archCtx regArgTps regRetTps syscallOv =
-    C.mkOverride' (Stubs.syscallName syscallOv) (C.StructRepr regRetTps) ov
-  where
-    ov ::
-      forall r'.
-      C.OverrideSim
-        p sym (Symbolic.MacawExt arch)
-        r' regArgs (C.StructType regRets)
-        (Ctx.Assignment (C.RegValue' sym) regRets)
-    ov = do
-      -- Construct the arguments
-      argMap <- C.getOverrideArgs
-      let argReg = massageRegAssignment $ C.regMap argMap
-      args <- liftIO $
+  C.mkOverride' (Stubs.syscallName syscallOv) (C.StructRepr regRetTps) ov
+ where
+  ov ::
+    forall r'.
+    C.OverrideSim
+      p
+      sym
+      (Symbolic.MacawExt arch)
+      r'
+      regArgs
+      (C.StructType regRets)
+      (Ctx.Assignment (C.RegValue' sym) regRets)
+  ov = do
+    -- Construct the arguments
+    argMap <- C.getOverrideArgs
+    let argReg = massageRegAssignment $ C.regMap argMap
+    args <-
+      liftIO $
         (archCtx ^. archSyscallArgumentRegisters)
-          bak regArgTps argReg
+          bak
+          regArgTps
+          argReg
           (Stubs.syscallArgTypes syscallOv)
 
-      -- Invoke the override and put the return value(s) into the appropriate
-      -- register(s)
-      (archCtx ^. archSyscallReturnRegisters)
-        (Stubs.syscallReturnType syscallOv)
-        (Stubs.syscallOverride syscallOv bak args)
-        regArgTps argReg regRetTps
+    -- Invoke the override and put the return value(s) into the appropriate
+    -- register(s)
+    (archCtx ^. archSyscallReturnRegisters)
+      (Stubs.syscallReturnType syscallOv)
+      (Stubs.syscallOverride syscallOv bak args)
+      regArgTps
+      argReg
+      regRetTps
 
 -- | Massage the 'C.RegEntry' 'Ctx.Assignment' that 'C.getOverrideArgs'
 -- provides into the form that 'archSyscallArgumentRegisters' expects.

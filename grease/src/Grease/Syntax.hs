@@ -1,22 +1,21 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Syntax
-  ( -- * Parsing @.cbl@ files
-    parseProgram
-  , parsedProgramCfgMap
-    -- * Parsing overrides YAML files
-  , parseOverridesYaml
-  , ParsedOverridesYaml(..)
-  , resolveOverridesYaml
-  , ResolvedOverridesYaml(..)
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Syntax (
+  -- * Parsing @.cbl@ files
+  parseProgram,
+  parsedProgramCfgMap,
+
+  -- * Parsing overrides YAML files
+  parseOverridesYaml,
+  ParsedOverridesYaml (..),
+  resolveOverridesYaml,
+  ResolvedOverridesYaml (..),
+) where
 
 import Control.Exception.Safe (throw)
 import Control.Monad (unless)
@@ -40,7 +39,7 @@ import Data.Text.Encoding qualified as Text
 import Data.Text.IO qualified as Text.IO
 import Data.Word (Word64)
 import Data.Yaml qualified as Yaml
-import Grease.Utility (GreaseException(..), tshow)
+import Grease.Utility (GreaseException (..), tshow)
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.FunctionHandle qualified as C
@@ -82,7 +81,7 @@ parsedProgramCfgMap ::
 parsedProgramCfgMap prog =
   let cfgName cfg = W4.functionName (C.handleName (C.Reg.cfgHandle cfg))
       cfgWithName c@(C.Reg.AnyCFG cfg) = (cfgName cfg, c)
-  in Map.fromList (List.map cfgWithName (CSyn.parsedProgCFGs prog))
+   in Map.fromList (List.map cfgWithName (CSyn.parsedProgCFGs prog))
 
 -----
 -- Parsing overrides YAML files
@@ -92,7 +91,7 @@ parsedProgramCfgMap prog =
 -- have not yet been checked for validity. For the validated version, see
 -- 'ResolvedOverridesYaml'.
 newtype ParsedOverridesYaml = ParsedOverridesYaml
-  { getParsedOverridesYaml :: Map.Map Word64 W4.FunctionName }
+  {getParsedOverridesYaml :: Map.Map Word64 W4.FunctionName}
   deriving stock Show
   deriving newtype (Semigroup, Monoid)
 
@@ -101,7 +100,7 @@ newtype ParsedOverridesYaml = ParsedOverridesYaml
 -- that all of the override names actually exist. For the pre-validated version,
 -- see 'ParsedOverridesYaml'.
 newtype ResolvedOverridesYaml w = ResolvedOverridesYaml
-  { getResolvedOverridesYaml :: Map.Map (MM.MemSegmentOff w) W4.FunctionName }
+  {getResolvedOverridesYaml :: Map.Map (MM.MemSegmentOff w) W4.FunctionName}
   deriving stock Show
   deriving newtype (Semigroup, Monoid)
 
@@ -129,23 +128,29 @@ resolveOverridesYaml ::
 resolveOverridesYaml loadOpts mem fnOvNames (ParsedOverridesYaml parsedFunAddrs) = do
   resolvedFunAddrs <-
     traverse
-      (\(addr, funName) -> do
-        let addrWord = MM.memWord $ addr + loadOffset
-        addrSegOff <-
-          case Loader.resolveAbsoluteAddress mem addrWord of
-            Just addrSegOff -> pure addrSegOff
-            Nothing -> throw $ GreaseException $
-              "Could not resolve " <> tshow addrWord <>
-              "to an address in the binary."
-        unless (Set.member funName fnOvNames) $
-          throw $ GreaseException $
-            "Could not find an override for a function named '" <>
-            W4.functionName funName <> "'."
-        pure (addrSegOff, funName))
+      ( \(addr, funName) -> do
+          let addrWord = MM.memWord $ addr + loadOffset
+          addrSegOff <-
+            case Loader.resolveAbsoluteAddress mem addrWord of
+              Just addrSegOff -> pure addrSegOff
+              Nothing ->
+                throw $
+                  GreaseException $
+                    "Could not resolve "
+                      <> tshow addrWord
+                      <> "to an address in the binary."
+          unless (Set.member funName fnOvNames) $
+            throw $
+              GreaseException $
+                "Could not find an override for a function named '"
+                  <> W4.functionName funName
+                  <> "'."
+          pure (addrSegOff, funName)
+      )
       (Map.toList parsedFunAddrs)
   pure $ ResolvedOverridesYaml $ Map.fromList resolvedFunAddrs
-  where
-    loadOffset = fromMaybe 0 $ MML.loadOffset loadOpts
+ where
+  loadOffset = fromMaybe 0 $ MML.loadOffset loadOpts
 
 -- | Helper, not exported.
 --
@@ -162,31 +167,36 @@ parseFunctionAddressOverrides val = do
     Just obj -> do
       let objSansFunAddrOvs = KeyMap.delete funAddrOvsKey obj
       unless (KeyMap.null objSansFunAddrOvs) $
-        throw $ GreaseException $ Text.unlines $
-          "Unexpected keys in overrides.yaml file:" :
-          map
-            (\key -> "- " <> Key.toText key)
-            (KeyMap.keys objSansFunAddrOvs)
+        throw $
+          GreaseException $
+            Text.unlines $
+              "Unexpected keys in overrides.yaml file:"
+                : map
+                  (\key -> "- " <> Key.toText key)
+                  (KeyMap.keys objSansFunAddrOvs)
       case KeyMap.lookup funAddrOvsKey obj of
         Nothing -> pure mempty
         Just funAddrOvs -> do
           funAddrOvsObj <- asObject funAddrOvs
           funAddrOvPairs <-
             traverse
-              (\(addrKey, funName) -> do
-                addr <-
-                  case Read.readMaybe (Key.toString addrKey) of
-                    Just addr -> pure addr
-                    Nothing -> throw $ GreaseException $
-                      "Expected address in overrides YAML file, but encountered " <>
-                      Key.toText addrKey
-                funNameText <- asString funName
-                pure (addr, W4.functionNameFromText funNameText))
+              ( \(addrKey, funName) -> do
+                  addr <-
+                    case Read.readMaybe (Key.toString addrKey) of
+                      Just addr -> pure addr
+                      Nothing ->
+                        throw $
+                          GreaseException $
+                            "Expected address in overrides YAML file, but encountered "
+                              <> Key.toText addrKey
+                  funNameText <- asString funName
+                  pure (addr, W4.functionNameFromText funNameText)
+              )
               (KeyMap.toList funAddrOvsObj)
           pure $ ParsedOverridesYaml $ Map.fromList funAddrOvPairs
-  where
-    funAddrOvsKey :: Key.Key
-    funAddrOvsKey = "function address overrides"
+ where
+  funAddrOvsKey :: Key.Key
+  funAddrOvsKey = "function address overrides"
 
 -- | Helper, not exported.
 --
@@ -194,9 +204,11 @@ parseFunctionAddressOverrides val = do
 -- return the underlying text. Otherwise, throw an exception.
 asString :: Aeson.Value -> IO Text
 asString (Aeson.String t) = pure t
-asString v = throw $ GreaseException $
-  "Expected string in overrides YAML file, but encountered " <>
-  Text.decodeUtf8 (BS.toStrict (Aeson.encode v))
+asString v =
+  throw $
+    GreaseException $
+      "Expected string in overrides YAML file, but encountered "
+        <> Text.decodeUtf8 (BS.toStrict (Aeson.encode v))
 
 -- | Helper, not exported.
 --
@@ -204,9 +216,11 @@ asString v = throw $ GreaseException $
 -- return the underlying object. Otherwise, throw an exception.
 asObject :: Aeson.Value -> IO Aeson.Object
 asObject (Aeson.Object o) = pure o
-asObject v = throw $ GreaseException $
-  "Expected object in overrides YAML file, but encountered " <>
-  Text.decodeUtf8 (BS.toStrict (Aeson.encode v))
+asObject v =
+  throw $
+    GreaseException $
+      "Expected object in overrides YAML file, but encountered "
+        <> Text.decodeUtf8 (BS.toStrict (Aeson.encode v))
 
 -- | Helper, not exported.
 --
@@ -217,6 +231,8 @@ asObject v = throw $ GreaseException $
 asNullableObject :: Aeson.Value -> IO (Maybe Aeson.Object)
 asNullableObject (Aeson.Object o) = pure $ Just o
 asNullableObject Aeson.Null = pure Nothing
-asNullableObject v = throw $ GreaseException $
-  "Expected null or object in overrides YAML file, but encountered " <>
-  Text.decodeUtf8 (BS.toStrict (Aeson.encode v))
+asNullableObject v =
+  throw $
+    GreaseException $
+      "Expected null or object in overrides YAML file, but encountered "
+        <> Text.decodeUtf8 (BS.toStrict (Aeson.encode v))

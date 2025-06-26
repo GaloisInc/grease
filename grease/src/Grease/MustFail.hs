@@ -1,10 +1,10 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Grease.MustFail
-  ( excludeMustFail
-  , oneMustFail
-  , checkOneMustFail
-  ) where
+module Grease.MustFail (
+  excludeMustFail,
+  oneMustFail,
+  checkOneMustFail,
+) where
 
 import Control.Lens ((^.))
 import Control.Lens qualified as Lens
@@ -32,32 +32,34 @@ excludeMustFail ::
   Maybe (Mem.BadBehavior sym) ->
   Bool
 excludeMustFail obligation minfo =
-  let reason = C.simErrorReason (obligation ^. Lens.to C.proofGoal ^. W4.labeledPredMsg) in
-  let msg = C.simErrorReasonMsg reason in
-  List.or @[]
-  [ case minfo of
-      -- Symbolic function pointers may arise from calling function pointers that
-      -- appear in function arguments. This is not a bug, just something GREASE
-      -- can't handle.
-      Just (Mem.BBMemoryError (Mem.MemoryError _ (Mem.BadFunctionPointer Mem.SymbolicPointer))) ->
-        True
-      _ |  -- macaw-symbolic does not make it straightforward to track which terms
-           -- give rise to out-of-bounds global writes, so we catch these errors
-           -- here in a very hacky way. See
-           -- https://github.com/GaloisInc/macaw/issues/429 for a proposal to
-           -- improve macaw-symbolic's assertion tracking so that we can intercept
-           -- this properly.
-           "PointerWrite outside of static memory range" `List.isPrefixOf` msg &&
-             -- Make an exception for the concretely-null pointer
-             not ("PointerWrite outside of static memory range (known BlockID 0): 0x0" `List.isPrefixOf` msg)
-        -> True
-        |  otherwise
-        -> False
-  , -- Hitting a loop/recursion bound does not indicate a bug in the program
-    case reason of
-      C.ResourceExhausted {} -> True
-      _ -> False
-  ]
+  let reason = C.simErrorReason (obligation ^. Lens.to C.proofGoal ^. W4.labeledPredMsg)
+   in let msg = C.simErrorReasonMsg reason
+       in List.or @[]
+            [ case minfo of
+                -- Symbolic function pointers may arise from calling function pointers that
+                -- appear in function arguments. This is not a bug, just something GREASE
+                -- can't handle.
+                Just (Mem.BBMemoryError (Mem.MemoryError _ (Mem.BadFunctionPointer Mem.SymbolicPointer))) ->
+                  True
+                _
+                  | -- macaw-symbolic does not make it straightforward to track which terms
+                    -- give rise to out-of-bounds global writes, so we catch these errors
+                    -- here in a very hacky way. See
+                    -- https://github.com/GaloisInc/macaw/issues/429 for a proposal to
+                    -- improve macaw-symbolic's assertion tracking so that we can intercept
+                    -- this properly.
+                    "PointerWrite outside of static memory range" `List.isPrefixOf` msg
+                      &&
+                      -- Make an exception for the concretely-null pointer
+                      not ("PointerWrite outside of static memory range (known BlockID 0): 0x0" `List.isPrefixOf` msg) ->
+                      True
+                  | otherwise ->
+                      False
+            , -- Hitting a loop/recursion bound does not indicate a bug in the program
+              case reason of
+                C.ResourceExhausted{} -> True
+                _ -> False
+            ]
 
 -- | Given a 'C.ProofObligation', produce a 'W4.Pred' that is unsatisfiable when
 -- the obligation \"must fail\", i.e., it is satisfiable when either the goal
@@ -95,12 +97,12 @@ oneMustFail ::
 oneMustFail bak obligations = do
   let sym = C.backendGetSym bak
   mustFail <-
-    W4.andAllOf sym Lens.folded Monad.=<<
-      Traversable.traverse (mustFailPred bak) obligations
+    W4.andAllOf sym Lens.folded
+      Monad.=<< Traversable.traverse (mustFailPred bak) obligations
   let onlineDisabled = Monad.fail "`must-fail` requires online solving to be enabled"
   withSolverProcess bak onlineDisabled Function.$ \solverProc ->
-    W4.checkSatisfiable solverProc "must-fail heuristic" mustFail Monad.>>=
-      \case
+    W4.checkSatisfiable solverProc "must-fail heuristic" mustFail
+      Monad.>>= \case
         W4.Unknown -> pure False
         W4.Sat () -> pure False
         W4.Unsat () -> pure True
@@ -120,5 +122,5 @@ checkOneMustFail ::
   IO Bool
 checkOneMustFail bak failed =
   if List.any (Tuple.uncurry excludeMustFail) failed
-  then pure False
-  else oneMustFail bak (List.map Tuple.fst failed)
+    then pure False
+    else oneMustFail bak (List.map Tuple.fst failed)

@@ -1,31 +1,30 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wno-orphans #-} -- Due to the orphan CursorExt instances below
+-- Due to the orphan CursorExt instances below
+{-# OPTIONS_GHC -Wno-orphans #-}
 
-module Grease.Cursor.Pointer
-  ( Dereference(..)
-  , ppDereference
-  , cursorRepr
-  , addField'
-  , addField
-  , addDeref
-  , addIndex
-  , addByteIndex
-  , asPtrCursor
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Cursor.Pointer (
+  Dereference (..),
+  ppDereference,
+  cursorRepr,
+  addField',
+  addField,
+  addDeref,
+  addIndex,
+  addByteIndex,
+  asPtrCursor,
+) where
 
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
-import Data.Type.Equality ((:~:)(Refl), testEquality)
+import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Grease.Cursor (Cursor, CursorExt)
 import Grease.Cursor qualified as Cursor
 import Lang.Crucible.LLVM.Extension (LLVM)
@@ -46,11 +45,13 @@ data Dereference ext w (ts :: [C.CrucibleType]) where
     Cursor ext (Mem.LLVMPointerType w ': ts) ->
     Dereference ext w (Mem.LLVMPointerType w ': Mem.LLVMPointerType w ': ts)
 
-type instance CursorExt (Symbolic.MacawExt arch)
-  = Dereference (Symbolic.MacawExt arch) (MC.ArchAddrWidth arch)
+type instance
+  CursorExt (Symbolic.MacawExt arch) =
+    Dereference (Symbolic.MacawExt arch) (MC.ArchAddrWidth arch)
 
-type instance CursorExt LLVM
-  = Dereference LLVM 64
+type instance
+  CursorExt LLVM =
+    Dereference LLVM 64
 
 ppDereference ::
   CursorExt ext ~ Dereference ext w =>
@@ -71,16 +72,16 @@ cursorRepr ::
   Cursor ext ts ->
   C.TypeRepr t
 cursorRepr = Cursor.cursorRepr derefRepr
-  where
-    derefRepr ::
-      CursorExt ext ~ Dereference ext w =>
-      Cursor.Last ts ~ t =>
-      Dereference ext w ts ->
-      C.TypeRepr t
-    derefRepr =
-      \case
-        DereferenceByte _ c -> cursorRepr c
-        DereferencePtr _ c -> cursorRepr c
+ where
+  derefRepr ::
+    CursorExt ext ~ Dereference ext w =>
+    Cursor.Last ts ~ t =>
+    Dereference ext w ts ->
+    C.TypeRepr t
+  derefRepr =
+    \case
+      DereferenceByte _ c -> cursorRepr c
+      DereferencePtr _ c -> cursorRepr c
 
 addField' ::
   CursorExt ext ~ Dereference ext w =>
@@ -112,7 +113,7 @@ addDeref ::
   Cursor ext (Cursor.Snoc ts (Mem.LLVMPointerType w))
 addDeref f =
   \case
-    h@(Cursor.Here {}) -> f h
+    h@(Cursor.Here{}) -> f h
     Cursor.Field idx' cursor -> Cursor.Field idx' (addDeref f cursor)
     Cursor.CursorExt (DereferenceByte idx' cursor) ->
       Cursor.CursorExt (DereferenceByte idx' (addDeref f cursor))
@@ -154,4 +155,3 @@ asPtrCursor w =
     Cursor.Field _ c' -> asPtrCursor w c'
     Cursor.CursorExt (DereferenceByte _ c') -> asPtrCursor w c'
     Cursor.CursorExt (DereferencePtr _ c') -> asPtrCursor w c'
-

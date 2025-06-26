@@ -1,16 +1,14 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Time
-  ( Nanoseconds(..)
-  , Milliseconds(..)
-  , nanosToMillis
-  , time
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Time (
+  Nanoseconds (..),
+  Milliseconds (..),
+  nanosToMillis,
+  time,
+) where
 
 import Data.Word (Word64)
 import GHC.Clock (getMonotonicTimeNSec)

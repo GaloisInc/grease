@@ -1,29 +1,27 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
-Module      : Grease.Shape.Parse
-
-The 'PtrShape.ShapePtr' constructor takes a 'PtrShape.PtrTarget' as an argument.
-However, in the serialized format, the pointer targets are printed at the very
-end, on their own lines. Therefore, we parse into a 'ShapesAst', then turn this
-into a list of actual 'Shape's.
-
-See @doc/shape-dsl.md@ for a description of the syntax.
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Grease.Shape.Parse
-  ( parseShapes
-  , ParsedShapes(..)
-  , ParseError(..)
-  , TypeMismatch(..)
-  , replaceShapes
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+-- Module      : Grease.Shape.Parse
+--
+-- The 'PtrShape.ShapePtr' constructor takes a 'PtrShape.PtrTarget' as an argument.
+-- However, in the serialized format, the pointer targets are printed at the very
+-- end, on their own lines. Therefore, we parse into a 'ShapesAst', then turn this
+-- into a list of actual 'Shape's.
+--
+-- See @doc/shape-dsl.md@ for a description of the syntax.
+module Grease.Shape.Parse (
+  parseShapes,
+  ParsedShapes (..),
+  ParseError (..),
+  TypeMismatch (..),
+  replaceShapes,
+) where
 
 import Control.Applicative qualified as Applicative
 import Control.Monad qualified as Monad
@@ -47,22 +45,22 @@ import Data.Parameterized.NatRepr (NatRepr)
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Some (Some (Some))
 import Data.Parameterized.TraversableFC qualified as TFC
-import Data.Proxy (Proxy(Proxy))
+import Data.Proxy (Proxy (Proxy))
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Traversable qualified as Traversable
 import Data.Tuple qualified as Tuple
-import Data.Type.Equality (type (:~:) (Refl), testEquality)
+import Data.Type.Equality (testEquality, type (:~:) (Refl))
 import Data.Void (Void)
 import Data.Word (Word8)
 import GHC.TypeLits (Nat)
 import Grease.Panic (panic)
 import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
-import Grease.Shape.NoTag (NoTag(NoTag))
-import Grease.Shape.Pointer (PtrShape, BlockId(BlockId, getBlockId), Offset)
+import Grease.Shape.NoTag (NoTag (NoTag))
+import Grease.Shape.Pointer (BlockId (BlockId, getBlockId), Offset, PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes (Bytes)
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
@@ -77,24 +75,22 @@ import Text.Megaparsec qualified as MP
 import Text.Megaparsec.Char qualified as MPC
 import Text.Megaparsec.Char.Lexer qualified as MPCL
 
-
-
-newtype Allocs = Allocs { getAllocs :: IntMap ParsePtrTarget }
+newtype Allocs = Allocs {getAllocs :: IntMap ParsePtrTarget}
   deriving Show
 
-newtype ParsePtrTarget = ParsePtrTarget { getParsePtrTarget :: Seq ParseMemShape }
+newtype ParsePtrTarget = ParsePtrTarget {getParsePtrTarget :: Seq ParseMemShape}
   deriving Show
 
 -- | Like 'PtrShape.MemShape', but non-recursive
 data ParseMemShape
-  =  Uninitialized !Bytes
-    -- | Some number of symbolically-initialized bytes
-  | Initialized !Bytes
-    -- | Several (generally 4 or 8) initialized bytes that form a pointer, plus
+  = Uninitialized !Bytes
+  | -- | Some number of symbolically-initialized bytes
+    Initialized !Bytes
+  | -- | Several (generally 4 or 8) initialized bytes that form a pointer, plus
     -- an offset into that pointer
-  | Pointer BlockId !Offset
-    -- | Some concrete bytes
-  | Exactly [Word8]
+    Pointer BlockId !Offset
+  | -- | Some concrete bytes
+    Exactly [Word8]
   deriving Show
 
 lookupAlloc :: BlockId -> Allocs -> Maybe ParsePtrTarget
@@ -105,8 +101,8 @@ removeAlloc blk as = Allocs (IntMap.delete (getBlockId blk) (getAllocs as))
 
 ptrTarget :: Allocs -> ParsePtrTarget -> Maybe BlockId -> Either BlockId (PtrShape.PtrTarget wptr NoTag)
 ptrTarget as tgt bid =
-  PtrShape.PtrTarget bid Functor.<$>
-    Traversable.traverse (memShape as) (getParsePtrTarget tgt)
+  PtrShape.PtrTarget bid
+    Functor.<$> Traversable.traverse (memShape as) (getParsePtrTarget tgt)
 
 memShape :: Allocs -> ParseMemShape -> Either BlockId (PtrShape.MemShape wptr NoTag)
 memShape allocs =
@@ -116,8 +112,8 @@ memShape allocs =
     Exactly wds ->
       Either.Right (PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) wds))
     Pointer blk off ->
-      PtrShape.Pointer NoTag off Functor.<$>
-        case lookupAlloc blk allocs of
+      PtrShape.Pointer NoTag off
+        Functor.<$> case lookupAlloc blk allocs of
           Maybe.Just tgt -> ptrTarget (removeAlloc blk allocs) tgt (Just blk)
           Maybe.Nothing -> Either.Left blk
 
@@ -128,9 +124,9 @@ data Parse ext w
 -- | AST of serialized format for 'Shape's
 data ShapesAst ext w
   = ShapesAst
-    { astAllocs :: Allocs
-    , astShapes :: Map Text (Some (Shape (Parse ext w) NoTag))
-    }
+  { astAllocs :: Allocs
+  , astShapes :: Map Text (Some (Shape (Parse ext w) NoTag))
+  }
 
 type instance Shape.ExtShape (Parse ext w) = ParsePtrShape w
 
@@ -172,8 +168,8 @@ convertShape as =
     Shape.ShapeUnit NoTag -> Either.Right (Shape.ShapeUnit NoTag)
     Shape.ShapeBool NoTag -> Either.Right (Shape.ShapeBool NoTag)
     Shape.ShapeStruct tag fields ->
-      Shape.ShapeStruct tag Functor.<$>
-        TFC.traverseFC (convertShape as) fields
+      Shape.ShapeStruct tag
+        Functor.<$> TFC.traverseFC (convertShape as) fields
     Shape.ShapeExt (ParseShapePtrBV w) ->
       Either.Right (Shape.ShapeExt (PtrShape.ShapePtrBV NoTag w))
     Shape.ShapeExt (ParseShapePtrBVLit w bv) ->
@@ -182,10 +178,11 @@ convertShape as =
       case IntMap.lookup blk (getAllocs as) of
         Maybe.Nothing -> Either.Left (BlockId blk)
         Maybe.Just tgt ->
-          Shape.ShapeExt . PtrShape.ShapePtr NoTag off Functor.<$>
-            ptrTarget as tgt (Just $ BlockId blk)
+          Shape.ShapeExt . PtrShape.ShapePtr NoTag off
+            Functor.<$> ptrTarget as tgt (Just $ BlockId blk)
 
 -----------------------------------------------------------
+
 -- * Parsing
 
 type Parser = Parsec Void Text
@@ -203,7 +200,7 @@ instance PP.Pretty ParseError where
         PP.pretty ("Missing definition for allocation " List.++ showHex blk "")
 
 newtype ParsedShapes ext
-  = ParsedShapes { _getParsedShapes :: Map Text (Some (Shape ext NoTag)) }
+  = ParsedShapes {_getParsedShapes :: Map Text (Some (Shape ext NoTag))}
 
 parseShapes ::
   forall ext w.
@@ -214,8 +211,8 @@ parseShapes ::
   Either ParseError (ParsedShapes ext)
 parseShapes path txt =
   let parsed = MP.runParser (parser (Proxy @ext) Applicative.<* MP.eof) path txt
-  in Bifunctor.first MissingBlock . astToMap Monad.=<<
-       Bifunctor.first ParseError parsed
+   in Bifunctor.first MissingBlock . astToMap
+        Monad.=<< Bifunctor.first ParseError parsed
 
 parser ::
   forall ext w proxy.
@@ -227,8 +224,8 @@ parser _proxy = do
   let namedShape = do
         let name =
               Text.cons
-              Functor.<$> (MP.single '%' MP.<|> MPC.letterChar)
-              Applicative.<*> (Text.pack Functor.<$> MP.some MPC.alphaNumChar)
+                Functor.<$> (MP.single '%' MP.<|> MPC.letterChar)
+                Applicative.<*> (Text.pack Functor.<$> MP.some MPC.alphaNumChar)
         chars <- name Applicative.<* MP.chunk ": "
         shape <- parseShape @ext
         _ <- MP.optional MPC.newline
@@ -259,19 +256,22 @@ parsePtrTarget =
 parseMemShape :: Parser ParseMemShape
 parseMemShape =
   Applicative.asum @[]
-  [ Uninitialized Functor.<$> parseUninit
-  , Initialized Functor.<$> parseInit
-  , do -- The `try` is needed to disambiguate the block number from the bytes
-       -- of `Exactly`
-       blk <-
-         MP.try (do
-           blk <- BlockId Functor.<$> MPCL.hexadecimal
-           _ <- MP.chunk "+"
-           Applicative.pure blk)
-       off <- parseOffset
-       Applicative.pure $ Pointer blk off
-  , Exactly . Foldable.toList Functor.<$> parseExactly
-  ]
+    [ Uninitialized Functor.<$> parseUninit
+    , Initialized Functor.<$> parseInit
+    , do
+        -- The `try` is needed to disambiguate the block number from the bytes
+        -- of `Exactly`
+        blk <-
+          MP.try
+            ( do
+                blk <- BlockId Functor.<$> MPCL.hexadecimal
+                _ <- MP.chunk "+"
+                Applicative.pure blk
+            )
+        off <- parseOffset
+        Applicative.pure $ Pointer blk off
+    , Exactly . Foldable.toList Functor.<$> parseExactly
+    ]
 
 trySepBy1 :: Parser a -> Parser sep -> Parser [a]
 trySepBy1 p sep = (:) Functor.<$> p Applicative.<*> MP.many (MP.try (sep Applicative.*> p))
@@ -309,7 +309,7 @@ parseInitRle = parseRle (MP.single 'X')
 
 -- | Helper, not exported. Requires actual hex 'Char's.
 hexCharsToWord8 :: Char -> Char -> Word8
-hexCharsToWord8 c1 c2 = Tuple.fst (List.head (Numeric.readHex (c1:c2:[])))
+hexCharsToWord8 c1 c2 = Tuple.fst (List.head (Numeric.readHex (c1 : c2 : [])))
 
 parseExactly :: Parser (Seq Word8)
 parseExactly = mconcat <$> trySepBy1 parseExactlyByte memShapeSep
@@ -332,13 +332,13 @@ parseShape ::
   Parser (Some (Shape (Parse ext w) NoTag))
 parseShape =
   Applicative.asum @[]
-  [ Some Functor.<$> parseBool
-  , Some Functor.<$> parseUnit
-  , parseStruct
-  , parsePtrBv
-  , Some . Shape.ShapeExt Functor.<$> parsePtr
-  , parsePtrBvLit
-  ]
+    [ Some Functor.<$> parseBool
+    , Some Functor.<$> parseUnit
+    , parseStruct
+    , parsePtrBv
+    , Some . Shape.ShapeExt Functor.<$> parsePtr
+    , parsePtrBvLit
+    ]
 
 parseBool :: Parser (Shape ext NoTag CT.BoolType)
 parseBool = MP.chunk "bool" Functor.$> Shape.ShapeBool NoTag
@@ -390,10 +390,12 @@ parsePtr = do
   -- The `try` is needed to disambiguate the block number from the bytes of
   -- `ShapePtrBVLit`
   blk <-
-    MP.try (do
-      blk <- BlockId Functor.<$> MPCL.hexadecimal
-      _ <- MP.chunk "+"
-      Applicative.pure blk)
+    MP.try
+      ( do
+          blk <- BlockId Functor.<$> MPCL.hexadecimal
+          _ <- MP.chunk "+"
+          Applicative.pure blk
+      )
   off <- parseOffset
   Applicative.pure (ParseShapePtr off blk)
 
@@ -401,26 +403,27 @@ parseOffset :: Parser PtrShape.Offset
 parseOffset = PtrShape.Offset . (Bytes.toBytes @Int) Functor.<$> MPCL.hexadecimal
 
 -----------------------------------------------------------
+
 -- * Replacing
 
 data TypeMismatch
   = TypeMismatch
-    { typeMismatchName :: String
-    , expectedType :: Some CT.TypeRepr
-    , foundType :: Some CT.TypeRepr
-    }
+  { typeMismatchName :: String
+  , expectedType :: Some CT.TypeRepr
+  , foundType :: Some CT.TypeRepr
+  }
   deriving Show
 
 instance PP.Pretty TypeMismatch where
   pretty tm =
     PP.hsep
-    [ "Type mismatch for"
-    , PP.pretty (typeMismatchName tm) PP.<> ":"
-    , "expected:"
-    , PP.viaShow (expectedType tm)
-    , "but found:"
-    , PP.viaShow (foundType tm)
-    ]
+      [ "Type mismatch for"
+      , PP.pretty (typeMismatchName tm) PP.<> ":"
+      , "expected:"
+      , PP.viaShow (expectedType tm)
+      , "but found:"
+      , PP.viaShow (foundType tm)
+      ]
 
 -- | Given an initial, provisional list of arguments and a set of replacements
 -- for some of them, calculate a new list of arguments.
@@ -437,22 +440,22 @@ replaceShapes ::
   Either TypeMismatch (Shape.ArgShapes ext NoTag tys)
 replaceShapes names (Shape.ArgShapes args) (ParsedShapes replacements) =
   -- TODO: Check that all the map keys are expected
-  Shape.ArgShapes Functor.<$>
-    Ctx.zipWithM (\(Const.Const nm) s -> replaceOne nm s) names args
-  where
-    replaceOne :: String -> Shape ext NoTag t -> Either TypeMismatch (Shape ext NoTag t)
-    replaceOne nm s =
-      case Map.lookup (Text.pack nm) replacements of
-        Maybe.Just (Some replace) ->
-          let ty = Shape.shapeType PtrShape.ptrShapeType s in
-          let ty' = Shape.shapeType PtrShape.ptrShapeType replace in
-          case testEquality ty ty' of
-            Maybe.Just Refl -> Either.Right replace
-            Maybe.Nothing ->
-              Either.Left $
-                TypeMismatch
-                { typeMismatchName = nm
-                , expectedType = Some ty
-                , foundType = Some ty'
-                }
-        Maybe.Nothing -> Either.Right s
+  Shape.ArgShapes
+    Functor.<$> Ctx.zipWithM (\(Const.Const nm) s -> replaceOne nm s) names args
+ where
+  replaceOne :: String -> Shape ext NoTag t -> Either TypeMismatch (Shape ext NoTag t)
+  replaceOne nm s =
+    case Map.lookup (Text.pack nm) replacements of
+      Maybe.Just (Some replace) ->
+        let ty = Shape.shapeType PtrShape.ptrShapeType s
+         in let ty' = Shape.shapeType PtrShape.ptrShapeType replace
+             in case testEquality ty ty' of
+                  Maybe.Just Refl -> Either.Right replace
+                  Maybe.Nothing ->
+                    Either.Left $
+                      TypeMismatch
+                        { typeMismatchName = nm
+                        , expectedType = Some ty
+                        , foundType = Some ty'
+                        }
+      Maybe.Nothing -> Either.Right s

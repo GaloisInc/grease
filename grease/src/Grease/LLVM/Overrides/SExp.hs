@@ -1,17 +1,15 @@
-{-|
-Copyright        : (c) Galois, Inc. 2025
-Description      : Support for LLVM overrides written in the S-expression syntax
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.LLVM.Overrides.SExp
-  ( LLVMSExpOverride(..)
-  , loadOverrides
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2025
+-- Description      : Support for LLVM overrides written in the S-expression syntax
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.LLVM.Overrides.SExp (
+  LLVMSExpOverride (..),
+  loadOverrides,
+) where
 
 import Control.Exception.Safe (throw)
 import Data.List qualified as List
@@ -20,14 +18,14 @@ import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Grease.LLVM.Overrides.Declare (mkDeclare)
 import Grease.Syntax (parseProgram)
-import Grease.Utility (GreaseException(..))
+import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.CFG.SSAConversion qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.Syntax (llvmParserHooks, emptyParserHooks)
+import Lang.Crucible.LLVM.Syntax (emptyParserHooks, llvmParserHooks)
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
@@ -35,17 +33,17 @@ import System.FilePath (dropExtensions, takeBaseName)
 import What4.FunctionName qualified as W4
 
 -- | An LLVM function override, corresponding to a single S-expression file.
-data LLVMSExpOverride p sym =
-  LLVMSExpOverride
-    { lsoPublicOverride :: CLLVM.SomeLLVMOverride p sym CLLVM.LLVM
-      -- ^ The override for the public function, whose name matches that of the
-      -- S-expression file.
-    , lsoAuxiliaryOverrides :: [CLLVM.SomeLLVMOverride p sym CLLVM.LLVM]
-      -- ^ Overrides for the auxiliary functions in the S-expression file.
-    , lsoForwardDeclarations :: Map.Map W4.FunctionName C.SomeHandle
-      -- ^ The map of names of forward declarations in the S-expression file to
-      -- their handles.
-    }
+data LLVMSExpOverride p sym
+  = LLVMSExpOverride
+  { lsoPublicOverride :: CLLVM.SomeLLVMOverride p sym CLLVM.LLVM
+  -- ^ The override for the public function, whose name matches that of the
+  -- S-expression file.
+  , lsoAuxiliaryOverrides :: [CLLVM.SomeLLVMOverride p sym CLLVM.LLVM]
+  -- ^ Overrides for the auxiliary functions in the S-expression file.
+  , lsoForwardDeclarations :: Map.Map W4.FunctionName C.SomeHandle
+  -- ^ The map of names of forward declarations in the S-expression file to
+  -- their handles.
+  }
 
 -- | Parse overrides in the Crucible-LLVM S-expression syntax.
 loadOverrides ::
@@ -87,13 +85,21 @@ loadOverride path halloc mvar = do
             }
         )
     [] ->
-      throw $ GreaseException $
-        "Expected to find a function named `" <> fnNameText <> "` in `" <>
-        Text.pack path <> "`"
-    _:_ ->
-      throw $ GreaseException $
-        "Override `" <> Text.pack path <> "` contains multiple `" <>
-        fnNameText <> "` functions"
+      throw $
+        GreaseException $
+          "Expected to find a function named `"
+            <> fnNameText
+            <> "` in `"
+            <> Text.pack path
+            <> "`"
+    _ : _ ->
+      throw $
+        GreaseException $
+          "Override `"
+            <> Text.pack path
+            <> "` contains multiple `"
+            <> fnNameText
+            <> "` functions"
 
 -- | Convert an 'C.Reg.AnyCFG' for a function defined in a Crucible-LLVM
 -- S-expression program to a 'CLLVM.SomeLLVMOverride' value.
@@ -112,15 +118,15 @@ acfgToSomeLLVMOverride path (C.Reg.AnyCFG cfg) = do
   case mkDeclare name argTys retTy of
     Right decl ->
       pure $
-      CLLVM.SomeLLVMOverride $
-      CLLVM.LLVMOverride
-        { CLLVM.llvmOverride_declare = decl
-        , CLLVM.llvmOverride_args = argTys
-        , CLLVM.llvmOverride_ret = retTy
-        , CLLVM.llvmOverride_def =
-            \_mvar args ->
-              C.regValue <$> C.callCFG ssa (C.RegMap args)
-        }
+        CLLVM.SomeLLVMOverride $
+          CLLVM.LLVMOverride
+            { CLLVM.llvmOverride_declare = decl
+            , CLLVM.llvmOverride_args = argTys
+            , CLLVM.llvmOverride_ret = retTy
+            , CLLVM.llvmOverride_def =
+                \_mvar args ->
+                  C.regValue <$> C.callCFG ssa (C.RegMap args)
+            }
     Left err ->
       throw (GreaseException ("Bad override in file " <> Text.pack path <> ": " <> err))
 

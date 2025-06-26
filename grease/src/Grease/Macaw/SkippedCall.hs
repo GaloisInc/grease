@@ -1,16 +1,14 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Macaw.SkippedCall
-  ( SkippedFunctionCall(..)
-  , SkippedSyscall(..)
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Macaw.SkippedCall (
+  SkippedFunctionCall (..),
+  SkippedSyscall (..),
+) where
 
 import Data.Macaw.CFG.Core qualified as MC
 import Data.Macaw.Memory (MemSegmentOff, MemWidth)
@@ -24,7 +22,8 @@ data SkippedFunctionCall arch where
   SymbolicAddress ::
     SkippedFunctionCall arch
   InvalidAddress ::
-    String {- ^ Address -} ->
+    -- | Address
+    String ->
     SkippedFunctionCall arch
   PltNoOverride ::
     (1 W4.<= MC.ArchAddrWidth arch, MemWidth (MC.ArchAddrWidth arch)) =>
@@ -44,8 +43,10 @@ data SkippedSyscall where
     Int ->
     SkippedSyscall
   SyscallWithoutOverride ::
-    Text {- ^ Syscall name -} ->
-    Int {- ^ Syscall number -} ->
+    -- | Syscall name
+    Text ->
+    -- | Syscall number
+    Int ->
     SkippedSyscall
 
 instance PP.Pretty (SkippedFunctionCall arch) where
@@ -54,8 +55,10 @@ instance PP.Pretty (SkippedFunctionCall arch) where
       SymbolicAddress -> "Skipped call to a symbolic address"
       InvalidAddress addr -> "Skipped call to an invalid address:" PP.<+> PP.pretty addr
       PltNoOverride addr name ->
-        "Skipped call to a PLT stub at address" PP.<+>
-        PP.pretty addr PP.<> PP.colon PP.<+> PP.pretty name
+        "Skipped call to a PLT stub at address"
+          PP.<+> PP.pretty addr
+          PP.<> PP.colon
+          PP.<+> PP.pretty name
       NotExecutable addr ->
         "Skipped call to a non-executable address:" PP.<+> PP.pretty addr
 

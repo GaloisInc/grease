@@ -1,15 +1,13 @@
-{-|
-Copyright        : (c) Galois, Inc. 2025
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE ImplicitParams #-}
 
-module Grease.LLVM.Overrides.Builtin
-  ( libcOverrides
-  , basicLLVMOverrides
-  , builtinLLVMOverrides
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2025
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.LLVM.Overrides.Builtin (
+  libcOverrides,
+  basicLLVMOverrides,
+  builtinLLVMOverrides,
+) where
 
 import Data.List qualified as List
 import Data.Sequence qualified as Seq
@@ -38,12 +36,12 @@ basicLLVMOverrides ::
   Seq.Seq (Mem.SomeLLVMOverride p sym ext)
 basicLLVMOverrides fs =
   -- We never need to make use of any non-standard IntrinsicsOptions.
-  let ?intrinsicsOpts = Mem.defaultIntrinsicsOptions in
-  Seq.fromList $
-    List.concat @[]
-    [ libcOverrides fs
-    , LLVM.basic_llvm_overrides
-    ]
+  let ?intrinsicsOpts = Mem.defaultIntrinsicsOptions
+   in Seq.fromList $
+        List.concat @[]
+          [ libcOverrides fs
+          , LLVM.basic_llvm_overrides
+          ]
 
 -- | Helper, not exported
 --
@@ -64,14 +62,14 @@ libcOverrides fs =
     [ Libc.libc_overrides
     , symioLlvmOverrides
     ]
-  where
-    symioLlvmOverrides :: [Mem.SomeLLVMOverride p sym ext]
-    symioLlvmOverrides =
-      [ Mem.SomeLLVMOverride $ SymIO.openFile fs
-      , Mem.SomeLLVMOverride $ SymIO.closeFile fs
-      , Mem.SomeLLVMOverride $ SymIO.readFileHandle fs
-      , Mem.SomeLLVMOverride $ SymIO.writeFileHandle fs
-      ]
+ where
+  symioLlvmOverrides :: [Mem.SomeLLVMOverride p sym ext]
+  symioLlvmOverrides =
+    [ Mem.SomeLLVMOverride $ SymIO.openFile fs
+    , Mem.SomeLLVMOverride $ SymIO.closeFile fs
+    , Mem.SomeLLVMOverride $ SymIO.readFileHandle fs
+    , Mem.SomeLLVMOverride $ SymIO.writeFileHandle fs
+    ]
 
 -- | All of the @crucible-llvm@ overrides that work across all supported
 -- configurations.
@@ -89,6 +87,6 @@ builtinLLVMOverrides ::
   Seq.Seq (Mem.OverrideTemplate p sym ext arch)
 builtinLLVMOverrides fs =
   -- We never need to make use of any non-standard IntrinsicsOptions.
-  let ?intrinsicsOpts = Mem.defaultIntrinsicsOptions in
-  fmap (\(Mem.SomeLLVMOverride ov) -> Mem.basic_llvm_override ov) (basicLLVMOverrides fs)
-    <> Seq.fromList (List.map (\(pfx, LLVM.Poly1LLVMOverride ov) -> Mem.polymorphic1_llvm_override pfx ov) LLVM.poly1_llvm_overrides)
+  let ?intrinsicsOpts = Mem.defaultIntrinsicsOptions
+   in fmap (\(Mem.SomeLLVMOverride ov) -> Mem.basic_llvm_override ov) (basicLLVMOverrides fs)
+        <> Seq.fromList (List.map (\(pfx, LLVM.Poly1LLVMOverride ov) -> Mem.polymorphic1_llvm_override pfx ov) LLVM.poly1_llvm_overrides)

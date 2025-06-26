@@ -1,26 +1,24 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Grease.Concretize.JSON
-  ( IntrinsicJsonFn(..)
-  , jsonPtrFn
-  , jsonPtrFnMap
-  , concRegValueToJson
-  , concArgsToJson
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Concretize.JSON (
+  IntrinsicJsonFn (..),
+  jsonPtrFn,
+  jsonPtrFnMap,
+  concRegValueToJson,
+  concArgsToJson,
+) where
 
 import Data.Aeson qualified as Aeson
 import Data.BitVector.Sized qualified as BV
-import Data.Functor.Const (Const(getConst))
-import Data.Functor.Product (Product(Pair))
+import Data.Functor.Const (Const (getConst))
+import Data.Functor.Product (Product (Pair))
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Parameterized.Context qualified as Ctx
@@ -29,7 +27,7 @@ import Data.Parameterized.Map qualified as MapF
 import Data.Parameterized.SymbolRepr (SymbolRepr)
 import Data.Parameterized.TraversableFC as TFC
 import Data.Text.Encoding qualified as Text
-import Grease.Concretize (ConcArgs(..))
+import Grease.Concretize (ConcArgs (..))
 import Grease.Panic (panic)
 import Grease.Shape (ExtShape, getTag)
 import Grease.Shape.Pointer (PtrShape, getPtrTag)
@@ -50,10 +48,11 @@ import What4.Utils.Word16String qualified as W4W16
 type IntrinsicJsonFn :: Type -> C.Symbol -> Type
 newtype IntrinsicJsonFn t nm
   = IntrinsicJsonFn
-    (forall ctx.
-      Ctx.Assignment TypeRepr ctx ->
-      Conc.ConcIntrinsic nm ctx ->
-      Aeson.Value)
+      ( forall ctx.
+        Ctx.Assignment TypeRepr ctx ->
+        Conc.ConcIntrinsic nm ctx ->
+        Aeson.Value
+      )
 
 -- | Helper, not exported
 tryConcIntrinsic ::
@@ -78,11 +77,13 @@ jsonPtrFn = IntrinsicJsonFn $ \tyCtx ptr ->
           Aeson.object ["block" Aeson..= blk, "offset" Aeson..= BV.asUnsigned off]
     -- These are impossible by the definition of LLVMPointerImpl
     Ctx.AssignEmpty ->
-       panic "jsonPtrFn"
-         [ "Impossible: LLVMPointerType empty context" ]
+      panic
+        "jsonPtrFn"
+        ["Impossible: LLVMPointerType empty context"]
     Ctx.AssignExtend _ _ ->
-       panic "jsonPtrFn"
-         [ "Impossible: LLVMPointerType ill-formed context" ]
+      panic
+        "jsonPtrFn"
+        ["Impossible: LLVMPointerType ill-formed context"]
 
 -- | A singleton map suitable when LLVM pointers are the only intrinsic type
 -- in use
@@ -141,8 +142,8 @@ structToJson ::
   Maybe Aeson.Value
 structToJson iFns fm tps (Conc.ConcRV' val) =
   let pairs = Ctx.zipWith Pair tps val
-  in Aeson.toJSON <$>
-       sequence (toListFC (\(Pair t v) -> concRegValueToJson iFns fm t v) pairs)
+   in Aeson.toJSON
+        <$> sequence (toListFC (\(Pair t v) -> concRegValueToJson iFns fm t v) pairs)
 
 concRegValueToJson ::
   (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
@@ -154,10 +155,10 @@ concRegValueToJson ::
 concRegValueToJson iFns fm tp val'@(Conc.ConcRV' val) =
   case tp of
     C.BoolRepr -> Just (Aeson.toJSON val)
-    C.BVRepr {} -> Just (bvToJson val)
+    C.BVRepr{} -> Just (bvToJson val)
     C.ComplexRealRepr ->
       Just (Aeson.object ["real" Aeson..= W4.realPart val, "imag" Aeson..= W4.imagPart val])
-    C.FloatRepr {} ->
+    C.FloatRepr{} ->
       case fm of
         W4FM.FloatIEEERepr -> bigFloatToJson val
         W4FM.FloatUninterpretedRepr -> Just (bvToJson val)
@@ -169,10 +170,10 @@ concRegValueToJson iFns fm tp val'@(Conc.ConcRV' val) =
     C.UnitRepr -> Just (Aeson.toJSON val)
     C.CharRepr -> Just (Aeson.toJSON val)
     C.IntrinsicRepr nm ctx -> tryConcIntrinsic iFns nm ctx val
-    C.AnyRepr {} -> anyToJson iFns fm val
+    C.AnyRepr{} -> anyToJson iFns fm val
     C.MaybeRepr tp' -> maybeToJson iFns fm tp' val'
     C.StructRepr tps -> structToJson iFns fm tps val'
-    C.StringRepr {} ->
+    C.StringRepr{} ->
       Just $
         case val of
           W4SL.UnicodeLiteral s ->
@@ -181,18 +182,17 @@ concRegValueToJson iFns fm tp val'@(Conc.ConcRV' val) =
             Aeson.toJSON (Text.decodeUtf8 s)
           W4SL.Char16Literal s ->
             Aeson.toJSON (Text.decodeUtf16LE (W4W16.toLEByteString s))
-
     -- TODO
-    C.FunctionHandleRepr {} -> Nothing
-    C.RecursiveRepr {} -> Nothing
-    C.ReferenceRepr {} -> Nothing
-    C.SequenceRepr {} -> Nothing
-    C.StringMapRepr {} -> Nothing
-    C.SymbolicArrayRepr {} -> Nothing
-    C.SymbolicStructRepr {} -> Nothing
-    C.VariantRepr {} -> Nothing
-    C.VectorRepr {} -> Nothing
-    C.WordMapRepr {} -> Nothing
+    C.FunctionHandleRepr{} -> Nothing
+    C.RecursiveRepr{} -> Nothing
+    C.ReferenceRepr{} -> Nothing
+    C.SequenceRepr{} -> Nothing
+    C.StringMapRepr{} -> Nothing
+    C.SymbolicArrayRepr{} -> Nothing
+    C.SymbolicStructRepr{} -> Nothing
+    C.VariantRepr{} -> Nothing
+    C.VectorRepr{} -> Nothing
+    C.WordMapRepr{} -> Nothing
 
 concArgsToJson ::
   (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
@@ -203,7 +203,7 @@ concArgsToJson ::
   Ctx.Assignment C.TypeRepr args ->
   [Aeson.Value]
 concArgsToJson fm argNames (ConcArgs cArgs) argTys =
-  let argsWithTypes = Ctx.zipWith (\argTy cArg -> Pair argTy (getTag getPtrTag cArg)) argTys cArgs in
-  let argBlobs = TFC.toListFC (\(Pair ty cVal) -> concRegValueToJson jsonPtrFnMap fm ty cVal) argsWithTypes in
-  let argNames' = TFC.toListFC getConst argNames in
-  List.zipWith (\name mval -> Aeson.object ["arg" Aeson..= name, "value" Aeson..= mval]) argNames' argBlobs
+  let argsWithTypes = Ctx.zipWith (\argTy cArg -> Pair argTy (getTag getPtrTag cArg)) argTys cArgs
+   in let argBlobs = TFC.toListFC (\(Pair ty cVal) -> concRegValueToJson jsonPtrFnMap fm ty cVal) argsWithTypes
+       in let argNames' = TFC.toListFC getConst argNames
+           in List.zipWith (\name mval -> Aeson.object ["arg" Aeson..= name, "value" Aeson..= mval]) argNames' argBlobs

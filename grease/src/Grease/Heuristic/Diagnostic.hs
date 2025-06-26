@@ -1,22 +1,20 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Heuristic.Diagnostic
-  ( Diagnostic(..)
-  , severity
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Heuristic.Diagnostic (
+  Diagnostic (..),
+  severity,
+) where
 
 import Control.Lens ((^.))
 import Data.Macaw.CFG qualified as MC
 import Grease.Cursor (CursorExt, ppCursor)
 import Grease.Cursor.Pointer (Dereference, ppDereference)
-import Grease.Diagnostic.Severity (Severity(Debug, Info))
+import Grease.Diagnostic.Severity (Severity (Debug, Info))
 import Grease.Shape.Pointer (PtrTarget)
 import Grease.Shape.Selector (ArgSelector, argSelectorPath)
 import Prettyprinter qualified as PP

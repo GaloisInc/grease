@@ -1,19 +1,17 @@
-{-|
-Copyright        : (c) Galois, Inc. 2025
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Macaw.Overrides.Builtin
-  ( builtinStubsOverrides
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2025
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Macaw.Overrides.Builtin (
+  builtinStubsOverrides,
+) where
 
-import Data.Functor.Identity (Identity(Identity, runIdentity))
+import Data.Functor.Identity (Identity (Identity, runIdentity))
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
@@ -61,44 +59,45 @@ builtinStubsOverrides ::
   Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
 builtinStubsOverrides bak mvar mmConf archCtx fs =
   customOvs <> fromLlvmOvs
-  where
-    -- Custom overrides that are only applicable at the machine code level (and
-    -- therefore do not belong in crucible-llvm).
-    customOvs :: Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
-    customOvs = Seq.fromList (customStubsOverrides mvar mmConf archCtx)
+ where
+  -- Custom overrides that are only applicable at the machine code level (and
+  -- therefore do not belong in crucible-llvm).
+  customOvs :: Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
+  customOvs = Seq.fromList (customStubsOverrides mvar mmConf archCtx)
 
-    -- Overrides that arise from crucible-llvm.
-    fromLlvmOvs :: Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
-    fromLlvmOvs =
-      -- We never need to make use of any non-standard IntrinsicsOptions.
-      let ?intrinsicsOpts = Mem.defaultIntrinsicsOptions in
-      Seq.fromList $
-      mapMaybe
-        (\(Mem.SomeLLVMOverride ov) -> llvmToStubsOverride bak mvar ov) $
-      List.filter
-        (\(Mem.SomeLLVMOverride ov) ->
-          L.decName (Mem.llvmOverride_declare ov) `Set.notMember`
-          excludedLibcOverrides)
-        (libcOverrides fs)
+  -- Overrides that arise from crucible-llvm.
+  fromLlvmOvs :: Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
+  fromLlvmOvs =
+    -- We never need to make use of any non-standard IntrinsicsOptions.
+    let ?intrinsicsOpts = Mem.defaultIntrinsicsOptions
+     in Seq.fromList
+          $ mapMaybe
+            (\(Mem.SomeLLVMOverride ov) -> llvmToStubsOverride bak mvar ov)
+          $ List.filter
+            ( \(Mem.SomeLLVMOverride ov) ->
+                L.decName (Mem.llvmOverride_declare ov)
+                  `Set.notMember` excludedLibcOverrides
+            )
+            (libcOverrides fs)
 
-    -- Overrides that we do not want to use at the binary level. If you add an
-    -- override to this list, make sure to include a comment with the reason why
-    -- the override is excluded.
-    excludedLibcOverrides :: Set L.Symbol
-    excludedLibcOverrides =
-      -- These overrides read strings from memory in a way that is at odds with
-      -- macaw-symbolic's lazy memory model (see gitlab#226). In particular,
-      -- these use crucible-llvm's various operations for performing memory
-      -- loads (`doLoad`, `loadRaw`, `loadString`, etc.). We have reimplemented
-      -- a subset of these functions as machine code overrides (see `customOvs`
-      -- above).
-      Set.fromList
-        [ "__assert_fail"
-        , "__assert_rtn"
-        , "__printf_chk"
-        , "printf"
-        , "puts"
-        ]
+  -- Overrides that we do not want to use at the binary level. If you add an
+  -- override to this list, make sure to include a comment with the reason why
+  -- the override is excluded.
+  excludedLibcOverrides :: Set L.Symbol
+  excludedLibcOverrides =
+    -- These overrides read strings from memory in a way that is at odds with
+    -- macaw-symbolic's lazy memory model (see gitlab#226). In particular,
+    -- these use crucible-llvm's various operations for performing memory
+    -- loads (`doLoad`, `loadRaw`, `loadString`, etc.). We have reimplemented
+    -- a subset of these functions as machine code overrides (see `customOvs`
+    -- above).
+    Set.fromList
+      [ "__assert_fail"
+      , "__assert_rtn"
+      , "__printf_chk"
+      , "printf"
+      , "puts"
+      ]
 
 -----
 -- Turn LLVM overrides into Stubs FunctionOverrides
@@ -138,56 +137,55 @@ llvmToStubsOverride ::
   Mem.LLVMOverride p sym (Symbolic.MacawExt arch) args ret ->
   Maybe (Stubs.SomeFunctionOverride p sym arch)
 llvmToStubsOverride bak mvar llvmOv
-  | isVariadic
-  = Nothing
+  | isVariadic =
+      Nothing
+  | otherwise =
+      Just $ runIdentity $ do
+        C.Some args <- Identity $ Ctx.fromList (toListFC bvToPointer args0)
+        C.Some ret <- Identity $ bvToPointer ret0
 
-  | otherwise
-  = Just $ runIdentity $ do
-      C.Some args <- Identity $ Ctx.fromList (toListFC bvToPointer args0)
-      C.Some ret <- Identity $ bvToPointer ret0
+        let nm = llvmOverrideName llvmOv
+        Identity $
+          Stubs.SomeFunctionOverride $
+            Stubs.FunctionOverride
+              { Stubs.functionName = nm
+              , Stubs.functionGlobals = Map.empty
+              , Stubs.functionExterns = Map.empty
+              , Stubs.functionArgTypes = args
+              , Stubs.functionReturnType = ret
+              , Stubs.functionAuxiliaryFnBindings = []
+              , Stubs.functionForwardDeclarations = Map.empty
+              , Stubs.functionOverride =
+                  \_bak argVals _getVarArg _parents -> do
+                    -- This won't panic because we're only using bvToPointer, and those casts
+                    -- are supported by Cast.
+                    let panic = Panic.panic "llvmToStubsOverride"
+                    let fargs =
+                          case Cast.castLLVMArgs nm bak args0 args of
+                            Left err -> panic (Cast.printValCastError err)
+                            Right f -> f
+                    let fret =
+                          case Cast.castLLVMRet nm bak ret0 ret of
+                            Left err -> panic (Cast.printValCastError err)
+                            Right f -> f
 
-      let nm = llvmOverrideName llvmOv
-      Identity $
-        Stubs.SomeFunctionOverride $
-          Stubs.FunctionOverride
-          { Stubs.functionName = nm
-          , Stubs.functionGlobals = Map.empty
-          , Stubs.functionExterns = Map.empty
-          , Stubs.functionArgTypes = args
-          , Stubs.functionReturnType = ret
-          , Stubs.functionAuxiliaryFnBindings = []
-          , Stubs.functionForwardDeclarations = Map.empty
-          , Stubs.functionOverride =
-              \_bak argVals _getVarArg _parents -> do
-                -- This won't panic because we're only using bvToPointer, and those casts
-                -- are supported by Cast.
-                let panic = Panic.panic "llvmToStubsOverride"
-                let fargs =
-                      case Cast.castLLVMArgs nm bak args0 args of
-                        Left err -> panic (Cast.printValCastError err)
-                        Right f -> f
-                let fret =
-                      case Cast.castLLVMRet nm bak ret0 ret of
-                        Left err -> panic (Cast.printValCastError err)
-                        Right f -> f
+                    argVals' <- Cast.applyArgCast fargs argVals
+                    retVal <- Mem.llvmOverride_def llvmOv mvar argVals'
+                    retVal' <- Cast.applyValCast fret retVal
+                    let regChanges = [] -- TODO: havoc registers?
+                    pure (Stubs.OverrideResult regChanges retVal')
+              }
+ where
+  args0 = Mem.llvmOverride_args llvmOv
+  ret0 = Mem.llvmOverride_ret llvmOv
 
-                argVals' <- Cast.applyArgCast fargs argVals
-                retVal <- Mem.llvmOverride_def llvmOv mvar argVals'
-                retVal' <- Cast.applyValCast fret retVal
-                let regChanges = []  -- TODO: havoc registers?
-                pure (Stubs.OverrideResult regChanges retVal')
-          }
-  where
-    args0 = Mem.llvmOverride_args llvmOv
-    ret0 = Mem.llvmOverride_ret llvmOv
-
-    -- crucible-llvm maintains the convention that any LLVMOverride for a
-    -- variadic function (e.g., `printf`) will use `VectorRepr AnyRepr` as the
-    -- last argument TypeRepr to represent the varargs' type.
-    isVariadic :: Bool
-    isVariadic =
-      case Ctx.viewAssign args0 of
-        Ctx.AssignExtend _ (C.VectorRepr C.AnyRepr) ->
-          True
-        _ ->
-          False
+  -- crucible-llvm maintains the convention that any LLVMOverride for a
+  -- variadic function (e.g., `printf`) will use `VectorRepr AnyRepr` as the
+  -- last argument TypeRepr to represent the varargs' type.
+  isVariadic :: Bool
+  isVariadic =
+    case Ctx.viewAssign args0 of
+      Ctx.AssignExtend _ (C.VectorRepr C.AnyRepr) ->
+        True
+      _ ->
+        False

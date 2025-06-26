@@ -1,15 +1,13 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Bug
-  ( BugType(..)
-  , BugInstance(..)
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Bug (
+  BugType (..),
+  BugInstance (..),
+) where
 
 import Data.Aeson.Types qualified as Aeson
 import Data.Eq qualified as Eq
@@ -28,6 +26,7 @@ data BugType
   | OneMustFail
   | UninitStackRead
   deriving (Eq.Eq, Generic, Show)
+
 instance Aeson.ToJSON BugType
 
 instance PP.Pretty BugType where
@@ -40,11 +39,11 @@ instance PP.Pretty BugType where
 -- TODO: Add callstack
 data BugInstance
   = BugInstance
-    { bugType :: {-# UNPACK #-} !BugType
-    , bugLoc :: {-# UNPACK #-} !Text.Text
-    , bugUb :: {-# UNPACK #-} !(Maybe.Maybe UB.UB)
-    , bugDetails :: {-# UNPACK #-} !(Maybe.Maybe Text.Text)
-    }
+  { bugType :: {-# UNPACK #-} !BugType
+  , bugLoc :: {-# UNPACK #-} !Text.Text
+  , bugUb :: {-# UNPACK #-} !(Maybe.Maybe UB.UB)
+  , bugDetails :: {-# UNPACK #-} !(Maybe.Maybe Text.Text)
+  }
   deriving (Generic, Show)
 instance Aeson.ToJSON BugInstance
 
@@ -56,6 +55,6 @@ instance PP.Pretty BugInstance where
             , "at"
             , PP.pretty (bugLoc bi)
             ]
-    in case bugDetails bi of
-         Maybe.Nothing -> firstLine
-         Maybe.Just details -> PP.vsep [firstLine, PP.pretty details]
+     in case bugDetails bi of
+          Maybe.Nothing -> firstLine
+          Maybe.Just details -> PP.vsep [firstLine, PP.pretty details]

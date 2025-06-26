@@ -1,28 +1,26 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Utility
-  ( OnlineSolverAndBackend
-  , GreaseException(..)
-  , pshow
-  , tshow
-  , functionNameFromByteString
-  , declaredFunNotFound
-  , llvmOverrideName
-  , ppProgramLoc
-  , printHandle
-  , segoffToAbsoluteAddr
-  , bytes32LE
-  , bytes64LE
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Utility (
+  OnlineSolverAndBackend,
+  GreaseException (..),
+  pshow,
+  tshow,
+  functionNameFromByteString,
+  declaredFunNotFound,
+  llvmOverrideName,
+  ppProgramLoc,
+  printHandle,
+  segoffToAbsoluteAddr,
+  bytes32LE,
+  bytes64LE,
+) where
 
-import Control.Exception.Safe (MonadThrow, Exception)
+import Control.Exception.Safe (Exception, MonadThrow)
 import Control.Exception.Safe qualified as X
 import Data.ByteString qualified as BS
 import Data.ByteString.Builder qualified as Builder
@@ -32,7 +30,7 @@ import Data.Macaw.CFG qualified as MC
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import Data.Word (Word8, Word32, Word64)
+import Data.Word (Word32, Word64, Word8)
 import Grease.Panic (panic)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
@@ -79,7 +77,7 @@ declaredFunNotFound decName =
 llvmOverrideName :: Mem.LLVMOverride p sym ext args ret -> W4.FunctionName
 llvmOverrideName ov =
   let L.Symbol nm = L.decName (Mem.llvmOverride_declare ov)
-  in W4.functionNameFromText (Text.pack nm)
+   in W4.functionNameFromText (Text.pack nm)
 
 -- TODO(lb): Also print the function name?
 ppProgramLoc :: W4.ProgramLoc -> Text
@@ -105,14 +103,15 @@ segoffToAbsoluteAddr ::
 segoffToAbsoluteAddr mem segoff =
   case MC.resolveRegionOff mem (MC.addrBase addr) (MC.addrOffset addr) of
     Just addrOff -> MC.segmentOffset seg + MC.segoffOffset addrOff
-    Nothing -> panic
-                 "segoffToAbsoluteAddr"
-                 [ "Failed to resolve absolute address"
-                 , "Address: " List.++ show addr
-                 ]
-  where
-    seg  = MC.segoffSegment segoff
-    addr = MC.segoffAddr segoff
+    Nothing ->
+      panic
+        "segoffToAbsoluteAddr"
+        [ "Failed to resolve absolute address"
+        , "Address: " List.++ show addr
+        ]
+ where
+  seg = MC.segoffSegment segoff
+  addr = MC.segoffAddr segoff
 
 -- | Split a 'Word32' into a little-endian sequence of bytes.
 bytes32LE :: Word32 -> [Word8]

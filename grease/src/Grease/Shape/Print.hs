@@ -1,27 +1,23 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Shape.Print
-  ( PrinterConfig(..)
-  , Printer
-  , evalPrinter
-  , printNamedShapesFiltered
-  , printNamedShapes
-  , printNamed
-  , print
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Shape.Print (
+  PrinterConfig (..),
+  Printer,
+  evalPrinter,
+  printNamedShapesFiltered,
+  printNamedShapes,
+  printNamed,
+  print,
+) where
 
-
-import Prelude hiding (print)
 import Control.Monad qualified as Monad
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
@@ -48,36 +44,37 @@ import Data.Text (Text)
 import Data.Tuple qualified as Tuple
 import Data.Void (Void)
 import Data.Void qualified as Void
-import Grease.Shape (Shape, ExtShape)
+import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
-import Grease.Shape.Pointer (PtrShape, BlockId(BlockId))
+import Grease.Shape.Pointer (BlockId (BlockId), PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Numeric (showHex)
 import Prettyprinter qualified as PP
+import Prelude hiding (print)
 
 data Allocs
   = Allocs
-    { allocs :: IntMap (PP.Doc Void)
-    , maxKey :: {-# UNPACK #-} !Int
-    }
+  { allocs :: IntMap (PP.Doc Void)
+  , maxKey :: {-# UNPACK #-} !Int
+  }
 
 allocNext :: Allocs -> (BlockId, Allocs)
-allocNext as = let k = maxKey as in (BlockId k, as { maxKey = k + 1 })
+allocNext as = let k = maxKey as in (BlockId k, as{maxKey = k + 1})
 
 emptyAllocs :: Allocs
 emptyAllocs = Allocs IntMap.empty 0
 
 data PrinterConfig w = PrinterConfig
   { cfgAddrWidth :: AddrWidthRepr w
-    -- | Threshold for applying run-length encoding (RLE) to sequences of
-    -- initialized, symbolic bytes or uninitialized bytes.
   , cfgRleThreshold :: Int
+  -- ^ Threshold for applying run-length encoding (RLE) to sequences of
+  -- initialized, symbolic bytes or uninitialized bytes.
   }
 
 -- | 'ReaderT'/'State' monad for pretty-printing
 newtype Printer w a
-  = Printer { runPrinter :: ReaderT.ReaderT (PrinterConfig w) (State Allocs) a }
+  = Printer {runPrinter :: ReaderT.ReaderT (PrinterConfig w) (State Allocs) a}
   deriving (Applicative, Functor, Monad)
 
 deriving instance MonadReader (PrinterConfig w) (Printer w)
@@ -87,10 +84,10 @@ deriving instance MonadState Allocs (Printer w)
 evalPrinter :: PrinterConfig w -> Printer w (PP.Doc ann) -> PP.Doc ann
 evalPrinter cfg p =
   let (doc, as) =
-        State.runState (ReaderT.runReaderT (runPrinter p) cfg) emptyAllocs in
-  if IntMap.null (allocs as)
-  then doc
-  else doc PP.<> PP.line PP.<> PP.line PP.<> printAllocs (cfgAddrWidth cfg) as
+        State.runState (ReaderT.runReaderT (runPrinter p) cfg) emptyAllocs
+   in if IntMap.null (allocs as)
+        then doc
+        else doc PP.<> PP.line PP.<> PP.line PP.<> printAllocs (cfgAddrWidth cfg) as
 
 printerAlloc :: Printer w (PP.Doc Void) -> Maybe BlockId -> Printer w BlockId
 printerAlloc computeDoc bid = do
@@ -105,7 +102,7 @@ printerAlloc computeDoc bid = do
         Just bid' -> (bid', as)
   State.put as'
   doc <- computeDoc
-  State.modify (\as''-> as'' { allocs = IntMap.insert k doc (allocs as'') })
+  State.modify (\as'' -> as''{allocs = IntMap.insert k doc (allocs as'')})
   pure blk
 
 addrWidth :: Printer w (AddrWidthRepr w)
@@ -127,7 +124,7 @@ printAllocs aw as =
         List.map
           (Functor.fmap Void.absurd . Tuple.uncurry printPair)
           (IntMap.toAscList (allocs as))
-  in PP.vsep docs
+   in PP.vsep docs
 
 -- | Print 'Shape's associated with given names (e.g., register names)
 printNamedShapesFiltered ::
@@ -141,10 +138,11 @@ printNamedShapesFiltered ::
   Printer w (PP.Doc ann)
 printNamedShapesFiltered names filt shapes =
   TFC.foldlMFC'
-    (\doc (Product.Pair (Product.Pair (Const.Const nm) s) (Const.Const b)) ->
-      if b
-      then ((doc PP.<> PP.line) PP.<>) Functor.<$> printNamed nm s
-      else pure doc)
+    ( \doc (Product.Pair (Product.Pair (Const.Const nm) s) (Const.Const b)) ->
+        if b
+          then ((doc PP.<> PP.line) PP.<>) Functor.<$> printNamed nm s
+          else pure doc
+    )
     Monoid.mempty
     (Ctx.zipWith Product.Pair (Ctx.zipWith Product.Pair names shapes) filt)
 
@@ -204,7 +202,7 @@ printPtr =
     PtrShape.ShapePtrBV _tag w -> printBv w
     PtrShape.ShapePtrBVLit _tag w bv -> printBvLit w bv
     PtrShape.ShapePtr _tag offset tgt@(PtrShape.PtrTarget bid _) -> do
-      blk <- printerAlloc (printTgt tgt) bid 
+      blk <- printerAlloc (printTgt tgt) bid
       printBlockOffset blk offset
 
 printBv :: NatRepr w' -> Printer w (PP.Doc ann)
@@ -217,8 +215,8 @@ printBv w' = do
 printBvLit :: NatRepr w' -> BV w' -> Printer w (PP.Doc ann)
 printBvLit w' bv =
   -- On `4`: There are 8 bits in a byte, and two hex digits denote one byte
-  let hexDigits = NatRepr.widthVal w' `div` 4 in
-  pure (PP.pretty (padHex hexDigits (BV.asUnsigned bv)))
+  let hexDigits = NatRepr.widthVal w' `div` 4
+   in pure (PP.pretty (padHex hexDigits (BV.asUnsigned bv)))
 
 printBlockOffset :: BlockId -> PtrShape.Offset -> Printer w (PP.Doc ann)
 printBlockOffset blk off = do
@@ -255,7 +253,7 @@ padHex :: Integral a => Int -> a -> String
 padHex pad v =
   let initial = showHex' v
       zs = List.take (pad - List.length initial) (List.repeat '0')
-  in zs List.++ initial
+   in zs List.++ initial
 
 -- | RLE-encode either @##@ or @XX@ if length > 8
 printRle :: Char -> Int -> Printer w (PP.Doc ann)
@@ -263,9 +261,10 @@ printRle c n = do
   t <- rleThreshold
   pure $
     if n <= t
-    then PP.fillSep (List.replicate n s)
-    else s PP.<> PP.pretty ("*" :: Text)  PP.<> PP.pretty (showHex' n)
-  where s = PP.pretty @[Char] [c, c]
+      then PP.fillSep (List.replicate n s)
+      else s PP.<> PP.pretty ("*" :: Text) PP.<> PP.pretty (showHex' n)
+ where
+  s = PP.pretty @[Char] [c, c]
 
 -- | Ignores @tag@s.
 printTgt :: PtrShape.PtrTarget w tag -> Printer w (PP.Doc Void)
@@ -287,8 +286,8 @@ printMemShape = \case
   PtrShape.Uninitialized bytes -> printRle '#' (bytesToInt bytes)
   PtrShape.Initialized _tag bytes -> printRle 'X' (bytesToInt bytes)
   PtrShape.Pointer _tag off target@(PtrShape.PtrTarget bid _) -> do
-      blk <- printerAlloc (printTgt target) bid
-      printBlockOffset blk off
+    blk <- printerAlloc (printTgt target) bid
+    printBlockOffset blk off
   PtrShape.Exactly bytes ->
-    let ppWord8 = PP.pretty . padHex 2 in
-    pure (PP.fillSep (List.map (ppWord8 . PtrShape.taggedByteValue) bytes))
+    let ppWord8 = PP.pretty . padHex 2
+     in pure (PP.fillSep (List.map (ppWord8 . PtrShape.taggedByteValue) bytes))

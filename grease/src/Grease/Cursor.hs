@@ -1,21 +1,19 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Grease.Cursor
-  ( Cursor(..)
-  , CursorExt
-  , ppCursor
-  , cursorRepr
-  , addField
-  , module Grease.Cursor.List
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Cursor (
+  Cursor (..),
+  CursorExt,
+  ppCursor,
+  cursorRepr,
+  addField,
+  module Grease.Cursor.List,
+) where
 
 import Data.Kind (Type)
 import Data.Parameterized.Context qualified as Ctx
@@ -59,10 +57,11 @@ ppCursor top ppExt =
 
 cursorRepr ::
   Last ts ~ t =>
-  (forall ts' t'.
+  ( forall ts' t'.
     Last ts' ~ t' =>
     CursorExt ext ts' ->
-    C.TypeRepr t') ->
+    C.TypeRepr t'
+  ) ->
   Cursor ext ts ->
   C.TypeRepr t
 cursorRepr ext =
@@ -75,12 +74,13 @@ cursorRepr ext =
 -- fields of the struct, you can get a 'Cursor' that points to that field.
 addField ::
   Last ts ~ C.StructType fields =>
-  (forall ts' t' fields'.
+  ( forall ts' t' fields'.
     Last ts' ~ C.StructType fields' =>
     C.TypeRepr t' ->
     Ctx.Index fields' t' ->
     CursorExt ext ts' ->
-    CursorExt ext (Snoc ts' t')) ->
+    CursorExt ext (Snoc ts' t')
+  ) ->
   C.TypeRepr t ->
   Ctx.Index fields t ->
   Cursor ext ts ->

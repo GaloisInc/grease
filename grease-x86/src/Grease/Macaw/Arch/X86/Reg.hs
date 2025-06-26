@@ -1,13 +1,11 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
-module Grease.Macaw.Arch.X86.Reg
-  ( getX86Reg
-  , putX86Reg
-  , modifyX86Reg
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Macaw.Arch.X86.Reg (
+  getX86Reg,
+  putX86Reg,
+  modifyX86Reg,
+) where
 
 import Control.Exception.Safe (MonadThrow, throw)
 import Data.Macaw.Symbolic qualified as Symbolic
@@ -16,7 +14,7 @@ import Data.Macaw.X86.Symbolic qualified as X86Sym
 import Data.Macaw.X86.X86Reg qualified as X86
 import Data.Parameterized.Context qualified as Ctx
 import Data.Text qualified as Text
-import Grease.Utility (GreaseException(..))
+import Grease.Utility (GreaseException (..))
 import Prelude hiding (mod)
 
 -- | Retrieve the value of an x86 register, throwing a 'GreaseException' if it
@@ -56,4 +54,3 @@ modifyX86Reg regs reg mod = do
   val <- getX86Reg reg regs
   val' <- mod val
   putX86Reg reg val' regs
-

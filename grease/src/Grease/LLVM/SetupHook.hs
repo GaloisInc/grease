@@ -3,19 +3,19 @@
 {-# LANGUAGE ImplicitParams #-}
 
 -- | c.f. "Grease.Macaw.SetupHook"
-module Grease.LLVM.SetupHook
-  ( SetupHook(..)
-  , syntaxSetupHook
-  , moduleSetupHook
-  ) where
+module Grease.LLVM.SetupHook (
+  SetupHook (..),
+  syntaxSetupHook,
+  moduleSetupHook,
+) where
 
 import Control.Lens ((^.))
 import Control.Monad qualified as Monad
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Grease.Concretize.ToConcretize (HasToConcretize)
-import Grease.Diagnostic (GreaseLogAction, Diagnostic (LLVMSetupHookDiagnostic))
+import Grease.Diagnostic (Diagnostic (LLVMSetupHookDiagnostic), GreaseLogAction)
 import Grease.Entrypoint qualified as GE
 import Grease.LLVM.Overrides (registerLLVMSexpOverrides)
 import Grease.LLVM.Overrides qualified as GLO
@@ -49,21 +49,22 @@ doLog la diag = LJ.writeLog la (LLVMSetupHookDiagnostic diag)
 -- c.f. 'Grease.Macaw.SetupHook.SetupHook'
 newtype SetupHook sym arch
   = SetupHook
-    (forall p bak rtp a r.
-      ( C.IsSymBackend sym bak
-      , ArchWidth arch ~ 64
-      , Mem.HasPtrWidth (ArchWidth arch)
-      , Mem.HasLLVMAnn sym
-      , HasToConcretize p
-      , ?lc :: TCtx.TypeContext
-      , ?memOpts :: Mem.MemOptions
-      , ?intrinsicsOpts :: CLLVM.IntrinsicsOptions
-      ) =>
-      bak ->
-      C.HandleAllocator ->
-      Trans.LLVMContext arch ->
-      SymIO.LLVMFileSystem (ArchWidth arch) ->
-      C.OverrideSim p sym LLVM rtp a r ())
+      ( forall p bak rtp a r.
+        ( C.IsSymBackend sym bak
+        , ArchWidth arch ~ 64
+        , Mem.HasPtrWidth (ArchWidth arch)
+        , Mem.HasLLVMAnn sym
+        , HasToConcretize p
+        , ?lc :: TCtx.TypeContext
+        , ?memOpts :: Mem.MemOptions
+        , ?intrinsicsOpts :: CLLVM.IntrinsicsOptions
+        ) =>
+        bak ->
+        C.HandleAllocator ->
+        Trans.LLVMContext arch ->
+        SymIO.LLVMFileSystem (ArchWidth arch) ->
+        C.OverrideSim p sym LLVM rtp a r ()
+      )
 
 -- | A 'SetupHook' for LLVM CFGs from S-expression programs.
 syntaxSetupHook ::

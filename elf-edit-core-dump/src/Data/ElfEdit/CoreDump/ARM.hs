@@ -6,60 +6,60 @@
 -- <https://github.com/kushaldas/elfutils/blob/0b72b650b173fdf5467b337ff26e97e69daed869/backends/arm_corenote.c>
 --
 -- This module is meant to be imported qualified.
-module Data.ElfEdit.CoreDump.ARM
-  ( ArmUserRegs(..)
-  , getArmUserRegs
-  , armUserRegsSize
-  , armPrRegOffset
-  ) where
+module Data.ElfEdit.CoreDump.ARM (
+  ArmUserRegs (..),
+  getArmUserRegs,
+  armUserRegsSize,
+  armPrRegOffset,
+) where
 
 import Data.Binary.Get qualified as Get
-import Data.Word (Word32)
-
 import Data.ElfEdit qualified as Elf
+import Data.Word (Word32)
 
 -- | General-purpose 32-bit ARM user registers.
 data ArmUserRegs = ArmUserRegs
-  { r0     :: !Word32
-  , r1     :: !Word32
-  , r2     :: !Word32
-  , r3     :: !Word32
-  , r4     :: !Word32
-  , r5     :: !Word32
-  , r6     :: !Word32
-  , r7     :: !Word32
-  , r8     :: !Word32
-  , r9     :: !Word32
-  , r10    :: !Word32
-  , r11    :: !Word32
-  , r12    :: !Word32
-  , r13    :: !Word32
-  , r14    :: !Word32
-  , r15    :: !Word32
-  , cpsr   :: !Word32
+  { r0 :: !Word32
+  , r1 :: !Word32
+  , r2 :: !Word32
+  , r3 :: !Word32
+  , r4 :: !Word32
+  , r5 :: !Word32
+  , r6 :: !Word32
+  , r7 :: !Word32
+  , r8 :: !Word32
+  , r9 :: !Word32
+  , r10 :: !Word32
+  , r11 :: !Word32
+  , r12 :: !Word32
+  , r13 :: !Word32
+  , r14 :: !Word32
+  , r15 :: !Word32
+  , cpsr :: !Word32
   , origR0 :: !Word32
-  } deriving Show
+  }
+  deriving Show
 
 -- | Parse an 'X64UserRegs' value.
 getArmUserRegs :: Elf.ElfData -> Get.Get ArmUserRegs
 getArmUserRegs d = do
-  r0     <- Elf.getWord32 d
-  r1     <- Elf.getWord32 d
-  r2     <- Elf.getWord32 d
-  r3     <- Elf.getWord32 d
-  r4     <- Elf.getWord32 d
-  r5     <- Elf.getWord32 d
-  r6     <- Elf.getWord32 d
-  r7     <- Elf.getWord32 d
-  r8     <- Elf.getWord32 d
-  r9     <- Elf.getWord32 d
-  r10    <- Elf.getWord32 d
-  r11    <- Elf.getWord32 d
-  r12    <- Elf.getWord32 d
-  r13    <- Elf.getWord32 d
-  r14    <- Elf.getWord32 d
-  r15    <- Elf.getWord32 d
-  cpsr   <- Elf.getWord32 d
+  r0 <- Elf.getWord32 d
+  r1 <- Elf.getWord32 d
+  r2 <- Elf.getWord32 d
+  r3 <- Elf.getWord32 d
+  r4 <- Elf.getWord32 d
+  r5 <- Elf.getWord32 d
+  r6 <- Elf.getWord32 d
+  r7 <- Elf.getWord32 d
+  r8 <- Elf.getWord32 d
+  r9 <- Elf.getWord32 d
+  r10 <- Elf.getWord32 d
+  r11 <- Elf.getWord32 d
+  r12 <- Elf.getWord32 d
+  r13 <- Elf.getWord32 d
+  r14 <- Elf.getWord32 d
+  r15 <- Elf.getWord32 d
+  cpsr <- Elf.getWord32 d
   origR0 <- Elf.getWord32 d
   pure ArmUserRegs{..}
 

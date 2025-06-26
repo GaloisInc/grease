@@ -1,22 +1,20 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Grease.Cursor.List
-  ( Last
-  , Snoc
-  , lastCons
-  , lastSnoc
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Cursor.List (
+  Last,
+  Snoc,
+  lastCons,
+  lastSnoc,
+) where
 
 import Data.Parameterized.Axiom (unsafeAxiom)
-import Data.Parameterized.List (List(..))
-import Data.Type.Equality ((:~:)(Refl))
+import Data.Parameterized.List (List (..))
+import Data.Type.Equality ((:~:) (Refl))
 
 type family Last (ts :: [k]) :: k where
   Last '[t] = t
@@ -69,5 +67,3 @@ _lastSnoc proxy =
         Refl ->
           case _lastSnoc proxy rest of
             Refl -> Refl
-
-

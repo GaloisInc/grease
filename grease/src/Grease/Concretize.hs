@@ -1,28 +1,28 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
-module Grease.Concretize
-  ( -- * Data to be concretized
-    InitialState(..)
-    -- * Concretization
-  , ConcMem(..)
-  , ConcArgs(..)
-  , ConcretizedData(..)
-  , SomeConcretizedValue(..)
-  , concArgsToSym
-  , makeConcretizedData
-    -- * Pretty-printing
-  , printConcArgs
-  , printConcFs
-  , printConcData
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Concretize (
+  -- * Data to be concretized
+  InitialState (..),
 
-import Control.Monad.IO.Class (MonadIO(..))
+  -- * Concretization
+  ConcMem (..),
+  ConcArgs (..),
+  ConcretizedData (..),
+  SomeConcretizedValue (..),
+  concArgsToSym,
+  makeConcretizedData,
+
+  -- * Pretty-printing
+  printConcArgs,
+  printConcFs,
+  printConcData,
+) where
+
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.BitVector.Sized qualified as BV
 import Data.Foldable (toList)
 import Data.Functor.Const (Const)
@@ -37,8 +37,8 @@ import Data.Text (Text)
 import Data.Type.Equality (testEquality)
 import Data.Word (Word8)
 import Grease.Concretize.ToConcretize (ToConcretizeType)
-import Grease.Setup (Args(Args), InitialMem(..))
-import Grease.Shape (Shape, ExtShape)
+import Grease.Setup (Args (Args), InitialMem (..))
+import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.Concretize (concShape)
 import Grease.Shape.Pointer (PtrShape)
@@ -62,22 +62,24 @@ import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as WI
 
 ---------------------------------------------------------------------
+
 -- * Data to be concretized
 
 -- | Initial state, to be concretized into 'ConcretizedData'
 data InitialState sym ext argTys
   = InitialState
-    { initStateArgs :: Args sym ext argTys
-    , initStateFs :: SymIO.InitialFileSystemContents sym
-    , initStateMem :: InitialMem sym
-    }
+  { initStateArgs :: Args sym ext argTys
+  , initStateFs :: SymIO.InitialFileSystemContents sym
+  , initStateMem :: InitialMem sym
+  }
 
 ---------------------------------------------------------------------
+
 -- * Concretization
 
 -- | Arguments ('Args') that have been concretized
 newtype ConcArgs sym ext argTys
-  = ConcArgs { getConcArgs :: Ctx.Assignment (Shape ext (Conc.ConcRV' sym)) argTys }
+  = ConcArgs {getConcArgs :: Ctx.Assignment (Shape ext (Conc.ConcRV' sym)) argTys}
 
 -- | Turn 'ConcArgs' back into a 'C.RegMap' that can be used to re-execute
 -- a CFG.
@@ -92,46 +94,47 @@ concArgsToSym ::
   ConcArgs sym ext argTys ->
   IO (C.RegMap sym argTys)
 concArgsToSym sym fm argTys (ConcArgs cArgs) =
-  C.RegMap <$>
-    Ctx.zipWithM
-    (\tp cShape -> do
-      let conc = Conc.unConcRV' (Shape.getTag PtrShape.getPtrTag cShape)
-      symb <- Conc.concToSym sym Mem.concToSymPtrFnMap fm tp conc
-      pure (C.RegEntry @sym tp symb))
-    argTys
-    cArgs
+  C.RegMap
+    <$> Ctx.zipWithM
+      ( \tp cShape -> do
+          let conc = Conc.unConcRV' (Shape.getTag PtrShape.getPtrTag cShape)
+          symb <- Conc.concToSym sym Mem.concToSymPtrFnMap fm tp conc
+          pure (C.RegEntry @sym tp symb)
+      )
+      argTys
+      cArgs
 
 -- | Memory before execution ('InitialMem') that has been concretized
 --
 -- See crucible#1217 for ideas on how we could present this more intuitively in
 -- the future.
-newtype ConcMem sym = ConcMem { getConcMem :: Mem.MemImpl sym }
+newtype ConcMem sym = ConcMem {getConcMem :: Mem.MemImpl sym}
 
 -- | File system contents before execution ('SymIO.InitialFileSystemContents')
 -- that has been concretized
-newtype ConcFs = ConcFs { getConcFs :: Map (SymIO.FDTarget SymIO.In) [Word8] }
+newtype ConcFs = ConcFs {getConcFs :: Map (SymIO.FDTarget SymIO.In) [Word8]}
 
 -- | An extra value that has been concretized
 data SomeConcretizedValue sym
   = forall ty.
-    SomeConcretizedValue
-    { concName :: Text
-    , concTy :: C.TypeRepr ty
-    , concValue :: Conc.ConcRV' sym ty
-    }
+  SomeConcretizedValue
+  { concName :: Text
+  , concTy :: C.TypeRepr ty
+  , concValue :: Conc.ConcRV' sym ty
+  }
 
 -- | Concretized version of 'InitialState' plus @GlobalVar 'ToConcretizeType'@
 --
 -- Produced by 'makeConcretizedData'
 data ConcretizedData sym ext argTys
   = ConcretizedData
-    { concArgs :: ConcArgs sym ext argTys
-      -- | Concretized values from the @GlobalVar 'ToConcretizeType'@
-    , concExtra :: [SomeConcretizedValue sym]
-    , concFs :: ConcFs
-    , concMem :: ConcMem sym
-    , concErr :: Maybe (Mem.BadBehavior sym)
-    }
+  { concArgs :: ConcArgs sym ext argTys
+  , concExtra :: [SomeConcretizedValue sym]
+  -- ^ Concretized values from the @GlobalVar 'ToConcretizeType'@
+  , concFs :: ConcFs
+  , concMem :: ConcMem sym
+  , concErr :: Maybe (Mem.BadBehavior sym)
+  }
 
 makeConcretizedData ::
   forall solver sym ext wptr bak t st argTys fm.
@@ -164,10 +167,10 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
           concRV (C.StringRepr WI.UnicodeRepr) name
         pure $
           SomeConcretizedValue
-          { concName = cName
-          , concTy = ty
-          , concValue = cVal
-          }
+            { concName = cName
+            , concTy = ty
+            , concValue = cVal
+            }
   -- re: reverse: The sequence is a cons-list, so the values appear in
   -- reverse-chronological (LIFO) order from when they were created.
   cExtra <- List.reverse . toList <$> liftIO (C.concretizeSymSequence gFn concStruct extra)
@@ -176,14 +179,15 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   cErr <- traverse (\(_, bb) -> Mem.concBadBehavior sym gFn bb) minfo
   pure $
     ConcretizedData
-    { concArgs = ConcArgs cArgs
-    , concExtra = cExtra
-    , concFs = ConcFs cFs
-    , concMem = ConcMem cMem
-    , concErr = cErr
-    }
+      { concArgs = ConcArgs cArgs
+      , concExtra = cExtra
+      , concFs = ConcFs cFs
+      , concMem = ConcMem cMem
+      , concErr = cErr
+      }
 
 ---------------------------------------------------------------------
+
 -- * Pretty-printing
 
 printConcArgs ::
@@ -197,11 +201,11 @@ printConcArgs ::
   ConcArgs sym ext argTys ->
   PP.Doc ann
 printConcArgs addrWidth argNames filt (ConcArgs cArgs) =
-  let cShapes = fmapFC concShape cArgs in
-  let rleThreshold = 8 in  -- this matches uses in Grease.Refine.Diagnostic
-   ShapePP.evalPrinter
-    (ShapePP.PrinterConfig addrWidth rleThreshold)
-    (ShapePP.printNamedShapesFiltered argNames filt cShapes)
+  let cShapes = fmapFC concShape cArgs
+   in let rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
+       in ShapePP.evalPrinter
+            (ShapePP.PrinterConfig addrWidth rleThreshold)
+            (ShapePP.printNamedShapesFiltered argNames filt cShapes)
 
 -- | Helper, not exported
 showHex' :: Integral a => a -> String
@@ -212,7 +216,7 @@ padHex :: Integral a => Int -> a -> String
 padHex pad v =
   let initial = showHex' v
       zs = List.take (pad - List.length initial) (List.repeat '0')
-  in zs List.++ initial
+   in zs List.++ initial
 
 -- | Pretty-print the \"extra\" concretized data
 printConcExtra ::
@@ -220,19 +224,20 @@ printConcExtra ::
   PP.Doc ann
 printConcExtra vals =
   PP.vsep $
-    PP.pretty "Concretized values:" :
-      map (PP.indent 2 . ppValue) vals
-  where
-    ppBv8 = PP.pretty . padHex 2 . BV.asUnsigned
+    PP.pretty "Concretized values:"
+      : map (PP.indent 2 . ppValue) vals
+ where
+  ppBv8 = PP.pretty . padHex 2 . BV.asUnsigned
 
-    ppValue :: SomeConcretizedValue sym -> PP.Doc ann
-    ppValue (SomeConcretizedValue { concName = name, concTy = ty, concValue = Conc.ConcRV' val }) =
-      PP.vsep
+  ppValue :: SomeConcretizedValue sym -> PP.Doc ann
+  ppValue (SomeConcretizedValue{concName = name, concTy = ty, concValue = Conc.ConcRV' val}) =
+    PP.vsep
       [ PP.pretty name
       , PP.indent 2 $
           case ty of
-            C.VectorRepr (C.BVRepr w) | Just C.Refl <- testEquality w (knownNat @8) ->
-              PP.fillSep (List.map (\(Conc.ConcRV' b) -> ppBv8 b) (toList val))
+            C.VectorRepr (C.BVRepr w)
+              | Just C.Refl <- testEquality w (knownNat @8) ->
+                  PP.fillSep (List.map (\(Conc.ConcRV' b) -> ppBv8 b) (toList val))
             -- TODO(#204): Handle more cases
             _ -> PP.pretty "<can't print this value>"
       ]
@@ -243,14 +248,14 @@ printConcFs ::
   PP.Doc ann
 printConcFs cFs =
   PP.vsep $
-    PP.pretty "Concretized filesystem:" :
-      map (PP.indent 2 . uncurry ppFile) (Map.toList (getConcFs cFs))
-  where
-    ppWord8 = PP.pretty . padHex 2
+    PP.pretty "Concretized filesystem:"
+      : map (PP.indent 2 . uncurry ppFile) (Map.toList (getConcFs cFs))
+ where
+  ppWord8 = PP.pretty . padHex 2
 
-    ppFile :: SymIO.FDTarget SymIO.In -> [Word8] -> PP.Doc ann
-    ppFile tgt content =
-      PP.vsep
+  ppFile :: SymIO.FDTarget SymIO.In -> [Word8] -> PP.Doc ann
+  ppFile tgt content =
+    PP.vsep
       [ PP.pretty (SymIO.fdTargetToText tgt)
       , PP.indent 2 (PP.fillSep (List.map ppWord8 content))
       ]
@@ -271,9 +276,9 @@ printConcData addrWidth argNames filt cData =
       fs = printConcFs (concFs cData)
       extra = printConcExtra (concExtra cData)
       vsep2 = PP.concatWith (\x y -> x <> PP.line <> PP.line <> y)
-  in vsep2 $
-       concat $
-         [ [args]
-         , if Map.null (getConcFs (concFs cData)) then [] else [fs]
-         , if List.null (concExtra cData) then [] else [extra]
-         ]
+   in vsep2 $
+        concat $
+          [ [args]
+          , if Map.null (getConcFs (concFs cData)) then [] else [fs]
+          , if List.null (concExtra cData) then [] else [extra]
+          ]

@@ -1,23 +1,21 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Refine.Diagnostic
-  ( Diagnostic(..)
-  , severity
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Refine.Diagnostic (
+  Diagnostic (..),
+  severity,
+) where
 
 import Control.Lens ((^.))
-import Data.Functor.Const (Const(..))
+import Data.Functor.Const (Const (..))
 import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
 import Data.Parameterized.Context qualified as Ctx
-import Grease.Diagnostic.Severity (Severity(Info, Debug))
+import Grease.Diagnostic.Severity (Severity (Debug, Info))
 import Grease.Heuristic.Result qualified as Heuristic
 import Grease.Shape (ArgShapes (..), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrShape)
@@ -90,10 +88,10 @@ instance PP.Pretty Diagnostic where
         case r of
           C.FinishedResult _ partRes ->
             case partRes of
-              C.TotalRes {} -> "All execution paths returned a result"
-              C.PartialRes {} -> "At least one execution path returned a result"
-          C.AbortedResult {} -> "All execution paths aborted"
-          C.TimeoutResult {} -> "Symbolic execution timed out!"
+              C.TotalRes{} -> "All execution paths returned a result"
+              C.PartialRes{} -> "At least one execution path returned a result"
+          C.AbortedResult{} -> "All execution paths aborted"
+          C.TimeoutResult{} -> "Symbolic execution timed out!"
       GoalNoMatchingHeuristic ->
         "Could not identify heuristic for goal, skipping"
       GoalMatchingHeuristic ->
@@ -124,22 +122,23 @@ instance PP.Pretty Diagnostic where
         PP.vcat $
           [ "Goal failed:"
           , PP.indent 4 (C.ppSimError $ lp ^. W4.labeledPredMsg)
-          -- , PP.indent 4 (W4.ppExpr $ lp ^. W4.labeledPred)
-          , case minfo of
+          , -- , PP.indent 4 (W4.ppExpr $ lp ^. W4.labeledPred)
+            case minfo of
               Nothing -> "<no details available>"
               Just (callStack, bb) ->
                 let ppCs = Mem.ppCallStack callStack
-                in PP.vcat $
-                     [ PP.indent 4 (Mem.ppBB bb) ] List.++
-                       -- HACK(crucible#1112): No Eq on Doc, no access to cs
-                       if Mem.null callStack
-                       then []
-                       else ["in context:", PP.indent 2 ppCs]
+                 in PP.vcat $
+                      [PP.indent 4 (Mem.ppBB bb)]
+                        List.++
+                        -- HACK(crucible#1112): No Eq on Doc, no access to cs
+                        if Mem.null callStack
+                          then []
+                          else ["in context:", PP.indent 2 ppCs]
           ]
-    where
-      printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w
-      printCfg w =
-        ShapePP.PrinterConfig
+   where
+    printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w
+    printCfg w =
+      ShapePP.PrinterConfig
         { ShapePP.cfgAddrWidth = w
         , ShapePP.cfgRleThreshold = 8
         }
@@ -160,4 +159,3 @@ severity =
     RefinementUsingPrecondition{} -> Debug
     SolverGoalPassed{} -> Debug
     SolverGoalFailed{} -> Debug
-

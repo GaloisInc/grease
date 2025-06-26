@@ -1,17 +1,16 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE LambdaCase #-}
 
--- | Functionality for logging diagnostic messages in @grease@.
-module Grease.Diagnostic
-  ( Diagnostic(..)
-  , GreaseLogAction
-  , Grease.Diagnostic.log
-  , severity
-  ) where
+-- \| Functionality for logging diagnostic messages in @grease@.
+
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Diagnostic (
+  Diagnostic (..),
+  GreaseLogAction,
+  Grease.Diagnostic.log,
+  severity,
+) where
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Grease.BranchTracer.Diagnostic qualified as BranchTracer

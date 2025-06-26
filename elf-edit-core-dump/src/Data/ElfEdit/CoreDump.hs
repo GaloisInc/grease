@@ -18,44 +18,42 @@
 -- * System V ABI documentation on ELF note sections (which are heavily used in
 --   core dump files):
 --   https://refspecs.linuxbase.org/elf/gabi4+/ch5.pheader.html#note_section
-module Data.ElfEdit.CoreDump
-  ( -- * Types
-    Note(..)
-  , NoteDesc(..)
-  , PrStatus(..)
-  , FpRegSet(..)
-  , PrpsInfo(..)
-  , UserRegSet(..)
+module Data.ElfEdit.CoreDump (
+  -- * Types
+  Note (..),
+  NoteDesc (..),
+  PrStatus (..),
+  FpRegSet (..),
+  PrpsInfo (..),
+  UserRegSet (..),
 
-    -- * Decoding
-  , decodeHeaderNotes
-  , decodePrStatus
-  , decodeUserRegSet
-  , decodeArmUserRegs
-  , decodePpcUserRegs
-  , decodeX86_64UserRegs
-  , decodeNhdr
-  , NoteDecodeError(..)
+  -- * Decoding
+  decodeHeaderNotes,
+  decodePrStatus,
+  decodeUserRegSet,
+  decodeArmUserRegs,
+  decodePpcUserRegs,
+  decodeX86_64UserRegs,
+  decodeNhdr,
+  NoteDecodeError (..),
 
-    -- * Analysis
-  , coreDumpPrStatusProgramCounter
-  , coreDumpHeaderProgramCounter
-  , CoreDumpAnalyzeError(..)
-  ) where
+  -- * Analysis
+  coreDumpPrStatusProgramCounter,
+  coreDumpHeaderProgramCounter,
+  CoreDumpAnalyzeError (..),
+) where
 
 import Control.Monad (unless)
 import Data.Binary.Get qualified as Get
-import Data.Bits (Bits(..))
+import Data.Bits (Bits (..))
 import Data.ByteString qualified as BS
-import Data.List qualified as List
-import Data.Maybe (mapMaybe, maybeToList)
-
 import Data.ElfEdit qualified as Elf
-
 import Data.ElfEdit.CoreDump.ARM qualified as ARM
 import Data.ElfEdit.CoreDump.PPC qualified as PPC
 import Data.ElfEdit.CoreDump.X86_64 qualified as X86_64
 import Data.ElfEdit.Prim.Nhdr qualified as Nhdr
+import Data.List qualified as List
+import Data.Maybe (mapMaybe, maybeToList)
 
 -----
 -- Types
@@ -65,10 +63,11 @@ import Data.ElfEdit.Prim.Nhdr qualified as Nhdr
 -- compatibility, etc.
 data Note = Note
   { noteName :: !BS.ByteString
-    -- ^ The note's owner or originator.
+  -- ^ The note's owner or originator.
   , noteDesc :: !NoteDesc
-    -- ^ The note's descriptor.
-  } deriving Show
+  -- ^ The note's descriptor.
+  }
+  deriving Show
 
 -- | A note descriptor. The ABI places no constraints on a descriptor's
 -- contents, but we recognize a subset of descriptor types that are commonly
@@ -92,7 +91,7 @@ data UserRegSet
 -- have Haskell counterparts yet.
 data PrStatus = PrStatus
   { prReg :: !UserRegSet
-    -- ^ The user registers. Currently, this assumes x86-64 registers.
+  -- ^ The user registers. Currently, this assumes x86-64 registers.
   }
   deriving Show
 
@@ -140,13 +139,16 @@ instance Show NoteDecodeError where
   show (InvalidX86_64UserRegs msg) =
     "Error parsing x86-64 registers: " ++ msg
   show (UnsupportedUserRegs cl m) =
-    "Don't know how to support user registers on ELF class " ++ show cl ++
-    " and machine " ++ show m
+    "Don't know how to support user registers on ELF class "
+      ++ show cl
+      ++ " and machine "
+      ++ show m
 
 -- Taken from elf-edit's unexported internals
-strictRunGetOrFail :: Get.Get a
-                   -> BS.ByteString
-                   -> Either (BS.ByteString, Get.ByteOffset, String) (BS.ByteString, Get.ByteOffset, a)
+strictRunGetOrFail ::
+  Get.Get a ->
+  BS.ByteString ->
+  Either (BS.ByteString, Get.ByteOffset, String) (BS.ByteString, Get.ByteOffset, a)
 strictRunGetOrFail m bs =
   case Get.pushEndOfInput (Get.pushChunk (Get.runGetIncremental m) bs) of
     Get.Fail rest off msg -> Left (rest, off, msg)
@@ -160,8 +162,8 @@ decodeNhdr ::
   Either NoteDecodeError Nhdr.Nhdr
 decodeNhdr d buf = do
   case strictRunGetOrFail (getNhdr d) buf of
-    Left (_,_,msg) -> Left $ InvalidNhdr msg
-    Right (_,_,nhdr) -> pure nhdr
+    Left (_, _, msg) -> Left $ InvalidNhdr msg
+    Right (_, _, nhdr) -> pure nhdr
 
 -- | Decode an 'ARM.ArmUserRegs' value from a 'BS.ByteString'.
 decodeArmUserRegs ::
@@ -170,8 +172,8 @@ decodeArmUserRegs ::
   Either NoteDecodeError ARM.ArmUserRegs
 decodeArmUserRegs d buf = do
   case strictRunGetOrFail (ARM.getArmUserRegs d) buf of
-    Left (_,_,msg) -> Left $ InvalidArmUserRegs msg
-    Right (_,_,regs) -> pure regs
+    Left (_, _, msg) -> Left $ InvalidArmUserRegs msg
+    Right (_, _, regs) -> pure regs
 
 -- | Decode a 'PPC.PpcUserRegs' value from a 'BS.ByteString'.
 decodePpcUserRegs ::
@@ -181,8 +183,8 @@ decodePpcUserRegs ::
   Either NoteDecodeError (PPC.PpcUserRegs w)
 decodePpcUserRegs cl d buf = do
   case strictRunGetOrFail (PPC.getPpcUserRegs cl d) buf of
-    Left (_,_,msg) -> Left $ InvalidPpcUserRegs msg
-    Right (_,_,regs) -> pure regs
+    Left (_, _, msg) -> Left $ InvalidPpcUserRegs msg
+    Right (_, _, regs) -> pure regs
 
 -- | Decode an 'X86_64.X86_64UserRegs' value from a 'BS.ByteString'.
 decodeX86_64UserRegs ::
@@ -191,8 +193,8 @@ decodeX86_64UserRegs ::
   Either NoteDecodeError X86_64.X86_64UserRegs
 decodeX86_64UserRegs d buf = do
   case strictRunGetOrFail (X86_64.getX86_64UserRegs d) buf of
-    Left (_,_,msg) -> Left $ InvalidX86_64UserRegs msg
-    Right (_,_,regs) -> pure regs
+    Left (_, _, msg) -> Left $ InvalidX86_64UserRegs msg
+    Right (_, _, regs) -> pure regs
 
 -- | Decode a 'UserRegSet' value from a 'BS.ByteString'.
 decodeUserRegSet ::
@@ -204,39 +206,39 @@ decodeUserRegSet ::
   Either NoteDecodeError UserRegSet
 decodeUserRegSet cl d m buf =
   Elf.elfClassInstances cl $
-  case (cl, m) of
-    (Elf.ELFCLASS32, Elf.EM_ARM) ->
-      let armUserRegsFileRange =
-            ( Elf.FileOffset ARM.armPrRegOffset
-            , ARM.armUserRegsSize
-            ) in
-      ArmUserRegSet <$>
-        decodeArmUserRegs d (Elf.slice armUserRegsFileRange buf)
-    (Elf.ELFCLASS32, Elf.EM_PPC) ->
-      decodePpcUserRegSet Ppc32UserRegSet
-    (Elf.ELFCLASS64, Elf.EM_PPC64) ->
-      decodePpcUserRegSet Ppc64UserRegSet
-    (Elf.ELFCLASS64, Elf.EM_X86_64) ->
-      let x86_64UserRegsFileRange =
-            ( Elf.FileOffset X86_64.x86_64PrRegOffset
-            , X86_64.x86_64UserRegsSize
-            ) in
-      X86_64UserRegSet <$>
-        decodeX86_64UserRegs d (Elf.slice x86_64UserRegsFileRange buf)
-    _ ->
-      Left $ UnsupportedUserRegs cl m
-  where
-    decodePpcUserRegSet ::
-      Integral (Elf.ElfWordType w) =>
-      (PPC.PpcUserRegs w -> UserRegSet) ->
-      Either NoteDecodeError UserRegSet
-    decodePpcUserRegSet mkPpcUserRegSet =
-      let ppcUserRegsFileRange =
-            ( Elf.FileOffset (PPC.ppcPrRegOffset cl)
-            , PPC.ppcUserRegsSize cl
-            ) in
-      mkPpcUserRegSet <$>
-        decodePpcUserRegs cl d (Elf.slice ppcUserRegsFileRange buf)
+    case (cl, m) of
+      (Elf.ELFCLASS32, Elf.EM_ARM) ->
+        let armUserRegsFileRange =
+              ( Elf.FileOffset ARM.armPrRegOffset
+              , ARM.armUserRegsSize
+              )
+         in ArmUserRegSet
+              <$> decodeArmUserRegs d (Elf.slice armUserRegsFileRange buf)
+      (Elf.ELFCLASS32, Elf.EM_PPC) ->
+        decodePpcUserRegSet Ppc32UserRegSet
+      (Elf.ELFCLASS64, Elf.EM_PPC64) ->
+        decodePpcUserRegSet Ppc64UserRegSet
+      (Elf.ELFCLASS64, Elf.EM_X86_64) ->
+        let x86_64UserRegsFileRange =
+              ( Elf.FileOffset X86_64.x86_64PrRegOffset
+              , X86_64.x86_64UserRegsSize
+              )
+         in X86_64UserRegSet
+              <$> decodeX86_64UserRegs d (Elf.slice x86_64UserRegsFileRange buf)
+      _ ->
+        Left $ UnsupportedUserRegs cl m
+ where
+  decodePpcUserRegSet ::
+    Integral (Elf.ElfWordType w) =>
+    (PPC.PpcUserRegs w -> UserRegSet) ->
+    Either NoteDecodeError UserRegSet
+  decodePpcUserRegSet mkPpcUserRegSet =
+    let ppcUserRegsFileRange =
+          ( Elf.FileOffset (PPC.ppcPrRegOffset cl)
+          , PPC.ppcUserRegsSize cl
+          )
+     in mkPpcUserRegSet
+          <$> decodePpcUserRegs cl d (Elf.slice ppcUserRegsFileRange buf)
 
 -- | Decode a 'PrStatus' value from a 'BS.ByteString'.
 decodePrStatus ::
@@ -255,14 +257,14 @@ notePadding ::
   Elf.ElfWordType w ->
   Elf.ElfWordType w
 notePadding cl sz =
-    Elf.elfClassInstances cl $
+  Elf.elfClassInstances cl $
     (align - (sz .&. (align - 1))) .&. (align - 1)
-  where
-    align :: Elf.ElfWordType w
-    align =
-      case cl of
-        Elf.ELFCLASS32 -> 4
-        Elf.ELFCLASS64 -> 8
+ where
+  align :: Elf.ElfWordType w
+  align =
+    case cl of
+      Elf.ELFCLASS32 -> 4
+      Elf.ELFCLASS64 -> 8
 
 -- | Decode a list of 'Note's from a program header's contents (represented as a
 -- 'BS.ByteString').
@@ -274,77 +276,81 @@ decodeNotes ::
   BS.ByteString ->
   Either NoteDecodeError [Note]
 decodeNotes cl d m phdrContents =
-    Elf.elfClassInstances cl $ go phdrContents
-  where
-    -- Iterate through the ByteString and decode one Note at a time.
-    go ::
-      (Integral (Elf.ElfWordType w), Num (Elf.ElfWordType w)) =>
-      BS.ByteString ->
-      Either NoteDecodeError [Note]
-    go buf
-      | BS.null buf
-      = pure []
-      | otherwise
-      = do -- First, decode the note header.
-           nhdr <- decodeNhdr d buf
-           -- Next, decode the note section (if we currently support it). This
-           -- is the tricky part, as the amount of bytes that the note section
-           -- uses is variable and depends on information found in the note
-           -- header. See
-           -- https://refspecs.linuxbase.org/elf/gabi4+/ch5.pheader.html#note_section
-           -- for a higher-level description of how this decoding works.
-           let nhdrSize :: Elf.ElfWordType w
-               nhdrSize = fromIntegral Nhdr.nhdrSize
+  Elf.elfClassInstances cl $ go phdrContents
+ where
+  -- Iterate through the ByteString and decode one Note at a time.
+  go ::
+    (Integral (Elf.ElfWordType w), Num (Elf.ElfWordType w)) =>
+    BS.ByteString ->
+    Either NoteDecodeError [Note]
+  go buf
+    | BS.null buf =
+        pure []
+    | otherwise =
+        do
+          -- First, decode the note header.
+          nhdr <- decodeNhdr d buf
+          -- Next, decode the note section (if we currently support it). This
+          -- is the tricky part, as the amount of bytes that the note section
+          -- uses is variable and depends on information found in the note
+          -- header. See
+          -- https://refspecs.linuxbase.org/elf/gabi4+/ch5.pheader.html#note_section
+          -- for a higher-level description of how this decoding works.
+          let nhdrSize :: Elf.ElfWordType w
+              nhdrSize = fromIntegral Nhdr.nhdrSize
 
-               nameFileOffset = Elf.FileOffset nhdrSize
-               nameSize       = fromIntegral (Nhdr.nhdrNameSize nhdr)
-               namePadding    = notePadding cl nameSize
-               nameFileRange  = (nameFileOffset, nameSize)
-               name           = BS.takeWhile (/= 0) (Elf.slice nameFileRange buf)
+              nameFileOffset = Elf.FileOffset nhdrSize
+              nameSize = fromIntegral (Nhdr.nhdrNameSize nhdr)
+              namePadding = notePadding cl nameSize
+              nameFileRange = (nameFileOffset, nameSize)
+              name = BS.takeWhile (/= 0) (Elf.slice nameFileRange buf)
 
-               descFileOffset = Elf.incOffset nameFileOffset (nameSize + namePadding)
-               descSize       = fromIntegral (Nhdr.nhdrDescSize nhdr)
-               descFileRange  = (descFileOffset, descSize)
-               descPadding    = notePadding cl descSize
-               descRaw        = Elf.slice descFileRange buf
+              descFileOffset = Elf.incOffset nameFileOffset (nameSize + namePadding)
+              descSize = fromIntegral (Nhdr.nhdrDescSize nhdr)
+              descFileRange = (descFileOffset, descSize)
+              descPadding = notePadding cl descSize
+              descRaw = Elf.slice descFileRange buf
 
-               noteSize = nhdrSize + nameSize + namePadding + descSize + descPadding
+              noteSize = nhdrSize + nameSize + namePadding + descSize + descPadding
 
-           mbNoteDesc <-
-             case Nhdr.nhdrType nhdr of
-               Nhdr.NT_PRSTATUS -> do
-                 prs <- decodePrStatus cl d m descRaw
-                 pure $ Just $ NotePrStatus prs
-               Nhdr.NT_FPREGSET -> pure $ Just $ NoteFpRegSet FpRegSet
-               Nhdr.NT_PRPSINFO -> pure $ Just $ NotePrpsInfo PrpsInfo
-               _                -> pure $ Nothing
-           let mbNote =
-                 fmap
-                   (\desc ->
-                     Note { noteName = name
-                          , noteDesc = desc })
-                   mbNoteDesc
+          mbNoteDesc <-
+            case Nhdr.nhdrType nhdr of
+              Nhdr.NT_PRSTATUS -> do
+                prs <- decodePrStatus cl d m descRaw
+                pure $ Just $ NotePrStatus prs
+              Nhdr.NT_FPREGSET -> pure $ Just $ NoteFpRegSet FpRegSet
+              Nhdr.NT_PRPSINFO -> pure $ Just $ NotePrpsInfo PrpsInfo
+              _ -> pure $ Nothing
+          let mbNote =
+                fmap
+                  ( \desc ->
+                      Note
+                        { noteName = name
+                        , noteDesc = desc
+                        }
+                  )
+                  mbNoteDesc
 
-           notes <- go (BS.drop (fromIntegral noteSize) buf)
-           pure $ maybeToList mbNote ++ notes
+          notes <- go (BS.drop (fromIntegral noteSize) buf)
+          pure $ maybeToList mbNote ++ notes
 
 -- | Decodes the 'Note's in an ELF file using header info.
 decodeHeaderNotes ::
   Elf.ElfHeaderInfo w ->
   Either NoteDecodeError [Note]
 decodeHeaderNotes ehi = do
-  let eh        = Elf.header ehi
-      cl        = Elf.headerClass eh
-      d         = Elf.headerData eh
-      m         = Elf.headerMachine eh
-      contents  = Elf.headerFileContents ehi
-      allPhdrs  = Elf.headerPhdrs ehi
+  let eh = Elf.header ehi
+      cl = Elf.headerClass eh
+      d = Elf.headerData eh
+      m = Elf.headerMachine eh
+      contents = Elf.headerFileContents ehi
+      allPhdrs = Elf.headerPhdrs ehi
       notePhdrs = filter (\p -> Elf.phdrSegmentType p == Elf.PT_NOTE) allPhdrs
   notess <-
     Elf.elfClassInstances cl $
-    traverse
-      (\phdr -> decodeNotes cl d m (Elf.slice (Elf.phdrFileRange phdr) contents))
-      notePhdrs
+      traverse
+        (\phdr -> decodeNotes cl d m (Elf.slice (Elf.phdrFileRange phdr) contents))
+        notePhdrs
   pure $ concat notess
 
 -----
@@ -367,11 +373,11 @@ instance Show CoreDumpAnalyzeError where
 
         showRegs =
           case regs of
-            ArmUserRegSet {} -> "32-bit ARM"
-            Ppc32UserRegSet {} -> "32-bit PPC"
-            Ppc64UserRegSet {} -> "64-bit PPC"
-            X86_64UserRegSet {} -> "x86-64"
-    in showClBits ++ "-bit ELF with " ++ showRegs
+            ArmUserRegSet{} -> "32-bit ARM"
+            Ppc32UserRegSet{} -> "32-bit PPC"
+            Ppc64UserRegSet{} -> "64-bit PPC"
+            X86_64UserRegSet{} -> "x86-64"
+     in showClBits ++ "-bit ELF with " ++ showRegs
   show (NonCoreDumpElfType eType) =
     "Expected an ET_CORE ELF file, but received " ++ show eType
   show CoreDumpWithoutLoadPhdr =
@@ -402,43 +408,39 @@ coreDumpPrStatusProgramCounter ::
   Either CoreDumpAnalyzeError (Elf.ElfWordType w)
 coreDumpPrStatusProgramCounter cl firstLoadPhdr prStatus =
   Elf.elfClassInstances cl $ do
+    let firstLoadVirtAddr :: Elf.ElfWordType w
+        firstLoadVirtAddr = Elf.phdrSegmentVirtAddr firstLoadPhdr
 
-  let firstLoadVirtAddr :: Elf.ElfWordType w
-      firstLoadVirtAddr = Elf.phdrSegmentVirtAddr firstLoadPhdr
+        -- Each architecture has its own register for the program
+        -- counter/instruction pointer, so we case on all supported architectures
+        -- here.
+        prStatusPcVirtAddrE :: Either CoreDumpAnalyzeError (Elf.ElfWordType w)
+        prStatusPcVirtAddrE =
+          let userRegs :: UserRegSet
+              userRegs = prReg prStatus
 
-      -- Each architecture has its own register for the program
-      -- counter/instruction pointer, so we case on all supported architectures
-      -- here.
-      prStatusPcVirtAddrE :: Either CoreDumpAnalyzeError (Elf.ElfWordType w)
-      prStatusPcVirtAddrE =
-        let userRegs :: UserRegSet
-            userRegs = prReg prStatus
+              throwErr :: Either CoreDumpAnalyzeError (Elf.ElfWordType w)
+              throwErr = Left $ UnexpectedUserRegSetClass cl userRegs
+           in case (cl, userRegs) of
+                (Elf.ELFCLASS32, ArmUserRegSet regs) ->
+                  Right $ ARM.r15 regs
+                (Elf.ELFCLASS64, ArmUserRegSet{}) ->
+                  throwErr
+                (Elf.ELFCLASS32, Ppc32UserRegSet regs) ->
+                  Right $ PPC.nip regs
+                (Elf.ELFCLASS64, Ppc32UserRegSet{}) ->
+                  throwErr
+                (Elf.ELFCLASS64, Ppc64UserRegSet regs) ->
+                  Right $ PPC.nip regs
+                (Elf.ELFCLASS32, Ppc64UserRegSet{}) ->
+                  throwErr
+                (Elf.ELFCLASS64, X86_64UserRegSet regs) ->
+                  Right $ X86_64.rip regs
+                (Elf.ELFCLASS32, X86_64UserRegSet{}) ->
+                  throwErr
 
-            throwErr :: Either CoreDumpAnalyzeError (Elf.ElfWordType w)
-            throwErr = Left $ UnexpectedUserRegSetClass cl userRegs in
-        case (cl, userRegs) of
-          (Elf.ELFCLASS32, ArmUserRegSet regs) ->
-            Right $ ARM.r15 regs
-          (Elf.ELFCLASS64, ArmUserRegSet {}) ->
-            throwErr
-
-          (Elf.ELFCLASS32, Ppc32UserRegSet regs) ->
-            Right $ PPC.nip regs
-          (Elf.ELFCLASS64, Ppc32UserRegSet {}) ->
-            throwErr
-
-          (Elf.ELFCLASS64, Ppc64UserRegSet regs) ->
-            Right $ PPC.nip regs
-          (Elf.ELFCLASS32, Ppc64UserRegSet {}) ->
-            throwErr
-
-          (Elf.ELFCLASS64, X86_64UserRegSet regs) ->
-            Right $ X86_64.rip regs
-          (Elf.ELFCLASS32, X86_64UserRegSet {}) ->
-            throwErr
-
-  prStatusPcVirtAddr <- prStatusPcVirtAddrE
-  Right $ prStatusPcVirtAddr - firstLoadVirtAddr
+    prStatusPcVirtAddr <- prStatusPcVirtAddrE
+    Right $ prStatusPcVirtAddr - firstLoadVirtAddr
 
 -- | Retrieve the instruction address in the program counter at the moment when
 -- a core dump occurred. Note that this computes the load address, not the
@@ -459,7 +461,8 @@ coreDumpHeaderProgramCounter ::
 coreDumpHeaderProgramCounter ehi notes =
   Elf.elfClassInstances cl $ do
     unless (ty == Elf.ET_CORE) $
-      Left $ NonCoreDumpElfType ty
+      Left $
+        NonCoreDumpElfType ty
 
     -- Find the first LOAD header in the core dump file.
     let allPhdrs = Elf.headerPhdrs ehi
@@ -471,24 +474,25 @@ coreDumpHeaderProgramCounter ehi notes =
         loadPhdrsSorted = List.sortOn Elf.phdrSegmentVirtAddr loadPhdrs
     firstLoadPhdr <-
       case loadPhdrsSorted of
-        loadPhdr:_ -> Right loadPhdr
+        loadPhdr : _ -> Right loadPhdr
         [] -> Left CoreDumpWithoutLoadPhdr
 
     -- Find a PRSTATUS note in the core dump file (if one exists).
     let prStatuses =
           mapMaybe
-            (\note ->
-              case noteDesc note of
-                NotePrStatus prs -> Just prs
-                _ -> Nothing)
+            ( \note ->
+                case noteDesc note of
+                  NotePrStatus prs -> Just prs
+                  _ -> Nothing
+            )
             notes
     prStatus <-
       case prStatuses of
-        prStatus:_ -> Right prStatus
+        prStatus : _ -> Right prStatus
         [] -> Left CoreDumpWithoutPrStatusNote
 
     coreDumpPrStatusProgramCounter cl firstLoadPhdr prStatus
-  where
-    eh = Elf.header ehi
-    cl = Elf.headerClass eh
-    ty = Elf.headerType eh
+ where
+  eh = Elf.header ehi
+  cl = Elf.headerClass eh
+  ty = Elf.headerType eh

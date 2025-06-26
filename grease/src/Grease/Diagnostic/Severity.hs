@@ -1,13 +1,11 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
-module Grease.Diagnostic.Severity
-  ( Severity(..)
-  , natToSeverity
-  , severityToNat
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Diagnostic.Severity (
+  Severity (..),
+  natToSeverity,
+  severityToNat,
+) where
 
 import Numeric.Natural (Natural)
 

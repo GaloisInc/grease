@@ -1,19 +1,17 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Grease.Macaw.Load
-  ( LoadedProgram(..)
-  , load
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Macaw.Load (
+  LoadedProgram (..),
+  load,
+) where
 
 import Control.Exception.Safe (throw)
 import Control.Monad (forM, when)
@@ -38,7 +36,7 @@ import Data.Text.Encoding qualified as Text
 import Data.Tuple qualified as Tuple
 import Data.Vector qualified as Vec
 import Grease.Diagnostic
-import Grease.Entrypoint (Entrypoint(..), EntrypointLocation(..))
+import Grease.Entrypoint (Entrypoint (..), EntrypointLocation (..))
 import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Utility
 import Lang.Crucible.CFG.Core qualified as C
@@ -53,20 +51,20 @@ doLog la diag = LJ.writeLog la (LoadDiagnostic diag)
 
 data LoadedProgram arch
   = LoadedProgram
-    { progLoadedBinary :: Loader.LoadedBinary arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
-    , progLoadOptions :: LC.LoadOptions
-    , progSymMap :: Map.Map (MC.ArchSegmentOff arch) BS.ByteString
-      -- ^ A map of all function addresses to their symbol names. Note that it
-      -- is possible for a single function address to have multiple function
-      -- symbols (https://github.com/GaloisInc/macaw-loader/issues/25), so this
-      -- map will arbitrarily pick one of the symbol names.
-    , progDynFunMap :: Map.Map W4.FunctionName (MC.ArchSegmentOff arch)
-      -- ^ A map of visible, dynamic function symbol names (UTF-8–encoded) to
-      -- their corresponding function addresses.
-    , progEntrypointAddrs :: Map Entrypoint (MC.ArchSegmentOff arch)
-      -- ^ The entrypoint addresses after resolving the user-supplied
-      -- 'Entrypoint'.
-    }
+  { progLoadedBinary :: Loader.LoadedBinary arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
+  , progLoadOptions :: LC.LoadOptions
+  , progSymMap :: Map.Map (MC.ArchSegmentOff arch) BS.ByteString
+  -- ^ A map of all function addresses to their symbol names. Note that it
+  -- is possible for a single function address to have multiple function
+  -- symbols (https://github.com/GaloisInc/macaw-loader/issues/25), so this
+  -- map will arbitrarily pick one of the symbol names.
+  , progDynFunMap :: Map.Map W4.FunctionName (MC.ArchSegmentOff arch)
+  -- ^ A map of visible, dynamic function symbol names (UTF-8–encoded) to
+  -- their corresponding function addresses.
+  , progEntrypointAddrs :: Map Entrypoint (MC.ArchSegmentOff arch)
+  -- ^ The entrypoint addresses after resolving the user-supplied
+  -- 'Entrypoint'.
+  }
 
 -- | Compute the 'LC.LoadOptions' for the binary being analyzed. Note that we do
 -- different things depending on whether the binary is a position-independent
@@ -107,16 +105,18 @@ load la userEntrypoints perms elf = do
   loaded <- Loader.loadBinary @arch loadOpts elf
   let mem = Loader.memoryImage loaded
   when (Elf.headerType (Elf.header elf) == Elf.ET_REL) $
-    throw $ GreaseException "Loading object files is not supported"
+    throw $
+      GreaseException "Loading object files is not supported"
   entrypoints <- Loader.entryPoints loaded
   let entrypointNamePairs =
         -- Use `mapMaybe` here, because `symbolFor` may return `Nothing` if an
         -- entry point lacks a corresponding function symbol. This is common
         -- with stripped binaries (see gitlab#110).
         mapMaybe
-          (\entrypoint -> do
-            entrypointName <- Loader.symbolFor loaded (EL.segoffAddr entrypoint)
-            pure (entrypoint, entrypointName))
+          ( \entrypoint -> do
+              entrypointName <- Loader.symbolFor loaded (EL.segoffAddr entrypoint)
+              pure (entrypoint, entrypointName)
+          )
           entrypoints
   let symMap = Map.fromList entrypointNamePairs
   let revSymMap = Map.fromList . fmap Tuple.swap $ Map.toList (Text.decodeUtf8 <$> symMap)
@@ -129,46 +129,54 @@ load la userEntrypoints perms elf = do
             Just addr -> pure (entry, addr)
         EntrypointAddress (readMaybe . Text.unpack -> Just addr)
           | Just so <-
-              let offset = fromMaybe 0 (LC.loadOffset loadOpts) in
-              let addrWithOffset = EL.memWord (addr + offset) in
-              Loader.resolveAbsoluteAddress mem addrWithOffset -> pure (entry, so)
+              let offset = fromMaybe 0 (LC.loadOffset loadOpts)
+               in let addrWithOffset = EL.memWord (addr + offset)
+                   in Loader.resolveAbsoluteAddress mem addrWithOffset ->
+              pure (entry, so)
         EntrypointAddress addr -> throw . GreaseException $ "Unable to resolve specified entrypoint address: " <> addr
         EntrypointCoreDump coreDumpPath ->
-          (entry,) <$>
-          resolveCoreDumpEntrypointAddress la loadOpts mem elf symMap coreDumpPath
+          (entry,)
+            <$> resolveCoreDumpEntrypointAddress la loadOpts mem elf symMap coreDumpPath
   let entryAddrMap = Map.fromList entryAddrs
 
   let dynFuns = dynamicFunAddrs loadOpts elf
   dynFunSegOffs <-
     traverse
-      (traverse
-        (traverse
-          (\addrWord ->
-            case Loader.resolveAbsoluteAddress mem addrWord of
-              Just addrSegOff ->
-                pure addrSegOff
-              Nothing ->
-                throw $ GreaseException $
-                  "Unable to resolve dynamic function address: " <>
-                  tshow addrWord)))
+      ( traverse
+          ( traverse
+              ( \addrWord ->
+                  case Loader.resolveAbsoluteAddress mem addrWord of
+                    Just addrSegOff ->
+                      pure addrSegOff
+                    Nothing ->
+                      throw $
+                        GreaseException $
+                          "Unable to resolve dynamic function address: "
+                            <> tshow addrWord
+              )
+          )
+      )
       dynFuns
-  let dynFunMap = Tuple.snd <$>
-                  List.foldl'
-                    (\m (funSym, (entry, addr)) ->
-                      -- Load dynamic function symbols, prioritizing symbols
-                      -- encountered earlier over later symbols. See
-                      -- Note [Weak symbols].
-                      addSymbolWithPriority funSym entry addr m)
-                    Map.empty dynFunSegOffs
+  let dynFunMap =
+        Tuple.snd
+          <$> List.foldl'
+            ( \m (funSym, (entry, addr)) ->
+                -- Load dynamic function symbols, prioritizing symbols
+                -- encountered earlier over later symbols. See
+                -- Note [Weak symbols].
+                addSymbolWithPriority funSym entry addr m
+            )
+            Map.empty
+            dynFunSegOffs
 
   return
     LoadedProgram
-    { progLoadedBinary = loaded
-    , progLoadOptions = loadOpts
-    , progSymMap = symMap
-    , progDynFunMap = dynFunMap
-    , progEntrypointAddrs = entryAddrMap
-    }
+      { progLoadedBinary = loaded
+      , progLoadOptions = loadOpts
+      , progSymMap = symMap
+      , progDynFunMap = dynFunMap
+      , progEntrypointAddrs = entryAddrMap
+      }
 
 -- Helper, not exported
 --
@@ -185,19 +193,22 @@ dynamicFunAddrs loadOpts ehi =
     Just (Right symtab) ->
       Elf.elfClassInstances (Elf.headerClass (Elf.header ehi)) (funAddrs symtab)
     _ -> []
-  where
-    offset = fromMaybe 0 $ LC.loadOffset loadOpts
+ where
+  offset = fromMaybe 0 $ LC.loadOffset loadOpts
 
-    funAddrs ::
-      Integral (Elf.ElfWordType w) =>
-      Elf.Symtab w ->
-      [(W4.FunctionName, (Elf.SymtabEntry BS.ByteString (Elf.ElfWordType w), MM.MemWord w))]
-    funAddrs symtab =
-        Elf.symtabEntries symtab
+  funAddrs ::
+    Integral (Elf.ElfWordType w) =>
+    Elf.Symtab w ->
+    [(W4.FunctionName, (Elf.SymtabEntry BS.ByteString (Elf.ElfWordType w), MM.MemWord w))]
+  funAddrs symtab =
+    Elf.symtabEntries symtab
       & Vec.filter isFuncSymbol
-      & Vec.map (\entry -> ( functionNameFromByteString $ Elf.steName entry
-                         , (entry, fromIntegral (Elf.steValue entry) + fromIntegral offset)
-                         ))
+      & Vec.map
+        ( \entry ->
+            ( functionNameFromByteString $ Elf.steName entry
+            , (entry, fromIntegral (Elf.steValue entry) + fromIntegral offset)
+            )
+        )
       & Vec.toList
 
 -- Helper, not exported
@@ -205,21 +216,21 @@ dynamicFunAddrs loadOpts ehi =
 -- Return true if this symbol table entry corresponds to a
 -- visibly defined function.
 isFuncSymbol :: Integral w => Elf.SymtabEntry nm w -> Bool
-isFuncSymbol e
-  =  Elf.steType e == Elf.STT_FUNC
-  && toInteger (Elf.steValue e) /= 0
-  && isVisibleSymbol e
+isFuncSymbol e =
+  Elf.steType e == Elf.STT_FUNC
+    && toInteger (Elf.steValue e) /= 0
+    && isVisibleSymbol e
 
 -- Helper, not exported
 --
 -- Return true if this symbol table entry corresponds to a
 -- visibly defined symbol.
 isVisibleSymbol :: Elf.SymtabEntry nm w -> Bool
-isVisibleSymbol e
-  =  -- We consider weak symbols to be visible. See Note [Weak symbols].
-     (Elf.steBind e == Elf.STB_GLOBAL || Elf.steBind e == Elf.STB_WEAK)
-  && Elf.steIndex e /= Elf.SHN_UNDEF
-  && Elf.steIndex e <  Elf.SHN_LORESERVE
+isVisibleSymbol e =
+  -- We consider weak symbols to be visible. See Note [Weak symbols].
+  (Elf.steBind e == Elf.STB_GLOBAL || Elf.steBind e == Elf.STB_WEAK)
+    && Elf.steIndex e /= Elf.SHN_UNDEF
+    && Elf.steIndex e < Elf.SHN_LORESERVE
 
 -- Helper, not exported
 --
@@ -244,20 +255,21 @@ addSymbolWithPriority ::
   Map.Map symbol (Elf.SymtabEntry nm (Elf.ElfWordType w), MM.MemSegmentOff w)
 addSymbolWithPriority newSym newSt newVal =
   Map.insertWith
-    (\new@(newSte, _newVal) old@(oldSte, _oldVal) ->
-      if -- Step (1)
-         |  Elf.steBind oldSte == Elf.STB_GLOBAL
-         ,  Elf.steBind newSte == Elf.STB_WEAK
-         -> old
-
-         |  Elf.steBind newSte == Elf.STB_GLOBAL
-         ,  Elf.steBind oldSte == Elf.STB_WEAK
-         -> new
-
-         -- Step (2)
-         |  otherwise
-         -> old)
-    newSym (newSt, newVal)
+    ( \new@(newSte, _newVal) old@(oldSte, _oldVal) ->
+        if
+          -- Step (1)
+          | Elf.steBind oldSte == Elf.STB_GLOBAL
+          , Elf.steBind newSte == Elf.STB_WEAK ->
+              old
+          | Elf.steBind newSte == Elf.STB_GLOBAL
+          , Elf.steBind oldSte == Elf.STB_WEAK ->
+              new
+          -- Step (2)
+          | otherwise ->
+              old
+    )
+    newSym
+    (newSt, newVal)
 
 {-
 Note [Weak symbols]
@@ -328,11 +340,14 @@ resolveCoreDumpEntrypointAddress la loadOpts mem binaryHeaderInfo symMap coreDum
     C.Refl <-
       case C.testEquality binaryClass coreDumpClass of
         Just r -> pure r
-        Nothing -> throw $ GreaseException $ Text.unlines
-          [ "The binary and the core dump file have different ELF classes."
-          , "Binary:         " <> tshow binaryClass
-          , "Core dump file: " <> tshow coreDumpClass
-          ]
+        Nothing ->
+          throw $
+            GreaseException $
+              Text.unlines
+                [ "The binary and the core dump file have different ELF classes."
+                , "Binary:         " <> tshow binaryClass
+                , "Core dump file: " <> tshow coreDumpClass
+                ]
     Elf.elfClassInstances coreDumpClass $ do
       -- Decode the ELF notes in the core dump file.
       notes <-
@@ -355,14 +370,19 @@ resolveCoreDumpEntrypointAddress la loadOpts mem binaryHeaderInfo symMap coreDum
       prStatusPcSegOff <-
         case Loader.resolveAbsoluteAddress mem prStatusPcWithOffset of
           Just prStatusPcSegOff -> pure prStatusPcSegOff
-          Nothing -> throw $ GreaseException $
-            "The core was dumped at address " <> tshow prStatusPcWithOffset <>
-            ", but this could not be resolved to an address in the binary."
+          Nothing ->
+            throw $
+              GreaseException $
+                "The core was dumped at address "
+                  <> tshow prStatusPcWithOffset
+                  <> ", but this could not be resolved to an address in the binary."
       (nearestEntrypointAddr, nearestEntrypointName) <-
         case Map.lookupLE prStatusPcSegOff symMap of
           Just nearestEntrypoint -> pure nearestEntrypoint
-          Nothing -> throw $ GreaseException
-            "Could not find an entrypoint address in the binary."
+          Nothing ->
+            throw $
+              GreaseException
+                "Could not find an entrypoint address in the binary."
       doLog la $
         Diag.DiscoveredCoreDumpEntrypoint
           nearestEntrypointAddr
@@ -376,6 +396,6 @@ resolveCoreDumpEntrypointAddress la loadOpts mem binaryHeaderInfo symMap coreDum
 withElfHeader :: BS.ByteString -> (forall w. Elf.ElfHeaderInfo w -> IO r) -> IO r
 withElfHeader bs k =
   case Elf.decodeElfHeaderInfo bs of
-    Left (_,err) ->
+    Left (_, err) ->
       throw $ GreaseException $ "Failed to parse ELF file: " <> tshow err
     Right (Elf.SomeElf e) -> k e
