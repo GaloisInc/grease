@@ -1,21 +1,21 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Requirement
-  ( Requirement(..)
-  , displayReq
-  , RequirementParser
-  , reqParser
-  , parseReq
-  ) where
+module Grease.Requirement (
+  Requirement (..),
+  displayReq,
+  RequirementParser,
+  reqParser,
+  parseReq,
+) where
 
-import Control.Applicative (Alternative(..))
+import Control.Applicative (Alternative (..))
 import Control.Exception (throw)
 import Data.Aeson qualified as Aeson
 import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Generics (Generic)
-import Grease.Utility (GreaseException(GreaseException), tshow)
+import Grease.Utility (GreaseException (GreaseException), tshow)
 import Prettyprinter qualified as PP
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
@@ -31,12 +31,13 @@ import Text.Megaparsec.Char.Lexer qualified as TMCL
 -- - The documentation in @doc/requirements.md@
 -- - The Ghidra plugin script's offering of requirements
 data Requirement
-  = InText
-    -- ^ The requirement that code is never executed from memory that has write
+  = -- | The requirement that code is never executed from memory that has write
     -- permissions.
-  | NoMprotect
-    -- ^ The requirement that code is not self-modifying.
+    InText
+  | -- | The requirement that code is not self-modifying.
+    NoMprotect
   deriving (Bounded, Enum, Eq, Ord, Show, Generic)
+
 instance Aeson.ToJSON Requirement
 instance Aeson.ToJSONKey Requirement
 
@@ -62,9 +63,9 @@ spaceConsumer = TMCL.space TMC.space1 empty empty
 -- | Parse a 'Requirement'.
 reqParser :: RequirementParser Requirement
 reqParser = inText <|> noMprotect
-  where
-    inText = symbol "in-text" *> pure InText
-    noMprotect = symbol "no-mprotect" *> pure NoMprotect
+ where
+  inText = symbol "in-text" *> pure InText
+  noMprotect = symbol "no-mprotect" *> pure NoMprotect
 
 -- | Parse a 'Requirement' and return the result in 'IO'. Throw an exception if
 -- parsing fails.

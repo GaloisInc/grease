@@ -1,20 +1,19 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- | See @doc/shared-libraries.md@ for user-facing documentation about PLT
+-- \| See @doc/shared-libraries.md@ for user-facing documentation about PLT
 -- stubs.
-module Grease.Macaw.PLT
-  ( pltStubSymbols
-  , PltStub(..)
-  , PltStubParser
-  , pltStubParser
-  , resolvePltStubs
-  ) where
+
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Macaw.PLT (
+  pltStubSymbols,
+  PltStub (..),
+  PltStubParser,
+  pltStubParser,
+  resolvePltStubs,
+) where
 
 import Control.Applicative (empty)
 import Control.Exception.Safe (throw)
@@ -62,20 +61,21 @@ pltStubSymbols ::
   , MM.MemWidth w
   , Elf.IsRelocationType reloc
   ) =>
-  PLT.PLTStubInfo reloc
-    {- ^ Heuristics about how large PLT stubs should be. -} ->
-  LC.LoadOptions
-    {- ^ Options configuring how to load the address of each PLT stub. -} ->
-  Elf.ElfHeaderInfo w
-    {- ^ The dynamically linked ELF binary. -} ->
+  -- | Heuristics about how large PLT stubs should be.
+  PLT.PLTStubInfo reloc ->
+  -- | Options configuring how to load the address of each PLT stub.
+  LC.LoadOptions ->
+  -- | The dynamically linked ELF binary.
+  Elf.ElfHeaderInfo w ->
   Map.Map (MM.MemWord w) (Elf.VersionedSymbol (Elf.ElfWordType w))
 pltStubSymbols pltStubInfo loadOptions ehi =
   Elf.elfClassInstances elfClass $
-  case listToMaybe (Elf.findSectionByName ".plt.sec" elf) of
-    -- We have a .plt.sec section, so compute the addresses of the .plt stubs
-    -- and fix up their addresses afterwards.
-    Just pltSec ->
-      let -- The base addresses of the .plt and .plt.sec sections, respectively.
+    case listToMaybe (Elf.findSectionByName ".plt.sec" elf) of
+      -- We have a .plt.sec section, so compute the addresses of the .plt stubs
+      -- and fix up their addresses afterwards.
+      Just pltSec ->
+        let
+          -- The base addresses of the .plt and .plt.sec sections, respectively.
           pltBase, pltSecBase :: Elf.ElfWordType w
           pltBase =
             case listToMaybe (Elf.findSectionByName ".plt" elf) of
@@ -89,55 +89,57 @@ pltStubSymbols pltStubInfo loadOptions ehi =
           -- address in order to make them valid .plt.sec stub addresses. See
           -- Note [Subtleties of resolving PLT stubs] (Wrinkle 2: .plt.sec).
           pltOffset :: MM.MemWord w
-          pltOffset = fromIntegral (pltSecBase - pltBase) -
-                      fromInteger (PLT.pltFunSize pltStubInfo) in
+          pltOffset =
+            fromIntegral (pltSecBase - pltBase)
+              - fromInteger (PLT.pltFunSize pltStubInfo)
+         in
+          Map.mapKeys (+ pltOffset) pltStubs
+      -- We do not have a .plt.sec section, so simply compute the addresses of the
+      -- .plt stubs.
+      Nothing ->
+        pltStubs
+ where
+  (_, elf) = Elf.getElf ehi
+  elfClass = Elf.elfClass elf
 
-      Map.mapKeys (+ pltOffset) pltStubs
-    -- We do not have a .plt.sec section, so simply compute the addresses of the
-    -- .plt stubs.
-    Nothing ->
-      pltStubs
-  where
-    (_, elf) = Elf.getElf ehi
-    elfClass = Elf.elfClass elf
+  -- The stubs from the .plt section.
+  pltStubs ::
+    (Ord (Elf.ElfWordType w), Num (Elf.ElfWordType w)) =>
+    Map.Map (MM.MemWord w) (Elf.VersionedSymbol (Elf.ElfWordType w))
+  pltStubs =
+    Map.filterWithKey
+      (\addr _ -> withinPltSection addr)
+      (PLT.pltStubSymbols pltStubInfo loadOptions ehi)
 
-    -- The stubs from the .plt section.
-    pltStubs ::
-      (Ord (Elf.ElfWordType w), Num (Elf.ElfWordType w)) =>
-      Map.Map (MM.MemWord w) (Elf.VersionedSymbol (Elf.ElfWordType w))
-    pltStubs =
-      Map.filterWithKey
-        (\addr _ -> withinPltSection addr)
-        (PLT.pltStubSymbols pltStubInfo loadOptions ehi)
+  withinPltSection ::
+    (Ord (Elf.ElfWordType w), Num (Elf.ElfWordType w)) =>
+    MM.MemWord w -> Bool
+  withinPltSection addr =
+    case Elf.findSectionByName ".plt" elf of
+      [section] -> withinSection addr section
+      _ -> False
 
-    withinPltSection ::
-      (Ord (Elf.ElfWordType w), Num (Elf.ElfWordType w)) =>
-      MM.MemWord w -> Bool
-    withinPltSection addr =
-      case Elf.findSectionByName ".plt" elf of
-        [section] -> withinSection addr section
-        _ -> False
+  withinSection ::
+    (Ord (Elf.ElfWordType w), Num (Elf.ElfWordType w)) =>
+    MM.MemWord w -> Elf.ElfSection (Elf.ElfWordType w) -> Bool
+  withinSection addr section =
+    let addr' :: Elf.ElfWordType w
+        addr' = fromIntegral addr
 
-    withinSection ::
-      (Ord (Elf.ElfWordType w), Num (Elf.ElfWordType w)) =>
-      MM.MemWord w -> Elf.ElfSection (Elf.ElfWordType w) -> Bool
-    withinSection addr section =
-      let addr' :: Elf.ElfWordType w
-          addr' = fromIntegral addr
+        secBegin = Elf.elfSectionAddr section + loadOffset
+        secEnd = secBegin + Elf.elfSectionSize section
+     in secBegin <= addr' && addr' < secEnd
 
-          secBegin = Elf.elfSectionAddr section + loadOffset
-          secEnd = secBegin + Elf.elfSectionSize section in
-
-      secBegin <= addr' && addr' < secEnd
-
-    loadOffset :: Num (Elf.ElfWordType w) => Elf.ElfWordType w
-    loadOffset = fromIntegral $ fromMaybe 0 (LC.loadOffset loadOptions)
+  loadOffset :: Num (Elf.ElfWordType w) => Elf.ElfWordType w
+  loadOffset = fromIntegral $ fromMaybe 0 (LC.loadOffset loadOptions)
 
 -- | A PLT stub address and name.
-data PltStub =
-  PltStub
-    Word64 -- ^ The stub's address.
-    Text   -- ^ The stub's name.
+data PltStub
+  = PltStub
+      -- | The stub's address.
+      Word64
+      -- | The stub's name.
+      Text
   deriving Show
 
 -- | A @megaparsec@ parser type for 'PltStub's.
@@ -175,32 +177,33 @@ resolvePltStubs ::
   , MM.MemWidth w
   , Elf.IsRelocationType reloc
   ) =>
-  Maybe (PLT.PLTStubInfo reloc)
-    {- ^ Heuristics about how large PLT stubs should be. If the binary uses an
-         architecture for which @grease@ cannot find PLT stubs (see
-         @Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC)@ for one
-         such example), then this will be 'Nothing'. -} ->
-  LC.LoadOptions
-    {- ^ Options configuring how to load the address of each PLT stub. -} ->
-  Elf.ElfHeaderInfo w
-    {- ^ The dynamically linked ELF binary. -} ->
+  -- | Heuristics about how large PLT stubs should be. If the binary uses an
+  --          architecture for which @grease@ cannot find PLT stubs (see
+  --          @Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC)@ for one
+  --          such example), then this will be 'Nothing'.
+  Maybe (PLT.PLTStubInfo reloc) ->
+  -- | Options configuring how to load the address of each PLT stub.
+  LC.LoadOptions ->
+  -- | The dynamically linked ELF binary.
+  Elf.ElfHeaderInfo w ->
+  -- | Map of @SymbolReloc@ relocation addresses to their symbols.
   Map.Map (MM.MemWord w) W4.FunctionName ->
-    {- ^ Map of @SymbolReloc@ relocation addresses to their symbols. -}
-  [PltStub]
-    {- ^ User-specified PLT stubs. -} ->
+  -- | User-specified PLT stubs.
+  [PltStub] ->
   MC.Memory w ->
   IO (Map.Map (MM.MemSegmentOff w) W4.FunctionName)
 resolvePltStubs mbPltStubInfo loadOptions ehi symbolRelocs userPltStubs memory = do
-  let -- This only contains the PLT stubs located in the @.plt@ section, for
-      -- which Macaw's heuristics are somewhat reliable.
-      pltStubAddrToNameMap :: Map.Map (MM.MemWord w) W4.FunctionName
-      pltStubAddrToNameMap =
-        case mbPltStubInfo of
-          Just pltStubInfo ->
-            Map.map (functionNameFromByteString . Elf.steName . fst) $
+  let
+    -- This only contains the PLT stubs located in the @.plt@ section, for
+    -- which Macaw's heuristics are somewhat reliable.
+    pltStubAddrToNameMap :: Map.Map (MM.MemWord w) W4.FunctionName
+    pltStubAddrToNameMap =
+      case mbPltStubInfo of
+        Just pltStubInfo ->
+          Map.map (functionNameFromByteString . Elf.steName . fst) $
             pltStubSymbols pltStubInfo loadOptions ehi
-          Nothing ->
-            Map.empty
+        Nothing ->
+          Map.empty
 
   let pltStubAddrToNameList :: Seq.Seq (MM.MemWord w, W4.FunctionName)
       pltStubAddrToNameList = Seq.fromList $ Map.toList pltStubAddrToNameMap
@@ -212,10 +215,11 @@ resolvePltStubs mbPltStubInfo loadOptions ehi symbolRelocs userPltStubs memory =
   let userPltStubAddrToNameList :: Seq.Seq (MM.MemWord w, W4.FunctionName)
       userPltStubAddrToNameList =
         Seq.fromList $
-        map
-          (\(PltStub addr name) ->
-            (MM.memWord (addr + offset), W4.functionNameFromText name))
-          userPltStubs
+          map
+            ( \(PltStub addr name) ->
+                (MM.memWord (addr + offset), W4.functionNameFromText name)
+            )
+            userPltStubs
 
   -- This contains SymbolReloc relocations.
   -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 1: .plt.got) for why
@@ -225,15 +229,20 @@ resolvePltStubs mbPltStubInfo loadOptions ehi symbolRelocs userPltStubs memory =
 
   pltStubSegOffToNameList <-
     traverse
-      (\(addr, name) ->
-        case Loader.resolveAbsoluteAddress memory addr of
-          Just so -> pure (so, name)
-          Nothing -> throw . GreaseException $
-            "Could not resolve PLT stub address " <> tshow addr <>
-            ": " <> W4.functionName name)
-      (pltStubAddrToNameList <>
-       userPltStubAddrToNameList <>
-       symbolRelocAddrToNameList)
+      ( \(addr, name) ->
+          case Loader.resolveAbsoluteAddress memory addr of
+            Just so -> pure (so, name)
+            Nothing ->
+              throw . GreaseException $
+                "Could not resolve PLT stub address "
+                  <> tshow addr
+                  <> ": "
+                  <> W4.functionName name
+      )
+      ( pltStubAddrToNameList
+          <> userPltStubAddrToNameList
+          <> symbolRelocAddrToNameList
+      )
 
   pure $ Map.fromList $ Foldable.toList pltStubSegOffToNameList
 

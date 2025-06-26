@@ -1,8 +1,3 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
@@ -10,19 +5,22 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Macaw
-  ( SetupHook(..)
-  , emptyMacawMem
-  , minimalArgShapes
-  , regStructRepr
-  , memConfigInitial
-  , memConfigWithHandles
-  , initState
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Macaw (
+  SetupHook (..),
+  emptyMacawMem,
+  minimalArgShapes,
+  regStructRepr,
+  memConfigInitial,
+  memConfigWithHandles,
+  initState,
+) where
 
 import Control.Exception.Safe (MonadThrow, throw)
-import Control.Lens ((^.), to)
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Lens (to, (^.))
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.BitVector.Sized qualified as BV
 import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as BSL
@@ -39,29 +37,29 @@ import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
 import Data.Macaw.Types qualified as MT
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
-import Data.Parameterized.Classes (TestEquality(..))
+import Data.Parameterized.Classes (TestEquality (..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.List qualified as P.List
 import Data.Parameterized.Map qualified as MapF
-import Data.Proxy (Proxy(Proxy))
+import Data.Proxy (Proxy (Proxy))
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
-import Data.Type.Equality ((:~:)(Refl))
-import Data.Word (Word8, Word64)
+import Data.Type.Equality ((:~:) (Refl))
+import Data.Word (Word64, Word8)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic
 import Grease.Macaw.Arch
-import Grease.Macaw.Load.Relocation (RelocType(..))
+import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.ResolveCall qualified as ResolveCall
-import Grease.Macaw.SetupHook (SetupHook(SetupHook))
+import Grease.Macaw.SetupHook (SetupHook (SetupHook))
 import Grease.Macaw.SimulatorHooks
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
 import Grease.Options qualified as Opts
 import Grease.Panic (panic)
 import Grease.Setup
 import Grease.Shape
-import Grease.Shape.NoTag (NoTag(NoTag))
+import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer
 import Grease.Syntax (ResolvedOverridesYaml)
 import Grease.Utility
@@ -122,163 +120,168 @@ globalMemoryHooks ::
   forall arch.
   MM.MemWidth (MC.ArchAddrWidth arch) =>
   ArchContext arch ->
-  Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (ArchReloc arch)
-    {- ^ Map of relocation addresses and types -} ->
+  -- | Map of relocation addresses and types
+  Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (ArchReloc arch) ->
   Symbolic.GlobalMemoryHooks (MC.ArchAddrWidth arch)
-globalMemoryHooks arch relocs = Symbolic.GlobalMemoryHooks {
-    Symbolic.populateRelocation = \bak relocMem relocSeg relocBaseAddr reloc -> do
-      -- This function populates relocation types we support as appropriate.
-      --
-      -- If grease encounters a relocation type that it doesn't support, then
-      -- the `assertRelocSupported` function should throw an exception before
-      -- we ever have a chance to simulate it. Still, we need to fill in
-      -- _something_ here for the address spaces of unsupported relocations,
-      -- so we fill them in with symbolic bytes. We choose to use symbolic bytes
-      -- instead of a constant value so that if we ever read from the middle of
-      -- a relocation by mistake, we are more likely to trigger assertion
-      -- failures elsewhere.
-      let sym = C.backendGetSym bak
-      let relocAbsBaseAddr = relocAddrToAbsAddr relocMem relocSeg relocBaseAddr reloc
-      case Map.lookup relocAbsBaseAddr relocs of
-        Just relocType
-          |  Just supportedRelocType <-
-               (arch ^. archRelocSupported) relocType
-          -> case supportedRelocType of
-               RelativeReloc ->
-                 relativeRelocHook sym reloc relocAbsBaseAddr
-               SymbolReloc ->
-                 symbolRelocHook sym reloc relocAbsBaseAddr
-        _ ->
-          symbolicRelocation sym reloc Nothing
-  }
-  where
-    -- Build a symbolic relocation value for `reloc`.  We use this for
-    -- relocation types we don't yet support.
-    symbolicRelocation ::
-      forall sym.
-      C.IsSymInterface sym =>
-      sym ->
-      MM.Relocation (MC.ArchAddrWidth arch) ->
-      Maybe String ->
-      IO [W4.SymBV sym 8]
-    symbolicRelocation sym reloc mName = do
-      let name = fromMaybe "unknown" mName ++ "-reloc"
-      traverse (symbolicByte sym name) [0 .. MM.relocationSize reloc-1]
+globalMemoryHooks arch relocs =
+  Symbolic.GlobalMemoryHooks
+    { Symbolic.populateRelocation = \bak relocMem relocSeg relocBaseAddr reloc -> do
+        -- This function populates relocation types we support as appropriate.
+        --
+        -- If grease encounters a relocation type that it doesn't support, then
+        -- the `assertRelocSupported` function should throw an exception before
+        -- we ever have a chance to simulate it. Still, we need to fill in
+        -- _something_ here for the address spaces of unsupported relocations,
+        -- so we fill them in with symbolic bytes. We choose to use symbolic bytes
+        -- instead of a constant value so that if we ever read from the middle of
+        -- a relocation by mistake, we are more likely to trigger assertion
+        -- failures elsewhere.
+        let sym = C.backendGetSym bak
+        let relocAbsBaseAddr = relocAddrToAbsAddr relocMem relocSeg relocBaseAddr reloc
+        case Map.lookup relocAbsBaseAddr relocs of
+          Just relocType
+            | Just supportedRelocType <-
+                (arch ^. archRelocSupported) relocType ->
+                case supportedRelocType of
+                  RelativeReloc ->
+                    relativeRelocHook sym reloc relocAbsBaseAddr
+                  SymbolReloc ->
+                    symbolRelocHook sym reloc relocAbsBaseAddr
+          _ ->
+            symbolicRelocation sym reloc Nothing
+    }
+ where
+  -- Build a symbolic relocation value for `reloc`.  We use this for
+  -- relocation types we don't yet support.
+  symbolicRelocation ::
+    forall sym.
+    C.IsSymInterface sym =>
+    sym ->
+    MM.Relocation (MC.ArchAddrWidth arch) ->
+    Maybe String ->
+    IO [W4.SymBV sym 8]
+  symbolicRelocation sym reloc mName = do
+    let name = fromMaybe "unknown" mName ++ "-reloc"
+    traverse (symbolicByte sym name) [0 .. MM.relocationSize reloc - 1]
 
-    -- Construct a symbolic byte.
-    symbolicByte ::
-      forall sym.
-      C.IsSymInterface sym =>
-      sym ->
-      -- | The prefix to use in the symbolic byte's name.
-      String ->
-      -- | The index to use as a suffix symbolic byte's name (zero-indexed).
-      Int ->
-      IO (W4.SymBV sym 8)
-    symbolicByte sym name idx = do
-      let symbol = W4.safeSymbol $ name ++ "-byte" ++ show idx
-      W4.freshConstant sym symbol W4.knownRepr
+  -- Construct a symbolic byte.
+  symbolicByte ::
+    forall sym.
+    C.IsSymInterface sym =>
+    sym ->
+    -- \| The prefix to use in the symbolic byte's name.
+    String ->
+    -- \| The index to use as a suffix symbolic byte's name (zero-indexed).
+    Int ->
+    IO (W4.SymBV sym 8)
+  symbolicByte sym name idx = do
+    let symbol = W4.safeSymbol $ name ++ "-byte" ++ show idx
+    W4.freshConstant sym symbol W4.knownRepr
 
-    -- Convert a MemAddr to an absolute address.
-    relocAddrToAbsAddr ::
-      MM.Memory (MC.ArchAddrWidth arch) ->
-      MM.MemSegment (MC.ArchAddrWidth arch) ->
-      MC.ArchMemAddr arch ->
-      MM.Relocation (MC.ArchAddrWidth arch) ->
-      MM.MemWord (MC.ArchAddrWidth arch)
-    relocAddrToAbsAddr mem seg addr reloc =
-      case MM.resolveRegionOff mem (MM.addrBase addr) (MM.addrOffset addr) of
-        Just addrOff -> MM.segmentOffset seg + MM.segoffOffset addrOff
-        Nothing -> panic
-                     "relocAddrToAbsAddr"
-                     [ "Failed to resolve relocation"
-                     , "Relocation: " ++ show reloc
-                     , "Address:    " ++ show addr
-                     ]
+  -- Convert a MemAddr to an absolute address.
+  relocAddrToAbsAddr ::
+    MM.Memory (MC.ArchAddrWidth arch) ->
+    MM.MemSegment (MC.ArchAddrWidth arch) ->
+    MC.ArchMemAddr arch ->
+    MM.Relocation (MC.ArchAddrWidth arch) ->
+    MM.MemWord (MC.ArchAddrWidth arch)
+  relocAddrToAbsAddr mem seg addr reloc =
+    case MM.resolveRegionOff mem (MM.addrBase addr) (MM.addrOffset addr) of
+      Just addrOff -> MM.segmentOffset seg + MM.segoffOffset addrOff
+      Nothing ->
+        panic
+          "relocAddrToAbsAddr"
+          [ "Failed to resolve relocation"
+          , "Relocation: " ++ show reloc
+          , "Address:    " ++ show addr
+          ]
 
-    -- Compute the address that a relocation references and convert it to a
-    -- list of bytes.
-    relocAddrBV ::
-      forall sym.
-      C.IsSymInterface sym =>
-      sym ->
-      MM.Relocation (MC.ArchAddrWidth arch) ->
-      MM.MemWord (MC.ArchAddrWidth arch) ->
-      IO [W4.SymBV sym 8]
-    relocAddrBV sym reloc relocAbsBaseAddr = do
-      -- First, compute the address by adding the offset...
-      let relocAddr = relocAbsBaseAddr + MM.relocationOffset reloc
+  -- Compute the address that a relocation references and convert it to a
+  -- list of bytes.
+  relocAddrBV ::
+    forall sym.
+    C.IsSymInterface sym =>
+    sym ->
+    MM.Relocation (MC.ArchAddrWidth arch) ->
+    MM.MemWord (MC.ArchAddrWidth arch) ->
+    IO [W4.SymBV sym 8]
+  relocAddrBV sym reloc relocAbsBaseAddr = do
+    -- First, compute the address by adding the offset...
+    let relocAddr = relocAbsBaseAddr + MM.relocationOffset reloc
 
-      -- ...next, chunk up the address into bytes...
-      let archAddrWidth = MM.memWidthNatRepr @(MC.ArchAddrWidth arch)
-      let bv = BV.mkBV archAddrWidth (fromIntegral relocAddr)
-      let bytesLE = fromMaybe
-            (panic
-              "relocAddrBV"
-              ["Failed to split bitvector into bytes - word size not a multiple of 8?"])
+    -- ...next, chunk up the address into bytes...
+    let archAddrWidth = MM.memWidthNatRepr @(MC.ArchAddrWidth arch)
+    let bv = BV.mkBV archAddrWidth (fromIntegral relocAddr)
+    let bytesLE =
+          fromMaybe
+            ( panic
+                "relocAddrBV"
+                ["Failed to split bitvector into bytes - word size not a multiple of 8?"]
+            )
             (BV.asBytesLE archAddrWidth bv)
 
-      --- ...finally, convert each byte to a SymBV.
-      traverse (W4.bvLit sym (W4.knownNat @8) . BV.word8) bytesLE
+    --- ...finally, convert each byte to a SymBV.
+    traverse (W4.bvLit sym (W4.knownNat @8) . BV.word8) bytesLE
 
-    -- Handle a RelativeReloc relocation. This is perhaps the simplest type of
-    -- relocation to handle, as there are no symbol names to cross-reference.
-    -- All we have to do is compute the address that the relocation references.
-    relativeRelocHook ::
-      forall sym.
-      C.IsSymInterface sym =>
-      sym ->
-      MM.Relocation (MC.ArchAddrWidth arch) ->
-      MM.MemWord (MC.ArchAddrWidth arch) ->
-      IO [W4.SymBV sym 8]
-    relativeRelocHook = relocAddrBV
+  -- Handle a RelativeReloc relocation. This is perhaps the simplest type of
+  -- relocation to handle, as there are no symbol names to cross-reference.
+  -- All we have to do is compute the address that the relocation references.
+  relativeRelocHook ::
+    forall sym.
+    C.IsSymInterface sym =>
+    sym ->
+    MM.Relocation (MC.ArchAddrWidth arch) ->
+    MM.MemWord (MC.ArchAddrWidth arch) ->
+    IO [W4.SymBV sym 8]
+  relativeRelocHook = relocAddrBV
 
-    -- Handle a SymbolReloc relocation (e.g., GLOB_DAT). We populate
-    -- SymbolRelocs with the address of the relocation itself. This is a hack,
-    -- but it is a useful one: the relocation address is a reasonably unique
-    -- value, so if the program tries to call a function with this same address,
-    -- then we can look up the address to determine if it is an external
-    -- function and simulate it appropriately. See Note [Subtleties of resolving
-    -- PLT stubs] (Wrinkle 1: .plt.got) in Grease.Macaw.PLT.
-    symbolRelocHook ::
-      forall sym.
-      C.IsSymInterface sym =>
-      sym ->
-      MM.Relocation (MC.ArchAddrWidth arch) ->
-      MM.MemWord (MC.ArchAddrWidth arch) ->
-      IO [W4.SymBV sym 8]
-    symbolRelocHook sym reloc relocAbsBaseAddr =
-      let -- First, convert the relocation address to a Word64. Note that the
-          -- size of the address itself may be less than 64 bits (e.g., on
-          -- 32-bit architectures), but we will truncate the Word64 to the
-          -- appropriate size later.
-          relocAbsBaseAddrWord64 :: Word64
-          relocAbsBaseAddrWord64 = MM.memWordValue relocAbsBaseAddr
+  -- Handle a SymbolReloc relocation (e.g., GLOB_DAT). We populate
+  -- SymbolRelocs with the address of the relocation itself. This is a hack,
+  -- but it is a useful one: the relocation address is a reasonably unique
+  -- value, so if the program tries to call a function with this same address,
+  -- then we can look up the address to determine if it is an external
+  -- function and simulate it appropriately. See Note [Subtleties of resolving
+  -- PLT stubs] (Wrinkle 1: .plt.got) in Grease.Macaw.PLT.
+  symbolRelocHook ::
+    forall sym.
+    C.IsSymInterface sym =>
+    sym ->
+    MM.Relocation (MC.ArchAddrWidth arch) ->
+    MM.MemWord (MC.ArchAddrWidth arch) ->
+    IO [W4.SymBV sym 8]
+  symbolRelocHook sym reloc relocAbsBaseAddr =
+    let
+      -- First, convert the relocation address to a Word64. Note that the
+      -- size of the address itself may be less than 64 bits (e.g., on
+      -- 32-bit architectures), but we will truncate the Word64 to the
+      -- appropriate size later.
+      relocAbsBaseAddrWord64 :: Word64
+      relocAbsBaseAddrWord64 = MM.memWordValue relocAbsBaseAddr
 
-          relocSizeInt64 :: Int64
-          relocSizeInt64 =
-            fromIntegral @Int @Int64 (MM.relocationSize reloc)
+      relocSizeInt64 :: Int64
+      relocSizeInt64 =
+        fromIntegral @Int @Int64 (MM.relocationSize reloc)
 
-          -- Next, convert the relocation address to a ByteString of the
-          -- appropriate size and endianness.
-          relocAbsBaseAddrBs :: BSL.ByteString
-          relocAbsBaseAddrBs =
-            case arch ^. archInfo . to MI.archEndianness of
-              MM.LittleEndian ->
-                BSL.take relocSizeInt64 $
-                Builder.toLazyByteString $
+      -- Next, convert the relocation address to a ByteString of the
+      -- appropriate size and endianness.
+      relocAbsBaseAddrBs :: BSL.ByteString
+      relocAbsBaseAddrBs =
+        case arch ^. archInfo . to MI.archEndianness of
+          MM.LittleEndian ->
+            BSL.take relocSizeInt64 $
+              Builder.toLazyByteString $
                 Builder.word64LE relocAbsBaseAddrWord64
-              MM.BigEndian ->
-                BSL.takeEnd relocSizeInt64 $
-                Builder.toLazyByteString $
+          MM.BigEndian ->
+            BSL.takeEnd relocSizeInt64 $
+              Builder.toLazyByteString $
                 Builder.word64BE relocAbsBaseAddrWord64
 
-          -- Finally, create an individual list of bytes corresponding to the
-          -- relocation address. This is what we will write to the memory that
-          -- the relocation address points to.
-          relocAbsBaseAddrWord8s :: [Word8]
-          relocAbsBaseAddrWord8s = BSL.unpack relocAbsBaseAddrBs in
-
+      -- Finally, create an individual list of bytes corresponding to the
+      -- relocation address. This is what we will write to the memory that
+      -- the relocation address points to.
+      relocAbsBaseAddrWord8s :: [Word8]
+      relocAbsBaseAddrWord8s = BSL.unpack relocAbsBaseAddrBs
+     in
       traverse (W4.bvLit sym W4.knownRepr . BV.word8) relocAbsBaseAddrWord8s
 
 minimalArgShapes ::
@@ -299,36 +302,37 @@ minimalArgShapes ::
 minimalArgShapes _bak arch mbEntryAddr = do
   regShapes <- Symbolic.macawAssignToCrucM mkRegShape $ Symbolic.crucGenRegAssignment symFns
   pure $ ArgShapes regShapes
-  where
-    symFns = arch ^. archVals . to Symbolic.archFunctions
+ where
+  symFns = arch ^. archVals . to Symbolic.archFunctions
 
-    mkRegShape :: forall tp. MC.ArchReg arch tp -> m (Shape (Symbolic.MacawExt arch) NoTag (Symbolic.ToCrucibleType tp))
-    mkRegShape r =
-      if | Just Refl <- testEquality r MC.sp_reg ->
-           case MT.typeRepr r of
-             MT.BVTypeRepr w ->
-               case testEquality w $ MT.knownNat @(MC.ArchAddrWidth arch) of
-                 Just C.Refl -> pure (ShapeExt (arch ^. archStackPtrShape))
-                 Nothing -> throw $ GreaseException "Bad stack pointer width"
-         | Just Refl <- testEquality r MC.ip_reg
-         , Just ipVal <- mbEntryAddr ->
-           case MT.typeRepr r of
-             MT.BVTypeRepr w ->
-               case testEquality w $ MT.knownNat @(MC.ArchAddrWidth arch) of
-                 Just C.Refl ->
-                   let bv = BV.mkBV w (fromIntegral (EL.memWordValue ipVal)) in
-                   pure (ShapeExt (ShapePtrBVLit NoTag w bv))
-                 Nothing -> throw $ GreaseException "Bad instruction pointer width"
-         | otherwise -> do
-           shape <- case MT.typeRepr r of
-             MT.BoolTypeRepr -> pure (ShapeBool NoTag)
-             MT.BVTypeRepr w ->
-               case testEquality w $ MT.knownNat @(MC.ArchAddrWidth arch) of
-                 Just C.Refl -> pure $ ShapeExt (ShapePtr NoTag (Offset 0) (ptrTarget Nothing Seq.Empty))
-                 Nothing -> pure $ ShapeExt (ShapePtrBV NoTag w)
-             MT.TupleTypeRepr P.List.Nil -> pure $ ShapeStruct NoTag Ctx.empty
-             _ -> throw $ GreaseException "Could not determine minimal shape for register"
-           pure shape
+  mkRegShape :: forall tp. MC.ArchReg arch tp -> m (Shape (Symbolic.MacawExt arch) NoTag (Symbolic.ToCrucibleType tp))
+  mkRegShape r =
+    if
+      | Just Refl <- testEquality r MC.sp_reg ->
+          case MT.typeRepr r of
+            MT.BVTypeRepr w ->
+              case testEquality w $ MT.knownNat @(MC.ArchAddrWidth arch) of
+                Just C.Refl -> pure (ShapeExt (arch ^. archStackPtrShape))
+                Nothing -> throw $ GreaseException "Bad stack pointer width"
+      | Just Refl <- testEquality r MC.ip_reg
+      , Just ipVal <- mbEntryAddr ->
+          case MT.typeRepr r of
+            MT.BVTypeRepr w ->
+              case testEquality w $ MT.knownNat @(MC.ArchAddrWidth arch) of
+                Just C.Refl ->
+                  let bv = BV.mkBV w (fromIntegral (EL.memWordValue ipVal))
+                   in pure (ShapeExt (ShapePtrBVLit NoTag w bv))
+                Nothing -> throw $ GreaseException "Bad instruction pointer width"
+      | otherwise -> do
+          shape <- case MT.typeRepr r of
+            MT.BoolTypeRepr -> pure (ShapeBool NoTag)
+            MT.BVTypeRepr w ->
+              case testEquality w $ MT.knownNat @(MC.ArchAddrWidth arch) of
+                Just C.Refl -> pure $ ShapeExt (ShapePtr NoTag (Offset 0) (ptrTarget Nothing Seq.Empty))
+                Nothing -> pure $ ShapeExt (ShapePtrBV NoTag w)
+            MT.TupleTypeRepr P.List.Nil -> pure $ ShapeStruct NoTag Ctx.empty
+            _ -> throw $ GreaseException "Could not determine minimal shape for register"
+          pure shape
 
 regStructRepr :: ArchContext arch -> C.TypeRepr (Symbolic.ArchRegStruct arch)
 regStructRepr arch = C.StructRepr . Symbolic.crucArchRegTypes $ arch ^. archVals . to Symbolic.archFunctions
@@ -361,21 +365,21 @@ memConfigInitial ::
   Symbolic.MemModelConfig p sym arch Mem.Mem
 memConfigInitial bak arch ptrTable relocs =
   lazyMemModelConfig
-  { -- We deviate from the lazy macaw-symbolic memory model's settings and opt
-    -- *not* to concretize pointers before reads or writes. See gitlab#143 for
-    -- further discussion on this point.
-    Symbolic.resolvePointer = pure
-    -- Upon each read, we assert that we are not reading from an unsupported
-    -- relocation type, throwing a helpful error message otherwise. The
-    -- concreteImmutableGlobalRead field of MemModelConfig gives us a convenient
-    -- way to hook each read without needing to re-implement all of the logic
-    -- for MacawReadMem/MacawCondReadMem, which is quite involved.
-  , Symbolic.concreteImmutableGlobalRead = \memRep ptr -> do
-      assertRelocSupported arch ptr relocs
-      Symbolic.concreteImmutableGlobalRead lazyMemModelConfig memRep ptr
-  }
-  where
-    lazyMemModelConfig = Symbolic.memModelConfig bak ptrTable
+    { -- We deviate from the lazy macaw-symbolic memory model's settings and opt
+      -- \*not* to concretize pointers before reads or writes. See gitlab#143 for
+      -- further discussion on this point.
+      Symbolic.resolvePointer = pure
+    , -- Upon each read, we assert that we are not reading from an unsupported
+      -- relocation type, throwing a helpful error message otherwise. The
+      -- concreteImmutableGlobalRead field of MemModelConfig gives us a convenient
+      -- way to hook each read without needing to re-implement all of the logic
+      -- for MacawReadMem/MacawCondReadMem, which is quite involved.
+      Symbolic.concreteImmutableGlobalRead = \memRep ptr -> do
+        assertRelocSupported arch ptr relocs
+        Symbolic.concreteImmutableGlobalRead lazyMemModelConfig memRep ptr
+    }
+ where
+  lazyMemModelConfig = Symbolic.memModelConfig bak ptrTable
 
 -- | Take a 'Symbolic.MemModelConfig' and augment it with the ability to look up
 -- function and syscall handles. This needs to be defined separately from
@@ -431,12 +435,12 @@ memConfigWithHandles ::
   Symbolic.MemModelConfig p sym arch Mem.Mem
 memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddress memCfg =
   memCfg
-  { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddress lfhd
-  , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd
-  }
-  where
-    lfhd = ResolveCall.defaultLookupFunctionHandleDispatch bak logAction halloc arch memory funOvs
-    lsd = ResolveCall.defaultLookupSyscallDispatch bak logAction halloc arch
+    { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddress lfhd
+    , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd
+    }
+ where
+  lfhd = ResolveCall.defaultLookupFunctionHandleDispatch bak logAction halloc arch memory funOvs
+  lsd = ResolveCall.defaultLookupSyscallDispatch bak logAction halloc arch
 
 -- | Check whether a pointer points to a relocation address, and if so, assert
 -- that the underlying relocation type is supported. If not, throw an exception.
@@ -461,17 +465,21 @@ assertRelocSupported arch (Mem.LLVMPointer _base offset) relocs =
       let addr = MM.memWord (fromInteger (BV.asUnsigned bv))
       case Map.lookup addr relocs of
         Just relocType
-          |  Nothing <- (arch ^. archRelocSupported) relocType
-          -> throw $ GreaseException $ Text.unlines
-               [ "Attempted to read from an unsupported relocation type (" <>
-                 tshow relocType <>
-                 ") at address " <> tshow addr <> "."
-               , "This may be due to a PLT stub that grease did not detect."
-               , "If so, try passing --plt-stub <ADDR>:<NAME>, where"
-               , "<ADDR> and <NAME> can be obtained by disassembling the"
-               , "relevant PLT section of the binary"
-               , "(.plt, .plt.got, .plt.sec, etc.)."
-               ]
+          | Nothing <- (arch ^. archRelocSupported) relocType ->
+              throw $
+                GreaseException $
+                  Text.unlines
+                    [ "Attempted to read from an unsupported relocation type ("
+                        <> tshow relocType
+                        <> ") at address "
+                        <> tshow addr
+                        <> "."
+                    , "This may be due to a PLT stub that grease did not detect."
+                    , "If so, try passing --plt-stub <ADDR>:<NAME>, where"
+                    , "<ADDR> and <NAME> can be obtained by disassembling the"
+                    , "relevant PLT section of the binary"
+                    , "(.plt, .plt.got, .plt.sec, etc.)."
+                    ]
         _ ->
           pure ()
 
@@ -522,35 +530,37 @@ initState bak la macawExtImpl halloc mvar mem0 globs0 (SymIO.SomeOverrideSim ini
   let globMap = Symbolic.mapRegionPointers ptrTable
   let extImpl = greaseMacawExtImpl bak la globMap macawExtImpl
   let cfgHdl = C.cfgHandle cfg
-  let bindings = C.FnBindings
-        $ C.insertHandleMap cfgHdl (C.UseCFG cfg $ C.postdomInfo cfg) C.emptyHandleMap
-  let ctx = C.initSimContext
-        bak
-        (Mem.llvmIntrinsicTypes `MapF.union` SymIO.llvmSymIOIntrinsicTypes)
-        halloc
-        printHandle
-        bindings
-        extImpl
-        initialPersonality
+  let bindings =
+        C.FnBindings $
+          C.insertHandleMap cfgHdl (C.UseCFG cfg $ C.postdomInfo cfg) C.emptyHandleMap
+  let ctx =
+        C.initSimContext
+          bak
+          (Mem.llvmIntrinsicTypes `MapF.union` SymIO.llvmSymIOIntrinsicTypes)
+          halloc
+          printHandle
+          bindings
+          extImpl
+          initialPersonality
   let sRepr = regStructRepr arch
-  pure $
-    C.InitialState
+  pure
+    $ C.InitialState
       ctx
       globs2
       C.defaultAbortHandler
       sRepr
-      $ C.runOverrideSim sRepr
-      $ Symbolic.crucGenArchConstraints (arch ^. archVals . to Symbolic.archFunctions)
-      $ do
-        let SetupHook hook = setupHook
-        hook bak mvar funOvs
-        initFsOv
-        let args = Ctx.singleton $ C.RegEntry sRepr initialRegs
-        r <-
-          case mbStartupOvCfg of
-            Nothing ->
-              C.callCFG cfg (C.RegMap args)
-            Just (C.SomeCFG startupOvCfg) -> do
-              args' <- C.callCFG startupOvCfg (C.RegMap args)
-              C.callCFG cfg (C.RegMap (Ctx.singleton args'))
-        pure $ C.regValue r
+    $ C.runOverrideSim sRepr
+    $ Symbolic.crucGenArchConstraints (arch ^. archVals . to Symbolic.archFunctions)
+    $ do
+      let SetupHook hook = setupHook
+      hook bak mvar funOvs
+      initFsOv
+      let args = Ctx.singleton $ C.RegEntry sRepr initialRegs
+      r <-
+        case mbStartupOvCfg of
+          Nothing ->
+            C.callCFG cfg (C.RegMap args)
+          Just (C.SomeCFG startupOvCfg) -> do
+            args' <- C.callCFG startupOvCfg (C.RegMap args)
+            C.callCFG cfg (C.RegMap (Ctx.singleton args'))
+      pure $ C.regValue r

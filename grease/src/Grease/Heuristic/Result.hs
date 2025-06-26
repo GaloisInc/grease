@@ -1,16 +1,14 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Heuristic.Result
-  ( CantRefine(..)
-  , HeuristicResult(..)
-  , mergeResultsOptimistic
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Heuristic.Result (
+  CantRefine (..),
+  HeuristicResult (..),
+  mergeResultsOptimistic,
+) where
 
 import Data.Aeson.Types qualified as Aeson
 import Data.Text (Text)
@@ -26,6 +24,7 @@ data CantRefine
   | MissingSemantics Text
   | MutableGlobal String
   deriving (Generic, Show)
+
 instance Aeson.ToJSON CantRefine
 
 instance PP.Pretty CantRefine where
@@ -53,7 +52,7 @@ mergeResultsOptimistic ::
   HeuristicResult ext tys
 mergeResultsOptimistic r1 r2 =
   case (r1, r2) of
-    (CantRefine {}, _) -> r2
-    (PossibleBug {}, _) -> r1
-    (RefinedPrecondition {}, _) -> r1
-    (Unknown {}, _) -> r2
+    (CantRefine{}, _) -> r2
+    (PossibleBug{}, _) -> r1
+    (RefinedPrecondition{}, _) -> r1
+    (Unknown{}, _) -> r2

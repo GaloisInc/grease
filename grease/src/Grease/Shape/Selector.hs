@@ -1,35 +1,33 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Grease.Shape.Selector
-  ( ArgSelector(..)
-  , RetSelector(..)
-  , Selector(..)
-  , argSelectorPath
-  , argSelectorIndex
-  , retSelectorFunc
-  , retSelectorPath
-  , selectorPath
-  , ppArgSelector
-  , ppMacawArgSelector
-  , ppRetSelector
-  , ppMacawRetSelector
-  , ppSelector
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Shape.Selector (
+  ArgSelector (..),
+  RetSelector (..),
+  Selector (..),
+  argSelectorPath,
+  argSelectorIndex,
+  retSelectorFunc,
+  retSelectorPath,
+  selectorPath,
+  ppArgSelector,
+  ppMacawArgSelector,
+  ppRetSelector,
+  ppMacawRetSelector,
+  ppSelector,
+) where
 
 import Control.Lens (Lens, lens, (.~))
 import Control.Lens.TH (makeLenses)
 import Data.Function ((&))
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
-import Grease.Cursor (Cursor(..), CursorExt, ppCursor)
+import Grease.Cursor (Cursor (..), CursorExt, ppCursor)
 import Grease.Cursor.Pointer (ppDereference)
 import Prettyprinter qualified as PP
 import What4.FunctionName qualified as W4
@@ -46,6 +44,7 @@ data ArgSelector ext argTys ts t = ArgSelector
   { _argSelectorIndex :: Ctx.Index argTys t
   , _argSelectorPath :: Cursor ext (t ': ts)
   }
+
 makeLenses ''ArgSelector
 
 -- | A pointer to a part of a symbolic value inside of the return value of a
@@ -60,6 +59,7 @@ data RetSelector ext ts t = RetSelector
   { _retSelectorFunc :: W4.FunctionName
   , _retSelectorPath :: Cursor ext (t ': ts)
   }
+
 makeLenses ''RetSelector
 
 -- | A pointer to a part of a symbolic value invented by GREASE.
@@ -92,7 +92,7 @@ ppArgSelector ::
   PP.Doc ann
 ppArgSelector ppExt (ArgSelector idx path) =
   let top = "arg" PP.<> PP.viaShow (Ctx.indexVal idx)
-  in ppCursor top ppExt path
+   in ppCursor top ppExt path
 
 ppMacawArgSelector :: ArgSelector (Symbolic.MacawExt arch) regTy ts t -> PP.Doc ann
 ppMacawArgSelector = ppArgSelector ppDereference
@@ -104,7 +104,7 @@ ppRetSelector ::
   PP.Doc ann
 ppRetSelector ppExt (RetSelector func path) =
   let top = PP.pretty (W4.functionName func <> "Return")
-  in ppCursor top ppExt path
+   in ppCursor top ppExt path
 
 ppMacawRetSelector :: RetSelector (Symbolic.MacawExt arch) ts t -> PP.Doc ann
 ppMacawRetSelector = ppRetSelector ppDereference

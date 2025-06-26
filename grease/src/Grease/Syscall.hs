@@ -1,18 +1,17 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Syscall
-  ( builtinGenericSyscalls
-    -- * Override implementations
-  , callGetppid
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Syscall (
+  builtinGenericSyscalls,
 
-import Control.Monad.IO.Class (MonadIO(..))
+  -- * Override implementations
+  callGetppid,
+) where
+
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Lang.Crucible.Backend qualified as C
@@ -29,11 +28,13 @@ builtinGenericSyscalls ::
   Mem.HasPtrWidth w =>
   Map.Map W4.FunctionName (Stubs.SomeSyscall p sym arch)
 builtinGenericSyscalls =
-  Map.fromList $ map
-    (\someSyscallOv@(Stubs.SomeSyscall syscallOv) ->
-      (Stubs.syscallName syscallOv, someSyscallOv))
-    [ Stubs.SomeSyscall buildGetppidOverride
-    ]
+  Map.fromList $
+    map
+      ( \someSyscallOv@(Stubs.SomeSyscall syscallOv) ->
+          (Stubs.syscallName syscallOv, someSyscallOv)
+      )
+      [ Stubs.SomeSyscall buildGetppidOverride
+      ]
 
 -----
 -- Scaffolding to turn override implementations into Syscalls
@@ -44,7 +45,8 @@ buildGetppidOverride ::
   Stubs.Syscall p sym Ctx.EmptyCtx ext (Mem.LLVMPointerType w)
 buildGetppidOverride =
   W4.withKnownNat ?ptrWidth $
-  Stubs.mkSyscall "getppid" $ \bak _args -> callGetppid bak
+    Stubs.mkSyscall "getppid" $
+      \bak _args -> callGetppid bak
 
 -----
 -- The implementations of the overrides themselves

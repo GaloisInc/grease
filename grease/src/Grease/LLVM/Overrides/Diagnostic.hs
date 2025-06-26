@@ -1,17 +1,15 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.LLVM.Overrides.Diagnostic
-  ( Diagnostic(..)
-  , severity
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.LLVM.Overrides.Diagnostic (
+  Diagnostic (..),
+  severity,
+) where
 
-import Grease.Diagnostic.Severity (Severity(Debug))
+import Grease.Diagnostic.Severity (Severity (Debug))
 import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
 import Prettyprinter qualified as PP
 import Text.LLVM.AST qualified as L
@@ -19,13 +17,13 @@ import Text.LLVM.PP qualified as L
 
 data Diagnostic where
   FoundDeclare ::
-    L.Declare
-      {- ^ The declared function -} ->
+    -- | The declared function
+    L.Declare ->
     Diagnostic
   RegisteredOverride ::
     forall p sym.
-    CLLVM.SomeLLVMOverride p sym CLLVM.LLVM
-      {- ^ The override -} ->
+    -- | The override
+    CLLVM.SomeLLVMOverride p sym CLLVM.LLVM ->
     Diagnostic
 
 ppDeclare :: L.Declare -> PP.Doc a

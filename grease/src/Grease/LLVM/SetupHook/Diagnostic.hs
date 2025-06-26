@@ -1,17 +1,15 @@
-{-|
-Copyright        : (c) Galois, Inc. 2025
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.LLVM.SetupHook.Diagnostic
-  ( Diagnostic(..)
-  , severity
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2025
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.LLVM.SetupHook.Diagnostic (
+  Diagnostic (..),
+  severity,
+) where
 
-import Grease.Diagnostic.Severity (Severity(Warn))
+import Grease.Diagnostic.Severity (Severity (Warn))
 import Lang.Crucible.LLVM.Translation qualified as Trans
 import Prettyprinter qualified as PP
 import Text.LLVM.AST qualified as L

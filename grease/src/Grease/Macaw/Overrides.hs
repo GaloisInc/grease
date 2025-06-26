@@ -1,28 +1,26 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
-
-Registering Macaw overrides
--}
-
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Macaw.Overrides
-  ( MacawSExpOverride(..)
-  , MacawFnHandle
-  , MacawOverride
-  , macawOverride
-  , mkMacawOverrideMap
-  , registerMacawSexpProgForwardDeclarations
-  , registerMacawOvForwardDeclarations
-  , lookupMacawForwardDeclarationOverride
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+--
+-- Registering Macaw overrides
+module Grease.Macaw.Overrides (
+  MacawSExpOverride (..),
+  MacawFnHandle,
+  MacawOverride,
+  macawOverride,
+  mkMacawOverrideMap,
+  registerMacawSexpProgForwardDeclarations,
+  registerMacawOvForwardDeclarations,
+  lookupMacawForwardDeclarationOverride,
+) where
 
 import Control.Lens ((^.))
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Foldable qualified as Foldable
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.CFG qualified as MC
@@ -34,7 +32,7 @@ import Data.Sequence qualified as Seq
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch
-import Grease.Macaw.Overrides.SExp (MacawSExpOverride(..), loadOverrides)
+import Grease.Macaw.Overrides.SExp (MacawSExpOverride (..), loadOverrides)
 import Grease.Macaw.SimulatorState (MacawFnHandle, MacawOverride)
 import Grease.Skip (registerSkipOverride)
 import Grease.Syntax.Overrides as SExp
@@ -60,10 +58,10 @@ macawOverride ::
   forall sym bak p arch args ret solver scope st fs.
   ( C.IsSymInterface sym
   , Mem.HasLLVMAnn sym
-    -- For silly reasons, `stubs` requires the use of an online SMT solver
+  , -- For silly reasons, `stubs` requires the use of an online SMT solver
     -- connection in order to call `functionOverride`. See
     -- https://github.com/GaloisInc/stubs/issues/28.
-  , W4.OnlineSolver solver
+    W4.OnlineSolver solver
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   ) =>
@@ -73,52 +71,63 @@ macawOverride ::
   Stubs.FunctionOverride p sym args arch ret ->
   MacawOverride p sym arch
 macawOverride bak mvar archCtx fnOv =
-    C.mkOverride' (Stubs.functionName fnOv) regsRepr ov
-  where
-    genArchVals :: Symbolic.GenArchVals Symbolic.LLVMMemory arch
-    genArchVals = archCtx ^. archVals
+  C.mkOverride' (Stubs.functionName fnOv) regsRepr ov
+ where
+  genArchVals :: Symbolic.GenArchVals Symbolic.LLVMMemory arch
+  genArchVals = archCtx ^. archVals
 
-    regsRepr :: C.TypeRepr (Symbolic.ArchRegStruct arch)
-    regsRepr =
-      C.StructRepr $
+  regsRepr :: C.TypeRepr (Symbolic.ArchRegStruct arch)
+  regsRepr =
+    C.StructRepr $
       Symbolic.crucArchRegTypes $
-      Symbolic.archFunctions genArchVals
+        Symbolic.archFunctions genArchVals
 
-    ov ::
-      forall r.
-      C.OverrideSim
-        p sym (Symbolic.MacawExt arch) r
-        (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
-        (Symbolic.ArchRegStruct arch)
-        (C.RegValue sym (Symbolic.ArchRegStruct arch))
-    ov = do
-      mem <- C.readGlobal mvar
+  ov ::
+    forall r.
+    C.OverrideSim
+      p
+      sym
+      (Symbolic.MacawExt arch)
+      r
+      (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
+      (Symbolic.ArchRegStruct arch)
+      (C.RegValue sym (Symbolic.ArchRegStruct arch))
+  ov = do
+    mem <- C.readGlobal mvar
 
-      -- Construct the arguments
-      argMap <- C.getOverrideArgs
-      let argReg = massageRegAssignment $ C.regMap argMap
-      (args, getVarArg) <- liftIO $
+    -- Construct the arguments
+    argMap <- C.getOverrideArgs
+    let argReg = massageRegAssignment $ C.regMap argMap
+    (args, getVarArg) <-
+      liftIO $
         (archCtx ^. archIntegerArguments)
-          bak (Stubs.functionArgTypes fnOv)
-          argReg mem
+          bak
+          (Stubs.functionArgTypes fnOv)
+          argReg
+          mem
 
-      -- Invoke the override
-      retVal <-
-        Stubs.functionOverride
-          fnOv bak args getVarArg
-          [] -- We don't currently make use of parent overrides
+    -- Invoke the override
+    retVal <-
+      Stubs.functionOverride
+        fnOv
+        bak
+        args
+        getVarArg
+        [] -- We don't currently make use of parent overrides
 
-      -- Put the return value(s) into the appropriate register(s)
-      (archCtx ^. archIntegerReturnRegisters)
-        bak genArchVals
-        (Stubs.functionReturnType fnOv)
-        retVal argReg
+    -- Put the return value(s) into the appropriate register(s)
+    (archCtx ^. archIntegerReturnRegisters)
+      bak
+      genArchVals
+      (Stubs.functionReturnType fnOv)
+      retVal
+      argReg
 
 -- | Massage the 'C.RegEntry' 'Ctx.Assignment' that 'C.getOverrideArgs'
 -- provides into the form that 'archIntegerArguments' expects.
 massageRegAssignment ::
-     Ctx.Assignment (C.RegEntry sym) (Ctx.EmptyCtx Ctx.::> C.StructType ctx)
-  -> Ctx.Assignment (C.RegValue' sym) ctx
+  Ctx.Assignment (C.RegEntry sym) (Ctx.EmptyCtx Ctx.::> C.StructType ctx) ->
+  Ctx.Assignment (C.RegValue' sym) ctx
 massageRegAssignment = C.unRV . Ctx.last . fmapFC (C.RV . C.regValue)
 
 -- | Construct a 'Map.Map' of names of function overrides to their corresponding
@@ -141,9 +150,10 @@ mkMacawOverrideMap ::
   , bak ~ C.OnlineBackend solver scope st fs
   ) =>
   bak ->
-  Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
-    {- ^ The built-in overrides. -} ->
-  [FilePath] {- ^ The paths of each user-supplied override file. -} ->
+  -- | The built-in overrides.
+  Seq.Seq (Stubs.SomeFunctionOverride p sym arch) ->
+  -- | The paths of each user-supplied override file.
+  [FilePath] ->
   C.HandleAllocator ->
   C.GlobalVar Mem.Mem ->
   ArchContext arch ->
@@ -155,29 +165,33 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
   -- Map.fromList favors things that appear later in the list in the event
   -- that there are duplicate names.
   let allOvs = builtinOvs <> userOvs
-  Map.fromList . Foldable.toList <$>
-    traverse
-      (\someFnOv@(Stubs.SomeFunctionOverride fnOv) -> do
-        let macawPublicOv = macawOverride bak mvar archCtx fnOv
-        macawPublicHdl <- liftIO $
-          C.mkHandle'
-            halloc (C.overrideName macawPublicOv)
-            (Ctx.singleton regsRepr) regsRepr
-        let macawFnOv =
-              MacawSExpOverride
-                { msoPublicFnHandle = macawPublicHdl
-                , msoPublicOverride = macawPublicOv
-                , msoSomeFunctionOverride = someFnOv
-                }
-        pure (Stubs.functionName fnOv, macawFnOv))
+  Map.fromList . Foldable.toList
+    <$> traverse
+      ( \someFnOv@(Stubs.SomeFunctionOverride fnOv) -> do
+          let macawPublicOv = macawOverride bak mvar archCtx fnOv
+          macawPublicHdl <-
+            liftIO $
+              C.mkHandle'
+                halloc
+                (C.overrideName macawPublicOv)
+                (Ctx.singleton regsRepr)
+                regsRepr
+          let macawFnOv =
+                MacawSExpOverride
+                  { msoPublicFnHandle = macawPublicHdl
+                  , msoPublicOverride = macawPublicOv
+                  , msoSomeFunctionOverride = someFnOv
+                  }
+          pure (Stubs.functionName fnOv, macawFnOv)
+      )
       allOvs
-  where
-    regsRepr :: C.TypeRepr (Symbolic.ArchRegStruct arch)
-    regsRepr =
-      C.StructRepr $
+ where
+  regsRepr :: C.TypeRepr (Symbolic.ArchRegStruct arch)
+  regsRepr =
+    C.StructRepr $
       Symbolic.crucArchRegTypes $
-      Symbolic.archFunctions $
-      archCtx ^. archVals
+        Symbolic.archFunctions $
+          archCtx ^. archVals
 
 -- | Redirect handles for forward declarations in an S-expression file to
 -- actually call the corresponding Macaw overrides. Treat any calls to unresolved
@@ -197,10 +211,10 @@ registerMacawSexpProgForwardDeclarations ::
   GreaseLogAction ->
   CLLVM.DataLayout ->
   C.GlobalVar Mem.Mem ->
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch)
-    {- ^ The map of public function names to their overrides. -} ->
-  Map.Map W4.FunctionName C.SomeHandle
-    {- ^ The map of forward declaration names to their handles. -} ->
+  -- | The map of public function names to their overrides.
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  -- | The map of forward declaration names to their handles.
+  Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerMacawSexpProgForwardDeclarations bak la dl mvar funOvs =
   registerMacawForwardDeclarations bak funOvs $
@@ -218,10 +232,10 @@ registerMacawOvForwardDeclarations ::
   , ToConc.HasToConcretize p
   ) =>
   bak ->
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch)
-    {- ^ The map of public function names to their overrides. -} ->
-  Map.Map W4.FunctionName C.SomeHandle
-    {- ^ The map of forward declaration names to their handles. -} ->
+  -- | The map of public function names to their overrides.
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  -- | The map of forward declaration names to their handles.
+  Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerMacawOvForwardDeclarations bak funOvs =
   registerMacawForwardDeclarations bak funOvs $ \fwdDecName _ ->
@@ -239,15 +253,16 @@ registerMacawForwardDeclarations ::
   , ToConc.HasToConcretize p
   ) =>
   bak ->
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch)
-    {- ^ The map of public function names to their overrides. -} ->
-  (forall args ret.
+  -- | The map of public function names to their overrides.
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  -- | What to do when a forward declaration cannot be resolved.
+  ( forall args ret.
     W4.FunctionName ->
     C.FnHandle args ret ->
-    C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ())
-    {- ^ What to do when a forward declaration cannot be resolved. -} ->
-  Map.Map W4.FunctionName C.SomeHandle
-    {- ^ The map of forward declaration names to their handles. -} ->
+    C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
+  ) ->
+  -- | The map of forward declaration names to their handles.
+  Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerMacawForwardDeclarations bak funOvs cannotResolve fwdDecs =
   Foldable.forM_ (Map.toList fwdDecs) $ \(decName, C.SomeHandle hdl) ->
@@ -265,17 +280,18 @@ registerMacawForwardDeclaration ::
   , ToConc.HasToConcretize p
   ) =>
   bak ->
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch)
-    {- ^ The map of public function names to their overrides. -} ->
-  (forall args ret.
+  -- | The map of public function names to their overrides.
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  -- | What to do when a forward declaration cannot be resolved.
+  ( forall args ret.
     W4.FunctionName ->
     C.FnHandle args ret ->
-    C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ())
-    {- ^ What to do when a forward declaration cannot be resolved. -} ->
-  W4.FunctionName
-    {- ^ Name of the forward declaration -} ->
-  C.FnHandle args' ret'
-    {- ^ Handle to bind -} ->
+    C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
+  ) ->
+  -- | Name of the forward declaration
+  W4.FunctionName ->
+  -- | Handle to bind
+  C.FnHandle args' ret' ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerMacawForwardDeclaration bak funOvs cannotResolve decName hdl =
   case lookupMacawForwardDeclarationOverride bak funOvs decName hdl of
@@ -293,12 +309,12 @@ lookupMacawForwardDeclarationOverride ::
   , ToConc.HasToConcretize p
   ) =>
   bak ->
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch)
-    {- ^ The map of public function names to their overrides. -} ->
-  W4.FunctionName
-    {-^ Name of the forward declaration -} ->
-  C.FnHandle args ret
-    {-^ Handle to bind -} ->
+  -- | The map of public function names to their overrides.
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  -- | Name of the forward declaration
+  W4.FunctionName ->
+  -- | Handle to bind
+  C.FnHandle args ret ->
   Maybe (C.Override p sym (Symbolic.MacawExt arch) args ret)
 lookupMacawForwardDeclarationOverride bak funOvs decName hdl =
   case Map.lookup decName funOvs of
@@ -318,5 +334,6 @@ lookupMacawForwardDeclarationOverride bak funOvs decName hdl =
               bak
               -- We don't use parent overrides, hence the []
               (someForwardedOv NE.:| [])
-              decName hdl
+              decName
+              hdl
       Just forwardedOv

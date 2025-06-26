@@ -1,15 +1,13 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Macaw.Load.Relocation
-  ( RelocType(..)
-  , elfRelocationMap
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Macaw.Load.Relocation (
+  RelocType (..),
+  elfRelocationMap,
+) where
 
 import Control.Exception (throw)
 import Data.ByteString qualified as BS
@@ -20,20 +18,20 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Vector qualified as Vec
 import Data.Word (Word32)
-import Grease.Utility (GreaseException(..), tshow)
+import Grease.Utility (GreaseException (..), tshow)
 
 -- | An architecture-independent description of the type of a relocation. When
 -- appropriate, this groups together certain relocation types that have
 -- identical treatment.
 data RelocType
-  = RelativeReloc
-    -- ^ A @RELATIVE@ relocation (e.g., @R_ARM_RELATIVE@). These reference an
+  = -- | A @RELATIVE@ relocation (e.g., @R_ARM_RELATIVE@). These reference an
     -- address relative to the load address of a shared library.
-  | SymbolReloc
-    -- ^ A relocation that references the address of a symbol, plus an offset.
+    RelativeReloc
+  | -- | A relocation that references the address of a symbol, plus an offset.
     -- These include absolute references to symbols in the same shared library
     -- (e.g., @R_ARM_ABS32@) and global variables defined in separate shared
     -- libraries (e.g., @R_ARM_GLOB_DAT@).
+    SymbolReloc
   deriving Eq
 
 -- | Read the @.rela.dyn@ and @.rel.dyn@ sections of an ELF binary (if they
@@ -66,57 +64,62 @@ elfRelocationMap _ loadOpts ehi =
         relDyn <- listToMaybe $ EE.findSectionByName ".rel.dyn" elf
         let relDynBytes = EE.elfSectionData relDyn
         rels <- rightToMaybe $ EE.decodeRelEntries (EE.elfData elf) relDynBytes
-        Just $ Map.fromList $ map relAddrType rels in
+        Just $ Map.fromList $ map relAddrType rels
+   in Map.union relaDynMap relDynMap
+ where
+  (_, elf) = EE.getElf ehi
+  elfClass = EE.elfClass elf
+  offset = fromMaybe 0 $ MML.loadOffset loadOpts
 
-  Map.union relaDynMap relDynMap
-  where
-    (_, elf) = EE.getElf ehi
-    elfClass = EE.elfClass elf
-    offset = fromMaybe 0 $ MML.loadOffset loadOpts
-
-    relaAddrType :: EE.RelaEntry reloc -> (MM.MemWord w, (reloc, BS.ByteString))
-    relaAddrType rel = EE.elfClassInstances elfClass $
+  relaAddrType :: EE.RelaEntry reloc -> (MM.MemWord w, (reloc, BS.ByteString))
+  relaAddrType rel =
+    EE.elfClassInstances elfClass $
       let addr = MM.memWord (offset + fromIntegral (EE.relaAddr rel))
-          relaType = EE.relaType rel in
-      (addr, (relaType, resolveRelocSym relaType addr (EE.relaSym rel)))
+          relaType = EE.relaType rel
+       in (addr, (relaType, resolveRelocSym relaType addr (EE.relaSym rel)))
 
-    relAddrType :: EE.RelEntry reloc -> (MM.MemWord w, (reloc, BS.ByteString))
-    relAddrType rel = EE.elfClassInstances elfClass $
+  relAddrType :: EE.RelEntry reloc -> (MM.MemWord w, (reloc, BS.ByteString))
+  relAddrType rel =
+    EE.elfClassInstances elfClass $
       let addr = MM.memWord (offset + fromIntegral (EE.relAddr rel))
-          relType = EE.relType rel in
-      (addr, (relType, resolveRelocSym relType addr (EE.relSym rel)))
+          relType = EE.relType rel
+       in (addr, (relType, resolveRelocSym relType addr (EE.relSym rel)))
 
-    -- The dynamic symbol table, which contains the names of dynamic
-    -- relocations. If the given binary does not have a symbol table, then this
-    -- table will be empty.
-    dynSymtab :: Vec.Vector (EE.SymtabEntry BS.ByteString (EE.ElfWordType w))
-    dynSymtab = case EE.decodeHeaderDynsym ehi of
-                  Just (Right v) -> EE.symtabEntries v
-                  _ -> Vec.empty
+  -- The dynamic symbol table, which contains the names of dynamic
+  -- relocations. If the given binary does not have a symbol table, then this
+  -- table will be empty.
+  dynSymtab :: Vec.Vector (EE.SymtabEntry BS.ByteString (EE.ElfWordType w))
+  dynSymtab = case EE.decodeHeaderDynsym ehi of
+    Just (Right v) -> EE.symtabEntries v
+    _ -> Vec.empty
 
-    -- Look up the name of a dynamic relocation from its dynamic symbol table
-    -- entry. If you reach this point in the code, then we know that the binary
-    -- is dynamically linked (and therefore has a dynamic symbol table), and
-    -- moreover, each dynamic relocation should have a corresponding entry in
-    -- the dynamic symbol table. If it doesn't, this function will raise an
-    -- exception.
-    resolveRelocSym ::
-      Show reloc =>
-      -- | The relocation type (only used for displaying information in an
-      -- exception).
-      reloc ->
-      -- | The relocation's address.
-      MM.MemWord w ->
-      -- | The relocation symbol's index in the dynamic symbol table.
-      Word32 ->
-      BS.ByteString
-    resolveRelocSym reloc addr idx =
-      case dynSymtab Vec.!? fromIntegral idx of
-        Just symb -> EE.steName symb
-        Nothing -> throw $ GreaseException $
-          "Cannot find " <> tshow reloc <>
-          " relocation (at address " <> tshow addr <>
-          ") in the dynamic symbol table"
+  -- Look up the name of a dynamic relocation from its dynamic symbol table
+  -- entry. If you reach this point in the code, then we know that the binary
+  -- is dynamically linked (and therefore has a dynamic symbol table), and
+  -- moreover, each dynamic relocation should have a corresponding entry in
+  -- the dynamic symbol table. If it doesn't, this function will raise an
+  -- exception.
+  resolveRelocSym ::
+    Show reloc =>
+    -- \| The relocation type (only used for displaying information in an
+    -- exception).
+    reloc ->
+    -- \| The relocation's address.
+    MM.MemWord w ->
+    -- \| The relocation symbol's index in the dynamic symbol table.
+    Word32 ->
+    BS.ByteString
+  resolveRelocSym reloc addr idx =
+    case dynSymtab Vec.!? fromIntegral idx of
+      Just symb -> EE.steName symb
+      Nothing ->
+        throw $
+          GreaseException $
+            "Cannot find "
+              <> tshow reloc
+              <> " relocation (at address "
+              <> tshow addr
+              <> ") in the dynamic symbol table"
 
 rightToMaybe :: Either l r -> Maybe r
 rightToMaybe = either (const Nothing) Just

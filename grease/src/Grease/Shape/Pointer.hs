@@ -1,8 +1,3 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
@@ -13,75 +8,78 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Grease.Shape.Pointer
-  ( TaggedByte(..)
-  , traverseTaggedByte
-  , MemShape(..)
-  , BlockId(..)
-  , traverseMemShapeWithType
-  , memShapeSize
-  , PtrTarget(..)
-  , ptrTarget
-  , traversePtrTargetWithType
-  , ptrTargetSize
-  , Offset(..)
-  , PtrShape(..)
-  , traversePtrShapeWithType
-  , ptrShapeType
-  , getPtrTag
-  , setPtrTag
-  , ptrShapeTag
-  , minimalPtrShape
-  , x64StackPtrShape
-  , ppcStackPtrShape
-  , armStackPtrShape
-  , bytesToPointers
-  , growPtrTargetBy
-  , growPtrTargetUpTo
-  , growPtrTarget
-  , initializePtrTarget
-  , initializeOrGrowPtrTarget
-  , modifyPtrTarget
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Shape.Pointer (
+  TaggedByte (..),
+  traverseTaggedByte,
+  MemShape (..),
+  BlockId (..),
+  traverseMemShapeWithType,
+  memShapeSize,
+  PtrTarget (..),
+  ptrTarget,
+  traversePtrTargetWithType,
+  ptrTargetSize,
+  Offset (..),
+  PtrShape (..),
+  traversePtrShapeWithType,
+  ptrShapeType,
+  getPtrTag,
+  setPtrTag,
+  ptrShapeTag,
+  minimalPtrShape,
+  x64StackPtrShape,
+  ppcStackPtrShape,
+  armStackPtrShape,
+  bytesToPointers,
+  growPtrTargetBy,
+  growPtrTargetUpTo,
+  growPtrTarget,
+  initializePtrTarget,
+  initializeOrGrowPtrTarget,
+  modifyPtrTarget,
+) where
 
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens qualified as Lens
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.BitVector.Sized (BV)
 import Data.Foldable qualified as Foldable
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
-import Data.Parameterized.Classes (ShowF(..))
+import Data.Parameterized.Classes (ShowF (..))
 import Data.Parameterized.NatRepr (NatRepr, natValue)
 import Data.Parameterized.TraversableF qualified as TF
 import Data.Parameterized.TraversableFC qualified as TFC
-import Data.Proxy (Proxy(Proxy))
+import Data.Proxy (Proxy (Proxy))
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
-import Data.Type.Equality (TestEquality(testEquality), (:~:)(Refl))
+import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import Data.Word (Word8)
 import GHC.TypeLits (type Natural)
 import Grease.Cursor
-import Grease.Cursor.Pointer (Dereference(..))
-import Grease.Options (ExtraStackSlots(..))
-import Grease.Shape.NoTag (NoTag(NoTag))
+import Grease.Cursor.Pointer (Dereference (..))
+import Grease.Options (ExtraStackSlots (..))
+import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Utility
 import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.LLVM.Bytes (Bytes(..))
+import Lang.Crucible.LLVM.Bytes (Bytes (..))
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Prettyprinter qualified as PP
 
-newtype BlockId = BlockId { getBlockId :: Int }
+newtype BlockId = BlockId {getBlockId :: Int}
   deriving (Eq, Ord, Show)
 
 -- | A byte ('Word8') along with a @tag@ (see 'Grease.Shape.Shape').
 data TaggedByte tag
   = TaggedByte
-    { taggedByteTag :: tag (Mem.LLVMPointerType 8)
-    , taggedByteValue :: Word8
-    }
+  { taggedByteTag :: tag (Mem.LLVMPointerType 8)
+  , taggedByteValue :: Word8
+  }
 
 deriving instance Eq (tag (Mem.LLVMPointerType 8)) => Eq (TaggedByte tag)
 
@@ -119,19 +117,20 @@ traverseTaggedByte f (TaggedByte tag val) = TaggedByte <$> f tag <*> pure val
 data MemShape wptr tag
   = -- | Some number of uninitialized bytes
     Uninitialized !Bytes
-    -- | Some number of symbolically-initialized bytes
-  | Initialized (tag (C.VectorType (Mem.LLVMPointerType 8))) !Bytes
-    -- | Several (generally 4 or 8) initialized bytes that form a pointer, plus
+  | -- | Some number of symbolically-initialized bytes
+    Initialized (tag (C.VectorType (Mem.LLVMPointerType 8))) !Bytes
+  | -- | Several (generally 4 or 8) initialized bytes that form a pointer, plus
     -- an offset into that pointer
-  | Pointer (tag (Mem.LLVMPointerType wptr)) !Offset (PtrTarget wptr tag)
-    -- | Some concrete bytes
-  | Exactly [TaggedByte tag]
+    Pointer (tag (Mem.LLVMPointerType wptr)) !Offset (PtrTarget wptr tag)
+  | -- | Some concrete bytes
+    Exactly [TaggedByte tag]
 
 deriving instance
   ( Eq (tag (Mem.LLVMPointerType 8))
   , Eq (tag (C.VectorType (Mem.LLVMPointerType 8)))
   , Eq (tag (Mem.LLVMPointerType wptr))
-  ) => Eq (MemShape wptr tag)
+  ) =>
+  Eq (MemShape wptr tag)
 
 instance MC.PrettyF tag => PP.Pretty (MemShape wptr tag) where
   pretty =
@@ -139,20 +138,20 @@ instance MC.PrettyF tag => PP.Pretty (MemShape wptr tag) where
       Uninitialized bs -> "uninitialized x" PP.<+> PP.viaShow (Bytes.bytesToInteger bs)
       Initialized tag bs ->
         PP.hcat
-        [ "initialized"
-        , ppTag tag
-        , "x "
-        , PP.viaShow (Bytes.bytesToInteger bs)
-        ]
+          [ "initialized"
+          , ppTag tag
+          , "x "
+          , PP.viaShow (Bytes.bytesToInteger bs)
+          ]
       Pointer tag (Offset off) tgt ->
         PP.hcat
-        [ "ptr"
-        , ppTag tag
-        , ":"
-        , PP.pretty tgt
-        , "+"
-        , PP.viaShow off
-        ]
+          [ "ptr"
+          , ppTag tag
+          , ":"
+          , PP.pretty tgt
+          , "+"
+          , PP.viaShow off
+          ]
       Exactly bs -> "exactly:" PP.<+> PP.pretty bs
 
 instance TF.FunctorF (MemShape wptr) where
@@ -181,16 +180,16 @@ traverseMemShapeWithType f =
     Uninitialized bs -> pure (Uninitialized bs)
     Initialized tag bs ->
       Initialized
-      <$> f (C.VectorRepr (Mem.LLVMPointerRepr C.knownNat)) tag
-      <*> pure bs
+        <$> f (C.VectorRepr (Mem.LLVMPointerRepr C.knownNat)) tag
+        <*> pure bs
     Pointer tag off tgt ->
       Pointer
-      <$> f (Mem.LLVMPointerRepr ?ptrWidth) tag
-      <*> pure off
-      <*> traversePtrTargetWithType f tgt
+        <$> f (Mem.LLVMPointerRepr ?ptrWidth) tag
+        <*> pure off
+        <*> traversePtrTargetWithType f tgt
     Exactly bs ->
       Exactly
-      <$> traverse (traverseTaggedByte (f (Mem.LLVMPointerRepr (C.knownNat @8)))) bs
+        <$> traverse (traverseTaggedByte (f (Mem.LLVMPointerRepr (C.knownNat @8)))) bs
 
 merge ::
   Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
@@ -226,22 +225,18 @@ initializeMemShape tag =
     Uninitialized bs -> Initialized tag bs
     ms -> ms
 
-
-
-
-
 {-
 Note [Deduplicating Pointer Targets Based on BlockIDs]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 During parsing of shapes, a given block is parsed as many times as it is needed into a 'PtrTarget'.
 This duplciation of blocks causes 'setup' to lose track of which 'PtrTarget's are identical and should be aliased.
-Indeed, the shapes datastructure does not directly allow for 'PtrTarget's to be aliased. We create aliasing by annotating 'PtrTarget's 
+Indeed, the shapes datastructure does not directly allow for 'PtrTarget's to be aliased. We create aliasing by annotating 'PtrTarget's
 with an optional 'BlockId'.
 
-'PtrTarget's with a 'BlockId' are deemed equivalent and during 'setup' each use of a given 'BlockId' will be deduplicated into a single runtime value. 
-'PtrTarget's without a 'BlockId' can be thought of as fresh on-the-fly 'BlockId's which is how the printer handles them. Inside of setup, pointer initialization is memoized 
+'PtrTarget's with a 'BlockId' are deemed equivalent and during 'setup' each use of a given 'BlockId' will be deduplicated into a single runtime value.
+'PtrTarget's without a 'BlockId' can be thought of as fresh on-the-fly 'BlockId's which is how the printer handles them. Inside of setup, pointer initialization is memoized
 such that the same result is returned for matching 'BlockId's. This behavior means that for a given list of shapes passed to 'setup' any 'PtrTarget' with a matching 'BlockId' is expected
-to have the same shape, otherwise the first observed 'PtrTarget's shape will win.   
+to have the same shape, otherwise the first observed 'PtrTarget's shape will win.
 -}
 
 -- | The target of a pointer.
@@ -250,8 +245,8 @@ to have the same shape, otherwise the first observed 'PtrTarget's shape will win
 -- allocated space. Otherwise, the pointer points to an allocation large enough
 -- to hold all the 'MemShape's in the 'Seq' (see 'ptrTargetSize').
 --
--- The `BlockId` is used to deduplicate target blocks during setup. If a `BlockId` is present 
--- a single block will be allocated for that identifier. If the identifier is `Nothing` then 
+-- The `BlockId` is used to deduplicate target blocks during setup. If a `BlockId` is present
+-- a single block will be allocated for that identifier. If the identifier is `Nothing` then
 -- a fresh identifier will be generated. Invariant: it is expected that any two 'PtrTarget's with the same 'BlockId'
 -- used within the same context will have the same shape. Violating this invariant will mean that 'setup' will produce
 -- incorrect blocks for the second time a 'BlockId' is used.
@@ -266,7 +261,7 @@ to have the same shape, otherwise the first observed 'PtrTarget's shape will win
 --
 -- * @wptr@: Width of a pointer, in bits
 -- * @tag@: See 'Grease.Shape.Shape'
-data PtrTarget wptr tag = PtrTarget (Maybe BlockId) (Seq (MemShape wptr tag)) 
+data PtrTarget wptr tag = PtrTarget (Maybe BlockId) (Seq (MemShape wptr tag))
 
 instance TF.FunctorF (PtrTarget wptr) where
   fmapF = TF.fmapFDefault
@@ -281,7 +276,8 @@ deriving instance
   ( Eq (tag (Mem.LLVMPointerType 8))
   , Eq (tag (C.VectorType (Mem.LLVMPointerType 8)))
   , Eq (tag (Mem.LLVMPointerType wptr))
-  ) => Eq (PtrTarget wptr tag)
+  ) =>
+  Eq (PtrTarget wptr tag)
 
 -- | Like 'TF.traverseF', but with access to the appropriate 'C.TypeRepr'.
 traversePtrTargetWithType ::
@@ -300,14 +296,14 @@ ptrTarget ::
   Seq (MemShape wptr tag) ->
   PtrTarget wptr tag
 ptrTarget bid = PtrTarget bid . Foldable.foldl' go Seq.empty
-  where
-    go s (Uninitialized 0) = s
-    go s (Initialized _tag 0) = s
-    go Seq.Empty memShape = Seq.singleton memShape
-    go accum@(pfx Seq.:|> lastElem) memShape =
-      case merge lastElem memShape of
-        Just last' -> pfx Seq.:|> last'
-        Nothing -> accum Seq.:|> memShape
+ where
+  go s (Uninitialized 0) = s
+  go s (Initialized _tag 0) = s
+  go Seq.Empty memShape = Seq.singleton memShape
+  go accum@(pfx Seq.:|> lastElem) memShape =
+    case merge lastElem memShape of
+      Just last' -> pfx Seq.:|> last'
+      Nothing -> accum Seq.:|> memShape
 
 -- | Compute the minimal size of an allocation that could contain this
 -- 'PtrTarget'
@@ -324,7 +320,7 @@ growPtrTargetBy ::
   Bytes ->
   PtrTarget wptr tag ->
   PtrTarget wptr tag
-growPtrTargetBy amount (PtrTarget bid s) = ptrTarget bid (s Seq.|> Uninitialized amount) 
+growPtrTargetBy amount (PtrTarget bid s) = ptrTarget bid (s Seq.|> Uninitialized amount)
 
 -- | Grow an allocation by adding uninitialized bytes to the end, up to the
 -- given size (or at least by 1).
@@ -365,15 +361,15 @@ initializeOrGrowPtrTarget ::
   PtrTarget wptr tag
 initializeOrGrowPtrTarget tag t@(PtrTarget _ ms) =
   if Foldable.all isInit ms
-  then growPtrTarget t
-  else initializePtrTarget tag t
-  where
-    isInit =
-      \case
-        Uninitialized{} -> False
-        Initialized{} -> True
-        Pointer{} -> True
-        Exactly{} -> True
+    then growPtrTarget t
+    else initializePtrTarget tag t
+ where
+  isInit =
+    \case
+      Uninitialized{} -> False
+      Initialized{} -> True
+      Pointer{} -> True
+      Exactly{} -> True
 
 -- | Replace the targets with pointers
 ptrTargetToPtrs ::
@@ -389,11 +385,11 @@ ptrTargetToPtrs proxy tag tgt =
       (nPtrs, remBytes) = sz `divMod` ptrBytes
       nPtrs' = Bytes.bytesToInteger $ if remBytes == 0 then nPtrs else nPtrs + 1
       genSeq n x = Seq.iterateN n id x
-  in (PtrTarget Nothing $
-     genSeq (fromIntegral nPtrs') $
-     Pointer tag (Offset 0) $
-     ptrTarget Nothing Seq.Empty) 
-
+   in ( PtrTarget Nothing $
+          genSeq (fromIntegral nPtrs') $
+            Pointer tag (Offset 0) $
+              ptrTarget Nothing Seq.Empty
+      )
 
 instance PP.Pretty BlockId where
   pretty bid = "blockid:" PP.<+> (PP.pretty $ getBlockId bid)
@@ -403,16 +399,20 @@ instance MC.PrettyF tag => PP.Pretty (PtrTarget wptr tag) where
   pretty =
     \case
       PtrTarget bid Seq.Empty -> PP.pretty bid PP.<+> "<unallocated>"
-      PtrTarget bid ms ->  PP.pretty bid PP.<+> PP.list (Foldable.toList (fmap PP.pretty ms))
+      PtrTarget bid ms -> PP.pretty bid PP.<+> PP.list (Foldable.toList (fmap PP.pretty ms))
 
-newtype Offset = Offset { getOffset :: Bytes }
+newtype Offset = Offset {getOffset :: Bytes}
   deriving (Eq, Show)
 
 -- Type parameters:
 --
+
 -- * @ext@: Crucible syntax extension
+
 -- * @w@: Width of a pointer, in bits
+
 -- * @tag@: See 'Grease.Shape.Shape'
+
 -- * @t@: Crucible type corresponding to this shape
 type PtrShape :: Type -> Natural -> (C.CrucibleType -> Type) -> C.CrucibleType -> Type
 data PtrShape (ext :: Type) w tag (t :: C.CrucibleType) where
@@ -445,7 +445,9 @@ instance
   , Eq (tag (Mem.LLVMPointerType w))
   , Eq (tag (C.VectorType (Mem.LLVMPointerType 8)))
   , TestEquality tag
-  ) => TestEquality (PtrShape ext w tag) where
+  ) =>
+  TestEquality (PtrShape ext w tag)
+  where
   testEquality s s' =
     case (s, s') of
       (ShapePtrBV tag w, ShapePtrBV tag' w') ->
@@ -471,12 +473,12 @@ instance MC.PrettyF tag => MC.PrettyF (PtrShape ext w tag) where
       ShapePtrBV tag _w -> "bv" PP.<> ppTag tag
       ShapePtrBVLit tag w bv ->
         PP.hcat
-        [ PP.viaShow bv
-        , ":[bv"
-        , PP.viaShow w
-        , "]"
-        , ppTag tag
-        ]
+          [ PP.viaShow bv
+          , ":[bv"
+          , PP.viaShow w
+          , "]"
+          , ppTag tag
+          ]
       ShapePtr tag (Offset off) tgt ->
         PP.pretty tgt PP.<> "+" PP.<> PP.viaShow off PP.<> ppTag tag
 
@@ -516,9 +518,9 @@ traversePtrShapeWithType f =
       ShapePtrBVLit <$> f (Mem.LLVMPointerRepr w) tag <*> pure w <*> pure bv
     ShapePtr tag off tgt ->
       ShapePtr
-      <$> f (Mem.LLVMPointerRepr ?ptrWidth) tag
-      <*> pure off
-      <*> traversePtrTargetWithType f tgt
+        <$> f (Mem.LLVMPointerRepr ?ptrWidth) tag
+        <*> pure off
+        <*> traversePtrTargetWithType f tgt
 
 -- | Get the @tag@ on this 'PtrShape'. (See 'Grease.Shape.Shape'.)
 getPtrTag :: PtrShape ext w tag t -> tag t
@@ -541,7 +543,7 @@ ptrShapeTag :: Lens.Lens' (PtrShape ext w tag t) (tag t)
 ptrShapeTag = Lens.lens getPtrTag setPtrTag
 
 minimalPtrShape ::
-  (1 C.<= w
+  ( 1 C.<= w
   , Mem.HasPtrWidth wptr
   , Applicative m
   , Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8)))
@@ -550,11 +552,11 @@ minimalPtrShape ::
   NatRepr w ->
   m (PtrShape ext wptr tag (Mem.LLVMPointerType w))
 minimalPtrShape mkTag w =
-  let tag = mkTag (Mem.LLVMPointerRepr w) in
-  case C.testEquality w ?ptrWidth of
-    Just C.Refl ->
-      ShapePtr <$> tag <*> pure (Offset 0) <*> pure (ptrTarget Nothing Seq.empty)
-    Nothing -> ShapePtrBV <$> tag <*> pure w
+  let tag = mkTag (Mem.LLVMPointerRepr w)
+   in case C.testEquality w ?ptrWidth of
+        Just C.Refl ->
+          ShapePtr <$> tag <*> pure (Offset 0) <*> pure (ptrTarget Nothing Seq.empty)
+        Nothing -> ShapePtrBV <$> tag <*> pure w
 
 -- | The x86_64 stack pointer points to the end of a large, fresh, mostly-
 -- uninitialized allocation, which is typical for a stack pointer. The very end
@@ -576,9 +578,11 @@ x64StackPtrShape returnAddrBytes stackArgSlots =
       (returnAddr, returnAddrSize) = returnAddrMemShape returnAddrBytes ptrWidth
       (stackArgs, stackArgsSize) = stackArgMemShapes stackArgSlots ptrWidth
       uninit = stackSizeInMiB - returnAddrSize - stackArgsSize
-      tgt = ptrTarget Nothing $ Seq.fromList $
+      tgt =
+        ptrTarget Nothing $
+          Seq.fromList $
             [Uninitialized uninit, returnAddr] List.++ stackArgs
-  in ShapePtr NoTag (Offset uninit) tgt
+   in ShapePtr NoTag (Offset uninit) tgt
 
 -- | The PowerPC stack pointer points to the end of a large, fresh, mostly-
 -- uninitialized allocation, which is typical for a stack pointer. The very end
@@ -607,9 +611,11 @@ ppcStackPtrShape returnAddrBytes stackArgSlots =
       backChainSize = ptrWidth
       (stackArgs, stackArgsSize) = stackArgMemShapes stackArgSlots ptrWidth
       uninit = stackSizeInMiB - returnAddrSize - backChainSize - stackArgsSize
-      tgt = ptrTarget Nothing $ Seq.fromList $
+      tgt =
+        ptrTarget Nothing $
+          Seq.fromList $
             [Uninitialized uninit, returnAddr, backChain] List.++ stackArgs
-  in ShapePtr NoTag (Offset uninit) tgt
+   in ShapePtr NoTag (Offset uninit) tgt
 
 -- | The AArch32 stack pointer points to the end of a large, fresh, mostly-
 -- uninitialized allocation, which is typical for a stack pointer. The very end
@@ -625,32 +631,36 @@ armStackPtrShape stackArgSlots =
   let ptrWidth = Bytes 4
       (stackArgs, stackArgsSize) = stackArgMemShapes stackArgSlots ptrWidth
       uninit = stackSizeInMiB - stackArgsSize
-      tgt = ptrTarget Nothing $ Seq.fromList $
+      tgt =
+        ptrTarget Nothing $
+          Seq.fromList $
             Uninitialized uninit : stackArgs
-  in ShapePtr NoTag (Offset uninit) tgt
+   in ShapePtr NoTag (Offset uninit) tgt
 
 -- Helper, not exported
 stackSizeInMiB :: Bytes
 stackSizeInMiB = 1024 * kib
-  where
-    kib = 1024
+ where
+  kib = 1024
 
 -- Helper, not exported
 returnAddrMemShape :: Maybe [Word8] -> Bytes -> (MemShape wptr NoTag, Bytes)
 returnAddrMemShape returnAddrBytes ptrWidth =
   case returnAddrBytes of
     Just bs ->
-      let bs' = List.map (TaggedByte NoTag) bs in
-      (Exactly bs', Bytes (fromIntegral (List.length bs)))
+      let bs' = List.map (TaggedByte NoTag) bs
+       in (Exactly bs', Bytes (fromIntegral (List.length bs)))
     Nothing -> (Initialized NoTag ptrWidth, ptrWidth)
 
 -- Helper, not exported
 stackArgMemShapes :: ExtraStackSlots -> Bytes -> ([MemShape wptr NoTag], Bytes)
 stackArgMemShapes stackArgSlots ptrWidth =
-  let stackArgs = List.replicate (getExtraStackSlots stackArgSlots)
-                                 (Initialized NoTag ptrWidth)
-      stackArgsSize = Bytes (toInteger stackArgSlots) * ptrWidth in
-  (stackArgs, stackArgsSize)
+  let stackArgs =
+        List.replicate
+          (getExtraStackSlots stackArgSlots)
+          (Initialized NoTag ptrWidth)
+      stackArgsSize = Bytes (toInteger stackArgSlots) * ptrWidth
+   in (stackArgs, stackArgsSize)
 
 -- This is far too broad, it makes the entire allocation consist of pointers
 -- when it's likely that only one part of it needs to be.
@@ -672,7 +682,6 @@ bytesToPointers proxy tag path tgt =
   case (path, tgt) of
     -- At the end of the path, grow/initialize the pointer here
     (Here _, _) -> pure (ptrTargetToPtrs proxy tag tgt)
-
     -- Need to keep dereferencing as specified by the path
     (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget bid ms) ->
       case ms Seq.!? idx of
@@ -684,7 +693,6 @@ bytesToPointers proxy tag path tgt =
         Just Initialized{} -> pure (ptrTargetToPtrs proxy tag tgt)
         Just Uninitialized{} -> pure (ptrTargetToPtrs proxy tag tgt)
         Nothing -> throw $ GreaseException $ "Internal error: path index out of bounds!"
-
     (CursorExt (DereferenceByte _ _), _) ->
       throw $ GreaseException $ "Internal error: can't have pointer precondition on byte!"
 
@@ -708,7 +716,6 @@ modifyPtrTarget proxy modify path tgt =
   case (path, tgt) of
     -- At the end of the path, grow/initialize/whatever the pointer here
     (Here _, _) -> modify tgt
-
     -- Need to keep dereferencing as specified by the path
     (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget _ ms) ->
       case ms Seq.!? idx of
@@ -718,7 +725,5 @@ modifyPtrTarget proxy modify path tgt =
           pure (ptrTarget Nothing (Seq.update idx (Pointer tag off subTgt') ms))
         Just _ -> throw $ GreaseException $ "Internal error: mismatched selector and pointer target!"
         Nothing -> throw $ GreaseException $ "Internal error: path index out of bounds!"
-
     (CursorExt (DereferenceByte _ _), _) ->
       throw $ GreaseException $ "Internal error: can't have pointer precondition on byte!"
-

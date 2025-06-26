@@ -1,16 +1,14 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Shape
-  ( shapeTests
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Shape (
+  shapeTests,
+) where
 
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (liftIO)
@@ -18,20 +16,20 @@ import Data.BitVector.Sized qualified as BV
 import Data.Either qualified as Either
 import Data.Functor qualified as Functor
 import Data.List qualified as List
-import Data.Macaw.CFG (AddrWidthRepr(Addr64))
+import Data.Macaw.CFG (AddrWidthRepr (Addr64))
 import Data.Map qualified as Map
 import Data.Maybe qualified as Maybe
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
-import Data.Parameterized.Pair (Pair(Pair))
-import Data.Parameterized.Some (Some(Some))
+import Data.Parameterized.Pair (Pair (Pair))
+import Data.Parameterized.Some (Some (Some))
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (testEquality)
 import Data.Type.Equality qualified as Equality
 import Grease.Shape as Shape
-import Grease.Shape.NoTag (NoTag(NoTag))
+import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
@@ -76,21 +74,21 @@ eqShapes eqExt c1 c2 =
     (_, _) -> False
 
 eqMemShape :: PtrShape.MemShape w NoTag -> PtrShape.MemShape w NoTag -> Bool
-eqMemShape (PtrShape.Pointer ty off tgt) (PtrShape.Pointer ty' off' tgt') = ty == ty' && off == off'
- && eqPtrTarget tgt tgt'
+eqMemShape (PtrShape.Pointer ty off tgt) (PtrShape.Pointer ty' off' tgt') =
+  ty == ty'
+    && off == off'
+    && eqPtrTarget tgt tgt'
 eqMemShape x y = x == y
-
 
 -- | In parse tests we ignore the blockID. This is because Nothing is equivalent to a fresh identifier
 -- That is 'PtrTarget' Nothing, 'PtrTarget' Nothing will result in a print of
 -- 0: x
 -- 1: y
 -- The parser will then parse the blockIDs as 0 and 1 accordingly.
-
-eqPtrTarget :: PtrShape.PtrTarget w NoTag -> PtrShape.PtrTarget w NoTag  -> Bool
-eqPtrTarget (PtrShape.PtrTarget _ mems)  (PtrShape.PtrTarget _ mems') =
-  Seq.length mems == Seq.length mems' &&
-    all (uncurry eqMemShape) (Seq.zip mems mems')
+eqPtrTarget :: PtrShape.PtrTarget w NoTag -> PtrShape.PtrTarget w NoTag -> Bool
+eqPtrTarget (PtrShape.PtrTarget _ mems) (PtrShape.PtrTarget _ mems') =
+  Seq.length mems == Seq.length mems'
+    && all (uncurry eqMemShape) (Seq.zip mems mems')
 
 eqPtrShape ::
   PtrShape w ext NoTag t1 ->
@@ -132,8 +130,9 @@ genShape genExt =
     , pure (Some (Shape.ShapeUnit NoTag))
     ]
     [ genStruct (genShape genExt)
-    , do Some ext <- genExt
-         pure (Some (ShapeExt ext))
+    , do
+        Some ext <- genExt
+        pure (Some (ShapeExt ext))
     ]
 
 maxBytes :: Integral a => a
@@ -142,20 +141,23 @@ maxBytes = 32
 genPtrShape :: Mem.HasPtrWidth w => H.Gen (Some (PtrShape ext w NoTag))
 genPtrShape =
   HG.choice
-    [ do bytes <- HG.integral (HR.linear 1 maxBytes)
-         Some w' <- pure (NatRepr.mkNatRepr (8 * bytes))
-         case NatRepr.isZeroOrGT1 w' of
-           Either.Left Equality.Refl -> Monad.fail "Impossible"
-           Either.Right NatRepr.LeqProof ->
-             pure (Some (PtrShape.ShapePtrBV NoTag w'))
-    , do bytes <- HG.bytes (HR.linear 1 maxBytes)
-         Pair w' bv <- pure (BV.bytestringLE bytes)
-         case NatRepr.isZeroOrGT1 w' of
-           Either.Left Equality.Refl -> Monad.fail "Impossible"
-           Either.Right NatRepr.LeqProof ->
-             pure (Some (PtrShape.ShapePtrBVLit NoTag w' bv))
-    , do (tgt, offset) <- genPtrTarget
-         pure (Some (PtrShape.ShapePtr NoTag offset tgt))
+    [ do
+        bytes <- HG.integral (HR.linear 1 maxBytes)
+        Some w' <- pure (NatRepr.mkNatRepr (8 * bytes))
+        case NatRepr.isZeroOrGT1 w' of
+          Either.Left Equality.Refl -> Monad.fail "Impossible"
+          Either.Right NatRepr.LeqProof ->
+            pure (Some (PtrShape.ShapePtrBV NoTag w'))
+    , do
+        bytes <- HG.bytes (HR.linear 1 maxBytes)
+        Pair w' bv <- pure (BV.bytestringLE bytes)
+        case NatRepr.isZeroOrGT1 w' of
+          Either.Left Equality.Refl -> Monad.fail "Impossible"
+          Either.Right NatRepr.LeqProof ->
+            pure (Some (PtrShape.ShapePtrBVLit NoTag w' bv))
+    , do
+        (tgt, offset) <- genPtrTarget
+        pure (Some (PtrShape.ShapePtr NoTag offset tgt))
     ]
 
 genPtrTarget ::
@@ -181,30 +183,32 @@ genMemShape = do
     HG.choice
     [ PtrShape.Uninitialized Functor.<$> bytes
     , PtrShape.Initialized NoTag Functor.<$> bytes
-    , PtrShape.Exactly Functor.<$>
-        HG.list
+    , PtrShape.Exactly
+        Functor.<$> HG.list
           (HR.linear minBytes 32)
           (PtrShape.TaggedByte NoTag Functor.<$> HG.word8 (HR.linear minBound maxBound))
     ]
-    [ do (tgt, offset) <- genPtrTarget
-         pure $ PtrShape.Pointer NoTag offset tgt ]
+    [ do
+        (tgt, offset) <- genPtrTarget
+        pure $ PtrShape.Pointer NoTag offset tgt
+    ]
 
 printCfg :: Print.PrinterConfig 64
 printCfg =
   Print.PrinterConfig
-  { Print.cfgAddrWidth = Addr64
-  , Print.cfgRleThreshold = 16  -- lower than `maxBytes` to exercise RLE
-  }
+    { Print.cfgAddrWidth = Addr64
+    , Print.cfgRleThreshold = 16 -- lower than `maxBytes` to exercise RLE
+    }
 
 doPrintNamed :: Text -> Shape LLVM NoTag ty -> Text
 doPrintNamed nm s =
-  let doc = Print.evalPrinter printCfg (Print.printNamed nm s) in
-  PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions doc)
+  let doc = Print.evalPrinter printCfg (Print.printNamed nm s)
+   in PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions doc)
 
 doPrint :: Shape LLVM NoTag ty -> Text
 doPrint s =
-  let doc = Print.evalPrinter printCfg (Print.print s) in
-  PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions doc)
+  let doc = Print.evalPrinter printCfg (Print.print s)
+   in PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions doc)
 
 testPrint :: String -> Text -> Shape LLVM NoTag ty -> TT.TestTree
 testPrint name printed s =
@@ -259,92 +263,93 @@ printThenParse s = do
 
 shapeTests :: TT.TestTree
 shapeTests =
-  TT.testGroup "Shape tests"
-  [ TTH.testPropertyNamed "Print then parse" "print_then_parse" $
-      H.property $ do
-        let ?ptrWidth = NatRepr.knownNat @64
-        Some s <- H.forAll (genShape @LLVM genPtrShape)
-        Some s' <- liftIO (printThenParse s)
-        let testEq = eqShape @LLVM eqPtrShape
-        H.assert (testEq s s')
-
-  , TTH.testPropertyNamed "Show does not loop" "show" $
-      H.property $ do
-        let ?ptrWidth = NatRepr.knownNat @64
-        Some s <- H.forAll (genShape @LLVM genPtrShape)
-        show s H.=== show s
-
-  , testParse
-    "Parse Initialized RLE"
-    "000000+0000000000000000\n\n000000: XX*4"
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Initialized NoTag 4])
-  , testParse
-    "Parse Uninitialized RLE"
-    "000000+0000000000000000\n\n000000: ##*4"
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Uninitialized 4])
-  , testParse
-    "Parse Exactly RLE"
-    "000000+0000000000000000\n\n000000: de*4"
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) [0xde, 0xde, 0xde, 0xde])])
-  , testParse
-    "Parse Exactly byte then RLE"
-    "000000+0000000000000000\n\n000000: 01 00*2 03"
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) [0x01, 0x00, 0x00, 0x03])])
-
-  , testPrint
-    "Print ShapeBool"
-    "bool"
-    (ShapeBool NoTag)
-  , testPrint
-    "Print ShapeUnit"
-    "unit"
-    (ShapeUnit NoTag)
-  , testPrint
-    "Print ShapeStruct"
-    "{bool, unit}"
-    (Shape.ShapeStruct
-     NoTag
-     (Ctx.Empty Ctx.:> Shape.ShapeBool NoTag Ctx.:> Shape.ShapeUnit NoTag))
-  , testPrint
-    "Print ShapePtrBV (32-bit)"
-    "XX XX XX XX"
-    (Shape.ShapeExt (PtrShape.ShapePtrBV NoTag (NatRepr.knownNat @32)))
-  , testPrint
-    "Print ShapePtrBV (64-bit)"
-    "XX XX XX XX XX XX XX XX"
-    (Shape.ShapeExt (PtrShape.ShapePtrBV NoTag (NatRepr.knownNat @64)))
-  , testPrint
-    "Print ShapePtrBVLit (8-bit)"
-    "61"
-    (let w = NatRepr.knownNat @8 in
-    Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag w (BV.mkBV w 97)))
-  , testPrint
-    "Print ShapePtrBVLit (32-bit)"
-    "0bad1dea"
-    (let w = NatRepr.knownNat @32 in
-    Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag w (BV.mkBV w 0xbad1dea)))
-  , testPrint
-    "Print ShapePtr (64-bit)"
-    "000000+00000000000000ff\n\n000000: "
-    (ptrShape (PtrShape.Offset 0xff) [])
-  , testPrint
-    "Print Initialized"
-    "000000+0000000000000000\n\n000000: XX XX XX XX"
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Initialized NoTag 4])
-  , testPrint
-    "Print Uninitialized"
-    "000000+0000000000000000\n\n000000: ## ## ## ## ## ##"
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Uninitialized 6])
-  , testPrint
-    "Print Exactly"
-    "000000+0000000000000000\n\n000000: de ad be ef"
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) [0xde, 0xad, 0xbe, 0xef])])
-  , testPrint
-    "Print Pointer"
-    "000000+0000000000000000\n\n000000: 000001+0000000000000000\n000001: "
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0) (PtrShape.PtrTarget Maybe.Nothing Seq.Empty)])
-  , testPrint
-    "Print Pointer with non-zero offset"
-    "000000+0000000000000000\n\n000000: 000001+00000000000000ff\n000001: "
-    (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0xff) (PtrShape.PtrTarget Maybe.Nothing Seq.Empty)])
-  ]
+  TT.testGroup
+    "Shape tests"
+    [ TTH.testPropertyNamed "Print then parse" "print_then_parse" $
+        H.property $ do
+          let ?ptrWidth = NatRepr.knownNat @64
+          Some s <- H.forAll (genShape @LLVM genPtrShape)
+          Some s' <- liftIO (printThenParse s)
+          let testEq = eqShape @LLVM eqPtrShape
+          H.assert (testEq s s')
+    , TTH.testPropertyNamed "Show does not loop" "show" $
+        H.property $ do
+          let ?ptrWidth = NatRepr.knownNat @64
+          Some s <- H.forAll (genShape @LLVM genPtrShape)
+          show s H.=== show s
+    , testParse
+        "Parse Initialized RLE"
+        "000000+0000000000000000\n\n000000: XX*4"
+        (ptrShape (PtrShape.Offset 0) [PtrShape.Initialized NoTag 4])
+    , testParse
+        "Parse Uninitialized RLE"
+        "000000+0000000000000000\n\n000000: ##*4"
+        (ptrShape (PtrShape.Offset 0) [PtrShape.Uninitialized 4])
+    , testParse
+        "Parse Exactly RLE"
+        "000000+0000000000000000\n\n000000: de*4"
+        (ptrShape (PtrShape.Offset 0) [PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) [0xde, 0xde, 0xde, 0xde])])
+    , testParse
+        "Parse Exactly byte then RLE"
+        "000000+0000000000000000\n\n000000: 01 00*2 03"
+        (ptrShape (PtrShape.Offset 0) [PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) [0x01, 0x00, 0x00, 0x03])])
+    , testPrint
+        "Print ShapeBool"
+        "bool"
+        (ShapeBool NoTag)
+    , testPrint
+        "Print ShapeUnit"
+        "unit"
+        (ShapeUnit NoTag)
+    , testPrint
+        "Print ShapeStruct"
+        "{bool, unit}"
+        ( Shape.ShapeStruct
+            NoTag
+            (Ctx.Empty Ctx.:> Shape.ShapeBool NoTag Ctx.:> Shape.ShapeUnit NoTag)
+        )
+    , testPrint
+        "Print ShapePtrBV (32-bit)"
+        "XX XX XX XX"
+        (Shape.ShapeExt (PtrShape.ShapePtrBV NoTag (NatRepr.knownNat @32)))
+    , testPrint
+        "Print ShapePtrBV (64-bit)"
+        "XX XX XX XX XX XX XX XX"
+        (Shape.ShapeExt (PtrShape.ShapePtrBV NoTag (NatRepr.knownNat @64)))
+    , testPrint
+        "Print ShapePtrBVLit (8-bit)"
+        "61"
+        ( let w = NatRepr.knownNat @8
+           in Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag w (BV.mkBV w 97))
+        )
+    , testPrint
+        "Print ShapePtrBVLit (32-bit)"
+        "0bad1dea"
+        ( let w = NatRepr.knownNat @32
+           in Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag w (BV.mkBV w 0xbad1dea))
+        )
+    , testPrint
+        "Print ShapePtr (64-bit)"
+        "000000+00000000000000ff\n\n000000: "
+        (ptrShape (PtrShape.Offset 0xff) [])
+    , testPrint
+        "Print Initialized"
+        "000000+0000000000000000\n\n000000: XX XX XX XX"
+        (ptrShape (PtrShape.Offset 0) [PtrShape.Initialized NoTag 4])
+    , testPrint
+        "Print Uninitialized"
+        "000000+0000000000000000\n\n000000: ## ## ## ## ## ##"
+        (ptrShape (PtrShape.Offset 0) [PtrShape.Uninitialized 6])
+    , testPrint
+        "Print Exactly"
+        "000000+0000000000000000\n\n000000: de ad be ef"
+        (ptrShape (PtrShape.Offset 0) [PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) [0xde, 0xad, 0xbe, 0xef])])
+    , testPrint
+        "Print Pointer"
+        "000000+0000000000000000\n\n000000: 000001+0000000000000000\n000001: "
+        (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0) (PtrShape.PtrTarget Maybe.Nothing Seq.Empty)])
+    , testPrint
+        "Print Pointer with non-zero offset"
+        "000000+0000000000000000\n\n000000: 000001+00000000000000ff\n000001: "
+        (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0xff) (PtrShape.PtrTarget Maybe.Nothing Seq.Empty)])
+    ]

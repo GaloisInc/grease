@@ -1,32 +1,30 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Entrypoint
-  ( -- * Core definitions
-    Entrypoint(..)
-  , EntrypointLocation(..)
-  , entrypointNoStartupOv
-  , entrypointFromBytestring
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Entrypoint (
+  -- * Core definitions
+  Entrypoint (..),
+  EntrypointLocation (..),
+  entrypointNoStartupOv,
+  entrypointFromBytestring,
 
-    -- * Parsing entrypoints
-  , EntrypointParser
-  , entrypointSymbolStartupOvParser
-  , entrypointAddressStartupOvParser
+  -- * Parsing entrypoints
+  EntrypointParser,
+  entrypointSymbolStartupOvParser,
+  entrypointAddressStartupOvParser,
 
-    -- * @EntrypointCfgs@ and friends
-  , EntrypointCfgs(..)
-  , MacawEntrypointCfgs(..)
-  , StartupOv(..)
-  , parseEntrypointStartupOv
-  ) where
+  -- * @EntrypointCfgs@ and friends
+  EntrypointCfgs (..),
+  MacawEntrypointCfgs (..),
+  StartupOv (..),
+  parseEntrypointStartupOv,
+) where
 
-import Control.Applicative (Alternative(..))
+import Control.Applicative (Alternative (..))
 import Control.Exception.Safe (throw)
 import Data.ByteString qualified as BS
 import Data.Macaw.CFG qualified as MC
@@ -39,7 +37,7 @@ import Data.Text.Encoding qualified as Text
 import Data.Void (Void)
 import Data.Word (Word64)
 import Grease.Syntax (parseProgram, parsedProgramCfgMap)
-import Grease.Utility (GreaseException(..))
+import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.FunctionHandle qualified as C
@@ -53,13 +51,13 @@ import Text.Megaparsec.Char.Lexer qualified as TMCL
 import What4.FunctionName qualified as W4
 
 -- | An 'EntrypointLocation' and its optional startup override.
-data Entrypoint =
-  Entrypoint
-    { entrypointLocation :: EntrypointLocation
-      -- ^ Where the entrypoint is located in a program.
-    , entrypointStartupOvPath :: Maybe FilePath
-      -- ^ An optional path to a startup override.
-    }
+data Entrypoint
+  = Entrypoint
+  { entrypointLocation :: EntrypointLocation
+  -- ^ Where the entrypoint is located in a program.
+  , entrypointStartupOvPath :: Maybe FilePath
+  -- ^ An optional path to a startup override.
+  }
   deriving (Eq, Ord, Show)
 
 -- | The location of an entrypoint in a program.
@@ -111,10 +109,11 @@ entrypointSymbolStartupOvParser = do
   _ <- TMC.char ':'
   ovPath <- ovPathParser
   TM.eof
-  pure $ Entrypoint
-           { entrypointLocation = EntrypointSymbolName symbolName
-           , entrypointStartupOvPath = ovPath
-           }
+  pure $
+    Entrypoint
+      { entrypointLocation = EntrypointSymbolName symbolName
+      , entrypointStartupOvPath = ovPath
+      }
 
 -- | Parse an 'Entrypoint' in the format @ADDR:FILE@, where @ADDR@ is a function
 -- address (in hexadecimal) and @FILE@ is a path to a startup override.
@@ -126,10 +125,11 @@ entrypointAddressStartupOvParser = do
   _ <- TMC.char ':'
   ovPath <- ovPathParser
   TM.eof
-  pure $ Entrypoint
-           { entrypointLocation = EntrypointAddress (Text.pack addrStr)
-           , entrypointStartupOvPath = ovPath
-           }
+  pure $
+    Entrypoint
+      { entrypointLocation = EntrypointAddress (Text.pack addrStr)
+      , entrypointStartupOvPath = ovPath
+      }
 
 instance PP.Pretty EntrypointLocation where
   pretty =
@@ -147,49 +147,49 @@ instance PP.Pretty Entrypoint where
         PP.squotes (PP.pretty nm) PP.<+> ppStartupOv
       EntrypointCoreDump fp ->
         PP.pretty fp PP.<+> PP.parens "core dump file" PP.<+> ppStartupOv
-    where
-      ppStartupOv =
-        case entrypointStartupOvPath entry of
-          Nothing ->
-            mempty
-          Just ovPath ->
-            PP.parens ("startup override:" PP.<+> PP.pretty ovPath)
+   where
+    ppStartupOv =
+      case entrypointStartupOvPath entry of
+        Nothing ->
+          mempty
+        Just ovPath ->
+          PP.parens ("startup override:" PP.<+> PP.pretty ovPath)
 
 -- | A startup override to run just before the user-specified entrypoint
 -- function. This is parameterized over the type of CFG to run (@cfg@).
-data StartupOv cfg =
-  StartupOv
-    { startupOvCfg :: cfg
-      -- ^ The CFG of the startup override's @startup@ function.
-    , startupOvForwardDecs :: Map W4.FunctionName C.SomeHandle
-      -- ^ Forward declarations declared in the startup override file.
-    }
+data StartupOv cfg
+  = StartupOv
+  { startupOvCfg :: cfg
+  -- ^ The CFG of the startup override's @startup@ function.
+  , startupOvForwardDecs :: Map W4.FunctionName C.SomeHandle
+  -- ^ Forward declarations declared in the startup override file.
+  }
   deriving Functor
 
 -- | All of the CFGs and associated information related to a user-specified
 -- entrypoint function. This is parameterized over the type of CFG to run
 -- (@cfg@).
-data EntrypointCfgs cfg =
-  EntrypointCfgs
-    { entrypointStartupOv :: Maybe (StartupOv cfg)
-      -- ^ An optional startup override. If 'Just', the corresponding
-      -- 'startupOvCFG' will be called before calling the entrypoint's CFG.
-    , entrypointCfg :: cfg
-      -- ^ The entrypoint's CFG.
-    }
+data EntrypointCfgs cfg
+  = EntrypointCfgs
+  { entrypointStartupOv :: Maybe (StartupOv cfg)
+  -- ^ An optional startup override. If 'Just', the corresponding
+  -- 'startupOvCFG' will be called before calling the entrypoint's CFG.
+  , entrypointCfg :: cfg
+  -- ^ The entrypoint's CFG.
+  }
   deriving Functor
 
 -- | The CFGs for an entrypoint for a function in a Macaw program (i.e., machine
 -- code or Macaw S-expression code).
-data MacawEntrypointCfgs arch =
-  MacawEntrypointCfgs
-    (EntrypointCfgs (C.Reg.AnyCFG (Symbolic.MacawExt arch)))
-    -- ^ The CFG for the user-requested entrypoint function, as well as the CFG
-    -- for the startup override (if one was supplied).
-    (Maybe (MC.ArchSegmentOff arch))
-    -- ^ If simulating a binary, the second element of the pair is 'Just' the
-    -- address of the entrypoint function. Otherwise, the second element is
-    -- Nothing.
+data MacawEntrypointCfgs arch
+  = MacawEntrypointCfgs
+      -- | The CFG for the user-requested entrypoint function, as well as the CFG
+      -- for the startup override (if one was supplied).
+      (EntrypointCfgs (C.Reg.AnyCFG (Symbolic.MacawExt arch)))
+      -- | If simulating a binary, the second element of the pair is 'Just' the
+      -- address of the entrypoint function. Otherwise, the second element is
+      -- Nothing.
+      (Maybe (MC.ArchSegmentOff arch))
 
 -- | Parse a startup override in Crucible S-expression syntax and perform a
 -- light amount of validation.
@@ -208,13 +208,17 @@ parseEntrypointStartupOv halloc startupOvPath = do
   --- ...and then ensure that it has a function named `startup`.
   cfg <-
     maybe
-      (throw $ GreaseException $ Text.unlines
-        [ "Could not find a function named `startup`"
-        , "In the startup override located in " <> Text.pack startupOvPath
-        ])
+      ( throw $
+          GreaseException $
+            Text.unlines
+              [ "Could not find a function named `startup`"
+              , "In the startup override located in " <> Text.pack startupOvPath
+              ]
+      )
       pure
       (Map.lookup "startup" (parsedProgramCfgMap startupOvProg))
-  pure $ StartupOv
-           { startupOvCfg = cfg
-           , startupOvForwardDecs = CSyn.parsedProgForwardDecs startupOvProg
-           }
+  pure $
+    StartupOv
+      { startupOvCfg = cfg
+      , startupOvForwardDecs = CSyn.parsedProgForwardDecs startupOvProg
+      }

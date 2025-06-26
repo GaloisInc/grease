@@ -1,11 +1,9 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
-module Grease.Profiler.Feature
-  ( greaseProfilerFeature
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Profiler.Feature (
+  greaseProfilerFeature,
+) where
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (Async, async)
@@ -17,7 +15,7 @@ import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.Profiling qualified as C
 import System.Directory (createDirectoryIfMissing)
-import System.FilePath ((</>), takeDirectory)
+import System.FilePath (takeDirectory, (</>))
 
 -- | Return an execution feature that enables Crucible profiling within
 -- @grease@, as well as an 'Async' action that updates a profiling report at

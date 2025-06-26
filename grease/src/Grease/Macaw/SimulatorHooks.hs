@@ -1,23 +1,21 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Grease.Macaw.SimulatorHooks
-  ( greaseMacawExtImpl
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Macaw.SimulatorHooks (
+  greaseMacawExtImpl,
+) where
 
 import Control.Monad.IO.Class (MonadIO)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Backend qualified as Symbolic
-import Grease.Diagnostic (Diagnostic(SimulatorHooksDiagnostic), GreaseLogAction)
+import Grease.Diagnostic (Diagnostic (SimulatorHooksDiagnostic), GreaseLogAction)
 import Grease.Macaw.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Panic (panic)
 import Lang.Crucible.Backend qualified as C
@@ -67,9 +65,9 @@ greaseMacawExtImpl ::
   C.ExtensionImpl p sym (Symbolic.MacawExt arch)
 greaseMacawExtImpl bak la globMap macawExtImpl =
   macawExtImpl
-  { C.extensionEval = extensionEval macawExtImpl
-  , C.extensionExec = extensionExec bak la globMap macawExtImpl
-  }
+    { C.extensionEval = extensionEval macawExtImpl
+    , C.extensionExec = extensionExec bak la globMap macawExtImpl
+    }
 
 -- | This evaluates a Macaw statement extension in the simulator.
 extensionEval ::
@@ -86,9 +84,8 @@ extensionEval baseExt bak iTypes logFn cst evalFn =
       Mem.LLVMPointer _blk off <- evalFn ptr
       pure off
     e -> defaultExec e
-  where
-    defaultExec = C.extensionEval baseExt bak iTypes logFn cst evalFn
-
+ where
+  defaultExec = C.extensionEval baseExt bak iTypes logFn cst evalFn
 
 -- | Perform and AND of two pointers.
 --
@@ -162,11 +159,12 @@ extensionExec bak la _globs baseExt stmt crucState = do
           doLog la (Diag.ExecutingInstruction (PP.pretty segOff) dis)
           defaultExec
         Nothing ->
-          panic "extensionExec"
+          panic
+            "extensionExec"
             [ "MemorySegmentOff out of range"
             , show baddr
             , show iaddr
             ]
     _ -> defaultExec
-  where
-    defaultExec = C.extensionExec baseExt stmt crucState
+ where
+  defaultExec = C.extensionExec baseExt stmt crucState

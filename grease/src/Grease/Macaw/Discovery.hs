@@ -1,14 +1,12 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Macaw.Discovery (
+  discoverFunction,
+) where
 
-module Grease.Macaw.Discovery
-  ( discoverFunction
-  ) where
-
-import Control.Lens ((^.), (.~), to)
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Lens (to, (.~), (^.))
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Function ((&))
 import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.CFG qualified as MC
@@ -29,14 +27,15 @@ import What4.ProgramLoc qualified as W4
 
 -- | We pass this log function to @macaw@ to wrap discovery events in a custom
 -- wrapper that we stream out with the rest of our diagnostics.
-logDiscoveryEvent
-  :: ( MonadIO m
-     , MC.ArchConstraints arch
-     , w ~ MC.RegAddrWidth (MC.ArchReg arch) )
-  => LJ.LogAction IO Diagnostic
-  -> Discovery.AddrSymMap w
-  -> Discovery.DiscoveryEvent arch
-  -> m ()
+logDiscoveryEvent ::
+  ( MonadIO m
+  , MC.ArchConstraints arch
+  , w ~ MC.RegAddrWidth (MC.ArchReg arch)
+  ) =>
+  LJ.LogAction IO Diagnostic ->
+  Discovery.AddrSymMap w ->
+  Discovery.DiscoveryEvent arch ->
+  m ()
 logDiscoveryEvent logAction symMap evt =
   liftIO $ LJ.writeLog logAction (LoadDiagnostic (Diag.DiscoveryEvent symMap evt))
 
@@ -72,23 +71,26 @@ discoverFunction logAction halloc arch mem symMap pltStubs addr = do
   -- Mark the PLT stubs as trusted function entry points.
   -- See Note [Mark PLT stubs as trusted function entry points].
   let pltEntryPoints = Discovery.MayReturnFun <$ pltStubs
-  let s0 = Discovery.emptyDiscoveryState mem symMap archInf
-             & Discovery.trustedFunctionEntryPoints .~ pltEntryPoints
+  let s0 =
+        Discovery.emptyDiscoveryState mem symMap archInf
+          & Discovery.trustedFunctionEntryPoints .~ pltEntryPoints
   MI.withArchConstraints archInf $ do
     (_state, Some funInfo) <-
       IncComp.processIncCompLogs (logDiscoveryEvent logAction symMap) $ IncComp.runIncCompM $ do
         IncComp.incCompLog $ Discovery.ReportAnalyzeFunction addr
         let discoveryOpts = Discovery.defaultDiscoveryOptions
-        res@(_, Some funInfo) <- IncComp.liftIncComp id $
-          Discovery.discoverFunction discoveryOpts addr Discovery.UserRequest s0 []
+        res@(_, Some funInfo) <-
+          IncComp.liftIncComp id $
+            Discovery.discoverFunction discoveryOpts addr Discovery.UserRequest s0 []
         IncComp.incCompLog $ Discovery.ReportAnalyzeFunctionDone funInfo
         pure res
-    liftIO $ Symbolic.mkFunRegCFG
-      (arch ^. archVals . to Symbolic.archFunctions)
-      halloc
-      (functionNameFromByteString $ Discovery.discoveredFunName funInfo)
-      (W4.OtherPos . tshow) -- simply use addresses as source positions for now
-      funInfo
+    liftIO $
+      Symbolic.mkFunRegCFG
+        (arch ^. archVals . to Symbolic.archFunctions)
+        halloc
+        (functionNameFromByteString $ Discovery.discoveredFunName funInfo)
+        (W4.OtherPos . tshow) -- simply use addresses as source positions for now
+        funInfo
 
 {-
 Note [Mark PLT stubs as trusted function entry points]

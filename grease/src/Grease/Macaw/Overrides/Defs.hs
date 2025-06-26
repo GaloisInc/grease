@@ -1,21 +1,19 @@
-{-|
-Copyright        : (c) Galois, Inc. 2025
-Maintainer       : GREASE Maintainers <grease@galois.com>
-
-Custom stubs overrides.
--}
-
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.Macaw.Overrides.Defs
-  ( customStubsOverrides
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2025
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+--
+-- Custom stubs overrides.
+module Grease.Macaw.Overrides.Defs (
+  customStubsOverrides,
+) where
 
-import Control.Lens ((^.), to)
+import Control.Lens (to, (^.))
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.State (MonadState(..), StateT(..), evalStateT)
+import Control.Monad.State (MonadState (..), StateT (..), evalStateT)
 import Data.BitVector.Sized qualified as BV
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
@@ -59,9 +57,9 @@ customStubsOverrides mvar mmConf archCtx =
   , Stubs.SomeFunctionOverride (buildPutsOverride mvar mmConf archCtx)
   , Stubs.SomeFunctionOverride (buildPrintfOverride mvar mmConf archCtx)
   , Stubs.SomeFunctionOverride (buildPrintfChkOverride mvar mmConf archCtx)
-    -- Functions that do not appear at the LLVM level but do appear at the
+  , -- Functions that do not appear at the LLVM level but do appear at the
     -- machine code level
-  , Stubs.SomeFunctionOverride buildStackChkFailOverride
+    Stubs.SomeFunctionOverride buildStackChkFailOverride
   , Stubs.SomeFunctionOverride buildStackChkFailLocalOverride
   ]
 
@@ -80,17 +78,21 @@ buildAssertFailOverride ::
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
   ArchContext arch ->
-  Stubs.FunctionOverride p sym
-    (Ctx.EmptyCtx Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-                    Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-                    Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-                    Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch))
+  Stubs.FunctionOverride
+    p
+    sym
+    ( Ctx.EmptyCtx
+        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
+    )
     arch
     C.UnitType
 buildAssertFailOverride mvar mmConf archCtx =
   W4.withKnownNat ?ptrWidth $
-  Stubs.mkFunctionOverride "__assert_fail" $ \bak args ->
-    Ctx.uncurryAssignment (callAssert bak mvar mmConf archCtx) args
+    Stubs.mkFunctionOverride "__assert_fail" $ \bak args ->
+      Ctx.uncurryAssignment (callAssert bak mvar mmConf archCtx) args
 
 -- | An override for the @__assert_rtn@ function. This assumes that the fourth
 -- argument points to an entirely concrete string.
@@ -107,17 +109,21 @@ buildAssertRtnOverride ::
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
   ArchContext arch ->
-  Stubs.FunctionOverride p sym
-    (Ctx.EmptyCtx Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-                    Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-                    Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-                    Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch))
+  Stubs.FunctionOverride
+    p
+    sym
+    ( Ctx.EmptyCtx
+        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
+    )
     arch
     C.UnitType
 buildAssertRtnOverride mvar mmConf archCtx =
   W4.withKnownNat ?ptrWidth $
-  Stubs.mkFunctionOverride "__assert_rtn" $ \bak args ->
-    Ctx.uncurryAssignment (callAssert bak mvar mmConf archCtx) args
+    Stubs.mkFunctionOverride "__assert_rtn" $ \bak args ->
+      Ctx.uncurryAssignment (callAssert bak mvar mmConf archCtx) args
 
 -- | Call the @__assert_fail@ or @__assert_rtn@ function. These are internal
 -- functions that the @assert@ function is liable to compile down to, depending
@@ -167,16 +173,18 @@ buildPrintfOverride ::
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
   ArchContext arch ->
-  Stubs.FunctionOverride p sym
+  Stubs.FunctionOverride
+    p
+    sym
     (Ctx.EmptyCtx Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch))
     arch
     (Mem.LLVMPointerType (MC.ArchAddrWidth arch))
 buildPrintfOverride mvar mmConf archCtx =
   W4.withKnownNat ?ptrWidth $
-  Stubs.mkVariadicFunctionOverride "printf" $ \bak args gva ->
-    Ctx.uncurryAssignment
-      (\formatStrPtr -> callPrintf bak mvar mmConf archCtx formatStrPtr gva)
-      args
+    Stubs.mkVariadicFunctionOverride "printf" $ \bak args gva ->
+      Ctx.uncurryAssignment
+        (\formatStrPtr -> callPrintf bak mvar mmConf archCtx formatStrPtr gva)
+        args
 
 -- | An override for the @__printf_chk@ function. This assumes that the first
 -- argument points to an entirely concrete formatting string.
@@ -193,17 +201,21 @@ buildPrintfChkOverride ::
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
   ArchContext arch ->
-  Stubs.FunctionOverride p sym
-    (Ctx.EmptyCtx Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-                    Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch))
+  Stubs.FunctionOverride
+    p
+    sym
+    ( Ctx.EmptyCtx
+        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
+    )
     arch
     (Mem.LLVMPointerType (MC.ArchAddrWidth arch))
 buildPrintfChkOverride mvar mmConf archCtx =
   W4.withKnownNat ?ptrWidth $
-  Stubs.mkVariadicFunctionOverride "__printf_chk" $ \bak args gva ->
-    Ctx.uncurryAssignment
-      (\_flg formatStrPtr -> callPrintf bak mvar mmConf archCtx formatStrPtr gva)
-      args
+    Stubs.mkVariadicFunctionOverride "__printf_chk" $ \bak args gva ->
+      Ctx.uncurryAssignment
+        (\_flg formatStrPtr -> callPrintf bak mvar mmConf archCtx formatStrPtr gva)
+        args
 
 -- | Call the @printf@ or @__printf_chk@ function. This assumes that the pointer
 -- first argument points to an entirely concrete formatting string.
@@ -220,7 +232,13 @@ callPrintf ::
   ArchContext arch ->
   C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   Stubs.GetVarArg sym ->
-  C.OverrideSim p sym (Symbolic.MacawExt arch) r args ret
+  C.OverrideSim
+    p
+    sym
+    (Symbolic.MacawExt arch)
+    r
+    args
+    ret
     (Mem.LLVMPtr sym (MC.ArchAddrWidth arch))
 callPrintf bak mvar mmConf archCtx formatStrPtr gva = do
   let sym = C.backendGetSym bak
@@ -228,13 +246,15 @@ callPrintf bak mvar mmConf archCtx formatStrPtr gva = do
   let endian = archCtx ^. archInfo . to MI.archEndianness
   let maxSize = Nothing
   -- Read format string
-  (formatStr, st1) <- liftIO $
-    loadConcreteString bak mvar mmConf endian formatStrPtr maxSize st0
+  (formatStr, st1) <-
+    liftIO $
+      loadConcreteString bak mvar mmConf endian formatStrPtr maxSize st0
   put st1
   -- Parse format directives
   case Printf.parseDirectives (BS.unpack formatStr) of
-    Left err -> C.overrideError $
-      C.AssertFailureSimError "Format string parsing failed" err
+    Left err ->
+      C.overrideError $
+        C.AssertFailureSimError "Format string parsing failed" err
     Right ds -> do
       -- Get variadic arguments
       valist <- liftIO $ getPrintfVarArgs (Vec.fromList ds) gva
@@ -242,9 +262,9 @@ callPrintf bak mvar mmConf archCtx formatStrPtr gva = do
       -- Execute directives
       ((str, n), mem1) <-
         liftIO $
-        runStateT
-          (Printf.executeDirectives (Libc.printfOps bak valist) ds)
-          mem0
+          runStateT
+            (Printf.executeDirectives (Libc.printfOps bak valist) ds)
+            mem0
       C.writeGlobal mvar mem1
       -- Print formatted output
       h <- C.printHandle <$> C.getContext
@@ -282,20 +302,20 @@ getPrintfVarArg pd gva@(Stubs.GetVarArg getVarArg) =
     Printf.StringDirective{} -> pure (Nothing, gva)
     Printf.ConversionDirective cd ->
       case Printf.printfType cd of
-        Printf.Conversion_Integer{}    -> getArgWithType Mem.PtrRepr
-        Printf.Conversion_Char{}       -> getArgWithType Mem.PtrRepr
-        Printf.Conversion_String{}     -> getArgWithType Mem.PtrRepr
-        Printf.Conversion_Pointer{}    -> getArgWithType Mem.PtrRepr
+        Printf.Conversion_Integer{} -> getArgWithType Mem.PtrRepr
+        Printf.Conversion_Char{} -> getArgWithType Mem.PtrRepr
+        Printf.Conversion_String{} -> getArgWithType Mem.PtrRepr
+        Printf.Conversion_Pointer{} -> getArgWithType Mem.PtrRepr
         Printf.Conversion_CountChars{} -> getArgWithType Mem.PtrRepr
-        Printf.Conversion_Floating{}   -> getArgWithType $ C.FloatRepr C.DoubleFloatRepr
-  where
-    getArgWithType ::
-      forall arg.
-      C.TypeRepr arg ->
-      IO (Maybe (C.AnyValue sym), Stubs.GetVarArg sym)
-    getArgWithType tpRepr = do
-      (C.RegEntry ty val, gva') <- getVarArg tpRepr
-      pure (Just (C.AnyValue ty val), gva')
+        Printf.Conversion_Floating{} -> getArgWithType $ C.FloatRepr C.DoubleFloatRepr
+ where
+  getArgWithType ::
+    forall arg.
+    C.TypeRepr arg ->
+    IO (Maybe (C.AnyValue sym), Stubs.GetVarArg sym)
+  getArgWithType tpRepr = do
+    (C.RegEntry ty val, gva') <- getVarArg tpRepr
+    pure (Just (C.AnyValue ty val), gva')
 
 -- | An override for the @puts@ function. This assumes that the pointer argument
 -- points to an entirely concrete string.
@@ -312,14 +332,16 @@ buildPutsOverride ::
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
   ArchContext arch ->
-  Stubs.FunctionOverride p sym
+  Stubs.FunctionOverride
+    p
+    sym
     (Ctx.EmptyCtx Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch))
     arch
     (Mem.LLVMPointerType (MC.ArchAddrWidth arch))
 buildPutsOverride mvar mmConf archCtx =
   W4.withKnownNat ?ptrWidth $
-  Stubs.mkFunctionOverride "puts" $ \bak args ->
-    Ctx.uncurryAssignment (callPuts bak mvar mmConf archCtx) args
+    Stubs.mkFunctionOverride "puts" $ \bak args ->
+      Ctx.uncurryAssignment (callPuts bak mvar mmConf archCtx) args
 
 -- | Call the @puts@ function. This assumes that the pointer argument points to
 -- an entirely concrete string.
@@ -335,7 +357,13 @@ callPuts ::
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
   ArchContext arch ->
   C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
-  C.OverrideSim p sym (Symbolic.MacawExt arch) r args ret
+  C.OverrideSim
+    p
+    sym
+    (Symbolic.MacawExt arch)
+    r
+    args
+    ret
     (Mem.LLVMPtr sym (MC.ArchAddrWidth arch))
 callPuts bak mvar mmConf archCtx strPtr = do
   let sym = C.backendGetSym bak
@@ -357,9 +385,9 @@ callPuts bak mvar mmConf archCtx strPtr = do
 buildStackChkFailOverride ::
   Stubs.FunctionOverride p sym Ctx.EmptyCtx arch C.UnitType
 buildStackChkFailOverride =
-  let fnName = "__stack_chk_fail" in
-  Stubs.mkFunctionOverride fnName $ \_bak Ctx.Empty ->
-    callStackChkFail fnName
+  let fnName = "__stack_chk_fail"
+   in Stubs.mkFunctionOverride fnName $ \_bak Ctx.Empty ->
+        callStackChkFail fnName
 
 -- | An override for @__stack_chk_fail_local@. This behaves identically to the
 -- @__stack_chk_fail@ function (see 'buildStackChkFailOverride'), but this
@@ -369,9 +397,9 @@ buildStackChkFailOverride =
 buildStackChkFailLocalOverride ::
   Stubs.FunctionOverride p sym Ctx.EmptyCtx arch C.UnitType
 buildStackChkFailLocalOverride =
-  let fnName = "__stack_chk_fail_local" in
-  Stubs.mkFunctionOverride fnName $ \_bak Ctx.Empty ->
-    callStackChkFail fnName
+  let fnName = "__stack_chk_fail_local"
+   in Stubs.mkFunctionOverride fnName $ \_bak Ctx.Empty ->
+        callStackChkFail fnName
 
 -- | Call a function in the @__stack_chk_fail@ family.
 callStackChkFail :: W4.FunctionName -> C.OverrideSim p sym ext r args ret ()

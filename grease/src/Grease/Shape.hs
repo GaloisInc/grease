@@ -1,11 +1,3 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
-Module      : Grease.Shape
-
-For an overview of refinement, see "Grease.Refinement".
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -16,40 +8,46 @@ For an overview of refinement, see "Grease.Refinement".
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Grease.Shape
-  ( ExtShape
-  , PrettyExt
-  , Shape(..)
-  , ArgShapes(..)
-  , argShapes
-  , shapeType
-  , getTag
-  , setTag
-  , shapeTag
-  , minimalShapeWithPtrs
-  , minimalShapeWithPtrs'
-  , traverseShapeWithType
-  , tagWithType
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+-- Module      : Grease.Shape
+--
+-- For an overview of refinement, see "Grease.Refinement".
+module Grease.Shape (
+  ExtShape,
+  PrettyExt,
+  Shape (..),
+  ArgShapes (..),
+  argShapes,
+  shapeType,
+  getTag,
+  setTag,
+  shapeTag,
+  minimalShapeWithPtrs,
+  minimalShapeWithPtrs',
+  traverseShapeWithType,
+  tagWithType,
+) where
 
-import           Data.Parameterized.Ctx (Ctx)
-import Control.Applicative (Alternative(empty))
-import Control.Exception.Safe (throw, MonadThrow)
+import Control.Applicative (Alternative (empty))
+import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
-import Data.Functor.Identity (Identity(Identity, runIdentity))
+import Data.Functor.Identity (Identity (Identity, runIdentity))
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
-import Data.Parameterized.Classes (ShowF(..))
+import Data.Parameterized.Classes (ShowF (..))
 import Data.Parameterized.Context qualified as Ctx
-import Data.Parameterized.TraversableFC (traverseFC, fmapFC)
+import Data.Parameterized.Ctx (Ctx)
+import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
 import Data.Parameterized.TraversableFC qualified as TFC
-import Data.Type.Equality (TestEquality(testEquality), (:~:)(Refl))
+import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import GHC.Show qualified as GShow
 import Grease.Shape.Pointer (PtrShape, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
-import Grease.Utility (GreaseException(..))
+import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel qualified as Mem
@@ -58,13 +56,12 @@ import Text.Show qualified as Show
 
 data SomeTyped f = forall (t :: C.CrucibleType). SomeTyped (C.TypeRepr t) (f t)
 instance ShowF f => Show (SomeTyped f) where
-
   showsPrec p (SomeTyped repr f) =
     Show.showParen (p > GShow.appPrec) $
-      Show.showString "SomeTyped " .
-      Show.showsPrec GShow.appPrec1 repr .
-      GShow.showSpace .
-      showsPrecF GShow.appPrec1 f
+      Show.showString "SomeTyped "
+        . Show.showsPrec GShow.appPrec1 repr
+        . GShow.showSpace
+        . showsPrecF GShow.appPrec1 f
 
 -- | The shape of a symbolic value.
 --
@@ -116,7 +113,9 @@ instance (ShowExt ext tag, ShowF tag) => Show (Shape ext tag t) where
 instance
   ( TestEquality tag
   , TestEquality (ExtShape ext tag)
-  ) => TestEquality (Shape ext tag) where
+  ) =>
+  TestEquality (Shape ext tag)
+  where
   testEquality s s' =
     case (s, s') of
       (ShapeUnit tag, ShapeUnit tag') -> testEquality tag tag'
@@ -138,11 +137,11 @@ instance (ShowExt ext tag, ShowF tag) => ShowF (Shape ext tag) where
       ShapeBool tag -> "bool" List.++ showTag tag
       ShapeStruct tag fields ->
         List.concat @[]
-        [ "("
-        , MC.foldlFC (\l s -> showF s List.++ ", " List.++ l) [] fields
-        , ")"
-        , showTag tag
-        ]
+          [ "("
+          , MC.foldlFC (\l s -> showF s List.++ ", " List.++ l) [] fields
+          , ")"
+          , showTag tag
+          ]
       ShapeUnit tag -> "unit" List.++ showTag tag
       ShapeExt ext -> showF ext
 
@@ -191,10 +190,10 @@ traverseShapeWithType f =
   \case
     ShapeBool tag -> ShapeBool <$> f C.BoolRepr tag
     ShapeStruct tag fields ->
-      let fieldTypes = fmapFC (shapeType ptrShapeType) fields in
-      ShapeStruct
-      <$> f (C.StructRepr fieldTypes) tag
-      <*> traverseFC (traverseShapeWithType f) fields
+      let fieldTypes = fmapFC (shapeType ptrShapeType) fields
+       in ShapeStruct
+            <$> f (C.StructRepr fieldTypes) tag
+            <*> traverseFC (traverseShapeWithType f) fields
     ShapeUnit tag -> ShapeUnit <$> f C.UnitRepr tag
     ShapeExt ext -> ShapeExt <$> traversePtrShapeWithType f ext
 
@@ -262,8 +261,8 @@ minimalShape ext mkTag =
     t@C.BoolRepr -> ShapeBool <$> mkTag t
     t@(C.StructRepr fields) ->
       ShapeStruct
-      <$> mkTag t
-      <*> traverseFC (minimalShape ext mkTag) fields
+        <$> mkTag t
+        <*> traverseFC (minimalShape ext mkTag) fields
     t@C.UnitRepr -> ShapeUnit <$> mkTag t
     repr -> ShapeExt <$> ext repr
 
@@ -279,9 +278,10 @@ minimalShapeWithPtrs ::
   m (Shape ext tag t)
 minimalShapeWithPtrs mkTag =
   minimalShape
-    (\case
-      Mem.LLVMPointerRepr w -> minimalPtrShape mkTag w
-      _ -> throw @m $ GreaseException "Could not determine minimal shape for argument")
+    ( \case
+        Mem.LLVMPointerRepr w -> minimalPtrShape mkTag w
+        _ -> throw @m $ GreaseException "Could not determine minimal shape for argument"
+    )
     mkTag
 
 -- | Like 'minimalShapeWithPtrs', but uses 'empty' instead of 'throw'.
@@ -297,9 +297,10 @@ minimalShapeWithPtrs' ::
   m (Shape ext tag t)
 minimalShapeWithPtrs' mkTag =
   minimalShape
-    (\case
-      Mem.LLVMPointerRepr w -> minimalPtrShape mkTag w
-      _ -> empty)
+    ( \case
+        Mem.LLVMPointerRepr w -> minimalPtrShape mkTag w
+        _ -> empty
+    )
     mkTag
 
 type ArgShapes :: Type -> (C.CrucibleType -> Type) -> Ctx C.CrucibleType -> Type

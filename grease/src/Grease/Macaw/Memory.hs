@@ -1,25 +1,23 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
-
-Various utilities for loading strings from memory. Strictly speaking, nothing
-about this functionality is @grease@-specific, but we make a somewhat
-opinionated design choice: we attempt to concretize the pointer to read from
-using an SMT solver. This is useful (and necessary) for some use cases, but it
-does require adding 'OnlineSolverAndBackend' constraints to support it. This
-design choice warrants a closer look before being considered for inclusion
-upstream in @macaw@.
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ImplicitParams #-}
 
-module Grease.Macaw.Memory
-  ( loadString
-  , loadConcreteString
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+--
+-- Various utilities for loading strings from memory. Strictly speaking, nothing
+-- about this functionality is @grease@-specific, but we make a somewhat
+-- opinionated design choice: we attempt to concretize the pointer to read from
+-- using an SMT solver. This is useful (and necessary) for some use cases, but it
+-- does require adding 'OnlineSolverAndBackend' constraints to support it. This
+-- design choice warrants a closer look before being considered for inclusion
+-- upstream in @macaw@.
+module Grease.Macaw.Memory (
+  loadString,
+  loadConcreteString,
+) where
 
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.BitVector.Sized qualified as BV
 import Data.ByteString qualified as BS
 import Data.Macaw.CFG qualified as MC
@@ -65,9 +63,10 @@ loadString ::
   C.SimState p sym (Symbolic.MacawExt arch) rtp f args ->
   -- | The loaded bytes from the string (excluding the null terminator) and the
   -- updated Crucible state.
-  IO ( [W4.SymBV sym 8]
-     , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
-     )
+  IO
+    ( [W4.SymBV sym 8]
+    , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
+    )
 loadString bak mvar mmConf endian ptr0 maxChars0 st = do
   memImpl <- Symbolic.getMem st mvar
   let sym = C.backendGetSym bak
@@ -86,12 +85,13 @@ loadString bak mvar mmConf endian ptr0 maxChars0 st = do
         C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
         Maybe Int ->
         C.SimState p sym (Symbolic.MacawExt arch) rtp f args ->
-        IO ( [W4.SymBV sym 8]
-           , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
-           )
+        IO
+          ( [W4.SymBV sym 8]
+          , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
+          )
       go f p maxChars st0
-        | maxChars == Just 0
-        = pure (f [], st0)
+        | maxChars == Just 0 =
+            pure (f [], st0)
         | otherwise = do
             let addrWidth = MC.addrWidthRepr ?ptrWidth
             let readInfo = MC.BVMemRepr (W4.knownNat @1) endian
@@ -104,7 +104,7 @@ loadString bak mvar mmConf endian ptr0 maxChars0 st = do
                 one <- liftIO $ W4.bvOne sym Mem.PtrWidth
                 p' <- liftIO $ Mem.doPtrAddOffset bak memImpl (C.regValue p) one
                 let pEntry' = C.RegEntry Mem.PtrRepr p'
-                go (\xs -> f (x:xs)) pEntry' (subtract 1 <$> maxChars) st1
+                go (\xs -> f (x : xs)) pEntry' (subtract 1 <$> maxChars) st1
 
   go id ptrEntry1 maxChars0 st
 
@@ -127,19 +127,22 @@ loadConcreteString ::
   C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   Maybe Int ->
   C.SimState p sym (Symbolic.MacawExt arch) rtp f args ->
-  IO ( BS.ByteString
-     , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
-     )
+  IO
+    ( BS.ByteString
+    , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
+    )
 loadConcreteString bak mvar mmConf endian ptr maxChars st0 = do
   (symBytes, st1) <- loadString bak mvar mmConf endian ptr maxChars st0
   bytes <- traverse concretizeByte symBytes
   pure (BS.pack bytes, st1)
-  where
-    concretizeByte :: W4.SymBV sym 8 -> IO Word8
-    concretizeByte symByte =
-      case BV.asUnsigned <$> W4.asBV symByte of
-        Just byte -> pure $ fromInteger byte
-        Nothing ->
-          liftIO $ C.addFailedAssertion bak
-                 $ C.Unsupported Stack.callStack
-                     "Symbolic value encountered when loading a string"
+ where
+  concretizeByte :: W4.SymBV sym 8 -> IO Word8
+  concretizeByte symByte =
+    case BV.asUnsigned <$> W4.asBV symByte of
+      Just byte -> pure $ fromInteger byte
+      Nothing ->
+        liftIO $
+          C.addFailedAssertion bak $
+            C.Unsupported
+              Stack.callStack
+              "Symbolic value encountered when loading a string"

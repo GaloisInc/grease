@@ -1,27 +1,25 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 
-module Grease.LLVM
-  ( initState
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.LLVM (
+  initState,
+) where
 
 import Control.Exception.Safe (MonadThrow)
 import Control.Lens ((^.))
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.LLVM.SetupHook (SetupHook(SetupHook))
+import Grease.LLVM.SetupHook (SetupHook (SetupHook))
 import Grease.LLVM.SimulatorHooks (greaseLlvmExtImpl)
 import Grease.Options (ErrorSymbolicFunCalls)
-import Grease.Setup (SetupMem(getSetupMem))
+import Grease.Setup (SetupMem (getSetupMem))
 import Grease.Utility (printHandle)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.Backend qualified as C
@@ -74,16 +72,18 @@ initState ::
 initState bak la llvmExtImpl p halloc errorSymbolicFunCalls mem fs globs (SymIO.SomeOverrideSim initFsOv) llvmCtx setupHook initArgs mbStartupOvCfg (C.SomeCFG cfg) = do
   let dl = TCtx.llvmDataLayout (llvmCtx ^. Trans.llvmTypeCtx)
   let extImpl = greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls llvmExtImpl
-  let bindings = C.FnBindings
-        $ C.insertHandleMap (C.cfgHandle cfg) (C.UseCFG cfg $ C.postdomInfo cfg) C.emptyHandleMap
-  let ctx = C.initSimContext
-        bak
-        (CLLVM.llvmIntrinsicTypes `MapF.union` SymIO.llvmSymIOIntrinsicTypes)
-        halloc
-        printHandle
-        bindings
-        extImpl
-        p
+  let bindings =
+        C.FnBindings $
+          C.insertHandleMap (C.cfgHandle cfg) (C.UseCFG cfg $ C.postdomInfo cfg) C.emptyHandleMap
+  let ctx =
+        C.initSimContext
+          bak
+          (CLLVM.llvmIntrinsicTypes `MapF.union` SymIO.llvmSymIOIntrinsicTypes)
+          halloc
+          printHandle
+          bindings
+          extImpl
+          p
   let argTys = C.cfgArgTypes cfg
   let args =
         Ctx.generate
@@ -91,27 +91,29 @@ initState bak la llvmExtImpl p halloc errorSymbolicFunCalls mem fs globs (SymIO.
           (\i -> C.RegEntry (argTys ^. C.ixF' i) (C.unRV (initArgs ^. C.ixF' i)))
   let mvar = Trans.llvmMemVar llvmCtx
   pure $
-    C.InitialState ctx
+    C.InitialState
+      ctx
       (C.insertGlobal mvar (getSetupMem mem) globs)
       C.defaultAbortHandler
       (C.cfgReturnType cfg)
-      (C.runOverrideSim (C.cfgReturnType cfg) $ do
-        let ?lc = llvmCtx ^. Trans.llvmTypeCtx
-        let ?intrinsicsOpts = CLLVM.defaultIntrinsicsOptions
-        let SetupHook hook = setupHook
-        hook bak halloc llvmCtx fs
-        initFsOv
-        r <-
-          case mbStartupOvCfg of
-            Nothing ->
-              C.callCFG cfg (C.RegMap args)
-            Just (C.SomeCFG startupOvCfg) -> do
-              args' <- C.callCFG startupOvCfg (C.RegMap args)
-              C.StructRepr argTys' <- pure $ C.regType args'
-              C.callCFG cfg
-                $ C.RegMap
-                $ Ctx.zipWith
-                    (\argTy (C.RV arg) -> C.RegEntry argTy arg)
-                    argTys'
-                    (C.regValue args')
-        pure $ C.regValue r)
+      ( C.runOverrideSim (C.cfgReturnType cfg) $ do
+          let ?lc = llvmCtx ^. Trans.llvmTypeCtx
+          let ?intrinsicsOpts = CLLVM.defaultIntrinsicsOptions
+          let SetupHook hook = setupHook
+          hook bak halloc llvmCtx fs
+          initFsOv
+          r <-
+            case mbStartupOvCfg of
+              Nothing ->
+                C.callCFG cfg (C.RegMap args)
+              Just (C.SomeCFG startupOvCfg) -> do
+                args' <- C.callCFG startupOvCfg (C.RegMap args)
+                C.StructRepr argTys' <- pure $ C.regType args'
+                C.callCFG cfg $
+                  C.RegMap $
+                    Ctx.zipWith
+                      (\argTy (C.RV arg) -> C.RegEntry argTy arg)
+                      argTys'
+                      (C.regValue args')
+          pure $ C.regValue r
+      )

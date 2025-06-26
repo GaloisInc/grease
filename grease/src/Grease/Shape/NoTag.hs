@@ -1,19 +1,17 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
-Module           : Grease.Shape
--}
-
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 
-module Grease.Shape.NoTag
-  ( NoTag(NoTag)
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+-- Module           : Grease.Shape
+module Grease.Shape.NoTag (
+  NoTag (NoTag),
+) where
 
 import Data.Kind (Type)
 import Data.Macaw.CFG qualified as MC
-import Data.Parameterized.Classes (ShowF(showF))
+import Data.Parameterized.Classes (ShowF (showF))
 import Lang.Crucible.Types qualified as C
 
 -- | A @tag@ to annotate 'Grease.Shape.Shape'

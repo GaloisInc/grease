@@ -1,17 +1,17 @@
 {-# LANGUAGE ImplicitParams #-}
 
 -- | c.f. "Grease.LLVM.SetupHook"
-module Grease.Macaw.SetupHook
-  ( SetupHook(..)
-  , registerOverrideCfgs
-  , registerOverrideForwardDeclarations
-  , registerOverrideHandles
-  , registerSyntaxCfgs
-  , registerSyntaxForwardDeclarations
-  , registerSyntaxHandles
-  , syntaxSetupHook
-  , binSetupHook
-  ) where
+module Grease.Macaw.SetupHook (
+  SetupHook (..),
+  registerOverrideCfgs,
+  registerOverrideForwardDeclarations,
+  registerOverrideHandles,
+  registerSyntaxCfgs,
+  registerSyntaxForwardDeclarations,
+  registerSyntaxHandles,
+  syntaxSetupHook,
+  binSetupHook,
+) where
 
 import Control.Monad qualified as Monad
 import Data.Macaw.CFG.Core (ArchAddrWidth)
@@ -44,20 +44,21 @@ import What4.Protocol.Online qualified as WPO
 -- c.f. 'Grease.LLVM.SetupHook.SetupHook'
 newtype SetupHook sym arch
   = SetupHook
-    (forall bak rtp a r solver scope st fs p.
-      ( LCB.IsSymBackend sym bak
-      , sym ~ WEB.ExprBuilder scope st fs
-      , bak ~ LCB.OnlineBackend solver scope st fs
-      , WPO.OnlineSolver solver
-      , LCLM.HasLLVMAnn sym
-      , HasGreaseSimulatorState p sym arch
-      , HasToConcretize p
-      ) =>
-      bak ->
-      LCS.GlobalVar LCLM.Mem ->
-      -- Map of names of overridden functions to their implementations
-      Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
-      LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ())
+      ( forall bak rtp a r solver scope st fs p.
+        ( LCB.IsSymBackend sym bak
+        , sym ~ WEB.ExprBuilder scope st fs
+        , bak ~ LCB.OnlineBackend solver scope st fs
+        , WPO.OnlineSolver solver
+        , LCLM.HasLLVMAnn sym
+        , HasGreaseSimulatorState p sym arch
+        , HasToConcretize p
+        ) =>
+        bak ->
+        LCS.GlobalVar LCLM.Mem ->
+        -- Map of names of overridden functions to their implementations
+        Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
+        LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+      )
 
 -- | Register overrides, both user-defined ones and ones that are hard-coded
 -- into GREASE itself.
@@ -148,7 +149,7 @@ registerSyntaxForwardDeclarations bak la dl mvar funOvs prog =
 -- | Register all handles from a an S-expression program ('CSyn.ParsedProgram').
 --
 -- Calls 'registerSyntaxCfgs' and 'registerSyntaxForwardDeclarations'.
-registerSyntaxHandles :: 
+registerSyntaxHandles ::
   ( LCLM.HasPtrWidth (ArchAddrWidth arch)
   , DMS.SymArchConstraints arch
   , sym ~ WEB.ExprBuilder scope st fs
@@ -192,7 +193,6 @@ syntaxSetupHook la dl cfgs prog =
     Monad.forM_ (Map.elems cfgs) $ \entrypointCfgs ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
         GMO.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
-
 
 -- | A 'SetupHook' for Macaw CFGs from binaries.
 --

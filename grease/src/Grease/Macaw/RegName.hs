@@ -1,25 +1,23 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Macaw.RegName (
+  RegName (..),
+  mkRegName,
+  regNames,
+  RegNames (..),
+  getRegName,
+  regNameToString,
+  regNamesToList,
+) where
 
-module Grease.Macaw.RegName
-  ( RegName(..)
-  , mkRegName
-  , regNames
-  , RegNames(..)
-  , getRegName
-  , regNameToString
-  , regNamesToList
-  ) where
-
-import Control.Lens ((^.), to)
-import Data.Functor.Const (Const(..))
+import Control.Lens (to, (^.))
+import Data.Functor.Const (Const (..))
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Maybe qualified as Maybe
-import Data.Parameterized.Classes (IxedF'(ixF'))
+import Data.Parameterized.Classes (IxedF' (ixF'))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (toListFC)
 
@@ -29,7 +27,8 @@ newtype RegName = RegName String
 -- AArch32 registers are prefixed with "_" for some reason, remove that
 mkRegName :: Symbolic.SymArchConstraints arch => MC.ArchReg arch tp -> RegName
 mkRegName r = RegName (strip "_" (show (MC.prettyF r)))
-  where strip pfx s = Maybe.fromMaybe s (List.stripPrefix pfx s)
+ where
+  strip pfx s = Maybe.fromMaybe s (List.stripPrefix pfx s)
 
 -- | A list of human-readable names for each register in the architecture
 newtype RegNames arch = RegNames (Ctx.Assignment (Const RegName) (Symbolic.MacawCrucibleRegTypes arch))

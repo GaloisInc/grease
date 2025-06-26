@@ -1,8 +1,3 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
@@ -12,40 +7,43 @@ Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Grease.Main
-  ( main
-  , simulateARM
-  , simulateARMSyntax
-  , simulatePPC32
-  , simulatePPC32Syntax
-  , simulatePPC64
-  , simulatePPC64Syntax
-  , simulateX86
-  , simulateX86Syntax
-  , simulateLlvm
-  , simulateLlvmSyntax
-  , simulateFile
-  , Results(..)
-  , logResults
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Main (
+  main,
+  simulateARM,
+  simulateARMSyntax,
+  simulatePPC32,
+  simulatePPC32Syntax,
+  simulatePPC64,
+  simulatePPC64Syntax,
+  simulateX86,
+  simulateX86Syntax,
+  simulateLlvm,
+  simulateLlvmSyntax,
+  simulateFile,
+  Results (..),
+  logResults,
+) where
 
 import Control.Applicative (pure)
 import Control.Concurrent.Async (cancel)
-import Control.Exception.Safe (MonadThrow, Handler(..), catches, throw)
-import Control.Lens ((^.), (.~), to)
-import Control.Monad ((>>=), forM, forM_, mapM_, when)
-import Control.Monad.IO.Class (MonadIO(..))
-import Data.Bool (Bool(..), (&&), (||), otherwise, not)
+import Control.Exception.Safe (Handler (..), MonadThrow, catches, throw)
+import Control.Lens (to, (.~), (^.))
+import Control.Monad (forM, forM_, mapM_, when, (>>=))
+import Control.Monad.IO.Class (MonadIO (..))
+import Data.Bool (Bool (..), not, otherwise, (&&), (||))
 import Data.ByteString qualified as BS
-import Data.Either (Either(..))
+import Data.Either (Either (..))
 import Data.ElfEdit qualified as Elf
 import Data.Eq ((==))
 import Data.Foldable (traverse_)
-import Data.Function (($), (.), (&), id, const)
-import Data.Functor ((<$>), fmap, (<&>))
-import Data.Functor.Const (Const(..))
+import Data.Function (const, id, ($), (&), (.))
+import Data.Functor (fmap, (<$>), (<&>))
+import Data.Functor.Const (Const (..))
 import Data.Functor.Const qualified as Const
-import Data.IORef (newIORef, modifyIORef)
+import Data.IORef (modifyIORef, newIORef)
 import Data.IntMap qualified as IntMap
 import Data.LLVM.BitCode (parseBitCodeFromFile)
 import Data.List qualified as List
@@ -75,18 +73,18 @@ import Data.Macaw.X86.Crucible qualified as X86Symbolic
 import Data.Macaw.X86.Symbolic.Syntax qualified as X86Syn
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (Maybe(..), fromMaybe, catMaybes)
+import Data.Maybe (Maybe (..), catMaybes, fromMaybe)
 import Data.Maybe qualified as Maybe
 import Data.Monoid (mconcat)
 import Data.Ord ((<=))
-import Data.Parameterized.Classes (IxedF'(ixF'))
+import Data.Parameterized.Classes (IxedF' (ixF'))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Nonce (globalNonceGenerator)
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
 import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Parameterized.TraversableFC.WithIndex (imapFC)
-import Data.Proxy (Proxy(..))
+import Data.Proxy (Proxy (..))
 import Data.Semigroup ((<>))
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -96,16 +94,16 @@ import Data.Text.IO (putStrLn)
 import Data.Text.IO qualified as Text.IO
 import Data.Traversable (for, traverse)
 import Data.Tuple (fst, snd)
-import Data.Type.Equality (type (~), (:~:)(Refl), testEquality)
+import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
 import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Bug qualified as Bug
 import Grease.Cli (optsFromArgs)
-import Grease.Concretize (ConcretizedData, ConcArgs(..))
+import Grease.Concretize (ConcArgs (..), ConcretizedData)
 import Grease.Concretize qualified as Conc
-import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Concretize.JSON (concArgsToJson)
+import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Cursor.Pointer ()
 import Grease.Diagnostic
 import Grease.Diagnostic.Severity (Severity)
@@ -113,6 +111,7 @@ import Grease.Entrypoint
 import Grease.Heuristic
 import Grease.LLVM qualified as LLVM
 import Grease.LLVM.SetupHook qualified as LLVM (SetupHook, moduleSetupHook, syntaxSetupHook)
+import Grease.LLVM.SetupHook.Diagnostic qualified as LDiag (Diagnostic (LLVMTranslationWarning))
 import Grease.Macaw
 import Grease.Macaw.Arch
 import Grease.Macaw.Arch.AArch32 (armCtx)
@@ -120,16 +119,15 @@ import Grease.Macaw.Arch.PPC32 (ppc32Ctx)
 import Grease.Macaw.Arch.PPC64 (ppc64Ctx)
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
+import Grease.Macaw.Load (LoadedProgram (..), load)
+import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMap)
-import Grease.Macaw.Load (LoadedProgram(..), load)
-import Grease.Macaw.Load.Relocation (RelocType(..), elfRelocationMap)
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
 import Grease.Macaw.PLT
-import Grease.Macaw.RegName (RegName(..), RegNames(..), regNames, getRegName, mkRegName, regNameToString)
+import Grease.Macaw.RegName (RegName (..), RegNames (..), getRegName, mkRegName, regNameToString, regNames)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
 import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, emptyGreaseSimulatorState)
 import Grease.Main.Diagnostic qualified as Diag
-import Grease.LLVM.SetupHook.Diagnostic qualified as LDiag (Diagnostic(LLVMTranslationWarning))
 import Grease.MustFail qualified as MustFail
 import Grease.Options
 import Grease.Output
@@ -138,14 +136,14 @@ import Grease.Profiler.Feature (greaseProfilerFeature)
 import Grease.Refine
 import Grease.Requirement
 import Grease.Setup
-import Grease.Shape (ArgShapes(..), minimalShapeWithPtrs, ExtShape)
+import Grease.Shape (ArgShapes (..), ExtShape, minimalShapeWithPtrs)
 import Grease.Shape qualified as Shape
 import Grease.Shape.Concretize (concShape)
-import Grease.Shape.NoTag (NoTag(NoTag))
+import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Solver (withSolverOnlineBackend)
-import Grease.Syntax (parseProgram, parsedProgramCfgMap, parseOverridesYaml, resolveOverridesYaml)
+import Grease.Syntax (parseOverridesYaml, parseProgram, parsedProgramCfgMap, resolveOverridesYaml)
 import Grease.Syscall
 import Grease.Time (time)
 import Grease.Utility
@@ -166,32 +164,32 @@ import Lang.Crucible.LLVM.Globals qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.LLVM.SymIO qualified as CLLVM.SymIO
-import Lang.Crucible.LLVM.Syntax (llvmParserHooks, emptyParserHooks)
+import Lang.Crucible.LLVM.Syntax (emptyParserHooks, llvmParserHooks)
 import Lang.Crucible.LLVM.Translation qualified as Trans
-import Lang.Crucible.SymIO qualified as SymIO
-import Lang.Crucible.SymIO.Loader qualified as SymIO.Loader
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
+import Lang.Crucible.SymIO qualified as SymIO
+import Lang.Crucible.SymIO.Loader qualified as SymIO.Loader
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Lumberjack qualified as LJ
-import Prelude (Num(..), fromIntegral, Integral)
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import System.Directory (Permissions, getPermissions)
 import System.FilePath (FilePath)
 import System.IO (IO)
 import Text.LLVM qualified as L
-import Text.Show (Show(..))
+import Text.Show (Show (..))
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
+import Prelude (Integral, Num (..), fromIntegral)
 
 -- | Results of analysis, one per given 'Entrypoint'
-newtype Results = Results { getResults :: Map Entrypoint Batch }
+newtype Results = Results {getResults :: Map Entrypoint Batch}
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (MainDiagnostic diag)
@@ -206,19 +204,21 @@ readElfHeaderInfo ::
   FilePath ->
   m (Permissions, Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
 readElfHeaderInfo _proxy path =
-  do perms <- liftIO $ getPermissions path
-     bs <- liftIO $ BS.readFile path
-     case Elf.decodeElfHeaderInfo bs of
-       Right (Elf.SomeElf hdr) ->
-         case ( Elf.headerClass (Elf.header hdr)
-              , C.testEquality ?ptrWidth (knownNat @32)
-              , C.testEquality ?ptrWidth (knownNat @64)
-              ) of
-           (Elf.ELFCLASS32, Just Refl, Nothing) -> pure (perms, hdr)
-           (Elf.ELFCLASS64, Nothing, Just Refl) -> pure (perms, hdr)
-           _ -> throw $ GreaseException "Internal error: bad pointer width!"
-       Left _ -> userError ("expected AArch32, PowerPC, or x86_64 ELF binary, but found non-ELF file at " <> Text.pack path)
-  where userError msg = throw $ GreaseException ("User error: " <> msg)
+  do
+    perms <- liftIO $ getPermissions path
+    bs <- liftIO $ BS.readFile path
+    case Elf.decodeElfHeaderInfo bs of
+      Right (Elf.SomeElf hdr) ->
+        case ( Elf.headerClass (Elf.header hdr)
+             , C.testEquality ?ptrWidth (knownNat @32)
+             , C.testEquality ?ptrWidth (knownNat @64)
+             ) of
+          (Elf.ELFCLASS32, Just Refl, Nothing) -> pure (perms, hdr)
+          (Elf.ELFCLASS64, Nothing, Just Refl) -> pure (perms, hdr)
+          _ -> throw $ GreaseException "Internal error: bad pointer width!"
+      Left _ -> userError ("expected AArch32, PowerPC, or x86_64 ELF binary, but found non-ELF file at " <> Text.pack path)
+ where
+  userError msg = throw $ GreaseException ("User error: " <> msg)
 
 -- Helper, not exported
 --
@@ -241,9 +241,9 @@ textBounds loadOpts elf =
       case fmap NE.head . NE.nonEmpty . List.filter (\s -> Elf.shdrName s == ".text") $ Vec.toList shdrs of
         Nothing -> throw $ GreaseException "Could not find .text segment"
         Just s ->
-          let loadOffset = fromIntegral $ fromMaybe 0 (MML.loadOffset loadOpts) in
-          let sWithOffset = Elf.shdrAddr s + loadOffset in
-          pure (sWithOffset, sWithOffset + Elf.shdrSize s)
+          let loadOffset = fromIntegral $ fromMaybe 0 (MML.loadOffset loadOpts)
+           in let sWithOffset = Elf.shdrAddr s + loadOffset
+               in pure (sWithOffset, sWithOffset + Elf.shdrSize s)
 
 -- | Define @?memOpts@ in a continuation, setting the 'Mem.laxLoadsAndStores'
 -- option according to whether the user set the @--rust@ flag.
@@ -259,15 +259,15 @@ withMemOptions opts k =
             -- writing to it), and reading the payload's memory later should not
             -- induce failure on its own. See gitlab#177.
             Mem.laxLoadsAndStores = simRust opts
-            -- This option tells Crucible-LLVM to invent a fresh boolean
+          , -- This option tells Crucible-LLVM to invent a fresh boolean
             -- constant to use as a proof obligation when certain reads fail.
             -- This interacts poorly with the must-fail heuristic, as this proof
             -- obligation semantically should always fail, but as it is a fresh
             -- constant, there is no way for the heuristic to see that.
             -- See gitlab#256.
-          , Mem.noSatisfyingWriteFreshConstant = False
+            Mem.noSatisfyingWriteFreshConstant = False
           }
-  in k
+   in k
 
 loadInitialPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
@@ -304,15 +304,15 @@ toBatchBug ::
   ConcretizedData sym ext args ->
   BatchBug
 toBatchBug fm addrWidth argNames argTys initArgs b cData =
-  let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys in
-  let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (Conc.concArgs cData) in
-  let prettyConc = Conc.printConcData addrWidth argNames interestingShapes cData in
-  let prettyConc' = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyConc) in
-  MkBatchBug
-    { bugDesc = b
-    , bugArgs = argsJson
-    , bugShapes = prettyConc'
-    }
+  let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
+   in let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (Conc.concArgs cData)
+       in let prettyConc = Conc.printConcData addrWidth argNames interestingShapes cData
+           in let prettyConc' = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyConc)
+               in MkBatchBug
+                    { bugDesc = b
+                    , bugArgs = argsJson
+                    , bugShapes = prettyConc'
+                    }
 
 toFailedPredicate ::
   Mem.HasPtrWidth wptr =>
@@ -336,19 +336,20 @@ toFailedPredicate fm addrWidth argNames argTys initArgs (NoHeuristic goal cData 
       msg =
         tshow $
           PP.vcat $
-            let details = C.simErrorDetailsMsg (C.simErrorReason simErr) in
-            (PP.pretty (C.simErrorReasonMsg (C.simErrorReason simErr)) :)
-            (if List.null details
-            then []
-            else [ "Details:", PP.indent 2 (PP.pretty details) ])
-  in FailedPredicate
-     { _failedPredicateLocation =
-         tshow (PP.pretty (W4.plSourceLoc (C.simErrorLoc simErr)))
-     , _failedPredicateMessage = msg
-     , _failedPredicateArgs = argsJson
-     , _failedPredicateConcShapes =
-         PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyConc)
-     }
+            let details = C.simErrorDetailsMsg (C.simErrorReason simErr)
+             in (PP.pretty (C.simErrorReasonMsg (C.simErrorReason simErr)) :)
+                  ( if List.null details
+                      then []
+                      else ["Details:", PP.indent 2 (PP.pretty details)]
+                  )
+   in FailedPredicate
+        { _failedPredicateLocation =
+            tshow (PP.pretty (W4.plSourceLoc (C.simErrorLoc simErr)))
+        , _failedPredicateMessage = msg
+        , _failedPredicateArgs = argsJson
+        , _failedPredicateConcShapes =
+            PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyConc)
+        }
 
 checkMustFail ::
   ( C.IsSymBackend sym bak
@@ -365,21 +366,21 @@ checkMustFail bak errs = do
   mustFail <- MustFail.checkOneMustFail bak noHeuristicPreds
   let bug =
         Bug.BugInstance
-        { Bug.bugType = Bug.OneMustFail
-        , Bug.bugLoc = "<multiple locations>"
-        , Bug.bugDetails =
-            let goals = NE.toList (NE.map noHeuristicGoal errs)
-                print o =
-                  let lp = C.proofGoal o in
-                  let simError = lp ^. C.labeledPredMsg in
-                  tshow (C.ppSimError simError)
-            in Just $ Text.unlines (List.map print goals)
-        , Bug.bugUb = Nothing  -- TODO: check if they are all the same?
-        }
+          { Bug.bugType = Bug.OneMustFail
+          , Bug.bugLoc = "<multiple locations>"
+          , Bug.bugDetails =
+              let goals = NE.toList (NE.map noHeuristicGoal errs)
+                  print o =
+                    let lp = C.proofGoal o
+                     in let simError = lp ^. C.labeledPredMsg
+                         in tshow (C.ppSimError simError)
+               in Just $ Text.unlines (List.map print goals)
+          , Bug.bugUb = Nothing -- TODO: check if they are all the same?
+          }
   if mustFail
-  -- TODO: concretized args
-  then pure (Just (MkBatchBug { bugDesc = bug, bugArgs = [], bugShapes = "" }))
-  else pure Nothing
+    -- TODO: concretized args
+    then pure (Just (MkBatchBug{bugDesc = bug, bugArgs = [], bugShapes = ""}))
+    else pure Nothing
 
 -- | Machine code-specific arguments that are used throughout 'simulateMacawCfg'
 -- and friends. This exists primarily to reduce the number of distinct arguments
@@ -388,25 +389,25 @@ checkMustFail bak errs = do
 -- S-expression programs do not require analyzing machine code.
 data MacawCfgConfig arch = MacawCfgConfig
   { mcDataLayout :: DataLayout
-    -- ^ The data layout to use in the underlying memory model.
+  -- ^ The data layout to use in the underlying memory model.
   , mcMprotectAddr :: Maybe (MC.ArchSegmentOff arch)
-    -- ^ 'Just' the address of @mprotect@ if it exists, and 'Nothing' otherwise.
+  -- ^ 'Just' the address of @mprotect@ if it exists, and 'Nothing' otherwise.
   , mcLoadOptions :: MML.LoadOptions
-    -- ^ The load options used to load addresses in the binary.
+  -- ^ The load options used to load addresses in the binary.
   , mcSymMap :: Discovery.AddrSymMap (MC.ArchAddrWidth arch)
-    -- ^ Map of entrypoint addresses to their names.
+  -- ^ Map of entrypoint addresses to their names.
   , mcPltStubs :: Map.Map (MC.ArchSegmentOff arch) W4.FunctionName
-    -- ^ Map of addresses to PLT stub names.
+  -- ^ Map of addresses to PLT stub names.
   , mcDynFunMap :: Map.Map W4.FunctionName (MC.ArchSegmentOff arch)
-    -- ^ Map of dynamic function names to their addresses.
+  -- ^ Map of dynamic function names to their addresses.
   , mcRelocs :: Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (ArchReloc arch)
-    -- ^ Map of relocation addresses and types.
+  -- ^ Map of relocation addresses and types.
   , mcMemory :: MC.Memory (MC.RegAddrWidth (MC.ArchReg arch))
-    -- ^ The memory layout of the binary.
+  -- ^ The memory layout of the binary.
   , mcTxtBounds :: (Elf.ElfWordType (MC.ArchAddrWidth arch), Elf.ElfWordType (MC.ArchAddrWidth arch))
-    -- ^ Bounds on the @.text@ segment's addresses.
+  -- ^ Bounds on the @.text@ segment's addresses.
   , mcElf :: Maybe (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
-    -- ^ 'Just' the ELF of the target binary if it exists, and 'Nothing' otherwise
+  -- ^ 'Just' the ELF of the target binary if it exists, and 'Nothing' otherwise
   }
 
 -- | Create a 'DataLayout' suitable for @macaw-symbolic@'s needs. Currently,
@@ -415,35 +416,35 @@ data MacawCfgConfig arch = MacawCfgConfig
 macawDataLayout :: ArchContext arch -> DataLayout
 macawDataLayout archCtx =
   DataLayout.defaultDataLayout
-    & DataLayout.intLayout .~
-        (archCtx ^. archInfo . to (Symbolic.toCrucibleEndian . MI.archEndianness))
+    & DataLayout.intLayout
+      .~ (archCtx ^. archInfo . to (Symbolic.toCrucibleEndian . MI.archEndianness))
 
 -- | Integer argument registers
 interestingRegs :: Set String
 interestingRegs =
   Set.fromList
-  [ -- AArch32
-    "R0"
-  , "R1"
-  , "R2"
-  , "R3"
-    -- PPC32
-  , "r3"
-  , "r4"
-  , "r5"
-  , "r6"
-  , "r7"
-  , "r8"
-  , "r9"
-  , "r10"
-    -- x86_64
-  , "rdi"
-  , "rsi"
-  , "rdx"
-  , "rcx"
-  , "r8"  -- also listed above in PPC32, but it's a set, so...
-  , "r9"
-  ]
+    [ -- AArch32
+      "R0"
+    , "R1"
+    , "R2"
+    , "R3"
+    , -- PPC32
+      "r3"
+    , "r4"
+    , "r5"
+    , "r6"
+    , "r7"
+    , "r8"
+    , "r9"
+    , "r10"
+    , -- x86_64
+      "rdi"
+    , "rsi"
+    , "rdx"
+    , "rcx"
+    , "r8" -- also listed above in PPC32, but it's a set, so...
+    , "r9"
+    ]
 
 -- | Filter out \"uninteresting\" concretized shapes
 --
@@ -464,14 +465,15 @@ interestingConcretizedShapes ::
   ConcArgs sym ext argTys ->
   Ctx.Assignment (Const Bool) argTys
 interestingConcretizedShapes names initArgs (ConcArgs cArgs) =
-  let cShapes = fmapFC (Shape.tagWithType . concShape) cArgs in
-  let initArgs' = fmapFC Shape.tagWithType initArgs in
-  let isLlvmArg name = "%" `List.isPrefixOf` name in
-  Ctx.zipWith
-    (\(Const name) (Const isDefault) ->
-      Const ((name `List.elem` interestingRegs || isLlvmArg name) && not isDefault))
-    names
-    (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgs')
+  let cShapes = fmapFC (Shape.tagWithType . concShape) cArgs
+   in let initArgs' = fmapFC Shape.tagWithType initArgs
+       in let isLlvmArg name = "%" `List.isPrefixOf` name
+           in Ctx.zipWith
+                ( \(Const name) (Const isDefault) ->
+                    Const ((name `List.elem` interestingRegs || isLlvmArg name) && not isDefault)
+                )
+                names
+                (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgs')
 
 -- | Helper, not exported
 --
@@ -483,11 +485,12 @@ initialLlvmFileSystem ::
   C.HandleAllocator ->
   sym ->
   SimOpts ->
-  IO ( SymIO.InitialFileSystemContents sym
-     , CLLVM.SymIO.LLVMFileSystem ptrW
-     , C.SymGlobalState sym
-     , CLLVM.SymIO.SomeOverrideSim sym ()
-     )
+  IO
+    ( SymIO.InitialFileSystemContents sym
+    , CLLVM.SymIO.LLVMFileSystem ptrW
+    , C.SymGlobalState sym
+    , CLLVM.SymIO.SomeOverrideSim sym ()
+    )
 initialLlvmFileSystem halloc sym simOpts = do
   fileContents <-
     case simFsRoot simOpts of
@@ -543,23 +546,24 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
       rNamesAssign' = fmapFC (\(Const (RegName n)) -> Const n) rNamesAssign
   let overrideRegs =
         Ctx.traverseWithIndex
-          (\idx reg -> do
-            let regName = getRegName rNames idx
-            let isStackPointer = regName == mkRegName @arch MC.sp_reg
-            case Map.lookup regName (archCtx ^. archRegOverrides) of
-              Just i
-                | isStackPointer ->
-                    throw $ GreaseException "Can't override stack pointer"
-                | Mem.LLVMPointerRepr w <- regTypes ^. ixF' idx
-                , Just C.Refl <- C.testEquality w ?ptrWidth -> do
-                    let macawGlobalMemBlock = 1 -- TODO: don't hardcode this
-                    blk <- liftIO $ W4.natLit sym macawGlobalMemBlock
-                    off <- liftIO (W4.bvLit sym ?ptrWidth i)
-                    let ptr = Mem.LLVMPointer blk off
-                    pure $ C.RV $ ptr
-                | otherwise ->
-                    throw $ GreaseException "Can't override non-pointer register"
-              Nothing -> pure reg)
+          ( \idx reg -> do
+              let regName = getRegName rNames idx
+              let isStackPointer = regName == mkRegName @arch MC.sp_reg
+              case Map.lookup regName (archCtx ^. archRegOverrides) of
+                Just i
+                  | isStackPointer ->
+                      throw $ GreaseException "Can't override stack pointer"
+                  | Mem.LLVMPointerRepr w <- regTypes ^. ixF' idx
+                  , Just C.Refl <- C.testEquality w ?ptrWidth -> do
+                      let macawGlobalMemBlock = 1 -- TODO: don't hardcode this
+                      blk <- liftIO $ W4.natLit sym macawGlobalMemBlock
+                      off <- liftIO (W4.bvLit sym ?ptrWidth i)
+                      let ptr = Mem.LLVMPointer blk off
+                      pure $ C.RV $ ptr
+                  | otherwise ->
+                      throw $ GreaseException "Can't override non-pointer register"
+                Nothing -> pure reg
+          )
 
   profFeatLog <- traverse greaseProfilerFeature (simProfileTo simOpts)
 
@@ -567,24 +571,24 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   debuggerFeat <-
     liftIO $
       if simDebug simOpts
-      then do
-        dbgInputs <- Dbg.defaultDebuggerInputs cmdExt
-        let mbElf = snd . Elf.getElf <$> mcElf macawCfgConfig
-        Just <$>
-          Dbg.debugger
-            cmdExt
-            (MDebug.macawExtImpl prettyPtrFnMap (archCtx ^. archVals) mbElf)
-            prettyPtrFnMap
-            dbgInputs
-            Dbg.defaultDebuggerOutputs
-            (regStructRepr archCtx)
-      else pure Nothing
+        then do
+          dbgInputs <- Dbg.defaultDebuggerInputs cmdExt
+          let mbElf = snd . Elf.getElf <$> mcElf macawCfgConfig
+          Just
+            <$> Dbg.debugger
+              cmdExt
+              (MDebug.macawExtImpl prettyPtrFnMap (archCtx ^. archVals) mbElf)
+              prettyPtrFnMap
+              dbgInputs
+              Dbg.defaultDebuggerOutputs
+              (regStructRepr archCtx)
+        else pure Nothing
   let execFeats =
         catMaybes
-        [ fmap fst profFeatLog
-        , debuggerFeat
-        , Just (greaseBranchTracerFeature la)
-        ]
+          [ fmap fst profFeatLog
+          , debuggerFeat
+          , Just (greaseBranchTracerFeature la)
+          ]
   let memCfg0 = memConfigInitial bak archCtx memPtrTable relocs
   let rNameAssign =
         Ctx.generate
@@ -600,7 +604,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   EntrypointCfgs
     { entrypointStartupOv = mbStartupOvSsa
     , entrypointCfg = ssa@(C.SomeCFG ssaCfg)
-    } <- pure (toSsaSomeCfg <$> entrypointCfgs)
+    } <-
+    pure (toSsaSomeCfg <$> entrypointCfgs)
   let mbStartupOvSsaCfg = startupOvCfg <$> mbStartupOvSsa
 
   let mkInitState ::
@@ -612,7 +617,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         ArchRegs sym arch ->
         SetupMem sym ->
         C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch) ->
-        m ( SymIO.InitialFileSystemContents sym
+        m
+          ( SymIO.InitialFileSystemContents sym
           , C.ExecState (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch)))
           )
       mkInitState regs' mem' ssa'@(C.SomeCFG ssaCfg') = do
@@ -638,8 +644,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` ssaCfgHdl) mbCfgAddr
         (toConcVar, globals1) <- liftIO $ ToConc.newToConcretize halloc globals0
         let personality =
-              emptyGreaseSimulatorState toConcVar &
-                discoveredFnHandles .~ discoveredHdls
+              emptyGreaseSimulatorState toConcVar
+                & discoveredFnHandles .~ discoveredHdls
         st <- initState bak la macawExtImpl halloc mvar mem' globals1 initFsOv archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa'
         pure (fs0, st)
 
@@ -648,8 +654,9 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
     (args, setupMem, setupAnns) <- setup la bak dl rNameAssign regTypes argShapes initMem
     regs' <- liftIO (overrideRegs (argVals args))
     bbMapRef <- liftIO (newIORef Map.empty)
-    let ?recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
-          modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
+    let ?recordLLVMAnnotation =
+          \callStack (Mem.BoolAnn ann) bb ->
+            modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
     (fs0, st) <- mkInitState regs' setupMem ssa
     -- The order of the heuristics is significant, the 'macawHeuristics'
     -- find a sensible initial memory layout, which is necessary before
@@ -658,27 +665,31 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
     -- preconditions.)
     let heuristics =
           if simNoHeuristics simOpts
-          then []
-          else macawHeuristics la rNames List.++ [mustFailHeuristic]
+            then []
+            else macawHeuristics la rNames List.++ [mustFailHeuristic]
     let concInitState =
           Conc.InitialState
-          { Conc.initStateArgs = args
-          , Conc.initStateFs = fs0
-          , Conc.initStateMem = initMem
-          }
-    execAndRefine bak (simSolver simOpts) fm la setupAnns heuristics argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st `catches`
-      [ Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
-          pure $ ProveCantRefine $ MissingSemantics $ pshow ex
-      , Handler (\(ex :: AArch32Symbolic.AArch32Exception) ->
-          pure (ProveCantRefine (MissingSemantics (tshow ex))))
-      , Handler (\(ex :: PPCSymbolic.SemanticsError) ->
-          pure (ProveCantRefine (MissingSemantics (tshow ex))))
-      ]
+            { Conc.initStateArgs = args
+            , Conc.initStateFs = fs0
+            , Conc.initStateMem = initMem
+            }
+    execAndRefine bak (simSolver simOpts) fm la setupAnns heuristics argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
+      `catches` [ Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
+                    pure $ ProveCantRefine $ MissingSemantics $ pshow ex
+                , Handler
+                    ( \(ex :: AArch32Symbolic.AArch32Exception) ->
+                        pure (ProveCantRefine (MissingSemantics (tshow ex)))
+                    )
+                , Handler
+                    ( \(ex :: PPCSymbolic.SemanticsError) ->
+                        pure (ProveCantRefine (MissingSemantics (tshow ex)))
+                    )
+                ]
 
   res <- case result of
     RefinementBug b cData ->
-      let addrWidth = archCtx ^. archInfo . to MI.archAddrWidth in
-      pure (BatchBug (toBatchBug fm addrWidth argNames regTypes initArgs b cData))
+      let addrWidth = archCtx ^. archInfo . to MI.archAddrWidth
+       in pure (BatchBug (toBatchBug fm addrWidth argNames regTypes initArgs b cData))
     RefinementCantRefine b ->
       pure (BatchCantRefine b)
     RefinementItersExceeded ->
@@ -690,9 +701,11 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
       case maybeBug of
         Just bug -> pure (BatchBug bug)
         Nothing ->
-          pure $ BatchCouldNotInfer $ errs <&> \noHeuristic ->
-            let addrWidth = archCtx ^. archInfo . to MI.archAddrWidth
-            in toFailedPredicate fm addrWidth argNames regTypes initArgs noHeuristic
+          pure $
+            BatchCouldNotInfer $
+              errs <&> \noHeuristic ->
+                let addrWidth = archCtx ^. archInfo . to MI.archAddrWidth
+                 in toFailedPredicate fm addrWidth argNames regTypes initArgs noHeuristic
     RefinementSuccess argShapes -> do
       let pcReg = archCtx ^. archPcReg
       let assertInText = addPCBoundAssertion knownNat pcReg memory (MC.memWord $ fromIntegral starttext) (MC.memWord $ fromIntegral endtext) pltStubs
@@ -710,47 +723,50 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         (args, setupMem, setupAnns) <- setup la bak dl rNameAssign regTypes argShapes initMem
         regs' <- liftIO (overrideRegs (argVals args))
         bbMapRef <- liftIO (newIORef Map.empty)
-        let ?recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
-              modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
+        let ?recordLLVMAnnotation =
+              \callStack (Mem.BoolAnn ann) bb ->
+                modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
         let assertingSsa = C.toSSA assertingCfg
         (fs0, st) <- mkInitState regs' setupMem assertingSsa
         let concInitState =
               Conc.InitialState
-              { Conc.initStateArgs = args
-              , Conc.initStateFs = fs0
-              , Conc.initStateMem = initMem
-              }
+                { Conc.initStateArgs = args
+                , Conc.initStateFs = fs0
+                , Conc.initStateMem = initMem
+                }
         new <- execAndRefine bak (simSolver simOpts) fm la setupAnns (macawHeuristics la rNames) argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
         case new of
-          ProveBug {} ->
+          ProveBug{} ->
             throw (GreaseException "CFG rewriting introduced a bug!")
-          ProveCantRefine {} ->
+          ProveCantRefine{} ->
             throw (GreaseException "CFG rewriting prevented refinement!")
           ProveSuccess -> do
             doLog la Diag.SimulationAllGoalsPassed
             pure CheckSuccess
           ProveNoHeuristic errs -> do
             doLog la Diag.SimulationGoalsFailed
-            pure $ CheckAssertionFailure $ NE.toList errs <&> \noHeuristic ->
-              let addrWidth = archCtx ^. archInfo . to MI.archAddrWidth
-              in toFailedPredicate fm addrWidth argNames regTypes initArgs noHeuristic
+            pure $
+              CheckAssertionFailure $
+                NE.toList errs <&> \noHeuristic ->
+                  let addrWidth = archCtx ^. archInfo . to MI.archAddrWidth
+                   in toFailedPredicate fm addrWidth argNames regTypes initArgs noHeuristic
           ProveRefine _ -> do
             doLog la Diag.SimulationGoalsFailed
             pure $ CheckAssertionFailure []
   traverse_ cancel (fmap snd profFeatLog)
   pure res
-  where
-    MacawCfgConfig
-      { mcDataLayout = dl
-      , mcMprotectAddr = mprotectAddr
-      , mcLoadOptions = loadOpts
-      , mcSymMap = symMap
-      , mcPltStubs = pltStubs
-      , mcDynFunMap = dynFunMap
-      , mcRelocs = relocs
-      , mcMemory = memory
-      , mcTxtBounds = (starttext, endtext)
-      } = macawCfgConfig
+ where
+  MacawCfgConfig
+    { mcDataLayout = dl
+    , mcMprotectAddr = mprotectAddr
+    , mcLoadOptions = loadOpts
+    , mcSymMap = symMap
+    , mcPltStubs = pltStubs
+    , mcDynFunMap = dynFunMap
+    , mcRelocs = relocs
+    , mcMemory = memory
+    , mcTxtBounds = (starttext, endtext)
+    } = macawCfgConfig
 
 simulateMacawCfgs ::
   forall arch.
@@ -780,7 +796,8 @@ simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs = do
           EntrypointCfgs
             { entrypointStartupOv = mbStartupOv
             , entrypointCfg = C.Reg.AnyCFG entrypointCfg0
-            } <- pure entrypointCfgs
+            } <-
+            pure entrypointCfgs
           let entryName = W4.functionName (C.handleName (C.Reg.cfgHandle entrypointCfg0))
           let name = Text.concat ["CFG `", entryName, "`"]
           C.Reg.SomeCFG entrypointCfg' <- checkCfgSignature name entrypointCfg0
@@ -788,14 +805,16 @@ simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs = do
             StartupOv
               { startupOvCfg = C.Reg.AnyCFG startupOvCfg0
               , startupOvForwardDecs = fwdDecs
-              } <- pure startupOv
+              } <-
+              pure startupOv
             let entryName' = W4.functionName (C.handleName (C.Reg.cfgHandle startupOvCfg0))
             let name' = Text.concat ["startup override for `", entryName', "`"]
             C.Reg.SomeCFG startupOvCfg' <- checkCfgSignature name' startupOvCfg0
-            pure $ StartupOv
-                     { startupOvCfg = C.Reg.SomeCFG startupOvCfg'
-                     , startupOvForwardDecs = fwdDecs
-                     }
+            pure $
+              StartupOv
+                { startupOvCfg = C.Reg.SomeCFG startupOvCfg'
+                , startupOvForwardDecs = fwdDecs
+                }
           let entrypointCfgsSome =
                 EntrypointCfgs
                   { entrypointStartupOv = mbStartupOvSome
@@ -805,53 +824,55 @@ simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs = do
           let result =
                 Batch
                   { batchStatus = status
-                  , batchLoadOffset = fromMaybe 0 $
-                                      MML.loadOffset $
-                                      mcLoadOptions macawCfgConfig
+                  , batchLoadOffset =
+                      fromMaybe 0 $
+                        MML.loadOffset $
+                          mcLoadOptions macawCfgConfig
                   }
           pure (entry, result)
 
     pure (Results (Map.fromList results))
-  where
-    -- Ensure that this CFG is a well-formed Macaw CFG, i.e., it takes the
-    -- register struct as its only argument and returns it.
-    checkCfgSignature ::
-      Text.Text ->
-      C.Reg.CFG (Symbolic.MacawExt arch) s init ret ->
-      IO (C.Reg.SomeCFG
-           (Symbolic.MacawExt arch)
-           (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
-           (Symbolic.ArchRegStruct arch))
-    checkCfgSignature name regCfg = do
-      let expectedArgTys = Ctx.singleton (regStructRepr archCtx)
-      let expectedRet = regStructRepr archCtx
-      let argTys = C.Reg.cfgArgTypes regCfg
-      let ret = C.Reg.cfgReturnType regCfg
-      let url = "https://galoisinc.github.io/grease/sexp-progs.html"
-      let doThrow :: Text.Text -> IO a
-          doThrow msg =
-            throw (GreaseException (msg <> "\n" <> "For more information, see " <> url))
-      Refl <-
-        case testEquality argTys expectedArgTys of
-          Just r -> pure r
-          Nothing ->
-            let prettyArgs = TFC.toListFC PP.pretty argTys in
-            doThrow $
-              Text.unlines
-              [ Text.unwords ["Bad argument types for", name <> ":", tshow prettyArgs]
-              , "Expected a single argument, the struct of register values"
-              ]
-      Refl <-
-        case testEquality ret expectedRet of
-          Just r -> pure r
-          Nothing ->
-            doThrow $
-              Text.unlines
+ where
+  -- Ensure that this CFG is a well-formed Macaw CFG, i.e., it takes the
+  -- register struct as its only argument and returns it.
+  checkCfgSignature ::
+    Text.Text ->
+    C.Reg.CFG (Symbolic.MacawExt arch) s init ret ->
+    IO
+      ( C.Reg.SomeCFG
+          (Symbolic.MacawExt arch)
+          (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
+          (Symbolic.ArchRegStruct arch)
+      )
+  checkCfgSignature name regCfg = do
+    let expectedArgTys = Ctx.singleton (regStructRepr archCtx)
+    let expectedRet = regStructRepr archCtx
+    let argTys = C.Reg.cfgArgTypes regCfg
+    let ret = C.Reg.cfgReturnType regCfg
+    let url = "https://galoisinc.github.io/grease/sexp-progs.html"
+    let doThrow :: Text.Text -> IO a
+        doThrow msg =
+          throw (GreaseException (msg <> "\n" <> "For more information, see " <> url))
+    Refl <-
+      case testEquality argTys expectedArgTys of
+        Just r -> pure r
+        Nothing ->
+          let prettyArgs = TFC.toListFC PP.pretty argTys
+           in doThrow $
+                Text.unlines
+                  [ Text.unwords ["Bad argument types for", name <> ":", tshow prettyArgs]
+                  , "Expected a single argument, the struct of register values"
+                  ]
+    Refl <-
+      case testEquality ret expectedRet of
+        Just r -> pure r
+        Nothing ->
+          doThrow $
+            Text.unlines
               [ Text.unwords ["Bad return type for", name <> ":", pshow ret]
               , "Expected the struct of register values"
               ]
-      pure (C.Reg.SomeCFG regCfg)
-
+    pure (C.Reg.SomeCFG regCfg)
 
 -- | Convert a register-based CFG ('C.Reg.AnyCFG') to an SSA-based CFG
 -- ('C.AnyCFG').
@@ -881,37 +902,42 @@ entrypointCfgMap ::
   IO (Map Entrypoint (EntrypointCfgs (C.Reg.AnyCFG ext)))
 entrypointCfgMap la halloc prog entries =
   if List.null entries
-  then do
-    doLog la Diag.NoEntrypoints
-    pure $ Map.map
-             (\cfg -> EntrypointCfgs
-                        { entrypointStartupOv = Nothing
-                        , entrypointCfg = cfg
-                        })
-         $ Map.mapKeys
-             (entrypointNoStartupOv . EntrypointSymbolName)
-             cfgs
-  else do
-    results <-
-      forM entries $ \e ->
-        case entrypointLocation e of
-          EntrypointAddress {} -> nonSymbolEntrypointException
-          EntrypointCoreDump {} -> nonSymbolEntrypointException
-          EntrypointSymbolName nm ->
-            case Map.lookup nm cfgs of
-              Just cfg -> do
-                mbStartupOv <-
-                  traverse (parseEntrypointStartupOv halloc)
-                           (entrypointStartupOvPath e)
-                let entrypointCfgs =
-                      EntrypointCfgs
-                        { entrypointStartupOv = mbStartupOv
-                        , entrypointCfg = cfg
-                        }
-                pure (e, entrypointCfgs)
-              Nothing -> throw $ GreaseException $ "Could not find function: " <> nm
-    pure (Map.fromList results)
-  where cfgs = parsedProgramCfgMap prog
+    then do
+      doLog la Diag.NoEntrypoints
+      pure
+        $ Map.map
+          ( \cfg ->
+              EntrypointCfgs
+                { entrypointStartupOv = Nothing
+                , entrypointCfg = cfg
+                }
+          )
+        $ Map.mapKeys
+          (entrypointNoStartupOv . EntrypointSymbolName)
+          cfgs
+    else do
+      results <-
+        forM entries $ \e ->
+          case entrypointLocation e of
+            EntrypointAddress{} -> nonSymbolEntrypointException
+            EntrypointCoreDump{} -> nonSymbolEntrypointException
+            EntrypointSymbolName nm ->
+              case Map.lookup nm cfgs of
+                Just cfg -> do
+                  mbStartupOv <-
+                    traverse
+                      (parseEntrypointStartupOv halloc)
+                      (entrypointStartupOvPath e)
+                  let entrypointCfgs =
+                        EntrypointCfgs
+                          { entrypointStartupOv = mbStartupOv
+                          , entrypointCfg = cfg
+                          }
+                  pure (e, entrypointCfgs)
+                Nothing -> throw $ GreaseException $ "Could not find function: " <> nm
+      pure (Map.fromList results)
+ where
+  cfgs = parsedProgramCfgMap prog
 
 analyzeEntrypoint :: GreaseLogAction -> Entrypoint -> IO a -> IO a
 analyzeEntrypoint la entry act = do
@@ -992,12 +1018,13 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
 
   let relocs = elfRelocationMap (Proxy @(ArchReloc arch)) loadOpts elf
   let symbolRelocs =
-       Map.mapMaybe
-         (\(reloc, symb) ->
-           if (archCtx ^. archRelocSupported) reloc == Just SymbolReloc
-             then Just $ functionNameFromByteString symb
-             else Nothing)
-         relocs
+        Map.mapMaybe
+          ( \(reloc, symb) ->
+              if (archCtx ^. archRelocSupported) reloc == Just SymbolReloc
+                then Just $ functionNameFromByteString symb
+                else Nothing
+          )
+          relocs
 
   -- A map of each PLT stub address to its symbol name, which we consult
   -- later to check for the presence of `mprotect` (i.e., the `no-mprotect`
@@ -1006,42 +1033,44 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
   pltStubSegOffToNameMap <-
     resolvePltStubs mbPltStubInfo loadOpts elf symbolRelocs (simPltStubs simOpts) memory
 
-  let -- The inverse of `pltStubSegOffToNameMap`.
-      pltStubNameToSegOffMap :: Map.Map W4.FunctionName (MC.ArchSegmentOff arch)
-      pltStubNameToSegOffMap =
-        Map.foldrWithKey
-          (\addr name -> Map.insert name addr)
-          Map.empty
-          pltStubSegOffToNameMap
+  let
+    -- The inverse of `pltStubSegOffToNameMap`.
+    pltStubNameToSegOffMap :: Map.Map W4.FunctionName (MC.ArchSegmentOff arch)
+    pltStubNameToSegOffMap =
+      Map.foldrWithKey
+        (\addr name -> Map.insert name addr)
+        Map.empty
+        pltStubSegOffToNameMap
 
   let mprotectAddr = Map.lookup "mprotect" pltStubNameToSegOffMap
 
   entries <-
     if List.null (simEntryPoints simOpts)
-    then do
-      doLog la Diag.NoEntrypoints
-      pure (List.map
-             (\(k, v) -> (entrypointFromBytestring v, k))
-             (Map.toList (progSymMap loadedProg)))
-    else
-      forM (simEntryPoints simOpts) $ \entry -> do
+      then do
+        doLog la Diag.NoEntrypoints
+        pure
+          ( List.map
+              (\(k, v) -> (entrypointFromBytestring v, k))
+              (Map.toList (progSymMap loadedProg))
+          )
+      else forM (simEntryPoints simOpts) $ \entry -> do
         case Map.lookup entry (progEntrypointAddrs loadedProg) of
           Nothing -> throw . GreaseException $ "Impossible: entrypoint not in map"
           Just a -> pure (entry, a)
 
   cfgs <-
     fmap Map.fromList $
-    forM entries $ \(entry, entryAddr) -> do
-      C.Reg.SomeCFG cfg <-
-        discoverFunction la halloc archCtx memory symMap pltStubSegOffToNameMap entryAddr
-      mbStartupOv <-
-        traverse (parseEntrypointStartupOv halloc) (entrypointStartupOvPath entry)
-      let entrypointCfgs =
-            EntrypointCfgs
-              { entrypointStartupOv = mbStartupOv
-              , entrypointCfg = C.Reg.AnyCFG cfg
-              }
-      pure (entry, MacawEntrypointCfgs entrypointCfgs (Just entryAddr))
+      forM entries $ \(entry, entryAddr) -> do
+        C.Reg.SomeCFG cfg <-
+          discoverFunction la halloc archCtx memory symMap pltStubSegOffToNameMap entryAddr
+        mbStartupOv <-
+          traverse (parseEntrypointStartupOv halloc) (entrypointStartupOvPath entry)
+        let entrypointCfgs =
+              EntrypointCfgs
+                { entrypointStartupOv = mbStartupOv
+                , entrypointCfg = C.Reg.AnyCFG cfg
+                }
+        pure (entry, MacawEntrypointCfgs entrypointCfgs (Just entryAddr))
 
   let setupHook :: forall sym. SetupHook sym arch
       setupHook = Macaw.binSetupHook cfgs
@@ -1097,58 +1126,59 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
 
   let argTys = C.cfgArgTypes cfg
       -- Display the arguments as though they are unnamed LLVM virtual registers.
-      argNames = imapFC (\i _ -> Const ('%':show i)) argTys
+      argNames = imapFC (\i _ -> Const ('%' : show i)) argTys
   initArgs_ <- traverseFC (minimalShapeWithPtrs (pure . const NoTag)) argTys
   initArgs <-
     loadInitialPreconditions (simInitialPreconditions simOpts) argNames (ArgShapes initArgs_)
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   result <- withMemOptions simOpts $
-            refinementLoop la (simMaxIters simOpts) (simTimeout simOpts) argNames initArgs $ \argShapes -> do
-    let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
-    let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
-    let dl = TCtx.llvmDataLayout typeCtx
-    (args, setupMem, setupAnns) <- setup la bak dl valueNames argTys argShapes initMem
-    bbMapRef <- liftIO (newIORef Map.empty)
-    let ?recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
-          modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
-    let llvmExtImpl = CLLVM.llvmExtensionImpl ?memOpts
-    (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
-    (p, globals1) <- liftIO $ ToConc.newToConcretize halloc globals0
-    st <- LLVM.initState bak la llvmExtImpl p halloc (simErrorSymbolicFunCalls simOpts) setupMem fs globals1 initFsOv llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
-    let cmdExt = Debug.llvmCommandExt
-    debuggerFeat <-
-      liftIO $
-        if simDebug simOpts
-        then do
-          dbgInputs <- Dbg.defaultDebuggerInputs cmdExt
-          Just <$>
-            Dbg.debugger
-              cmdExt
-              (Debug.llvmExtImpl (Trans.llvmMemVar llvmCtx))
-              prettyPtrFnMap
-              dbgInputs
-              Dbg.defaultDebuggerOutputs
-              (C.cfgReturnType cfg)
-        else pure Nothing
-    let execFeats =
-          catMaybes
-          [ fmap fst profFeatLog
-          , debuggerFeat
-          , Just (greaseBranchTracerFeature la)
-          ]
-    -- See comment above on heuristics in 'simulateMacawCfg'
-    let heuristics =
-          if simNoHeuristics simOpts
-          then []
-          else llvmHeuristics la List.++ [mustFailHeuristic]
-    let concInitState =
-          Conc.InitialState
-          { Conc.initStateArgs = args
-          , Conc.initStateFs = fs0
-          , Conc.initStateMem = initMem
-          }
-    execAndRefine bak (simSolver simOpts) fm la setupAnns heuristics argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
+    refinementLoop la (simMaxIters simOpts) (simTimeout simOpts) argNames initArgs $ \argShapes -> do
+      let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
+      let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
+      let dl = TCtx.llvmDataLayout typeCtx
+      (args, setupMem, setupAnns) <- setup la bak dl valueNames argTys argShapes initMem
+      bbMapRef <- liftIO (newIORef Map.empty)
+      let ?recordLLVMAnnotation =
+            \callStack (Mem.BoolAnn ann) bb ->
+              modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
+      let llvmExtImpl = CLLVM.llvmExtensionImpl ?memOpts
+      (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
+      (p, globals1) <- liftIO $ ToConc.newToConcretize halloc globals0
+      st <- LLVM.initState bak la llvmExtImpl p halloc (simErrorSymbolicFunCalls simOpts) setupMem fs globals1 initFsOv llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
+      let cmdExt = Debug.llvmCommandExt
+      debuggerFeat <-
+        liftIO $
+          if simDebug simOpts
+            then do
+              dbgInputs <- Dbg.defaultDebuggerInputs cmdExt
+              Just
+                <$> Dbg.debugger
+                  cmdExt
+                  (Debug.llvmExtImpl (Trans.llvmMemVar llvmCtx))
+                  prettyPtrFnMap
+                  dbgInputs
+                  Dbg.defaultDebuggerOutputs
+                  (C.cfgReturnType cfg)
+            else pure Nothing
+      let execFeats =
+            catMaybes
+              [ fmap fst profFeatLog
+              , debuggerFeat
+              , Just (greaseBranchTracerFeature la)
+              ]
+      -- See comment above on heuristics in 'simulateMacawCfg'
+      let heuristics =
+            if simNoHeuristics simOpts
+              then []
+              else llvmHeuristics la List.++ [mustFailHeuristic]
+      let concInitState =
+            Conc.InitialState
+              { Conc.initStateArgs = args
+              , Conc.initStateFs = fs0
+              , Conc.initStateMem = initMem
+              }
+      execAndRefine bak (simSolver simOpts) fm la setupAnns heuristics argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
 
   res <- case result of
     RefinementBug b cData ->
@@ -1164,8 +1194,10 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvCf
       case maybeBug of
         Just bug -> pure (BatchBug bug)
         Nothing ->
-          pure $ BatchCouldNotInfer $ errs <&> \noHeuristic ->
-            toFailedPredicate fm MM.Addr64 argNames argTys initArgs noHeuristic
+          pure $
+            BatchCouldNotInfer $
+              errs <&> \noHeuristic ->
+                toFailedPredicate fm MM.Addr64 argNames argTys initArgs noHeuristic
     RefinementSuccess _argShapes -> pure (BatchChecks Map.empty)
   traverse_ cancel (fmap snd profFeatLog)
   pure res
@@ -1191,7 +1223,8 @@ simulateLlvmCfgs la simOpts halloc llvmCtx mkMem setupHook cfgs = do
           EntrypointCfgs
             { entrypointStartupOv = mbStartupOv
             , entrypointCfg = C.AnyCFG entrypointCfg'
-            } <- pure entrypointCfgs
+            } <-
+            pure entrypointCfgs
           mbStartupOvSomeCfg <-
             for (startupOvCfg <$> mbStartupOv) $ \(C.AnyCFG startupOvCfg') -> do
               let expectedArgTys = C.cfgArgTypes entrypointCfg'
@@ -1201,19 +1234,25 @@ simulateLlvmCfgs la simOpts halloc llvmCtx mkMem setupHook cfgs = do
               Refl <-
                 case testEquality expectedArgTys actualArgTys of
                   Just r -> pure r
-                  Nothing -> throw $ GreaseException $ Text.unlines
-                    [ "Startup override must have the same argument types as the entrypoint function"
-                    , "Entrypoint function argument types: " <> Text.pack (show expectedArgTys)
-                    , "Startup override argument types: " <> Text.pack (show actualArgTys)
-                    ]
+                  Nothing ->
+                    throw $
+                      GreaseException $
+                        Text.unlines
+                          [ "Startup override must have the same argument types as the entrypoint function"
+                          , "Entrypoint function argument types: " <> Text.pack (show expectedArgTys)
+                          , "Startup override argument types: " <> Text.pack (show actualArgTys)
+                          ]
               Refl <-
                 case testEquality expectedRetTy actualRetTy of
                   Just r -> pure r
-                  Nothing -> throw $ GreaseException $ Text.unlines
-                    [ "Startup override must return a struct containing the argument types of the entrypoint function"
-                    , "Entrypoint function argument types: " <> Text.pack (show expectedArgTys)
-                    , "Startup override return type: " <> Text.pack (show actualRetTy)
-                    ]
+                  Nothing ->
+                    throw $
+                      GreaseException $
+                        Text.unlines
+                          [ "Startup override must return a struct containing the argument types of the entrypoint function"
+                          , "Entrypoint function argument types: " <> Text.pack (show expectedArgTys)
+                          , "Startup override return type: " <> Text.pack (show actualRetTy)
+                          ]
               pure $ C.SomeCFG startupOvCfg'
           status <- simulateLlvmCfg la simOpts bak fm halloc llvmCtx initMem setupHook mbStartupOvSomeCfg (C.SomeCFG entrypointCfg')
           let result =
@@ -1224,7 +1263,6 @@ simulateLlvmCfgs la simOpts halloc llvmCtx mkMem setupHook cfgs = do
           pure (entry, result)
 
     pure (Results (Map.fromList results))
-
 
 simulateLlvmSyntax ::
   SimOpts ->
@@ -1244,13 +1282,13 @@ simulateLlvmSyntax simOpts la = do
   let (_errs, tyCtx) = TCtx.mkTypeContext dl IntMap.empty []
   let llvmCtx =
         Trans.LLVMContext
-        { Trans.llvmArch = CLLVM.X86Repr ?ptrWidth
-        , Trans.llvmPtrWidth = \k -> k ?ptrWidth
-        , Trans.llvmMemVar = mvar
-        , Trans._llvmTypeCtx = tyCtx
-        , Trans.llvmGlobalAliases = Map.empty
-        , Trans.llvmFunctionAliases = Map.empty
-        }
+          { Trans.llvmArch = CLLVM.X86Repr ?ptrWidth
+          , Trans.llvmPtrWidth = \k -> k ?ptrWidth
+          , Trans.llvmMemVar = mvar
+          , Trans._llvmTypeCtx = tyCtx
+          , Trans.llvmGlobalAliases = Map.empty
+          , Trans.llvmFunctionAliases = Map.empty
+          }
   let setupHook :: forall sym arch. LLVM.SetupHook sym arch
       setupHook = LLVM.syntaxSetupHook la (simOverrides simOpts) prog cfgs
   simulateLlvmCfgs la simOpts halloc llvmCtx mkMem setupHook cfgs
@@ -1262,8 +1300,8 @@ simulateLlvm ::
   IO Results
 simulateLlvm transOpts simOpts la = do
   llvmMod <-
-    parseBitCodeFromFile (simProgPath simOpts) >>=
-      \case
+    parseBitCodeFromFile (simProgPath simOpts)
+      >>= \case
         Left _err -> throw $ GreaseException "Could not parse LLVM module"
         Right m -> pure m
   halloc <- C.newHandleAllocator
@@ -1274,12 +1312,12 @@ simulateLlvm transOpts simOpts la = do
 
   entries <-
     if List.null (simEntryPoints simOpts)
-    then do
-      doLog la Diag.NoEntrypoints
-      let convertSymbol (L.Symbol s) =
-            entrypointNoStartupOv $ EntrypointSymbolName $ Text.pack s
-      pure (List.map (convertSymbol . L.defName) (L.modDefines llvmMod))
-    else pure (simEntryPoints simOpts)
+      then do
+        doLog la Diag.NoEntrypoints
+        let convertSymbol (L.Symbol s) =
+              entrypointNoStartupOv $ EntrypointSymbolName $ Text.pack s
+        pure (List.map (convertSymbol . L.defName) (L.modDefines llvmMod))
+      else pure (simEntryPoints simOpts)
 
   let llvmCtxt = trans ^. Trans.transContext
   Trans.llvmPtrWidth llvmCtxt $ \ptrW -> Mem.withPtrWidth ptrW $ do
@@ -1287,41 +1325,42 @@ simulateLlvm transOpts simOpts la = do
         mkMem bak =
           let ?lc = llvmCtxt ^. Trans.llvmTypeCtx
               ?recordLLVMAnnotation = \_ _ _ -> pure ()
-          in withMemOptions simOpts $ do
-            unpopulated <- CLLVM.initializeAllMemory bak llvmCtxt llvmMod
-            initMem <-
-              case simMutGlobs simOpts of
-                Initialized ->
-                  CLLVM.populateAllGlobals bak (trans ^. Trans.globalInitMap) unpopulated
-                Symbolic ->
-                  throw (GreaseException "GREASE does not yet support symbolic globals for LLVM")
-                Uninitialized ->
-                  CLLVM.populateConstGlobals bak (trans ^. Trans.globalInitMap) unpopulated
-            pure (InitialMem initMem)
+           in withMemOptions simOpts $ do
+                unpopulated <- CLLVM.initializeAllMemory bak llvmCtxt llvmMod
+                initMem <-
+                  case simMutGlobs simOpts of
+                    Initialized ->
+                      CLLVM.populateAllGlobals bak (trans ^. Trans.globalInitMap) unpopulated
+                    Symbolic ->
+                      throw (GreaseException "GREASE does not yet support symbolic globals for LLVM")
+                    Uninitialized ->
+                      CLLVM.populateConstGlobals bak (trans ^. Trans.globalInitMap) unpopulated
+                pure (InitialMem initMem)
 
     let ?parserHooks = llvmParserHooks emptyParserHooks mvar
     cfgs <-
       fmap Map.fromList $
-      forM entries $ \entry -> do
-        case entrypointLocation entry of
-          EntrypointAddress {} -> nonSymbolEntrypointException
-          EntrypointCoreDump {} -> nonSymbolEntrypointException
-          EntrypointSymbolName nm ->
-            Trans.getTranslatedCFG trans (L.Symbol (Text.unpack nm)) >>= \case
-              Just (_decl, cfg, warns) -> do
-                forM_ warns $ \warn ->
-                  LJ.writeLog la (LLVMSetupHookDiagnostic (LDiag.LLVMTranslationWarning warn))
-                mbStartupOv <-
-                  traverse (parseEntrypointStartupOv halloc)
-                           (entrypointStartupOvPath entry)
-                let mbStartupOvSsa = fmap toSsaAnyCfg <$> mbStartupOv
-                let entrypointCfgs =
-                      EntrypointCfgs
-                        { entrypointStartupOv = mbStartupOvSsa
-                        , entrypointCfg = cfg
-                        }
-                pure (entry, entrypointCfgs)
-              Nothing -> throw $ GreaseException $ "Could not find function: " <> nm
+        forM entries $ \entry -> do
+          case entrypointLocation entry of
+            EntrypointAddress{} -> nonSymbolEntrypointException
+            EntrypointCoreDump{} -> nonSymbolEntrypointException
+            EntrypointSymbolName nm ->
+              Trans.getTranslatedCFG trans (L.Symbol (Text.unpack nm)) >>= \case
+                Just (_decl, cfg, warns) -> do
+                  forM_ warns $ \warn ->
+                    LJ.writeLog la (LLVMSetupHookDiagnostic (LDiag.LLVMTranslationWarning warn))
+                  mbStartupOv <-
+                    traverse
+                      (parseEntrypointStartupOv halloc)
+                      (entrypointStartupOvPath entry)
+                  let mbStartupOvSsa = fmap toSsaAnyCfg <$> mbStartupOv
+                  let entrypointCfgs =
+                        EntrypointCfgs
+                          { entrypointStartupOv = mbStartupOvSsa
+                          , entrypointCfg = cfg
+                          }
+                  pure (entry, entrypointCfgs)
+                Nothing -> throw $ GreaseException $ "Could not find function: " <> nm
 
     let setupHook :: forall sym. LLVM.SetupHook sym arch
         setupHook = LLVM.moduleSetupHook la (simOverrides simOpts) trans cfgs
@@ -1460,28 +1499,29 @@ simulateFile ::
   GreaseLogAction ->
   IO Results
 simulateFile opts =
-  let path = simProgPath opts in
-  -- This list also appears in {overrides,sexp}.md
-  if | ".armv7l.elf" `List.isSuffixOf` path -> simulateARM opts
-     | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32 opts
-     | ".ppc64.elf" `List.isSuffixOf` path -> simulatePPC64 opts
-     | ".x64.elf" `List.isSuffixOf` path -> simulateX86 opts
-     | ".bc" `List.isSuffixOf` path -> simulateLlvm Trans.defaultTranslationOptions opts
-     | ".armv7l.cbl" `List.isSuffixOf` path -> simulateARMSyntax opts
-     | ".ppc32.cbl" `List.isSuffixOf` path -> simulatePPC32Syntax opts
-     | ".ppc64.cbl" `List.isSuffixOf` path -> simulatePPC64Syntax opts
-     | ".x64.cbl" `List.isSuffixOf` path -> simulateX86Syntax opts
-     | ".llvm.cbl" `List.isSuffixOf` path -> simulateLlvmSyntax opts
-     | otherwise -> simulateElf opts
+  let path = simProgPath opts
+   in -- This list also appears in {overrides,sexp}.md
+      if
+        | ".armv7l.elf" `List.isSuffixOf` path -> simulateARM opts
+        | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32 opts
+        | ".ppc64.elf" `List.isSuffixOf` path -> simulatePPC64 opts
+        | ".x64.elf" `List.isSuffixOf` path -> simulateX86 opts
+        | ".bc" `List.isSuffixOf` path -> simulateLlvm Trans.defaultTranslationOptions opts
+        | ".armv7l.cbl" `List.isSuffixOf` path -> simulateARMSyntax opts
+        | ".ppc32.cbl" `List.isSuffixOf` path -> simulatePPC32Syntax opts
+        | ".ppc64.cbl" `List.isSuffixOf` path -> simulatePPC64Syntax opts
+        | ".x64.cbl" `List.isSuffixOf` path -> simulateX86Syntax opts
+        | ".llvm.cbl" `List.isSuffixOf` path -> simulateLlvmSyntax opts
+        | otherwise -> simulateElf opts
 
 -- | Also used in the test suite
 logResults :: GreaseLogAction -> Results -> IO ()
 logResults la (Results results) =
   forM_ (Map.toList results) $ \(entrypoint, result) ->
     doLog la $
-    Diag.AnalyzedEntrypoint
-      (entrypointLocation entrypoint)
-      (batchStatus result)
+      Diag.AnalyzedEntrypoint
+        (entrypointLocation entrypoint)
+        (batchStatus result)
 
 main :: IO ()
 main = do

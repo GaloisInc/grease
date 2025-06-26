@@ -1,14 +1,13 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# OPTIONS_GHC -Wno-orphans #-} -- Due to the orphan ArchReloc instance below
+-- Due to the orphan ArchReloc instance below
+{-# OPTIONS_GHC -Wno-orphans #-}
 
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Arch.PPC64 (ppc64Ctx) where
 
 import Control.Exception.Safe (throw)
@@ -20,14 +19,14 @@ import Data.Macaw.PPC.Symbolic.Regs qualified as PPC.Symbolic.Regs
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map qualified as Map
 import Data.Parameterized.NatRepr (knownNat)
-import Data.Proxy (Proxy(..))
+import Data.Proxy (Proxy (..))
 import Data.Word (Word64)
-import Grease.Macaw.Arch (ArchContext(..), ArchReloc)
-import Grease.Macaw.Load.Relocation (RelocType(..))
-import Grease.Macaw.RegName (RegName(..))
+import Grease.Macaw.Arch (ArchContext (..), ArchReloc)
+import Grease.Macaw.Load.Relocation (RelocType (..))
+import Grease.Macaw.RegName (RegName (..))
 import Grease.Options (ExtraStackSlots)
 import Grease.Shape.Pointer (ppcStackPtrShape)
-import Grease.Utility (GreaseException(..), bytes64LE)
+import Grease.Utility (GreaseException (..), bytes64LE)
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.Simulator.RegValue qualified as C
 import Stubs.FunctionOverride.PPC.Linux qualified as Stubs

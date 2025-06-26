@@ -1,16 +1,14 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Grease.AssertProperty
-  ( addPCBoundAssertion
-  , addNoDynJumpAssertion
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.AssertProperty (
+  addPCBoundAssertion,
+  addNoDynJumpAssertion,
+) where
 
 import Control.Monad (foldM)
 import Data.BitVector.Sized qualified as BV
@@ -50,8 +48,10 @@ defBitsToPtr ::
   C.Reg.Atom src (C.BVType (MC.ArchAddrWidth arch)) ->
   C.Rewriter (Symbolic.MacawExt arch) s src tgt a (C.Reg.Atom src (Mem.LLVMPointerType (MC.ArchAddrWidth arch)))
 defBitsToPtr w bits =
-  def Mem.PtrRepr $ C.Reg.EvalApp $ C.ExtensionApp
-                  $ Symbolic.BitsToPtr w bits
+  def Mem.PtrRepr $
+    C.Reg.EvalApp $
+      C.ExtensionApp $
+        Symbolic.BitsToPtr w bits
 
 -- | Convert a pointer 'C.Reg.Atom' to a bitvector using 'Symbolic.PtrToBits'.
 defPtrToBits ::
@@ -62,8 +62,10 @@ defPtrToBits ::
   C.Reg.Atom src (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   C.Rewriter (Symbolic.MacawExt arch) s src tgt a (C.Reg.Atom src (C.BVType (MC.ArchAddrWidth arch)))
 defPtrToBits w ptr =
-  def (C.BVRepr w) $ C.Reg.EvalApp $ C.ExtensionApp
-                   $ Symbolic.PtrToBits w ptr
+  def (C.BVRepr w) $
+    C.Reg.EvalApp $
+      C.ExtensionApp $
+        Symbolic.PtrToBits w ptr
 
 -- | Take an 'C.Reg.Atom' corresponding to the current program counter value and
 -- convert it to a pointer containing an absolute address (i.e., a block number
@@ -75,8 +77,8 @@ defPcAbsAddr ::
   , MC.MemWidth (MC.ArchAddrWidth arch)
   ) =>
   MT.NatRepr (MC.ArchAddrWidth arch) ->
-  C.Reg.Atom src (Mem.LLVMPointerType (MC.ArchAddrWidth arch))
-    {- ^ The current program counter value -} ->
+  -- | The current program counter value
+  C.Reg.Atom src (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   C.Rewriter (Symbolic.MacawExt arch) s src tgt a (C.Reg.Atom src (Mem.LLVMPointerType (MC.ArchAddrWidth arch)))
 defPcAbsAddr w pc = do
   pcAbsAddr <- defPtrToBits w pc
@@ -93,19 +95,23 @@ defMemWordAbsAddr ::
   , MC.MemWidth (MC.ArchAddrWidth arch)
   ) =>
   MT.NatRepr (MC.ArchAddrWidth arch) ->
-  MC.MemWord (MC.ArchAddrWidth arch)
-    {- ^ The absolute address -} ->
+  -- | The absolute address
+  MC.MemWord (MC.ArchAddrWidth arch) ->
   C.Rewriter (Symbolic.MacawExt arch) s src tgt a (C.Reg.Atom src (Mem.LLVMPointerType (MC.ArchAddrWidth arch)))
 defMemWordAbsAddr w absAddr = do
   absAddrBV <-
-    def (C.BVRepr w) $ C.Reg.EvalApp $ C.BVLit w $ BV.mkBV w
-                     $ toInteger absAddr
+    def (C.BVRepr w) $
+      C.Reg.EvalApp $
+        C.BVLit w $
+          BV.mkBV w $
+            toInteger absAddr
   defBitsToPtr w absAddrBV
 
 strLit :: Text -> C.Rewriter ext s src tgt a (C.Reg.Atom src (C.StringType C.Unicode))
 strLit lit =
-  def (C.StringRepr W4.UnicodeRepr)
-      (C.Reg.EvalApp $ C.StringLit $ W4.UnicodeLiteral lit)
+  def
+    (C.StringRepr W4.UnicodeRepr)
+    (C.Reg.EvalApp $ C.StringLit $ W4.UnicodeLiteral lit)
 
 addAssert ::
   W4.Position ->
@@ -138,53 +144,61 @@ addPCBoundAssertion ::
   Map.Map (MC.ArchSegmentOff arch) W4.FunctionName ->
   ArchRegCFG arch ->
   ArchRegCFG arch
-addPCBoundAssertion w pcreg mem lower upper pltStubs = C.annotateCFGStmts ()
-  (\pstmt -> do
-      case W4.pos_val pstmt of
-        C.Reg.DefineAtom _ (C.Reg.EvalExt (Symbolic.MacawArchStateUpdate _ ru))
-          | Just (Symbolic.MacawCrucibleValue pc) <- MapF.lookup pcreg ru -> do
-              let pos = W4.pos pstmt
-              pcAbsAddrPtr <- defPcAbsAddr w pc
+addPCBoundAssertion w pcreg mem lower upper pltStubs =
+  C.annotateCFGStmts
+    ()
+    ( \pstmt -> do
+        case W4.pos_val pstmt of
+          C.Reg.DefineAtom _ (C.Reg.EvalExt (Symbolic.MacawArchStateUpdate _ ru))
+            | Just (Symbolic.MacawCrucibleValue pc) <- MapF.lookup pcreg ru -> do
+                let pos = W4.pos pstmt
+                pcAbsAddrPtr <- defPcAbsAddr w pc
 
-              -- Create a predicate that the PC is a PLT stub address.
-              pltStubPtrs <-
-                for (Map.keys pltStubs) $ \pltStubOff ->
-                  defMemWordAbsAddr w $ segoffToAbsoluteAddr mem pltStubOff
-              falseAtom <-
-                def C.BoolRepr $ C.Reg.EvalApp $ C.BoolLit False
-              pltStubPred <-
-                foldM
-                  (\acc pltStubPtr -> do
-                    isPltStub <-
-                      def C.BoolRepr $ C.Reg.EvalExt $
-                      Symbolic.PtrEq (MC.addrWidthRepr w) pcAbsAddrPtr pltStubPtr
-                    def C.BoolRepr $ C.Reg.EvalApp $ C.Or isPltStub acc)
-                  falseAtom
-                  pltStubPtrs
+                -- Create a predicate that the PC is a PLT stub address.
+                pltStubPtrs <-
+                  for (Map.keys pltStubs) $ \pltStubOff ->
+                    defMemWordAbsAddr w $ segoffToAbsoluteAddr mem pltStubOff
+                falseAtom <-
+                  def C.BoolRepr $ C.Reg.EvalApp $ C.BoolLit False
+                pltStubPred <-
+                  foldM
+                    ( \acc pltStubPtr -> do
+                        isPltStub <-
+                          def C.BoolRepr $
+                            C.Reg.EvalExt $
+                              Symbolic.PtrEq (MC.addrWidthRepr w) pcAbsAddrPtr pltStubPtr
+                        def C.BoolRepr $ C.Reg.EvalApp $ C.Or isPltStub acc
+                    )
+                    falseAtom
+                    pltStubPtrs
 
-              -- Next, create predicates that the PC is strictly within the
-              -- bounds of the .text section.
-              lowerbound <- defMemWordAbsAddr w lower
-              upperbound <- defMemWordAbsAddr w upper
-              gtTextStartPred <-
-                def C.BoolRepr $ C.Reg.EvalExt $
-                Symbolic.PtrLeq (MC.addrWidthRepr w) lowerbound pcAbsAddrPtr
-              ltTextStartPred <-
-                def C.BoolRepr $ C.Reg.EvalExt $
-                Symbolic.PtrLeq (MC.addrWidthRepr w) pcAbsAddrPtr upperbound
+                -- Next, create predicates that the PC is strictly within the
+                -- bounds of the .text section.
+                lowerbound <- defMemWordAbsAddr w lower
+                upperbound <- defMemWordAbsAddr w upper
+                gtTextStartPred <-
+                  def C.BoolRepr $
+                    C.Reg.EvalExt $
+                      Symbolic.PtrLeq (MC.addrWidthRepr w) lowerbound pcAbsAddrPtr
+                ltTextStartPred <-
+                  def C.BoolRepr $
+                    C.Reg.EvalExt $
+                      Symbolic.PtrLeq (MC.addrWidthRepr w) pcAbsAddrPtr upperbound
 
-              -- Finally, assert the various predicates.
-              addAssert pos "PC must be greater than .text start\n" $
-                C.Reg.EvalApp $ C.Or pltStubPred gtTextStartPred
-              addAssert pos "PC must be less than .text end\n" $
-                C.Reg.EvalApp $ C.Or pltStubPred ltTextStartPred
+                -- Finally, assert the various predicates.
+                addAssert pos "PC must be greater than .text start\n" $
+                  C.Reg.EvalApp $
+                    C.Or pltStubPred gtTextStartPred
+                addAssert pos "PC must be less than .text end\n" $
+                  C.Reg.EvalApp $
+                    C.Or pltStubPred ltTextStartPred
 
-              C.addStmt pstmt
-        _ -> C.addStmt pstmt
-  )
-  (\_pstmt ->
-      pure ()
-  )
+                C.addStmt pstmt
+          _ -> C.addStmt pstmt
+    )
+    ( \_pstmt ->
+        pure ()
+    )
 
 -- | Ensure that we are never updating the PC to be equal to a "bad" address
 -- that shouldn't be jumped to.
@@ -197,36 +211,40 @@ addNoDynJumpAssertion ::
   , MC.MemWidth (MC.ArchAddrWidth arch)
   ) =>
   MT.NatRepr (MC.ArchAddrWidth arch) ->
+  -- | The PC for arch
   MC.ArchReg arch (MT.BVType (MC.ArchAddrWidth arch)) ->
-  -- ^ The PC for arch
+  -- | The program memory
   MC.Memory (MC.ArchAddrWidth arch) ->
-  -- ^ The program memory
+  -- | The address we don't want to jump to
   MC.ArchSegmentOff arch ->
-  -- ^ The address we don't want to jump to
   ArchRegCFG arch ->
   ArchRegCFG arch
-addNoDynJumpAssertion w pcreg mem badAddrOff = C.annotateCFGStmts ()
-  (\pstmt -> do
-      case W4.pos_val pstmt of
-        C.Reg.DefineAtom _ (C.Reg.EvalExt (Symbolic.MacawArchStateUpdate _ ru))
-          | Just (Symbolic.MacawCrucibleValue pc) <- MapF.lookup pcreg ru -> do
-              let pos = W4.pos pstmt
-              pcAbsAddrPtr <- defPcAbsAddr w pc
+addNoDynJumpAssertion w pcreg mem badAddrOff =
+  C.annotateCFGStmts
+    ()
+    ( \pstmt -> do
+        case W4.pos_val pstmt of
+          C.Reg.DefineAtom _ (C.Reg.EvalExt (Symbolic.MacawArchStateUpdate _ ru))
+            | Just (Symbolic.MacawCrucibleValue pc) <- MapF.lookup pcreg ru -> do
+                let pos = W4.pos pstmt
+                pcAbsAddrPtr <- defPcAbsAddr w pc
 
-              badAddrPtr <- defMemWordAbsAddr w $ segoffToAbsoluteAddr mem badAddrOff
-              pcBad <-
-                def C.BoolRepr $
-                C.Reg.EvalExt $ Symbolic.PtrEq (MC.addrWidthRepr w) pcAbsAddrPtr badAddrPtr
+                badAddrPtr <- defMemWordAbsAddr w $ segoffToAbsoluteAddr mem badAddrOff
+                pcBad <-
+                  def C.BoolRepr $
+                    C.Reg.EvalExt $
+                      Symbolic.PtrEq (MC.addrWidthRepr w) pcAbsAddrPtr badAddrPtr
 
-              addAssert pos "Cannot call mprotect\n" $
-                C.Reg.EvalApp $ C.Not pcBad
+                addAssert pos "Cannot call mprotect\n" $
+                  C.Reg.EvalApp $
+                    C.Not pcBad
 
-              C.addStmt pstmt
-        _ -> C.addStmt pstmt
-  )
-  (\_pstmt ->
-      pure ()
-  )
+                C.addStmt pstmt
+          _ -> C.addStmt pstmt
+    )
+    ( \_pstmt ->
+        pure ()
+    )
 
 {-
 Note [Comparing the current program counter value]
@@ -256,16 +274,16 @@ different block number, then the comparison will always fail!
 This is all a bit confusing, but we can make things less confusing by ensuring
 that we are always comparing absolute addresses. To do so, we:
 
-* Convert the LLVMPtr in the program counter to a SymBV using PtrToBits (more
+\* Convert the LLVMPtr in the program counter to a SymBV using PtrToBits (more
   on this part later).
 
-* Convert the SymBV from the program counter back into an LLVMPtr with a block
+\* Convert the SymBV from the program counter back into an LLVMPtr with a block
   number of zero using BitsToPtr.
 
-* Convert the other address to an LLVMPtr to an LLVMPtr with a block number of
+\* Convert the other address to an LLVMPtr to an LLVMPtr with a block number of
   zero using BitsToPtr.
 
-* Compare the two LLVMPtrs, knowing that they both have the same block number
+\* Compare the two LLVMPtrs, knowing that they both have the same block number
   (0).
 
 Using PtrToBits on the LLVMPtr from the program counter might seem somewhat

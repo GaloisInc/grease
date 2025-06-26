@@ -1,11 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Version (verStr) where
 
 import Data.Aeson qualified as Aeson
@@ -23,58 +21,60 @@ import Paths_grease (version)
 verStr :: String
 verStr =
   mconcat $
-  intersperse "\n"
-    [ "grease " ++ ver
-    , "Git commit " ++ commitHash
-    , "    branch " ++ commitBranch ++ dirtyLab
-    ]
-  where
-    ver = showVersion version
+    intersperse
+      "\n"
+      [ "grease " ++ ver
+      , "Git commit " ++ commitHash
+      , "    branch " ++ commitBranch ++ dirtyLab
+      ]
+ where
+  ver = showVersion version
 
-    dirtyLab | commitDirty = " (non-committed files present during build)"
-             | otherwise   = ""
+  dirtyLab
+    | commitDirty = " (non-committed files present during build)"
+    | otherwise = ""
 
 -- Helper, not exported
 commitHash :: String
 commitHash
-  | hash /= unknown
-  = hash
+  | hash /= unknown =
+      hash
   -- See Note [grease.buildinfo.json]
   | Just buildinfoVal <- Aeson.decodeStrict buildinfo
-  , Just (Aeson.String buildinfoHash) <- KeyMap.lookup "hash" buildinfoVal
-  = Text.unpack buildinfoHash
-  | otherwise
-  = unknown
-  where
-    hash = GitRev.hash
+  , Just (Aeson.String buildinfoHash) <- KeyMap.lookup "hash" buildinfoVal =
+      Text.unpack buildinfoHash
+  | otherwise =
+      unknown
+ where
+  hash = GitRev.hash
 
 -- Helper, not exported
 commitBranch :: String
 commitBranch
-  | branch /= unknown
-  = branch
+  | branch /= unknown =
+      branch
   -- See Note [grease.buildinfo.json]
   | Just buildinfoVal <- Aeson.decodeStrict buildinfo
-  , Just (Aeson.String buildinfoCommit) <- KeyMap.lookup "branch" buildinfoVal
-  = Text.unpack buildinfoCommit
-  | otherwise
-  = unknown
-  where
-    branch = GitRev.branch
+  , Just (Aeson.String buildinfoCommit) <- KeyMap.lookup "branch" buildinfoVal =
+      Text.unpack buildinfoCommit
+  | otherwise =
+      unknown
+ where
+  branch = GitRev.branch
 
 -- Helper, not exported
 commitDirty :: Bool
 commitDirty
-  | dirty
-  = dirty
+  | dirty =
+      dirty
   -- See Note [grease.buildinfo.json]
   | Just buildinfoVal <- Aeson.decodeStrict buildinfo
-  , Just (Aeson.Bool buildinfoDirty) <- KeyMap.lookup "dirty" buildinfoVal
-  = buildinfoDirty
-  | otherwise
-  = False
-  where
-    dirty = GitRev.dirty
+  , Just (Aeson.Bool buildinfoDirty) <- KeyMap.lookup "dirty" buildinfoVal =
+      buildinfoDirty
+  | otherwise =
+      False
+ where
+  dirty = GitRev.dirty
 
 -- Helper, not exported
 --

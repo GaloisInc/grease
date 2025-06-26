@@ -1,18 +1,15 @@
-{-|
-Copyright        : (c) Galois, Inc. 2025
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
-
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE GADTs #-}
 
-module Grease.Syntax.Overrides
-  ( checkTypedOverrideHandleCompat
-  , tryBindTypedOverride
-  , freshBytesOverride
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2025
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Syntax.Overrides (
+  checkTypedOverrideHandleCompat,
+  tryBindTypedOverride,
+  freshBytesOverride,
+) where
 
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (liftIO)
@@ -21,7 +18,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Type.Equality ((:~:)(Refl), testEquality)
+import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Type.Ord (type (<=))
 import Data.Vector qualified as Vec
 import Grease.Concretize.ToConcretize qualified as ToConc
@@ -66,7 +63,7 @@ freshBytesOverride ::
   , LCB.IsSymInterface sym
   ) =>
   NatRepr.NatRepr w ->
-  LCS.TypedOverride p sym ext (Ctx.EmptyCtx Ctx.::> LCT.StringType WI.Unicode Ctx.::> LCT.BVType w) (LCT.VectorType (LCT.BVType 8 ))
+  LCS.TypedOverride p sym ext (Ctx.EmptyCtx Ctx.::> LCT.StringType WI.Unicode Ctx.::> LCT.BVType w) (LCT.VectorType (LCT.BVType 8))
 freshBytesOverride w =
   WI.withKnownNat w $
     LCS.typedOverride (Ctx.uncurryAssignment freshBytes)
@@ -111,7 +108,7 @@ doFreshBytes name len =
     v <-
       fmap Vec.fromList $
         liftIO $
-          Monad.forM [0..len - 1] $ \i -> do
+          Monad.forM [0 .. len - 1] $ \i -> do
             let nm = WI.safeSymbol (Text.unpack name ++ "_" ++ show i)
             WI.freshConstant sym nm (WI.BaseBVRepr (NatRepr.knownNat @8))
 

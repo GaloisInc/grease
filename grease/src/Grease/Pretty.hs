@@ -1,16 +1,14 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Grease.Pretty
-  ( prettyPtrFn
-  , prettyPtrFnMap
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Pretty (
+  prettyPtrFn,
+  prettyPtrFnMap,
+) where
 
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
@@ -30,11 +28,13 @@ prettyPtrFn = IntrinsicPrettyFn $ \tyCtx ptr ->
       ppPtr ptr
     -- These are impossible by the definition of LLVMPointerImpl
     Ctx.AssignEmpty ->
-       panic "LLVM.MemModel.Pointer.concToSymPtrFn"
-         [ "Impossible: LLVMPointerType empty context" ]
+      panic
+        "LLVM.MemModel.Pointer.concToSymPtrFn"
+        ["Impossible: LLVMPointerType empty context"]
     Ctx.AssignExtend _ _ ->
-       panic "LLVM.MemModel.Pointer.concToSymPtrFn"
-         [ "Impossible: LLVMPointerType ill-formed context" ]
+      panic
+        "LLVM.MemModel.Pointer.concToSymPtrFn"
+        ["Impossible: LLVMPointerType ill-formed context"]
 
 -- | A singleton map suitable for use in 'ppRegVal' if LLVM pointers are the
 -- only intrinsic type in use

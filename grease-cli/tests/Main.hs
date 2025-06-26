@@ -1,14 +1,13 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 -- See @doc/dev.md@ for a description of how tests are organized
+
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Main (main) where
 
 import Control.Exception qualified as X
@@ -26,13 +25,12 @@ import Data.Text.IO qualified as Text.IO
 import Data.Traversable (for)
 import Grease.Cli (optsFromList)
 import Grease.Diagnostic (Diagnostic, GreaseLogAction)
-import Grease.Main (simulateFile, logResults)
-import Grease.Options (SimOpts(..), optsSimOpts)
+import Grease.Main (logResults, simulateFile)
+import Grease.Options (SimOpts (..), optsSimOpts)
 import HsLua (Lua)
 import HsLua qualified as Lua
 import Lumberjack qualified as LJ
 import Oughta qualified
-import Prelude hiding (fail)
 import Prettyprinter qualified as PP
 import Shape (shapeTests)
 import System.Directory qualified as Dir
@@ -40,6 +38,7 @@ import System.FilePath ((</>))
 import System.FilePath qualified as FilePath
 import Test.Tasty qualified as T
 import Test.Tasty.HUnit qualified as T.U
+import Prelude hiding (fail)
 
 prelude :: Text.Text
 prelude = Text.decodeUtf8 $(embedFileRelative "tests/test.lua")
@@ -54,10 +53,11 @@ ppArch X64 = "x64"
 
 parseArch :: String -> Arch
 parseArch s =
-  if | s == ppArch Armv7 -> Armv7
-     | s == ppArch PPC32 -> PPC32
-     | s == ppArch X64 -> X64
-     | otherwise -> error ("Unknown architecture: " ++ s)
+  if
+    | s == ppArch Armv7 -> Armv7
+    | s == ppArch PPC32 -> PPC32
+    | s == ppArch X64 -> X64
+    | otherwise -> error ("Unknown architecture: " ++ s)
 
 -- Format for architecture-specific directives in comments in test files
 archComment :: Arch -> Text.Text
@@ -98,8 +98,8 @@ go prog = do
           logResults la' res
   logTxt <-
     liftIO $
-      X.try @X.SomeException action <&>
-        \case
+      X.try @X.SomeException action
+        <&> \case
           Left e -> Text.pack ("Exception: " ++ show e)
           Right t -> t
   let path = simProgPath opts
@@ -118,7 +118,7 @@ getArgs :: Lua [String]
 getArgs = do
   _ty <- Lua.getglobal argsGlobal
   l <- fromIntegral <$> Lua.rawlen Lua.top
-  forM [1..l] $ \i -> do
+  forM [1 .. l] $ \i -> do
     Lua.pushinteger i
     _ty <- Lua.gettable (Lua.nth 2)
     flag <- Lua.tostring Lua.top
@@ -132,7 +132,7 @@ getArgs = do
 appendStringArray :: [String] -> Lua ()
 appendStringArray strs = do
   l <- fromIntegral <$> Lua.rawlen Lua.top
-  forM_ (zip [1..] strs) $ \(i, s) -> do
+  forM_ (zip [1 ..] strs) $ \(i, s) -> do
     Lua.pushinteger (l + i)
     Lua.pushstring (Text.encodeUtf8 (Text.pack s))
     Lua.settable (Lua.nth 3)
@@ -160,15 +160,15 @@ preHook bin = do
 -- | Make an "Oughta"-based test
 oughta :: FilePath -> Oughta.LuaProgram -> IO ()
 oughta bin prog0 = do
-  let output = Oughta.Output ""  -- set by `go`
+  let output = Oughta.Output "" -- set by `go`
   let prog = Oughta.addPrefix prelude prog0
-  let hooks = Oughta.defaultHooks { Oughta.preHook = preHook bin }
+  let hooks = Oughta.defaultHooks{Oughta.preHook = preHook bin}
   Oughta.Result r <- Oughta.check hooks prog output
   case r of
     Left f -> X.throwIO f
     Right s ->
-      let ms = Oughta.successMatches s in
-      T.U.assertBool "Test has some assertions" (not (Seq.null ms))
+      let ms = Oughta.successMatches s
+       in T.U.assertBool "Test has some assertions" (not (Seq.null ms))
 
 -- | Make a "Oughta"-based tests for binaries
 oughtaBin ::
@@ -213,12 +213,12 @@ oughtaBc ::
   FilePath ->
   T.TestTree
 oughtaBc dir fileName =
-  let dropped = FilePath.dropExtension fileName in
-  T.U.testCase dropped $ do
-    let c = dir </> FilePath.addExtension dropped  "c"
-    content <- Text.IO.readFile c
-    let prog = Oughta.fromLineComments c "/// " content
-    oughta (dir </> fileName) prog
+  let dropped = FilePath.dropExtension fileName
+   in T.U.testCase dropped $ do
+        let c = dir </> FilePath.addExtension dropped "c"
+        content <- Text.IO.readFile c
+        let prog = Oughta.fromLineComments c "/// " content
+        oughta (dir </> fileName) prog
 
 -- | Create a test from a file, depending on the extension
 fileTest :: FilePath -> FilePath -> [T.TestTree]
@@ -237,15 +237,15 @@ discoverTests d = do
     for entries $ \ent -> do
       -- skip test support files
       if ent == "extra" || ".aux" `List.isInfixOf` ent
-      then pure []
-      else do
-        let path = d </> ent
-        isDir <- Dir.doesDirectoryExist path
-        if isDir
-        then do
-          tests <- discoverTests path
-          pure [tests]
-        else pure (fileTest d ent)
+        then pure []
+        else do
+          let path = d </> ent
+          isDir <- Dir.doesDirectoryExist path
+          if isDir
+            then do
+              tests <- discoverTests path
+              pure [tests]
+            else pure (fileTest d ent)
 
 main :: IO ()
 main = do
@@ -262,4 +262,4 @@ main = do
         , "x86"
         ]
   tests <- mapM discoverTests (map ("tests" </>) dirs)
-  T.defaultMain $ T.testGroup "Tests" (shapeTests:tests)
+  T.defaultMain $ T.testGroup "Tests" (shapeTests : tests)

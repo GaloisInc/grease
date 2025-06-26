@@ -1,58 +1,56 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Grease.Setup
-  ( InitialMem(..)
-  , SetupMem(..)
-  , Args(..)
-  , argTypes
-  , argVals
-  , argRegMap
-  , setupShape
-  , runSetup
-  , setup
-  , ValueName(..)
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Setup (
+  InitialMem (..),
+  SetupMem (..),
+  Args (..),
+  argTypes,
+  argVals,
+  argRegMap,
+  setupShape,
+  runSetup,
+  setup,
+  ValueName (..),
+) where
 
 import Control.Applicative (pure)
 import Control.Exception.Safe (MonadCatch)
-import Control.Lens (use, (^.), (%~), (.=))
+import Control.Lens (use, (%~), (.=), (^.))
 import Control.Lens.TH (makeLenses)
 import Control.Lens.Zoom (zoom)
 import Control.Monad (foldM, (=<<))
-import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.Trans.State (StateT(..), evalStateT, put, get)
+import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.State (StateT (..), evalStateT, get, put)
 import Data.BitVector.Sized qualified as BV
-import Data.Eq (Eq((==)))
-import Data.Function (($), (.), (&), flip)
+import Data.Eq (Eq ((==)))
+import Data.Function (flip, ($), (&), (.))
 import Data.Functor (fmap)
 import Data.List qualified as List
 import Data.Map qualified as Map
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe (..))
 import Data.Parameterized.Classes (ixF')
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (NatRepr, natValue)
 import Data.Parameterized.TraversableFC (fmapFC)
-import Data.Proxy (Proxy(Proxy))
+import Data.Proxy (Proxy (Proxy))
 import Data.Semigroup ((<>))
 import Data.Sequence qualified as Seq
 import Data.String (String)
-import Data.Type.Equality (type (~), (:~:)(Refl))
+import Data.Type.Equality ((:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
 import Data.Word (Word8)
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
-import Grease.Diagnostic (GreaseLogAction, Diagnostic(SetupDiagnostic))
+import Grease.Diagnostic (Diagnostic (SetupDiagnostic), GreaseLogAction)
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Setup.Diagnostic qualified as Diag
 import Grease.Shape
@@ -68,14 +66,14 @@ import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
-import Prelude (Int, Num(..), fromIntegral)
 import System.IO (IO)
 import Text.Show (show)
 import What4.Interface qualified as W4
+import Prelude (Int, Num (..), fromIntegral)
 
 -- | Name for fresh symbolic values, passed to 'W4.safeSymbol'. The phantom
 -- type parameter prevents making recursive calls without changing the name.
-newtype ValueName (t :: C.CrucibleType) = ValueName { getValueName :: String }
+newtype ValueName (t :: C.CrucibleType) = ValueName {getValueName :: String}
 
 addSuffix :: ValueName t -> String -> ValueName t'
 addSuffix (ValueName nm) suf = ValueName (nm <> suf)
@@ -96,18 +94,17 @@ safeSymbol = W4.safeSymbol . getValueName
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (SetupDiagnostic diag)
 
-
 -- | The result of setting up a pointer. `setupResPtr` represents the runtime value of the pointer and
--- `setupResTgt` stores the runtime representation of what is stored in that pointer. These 
--- results are memoized during setup based on `BlockId` so that a given block is only given 
+-- `setupResTgt` stores the runtime representation of what is stored in that pointer. These
+-- results are memoized during setup based on `BlockId` so that a given block is only given
 -- one runtime value.
-data SetupRes sym w = SetupRes { setupResPtr :: C.RegValue sym (Mem.LLVMPointerType w), setupResTgt ::  PtrTarget w (C.RegValue' sym)}
+data SetupRes sym w = SetupRes {setupResPtr :: C.RegValue sym (Mem.LLVMPointerType w), setupResTgt :: PtrTarget w (C.RegValue' sym)}
 
 data SetupState sym ext argTys w = SetupState
   { _setupMem :: Mem.MemImpl sym
   , _setupAnns :: Anns.Annotations sym ext argTys
-  -- | Memoization table that maps observed 'BlockId's from 'setupPtrMem' to observed 'SetupRes' results.
   , _setupRes :: Map.Map BlockId (SetupRes sym w)
+  -- ^ Memoization table that maps observed 'BlockId's from 'setupPtrMem' to observed 'SetupRes' results.
   }
 makeLenses ''SetupState
 
@@ -115,7 +112,7 @@ makeLenses ''SetupState
 type Setup sym ext argTys w a = StateT (SetupState sym ext argTys w) IO a
 
 annotatePtrBv ::
-  forall sym ext argTys ts regTy w  w'.
+  forall sym ext argTys ts regTy w w'.
   ( C.IsSymInterface sym
   , Cursor.Last (regTy ': ts) ~ Mem.LLVMPointerType w
   , 1 C.<= w
@@ -144,7 +141,7 @@ freshPtrBv sym sel nm w =
     =<< liftIO (W4.freshConstant sym (safeSymbol nm) (W4.BaseBVRepr w))
 
 -- | Memoizes calls to `setupPtr`. Results are stored in the `SetupState` based on the `BlockId`.
--- Only a single runtime value is produced per `BlockId` allowing for mutliple pointers to the same block in a 
+-- Only a single runtime value is produced per `BlockId` allowing for mutliple pointers to the same block in a
 -- shape.
 setupPtrMem ::
   forall sym bak ext tag w argTys ts regTy.
@@ -163,20 +160,20 @@ setupPtrMem ::
   Selector ext argTys ts regTy ->
   PtrTarget w tag ->
   Setup sym ext argTys w (C.RegValue sym (Mem.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
-setupPtrMem la bak dl nm sel tgt@(PtrTarget bid _) = 
-  let unseenFallback = setupPtr la bak dl nm sel tgt in 
-  case bid of 
-    Just bid' -> do 
-      resMap <- use setupRes
-      case Map.lookup bid' resMap of 
-        Just memoizeRes -> pure (setupResPtr memoizeRes, setupResTgt memoizeRes)
-        Nothing -> do
-          (ptr, rtgt) <- unseenFallback
-          s <- get
-          let newmap = Map.insert bid' (SetupRes {setupResPtr=ptr, setupResTgt=rtgt}) resMap 
-          _ <- put  (s {_setupRes = newmap})
-          pure (ptr, rtgt)
-    Nothing -> unseenFallback
+setupPtrMem la bak dl nm sel tgt@(PtrTarget bid _) =
+  let unseenFallback = setupPtr la bak dl nm sel tgt
+   in case bid of
+        Just bid' -> do
+          resMap <- use setupRes
+          case Map.lookup bid' resMap of
+            Just memoizeRes -> pure (setupResPtr memoizeRes, setupResTgt memoizeRes)
+            Nothing -> do
+              (ptr, rtgt) <- unseenFallback
+              s <- get
+              let newmap = Map.insert bid' (SetupRes{setupResPtr = ptr, setupResTgt = rtgt}) resMap
+              _ <- put (s{_setupRes = newmap})
+              pure (ptr, rtgt)
+        Nothing -> unseenFallback
 
 -- | Ignores tags.
 setupPtr ::
@@ -218,128 +215,129 @@ setupPtr la bak layout nm sel target = do
       (_, _, ms') <- foldM go (0, ptr, Seq.empty) ms
       p <- zoom setupAnns (Anns.annotatePtr sym sel ptr)
       pure (p, PtrTarget bid ms')
-  where
-    makeKnownBytes ::
-      forall ts'.
-      Cursor.Last (regTy ': ts') ~ Mem.LLVMPointerType w =>
-      sym ->
-      Selector ext argTys ts' regTy ->
-      [Word8] ->
-      Setup sym ext argTys w (Vec.Vector (Mem.LLVMPtr sym 8))
-    makeKnownBytes sym sel' bytes =
-      flip Vec.unfoldrM (List.zip [(1 :: Int)..] bytes) $
-        \case
-          [] -> pure Nothing
-          (i, b):rest -> do
-            let sel'' = sel' & selectorPath %~ PtrCursor.addByteIndex i
-            Refl <- pure $ Cursor.lastSnoc (Proxy @(Mem.LLVMPointerType 8)) (Proxy @ts')
-            Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @(Cursor.Snoc ts' (Mem.LLVMPointerType 8)))
-            bv <- liftIO (W4.bvLit sym (C.knownNat @8) (BV.mkBV (C.knownNat @8) (fromIntegral b)))
-            bv' <- annotatePtrBv sym sel'' bv
-            pure (Just (bv', rest))
+ where
+  makeKnownBytes ::
+    forall ts'.
+    Cursor.Last (regTy ': ts') ~ Mem.LLVMPointerType w =>
+    sym ->
+    Selector ext argTys ts' regTy ->
+    [Word8] ->
+    Setup sym ext argTys w (Vec.Vector (Mem.LLVMPtr sym 8))
+  makeKnownBytes sym sel' bytes =
+    flip Vec.unfoldrM (List.zip [(1 :: Int) ..] bytes) $
+      \case
+        [] -> pure Nothing
+        (i, b) : rest -> do
+          let sel'' = sel' & selectorPath %~ PtrCursor.addByteIndex i
+          Refl <- pure $ Cursor.lastSnoc (Proxy @(Mem.LLVMPointerType 8)) (Proxy @ts')
+          Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @(Cursor.Snoc ts' (Mem.LLVMPointerType 8)))
+          bv <- liftIO (W4.bvLit sym (C.knownNat @8) (BV.mkBV (C.knownNat @8) (fromIntegral b)))
+          bv' <- annotatePtrBv sym sel'' bv
+          pure (Just (bv', rest))
 
-    writeKnownBytes ::
-      forall ts'.
-      Cursor.Last (regTy ': ts') ~ Mem.LLVMPointerType w =>
-      C.IsSymBackend sym bak =>
-      sym ->
-      Mem.MemImpl sym ->
-      Selector ext argTys ts' regTy ->
-      -- | Pointer to write bytes to
-      C.RegValue sym (Mem.LLVMPointerType w) ->
-      [Word8] ->
-      Setup sym ext argTys w (Mem.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
-    writeKnownBytes sym m sel' ptr bytes = do
-      let i8 = Mem.bitvectorType (Bytes.toBytes (1 :: Int))
-      vals <- makeKnownBytes sym sel' bytes
-      let mkInt bv = Mem.LLVMValInt (Mem.llvmPointerBlock bv) (Mem.llvmPointerOffset bv)
-      let val = Mem.LLVMValArray i8 (Vec.map mkInt vals)
-      let storTy = Mem.arrayType (fromIntegral (List.length bytes)) i8
-      m' <- liftIO $ Mem.storeRaw bak m ptr storTy Mem.noAlignment val
-      pure (m', vals)
+  writeKnownBytes ::
+    forall ts'.
+    Cursor.Last (regTy ': ts') ~ Mem.LLVMPointerType w =>
+    C.IsSymBackend sym bak =>
+    sym ->
+    Mem.MemImpl sym ->
+    Selector ext argTys ts' regTy ->
+    -- \| Pointer to write bytes to
+    C.RegValue sym (Mem.LLVMPointerType w) ->
+    [Word8] ->
+    Setup sym ext argTys w (Mem.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
+  writeKnownBytes sym m sel' ptr bytes = do
+    let i8 = Mem.bitvectorType (Bytes.toBytes (1 :: Int))
+    vals <- makeKnownBytes sym sel' bytes
+    let mkInt bv = Mem.LLVMValInt (Mem.llvmPointerBlock bv) (Mem.llvmPointerOffset bv)
+    let val = Mem.LLVMValArray i8 (Vec.map mkInt vals)
+    let storTy = Mem.arrayType (fromIntegral (List.length bytes)) i8
+    m' <- liftIO $ Mem.storeRaw bak m ptr storTy Mem.noAlignment val
+    pure (m', vals)
 
-    makeFreshBytes ::
-      forall ts'.
-      Cursor.Last (regTy ': ts') ~ Mem.LLVMPointerType w =>
-      sym ->
-      Selector ext argTys ts' regTy ->
-      Bytes ->
-      Setup sym ext argTys w (Vec.Vector (Mem.LLVMPtr sym 8))
-    makeFreshBytes sym sel' bytes =
-      Vec.generateM (fromIntegral (Bytes.bytesToInteger bytes)) $ \i -> do
-        let sel'' = sel' & selectorPath %~ PtrCursor.addByteIndex i
-        Refl <- pure $ Cursor.lastSnoc (Proxy @(Mem.LLVMPointerType 8)) (Proxy @ts')
-        Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @(Cursor.Snoc ts' (Mem.LLVMPointerType 8)))
-        let nm' = addIndex nm i
-        freshPtrBv sym sel'' nm' (W4.knownNat @8)
+  makeFreshBytes ::
+    forall ts'.
+    Cursor.Last (regTy ': ts') ~ Mem.LLVMPointerType w =>
+    sym ->
+    Selector ext argTys ts' regTy ->
+    Bytes ->
+    Setup sym ext argTys w (Vec.Vector (Mem.LLVMPtr sym 8))
+  makeFreshBytes sym sel' bytes =
+    Vec.generateM (fromIntegral (Bytes.bytesToInteger bytes)) $ \i -> do
+      let sel'' = sel' & selectorPath %~ PtrCursor.addByteIndex i
+      Refl <- pure $ Cursor.lastSnoc (Proxy @(Mem.LLVMPointerType 8)) (Proxy @ts')
+      Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @(Cursor.Snoc ts' (Mem.LLVMPointerType 8)))
+      let nm' = addIndex nm i
+      freshPtrBv sym sel'' nm' (W4.knownNat @8)
 
-    writeFreshBytes ::
-      forall ts'.
-      Cursor.Last (regTy ': ts') ~ Mem.LLVMPointerType w =>
-      C.IsSymBackend sym bak =>
-      sym ->
-      Mem.MemImpl sym ->
-      Selector ext argTys ts' regTy ->
-      -- | Pointer to write bytes to
-      C.RegValue sym (Mem.LLVMPointerType w) ->
-      Bytes ->
-      Setup sym ext argTys  w (Mem.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
-    writeFreshBytes sym m sel' ptr bytes = do
-      let i8 = Mem.bitvectorType (Bytes.toBytes (1 :: Int))
-      vals <- makeFreshBytes sym sel' bytes
-      let mkInt bv = Mem.LLVMValInt (Mem.llvmPointerBlock bv) (Mem.llvmPointerOffset bv)
-      let val = Mem.LLVMValArray i8 (Vec.map mkInt vals)
-      let storTy = Mem.arrayType (fromIntegral bytes) i8
-      m' <- liftIO $ Mem.storeRaw bak m ptr storTy Mem.noAlignment val
-      pure (m', vals)
+  writeFreshBytes ::
+    forall ts'.
+    Cursor.Last (regTy ': ts') ~ Mem.LLVMPointerType w =>
+    C.IsSymBackend sym bak =>
+    sym ->
+    Mem.MemImpl sym ->
+    Selector ext argTys ts' regTy ->
+    -- \| Pointer to write bytes to
+    C.RegValue sym (Mem.LLVMPointerType w) ->
+    Bytes ->
+    Setup sym ext argTys w (Mem.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
+  writeFreshBytes sym m sel' ptr bytes = do
+    let i8 = Mem.bitvectorType (Bytes.toBytes (1 :: Int))
+    vals <- makeFreshBytes sym sel' bytes
+    let mkInt bv = Mem.LLVMValInt (Mem.llvmPointerBlock bv) (Mem.llvmPointerOffset bv)
+    let val = Mem.LLVMValArray i8 (Vec.map mkInt vals)
+    let storTy = Mem.arrayType (fromIntegral bytes) i8
+    m' <- liftIO $ Mem.storeRaw bak m ptr storTy Mem.noAlignment val
+    pure (m', vals)
 
-    go ::
-      Mem.HasPtrWidth w =>
-      ( -- Index from base pointer, used for names
-        Int
-        -- Base pointer plus current offset
-      , C.RegValue sym (Mem.LLVMPointerType w)
-        -- Values written so far
-      , Seq.Seq (MemShape w (C.RegValue' sym))
-      ) ->
-      MemShape w tag ->
-      Setup sym ext argTys w (Int, C.RegValue sym (Mem.LLVMPointerType w), Seq.Seq (MemShape w (C.RegValue' sym)))
-    go (idx, ptr, written) memShape = do
-      let sym = C.backendGetSym bak
-      let sel' = sel & selectorPath %~ PtrCursor.addIndex idx
-      Refl <- pure $ Cursor.lastSnoc (Proxy @(Mem.LLVMPointerType w)) (Proxy @(regTy ': ts))
-      memShape' <-
-        case memShape of
-          Exactly bytes -> do
-            let bytes' = List.map taggedByteValue bytes
-            m <- use setupMem
-            (m', byteVals) <- writeKnownBytes sym m sel' ptr bytes'
-            setupMem .= m'
-            pure (Exactly (List.zipWith (\v -> TaggedByte (C.RV v)) (Vec.toList byteVals) bytes'))
-          Uninitialized bytes -> pure (Uninitialized bytes)
-          Initialized _tag bytes -> do
-            m <- use setupMem
-            if bytes == 0
+  go ::
+    Mem.HasPtrWidth w =>
+    ( -- Index from base pointer, used for names
+      Int
+    , -- Base pointer plus current offset
+      C.RegValue sym (Mem.LLVMPointerType w)
+    , -- Values written so far
+      Seq.Seq (MemShape w (C.RegValue' sym))
+    ) ->
+    MemShape w tag ->
+    Setup sym ext argTys w (Int, C.RegValue sym (Mem.LLVMPointerType w), Seq.Seq (MemShape w (C.RegValue' sym)))
+  go (idx, ptr, written) memShape = do
+    let sym = C.backendGetSym bak
+    let sel' = sel & selectorPath %~ PtrCursor.addIndex idx
+    Refl <- pure $ Cursor.lastSnoc (Proxy @(Mem.LLVMPointerType w)) (Proxy @(regTy ': ts))
+    memShape' <-
+      case memShape of
+        Exactly bytes -> do
+          let bytes' = List.map taggedByteValue bytes
+          m <- use setupMem
+          (m', byteVals) <- writeKnownBytes sym m sel' ptr bytes'
+          setupMem .= m'
+          pure (Exactly (List.zipWith (\v -> TaggedByte (C.RV v)) (Vec.toList byteVals) bytes'))
+        Uninitialized bytes -> pure (Uninitialized bytes)
+        Initialized _tag bytes -> do
+          m <- use setupMem
+          if bytes == 0
             then pure (Initialized (C.RV Vec.empty) 0)
             else do
               (m', byteVals) <- writeFreshBytes sym m sel' ptr bytes
               setupMem .= m'
               pure (Initialized (C.RV byteVals) bytes)
-          Pointer _tag off tgt -> do  -- recursive case
-            let nm' = addIndex nm idx
-            (val, tgt') <- setupPtrMem la bak layout nm' sel' tgt
-            let storTy = Mem.bitvectorType (Bytes.bitsToBytes (natValue ?ptrWidth))
-            m <- use setupMem
-            offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset off))))
-            val' <- liftIO $ Mem.ptrAdd sym ?ptrWidth val offsetBv
-            m' <- liftIO $ Mem.doStore bak m ptr (Mem.LLVMPointerRepr ?ptrWidth) storTy Mem.noAlignment val' 
-            setupMem .= m'
-            pure (Pointer (C.RV val) off tgt')
+        Pointer _tag off tgt -> do
+          -- recursive case
+          let nm' = addIndex nm idx
+          (val, tgt') <- setupPtrMem la bak layout nm' sel' tgt
+          let storTy = Mem.bitvectorType (Bytes.bitsToBytes (natValue ?ptrWidth))
+          m <- use setupMem
+          offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset off))))
+          val' <- liftIO $ Mem.ptrAdd sym ?ptrWidth val offsetBv
+          m' <- liftIO $ Mem.doStore bak m ptr (Mem.LLVMPointerRepr ?ptrWidth) storTy Mem.noAlignment val'
+          setupMem .= m'
+          pure (Pointer (C.RV val) off tgt')
 
-      let offset = memShapeSize ?ptrWidth memShape
-      offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral offset)))
-      ptr' <- liftIO $ Mem.ptrAdd sym ?ptrWidth ptr offsetBv
-      pure (idx + 1, ptr', memShape' Seq.<| written)
+    let offset = memShapeSize ?ptrWidth memShape
+    offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral offset)))
+    ptr' <- liftIO $ Mem.ptrAdd sym ?ptrWidth ptr offsetBv
+    pure (idx + 1, ptr', memShape' Seq.<| written)
 
 {-
 Note [Initializing empty pointer shapes]
@@ -363,12 +361,12 @@ value from a bitvector into an actual pointer, and retry the refinement loop.)
 
 In practice, we pick option (2). There are a couple of reasons for this:
 
-* Ease of implementation. It is easier to refine bitvectors into pointers than
+\* Ease of implementation. It is easier to refine bitvectors into pointers than
   the opposite direction. Moreover, there are some operations which fail for
   pointers (e.g., adding two pointers in macaw-symbolic) that are somewhat
   difficult to intercept and trace back to the pointer arguments.
 
-* Performance. crucible-llvm's memory model's performance on memory reads from
+\* Performance. crucible-llvm's memory model's performance on memory reads from
   pointers with symbolic block numbers can be quite bad in the general case, as
   crucible-llvm must construct a mux tree over all possible pointer values that
   are live at a given moment. Starting off with a bitvector value (with a
@@ -420,12 +418,13 @@ setupShape la bak layout nm tRepr sel s = do
     ShapeStruct _tag fs -> do
       fieldShapes <-
         Ctx.traverseWithIndex
-          (\idx s' -> do
-            let ty' = case tRepr of C.StructRepr fields -> fields ^. ixF' idx
-            Refl <- pure $ Cursor.lastSnoc ty' (Proxy @(regTy ': ts))
-            let sel' = sel & selectorPath %~ PtrCursor.addField ty' idx
-            let nm' = addIndex nm (Ctx.indexVal idx)
-            setupShape la bak layout nm' ty' sel' s')
+          ( \idx s' -> do
+              let ty' = case tRepr of C.StructRepr fields -> fields ^. ixF' idx
+              Refl <- pure $ Cursor.lastSnoc ty' (Proxy @(regTy ': ts))
+              let sel' = sel & selectorPath %~ PtrCursor.addField ty' idx
+              let nm' = addIndex nm (Ctx.indexVal idx)
+              setupShape la bak layout nm' ty' sel' s'
+          )
           fs
       let vals = fmapFC (getTag getPtrTag) fieldShapes
       pure (ShapeStruct (C.RV vals) fieldShapes)
@@ -452,27 +451,28 @@ setupArgs ::
   Ctx.Assignment (Shape ext tag) argTys ->
   Setup sym ext argTys w (Args sym ext argTys)
 setupArgs la bak layout argNames argTys =
-  fmap Args .
-    Ctx.traverseWithIndex
-      (\idx s ->
-        let nm = argNames ^. ixF' idx
-            ty = argTys ^. ixF' idx
-            sel = SelectArg (ArgSelector idx (Cursor.Here ty))
-        in setupShape la bak layout nm ty sel s)
+  fmap Args
+    . Ctx.traverseWithIndex
+      ( \idx s ->
+          let nm = argNames ^. ixF' idx
+              ty = argTys ^. ixF' idx
+              sel = SelectArg (ArgSelector idx (Cursor.Here ty))
+           in setupShape la bak layout nm ty sel s
+      )
 
 -- | Memory before execution
 --
 -- Used by heuristics to look up the names of globals.
-newtype InitialMem sym = InitialMem { getInitialMem :: Mem.MemImpl sym }
+newtype InitialMem sym = InitialMem {getInitialMem :: Mem.MemImpl sym}
 
 -- | Memory after running 'setup'
-newtype SetupMem sym = SetupMem { getSetupMem :: Mem.MemImpl sym }
+newtype SetupMem sym = SetupMem {getSetupMem :: Mem.MemImpl sym}
 
 -- | Arguments used for an execution of the target
 --
 -- Used by refinement loop to print concrete examples.
 newtype Args sym ext argTys
-  = Args { getArgs :: Ctx.Assignment (Shape ext (C.RegValue' sym)) argTys }
+  = Args {getArgs :: Ctx.Assignment (Shape ext (C.RegValue' sym)) argTys}
 
 argTypes ::
   ( Mem.HasPtrWidth w
@@ -509,8 +509,9 @@ runSetup ::
   m a
 runSetup mem act =
   liftIO (evalStateT act initial)
-  where
-    initial = SetupState
+ where
+  initial =
+    SetupState
       { _setupMem = getInitialMem mem
       , _setupAnns = Anns.empty
       , _setupRes = Map.empty
@@ -537,7 +538,8 @@ setup ::
   Ctx.Assignment C.TypeRepr argTys ->
   ArgShapes ext tag argTys ->
   InitialMem sym ->
-  m ( Args sym ext argTys
+  m
+    ( Args sym ext argTys
     , SetupMem sym
     , Anns.Annotations sym ext argTys
     )

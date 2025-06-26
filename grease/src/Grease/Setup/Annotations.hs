@@ -1,38 +1,38 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Grease.Setup.Annotations
-  ( SomeBaseSelector(..)
-  , SomePtrSelector(..)
-  , Annotations
-  , empty
-    -- * Annotate
-  , annotate
-  , annotatePtr
-    -- * Lookup
-  , lookupPtrAnnotation
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Setup.Annotations (
+  SomeBaseSelector (..),
+  SomePtrSelector (..),
+  Annotations,
+  empty,
+
+  -- * Annotate
+  annotate,
+  annotatePtr,
+
+  -- * Lookup
+  lookupPtrAnnotation,
+) where
 
 import Control.Applicative ((<|>))
-import Control.Lens ((^.), (%=))
+import Control.Lens ((%=), (^.))
 import Control.Lens.TH (makeLenses)
-import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.State.Class (MonadState(..))
+import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.State.Class (MonadState (..))
 import Data.Macaw.CFG qualified as MC
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe qualified as Maybe
 import Data.Parameterized.Map qualified as MapF
-import Data.Parameterized.Some (Some(..))
-import Data.Proxy (Proxy(Proxy))
-import Data.Type.Equality ((:~:)(Refl), testEquality)
+import Data.Parameterized.Some (Some (..))
+import Data.Proxy (Proxy (Proxy))
+import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Shape.Selector
@@ -91,21 +91,23 @@ instance MapF.OrdF (W4.SymAnnotation sym) => Ord (IntegerAnn sym) where
 -- | Track the provenance of symbolic values using 'W4.SymAnnotation's.
 data Annotations sym ext argTys
   = Annotations
-    { _baseAnns :: MapF.MapF (W4.SymAnnotation sym) (SomeBaseSelector ext argTys)
-    , _blockAnns :: Map (IntegerAnn sym) (Some (SomePtrSelector ext argTys))
-    , _offsetAnns :: MapF.MapF (BVAnn sym) (SomePtrSelector ext argTys)
-    }
+  { _baseAnns :: MapF.MapF (W4.SymAnnotation sym) (SomeBaseSelector ext argTys)
+  , _blockAnns :: Map (IntegerAnn sym) (Some (SomePtrSelector ext argTys))
+  , _offsetAnns :: MapF.MapF (BVAnn sym) (SomePtrSelector ext argTys)
+  }
+
 makeLenses ''Annotations
 
 empty :: Annotations sym ext argTys
 empty =
   Annotations
-  { _baseAnns = MapF.empty
-  , _blockAnns = Map.empty
-  , _offsetAnns = MapF.empty
-  }
+    { _baseAnns = MapF.empty
+    , _blockAnns = Map.empty
+    , _offsetAnns = MapF.empty
+    }
 
 ---------------------------------------------------------------------
+
 -- * Annotate
 
 annotate ::
@@ -152,6 +154,7 @@ annotatePtr sym sel ptr = do
   pure ptr''
 
 ---------------------------------------------------------------------
+
 -- * Lookup
 
 findAnnotations ::
@@ -169,16 +172,17 @@ findAnnotations sym repr e = case W4.asApp e of
         anns = MC.foldMapFC (Maybe.maybeToList . getAnn) app
     case getAnn e of
       Nothing -> anns
-      Just ann -> ann:anns
+      Just ann -> ann : anns
   Nothing -> Maybe.maybeToList (getAnn e)
-  where
-    getAnn ::
-      forall tp. W4.Expr brand tp ->
-      Maybe (W4.SymAnnotation sym t')
-    getAnn expr =
-      case W4.exprType expr of
-        repr' | Just C.Refl <- C.testEquality repr repr' -> W4.getAnnotation sym expr
-        _ -> Nothing
+ where
+  getAnn ::
+    forall tp.
+    W4.Expr brand tp ->
+    Maybe (W4.SymAnnotation sym t')
+  getAnn expr =
+    case W4.exprType expr of
+      repr' | Just C.Refl <- C.testEquality repr repr' -> W4.getAnnotation sym expr
+      _ -> Nothing
 
 lookupSomePtrBlockAnnotation ::
   ( C.IsSymInterface sym
@@ -231,7 +235,7 @@ lookupPtrOffsetAnnotation ::
 lookupPtrOffsetAnnotation anns sym w ptr =
   case findAnnotations sym (W4.BaseBVRepr w) (Mem.llvmPointerOffset ptr) of
     [] -> Nothing
-    (ann:_) ->
+    (ann : _) ->
       -- In this lookup, 'Nothing' may arise if this pointer was created by a
       -- "skip" override (see "Grease.Skip"), because such overrides use the
       -- "setup" machinery, but discard the map that tracks the annotations on

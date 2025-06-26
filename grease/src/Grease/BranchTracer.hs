@@ -1,21 +1,19 @@
-{-|
-Copyright        : (c) Galois, Inc. 2024
-Maintainer       : GREASE Maintainers <grease@galois.com>
--}
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Grease.BranchTracer
-  ( BranchTracer(..)
-  , branchTracerFeature
-  , greaseBranchTracerFeature
-  ) where
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.BranchTracer (
+  BranchTracer (..),
+  branchTracerFeature,
+  greaseBranchTracerFeature,
+) where
 
 import Control.Lens ((^.))
 import Control.Monad.IO.Class (MonadIO)
 import Grease.BranchTracer.Diagnostic qualified as Diag
-import Grease.Diagnostic (GreaseLogAction, Diagnostic(BranchTracerDiagnostic))
+import Grease.Diagnostic (Diagnostic (BranchTracerDiagnostic), GreaseLogAction)
 import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.EvalStmt qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
@@ -25,15 +23,15 @@ import What4.Interface qualified as W4
 -- | 'IO' action to run upon reaching a symbolic branch.
 newtype BranchTracer p sym ext
   = BranchTracer
-    { getBranchTracer ::
+  { getBranchTracer ::
       forall rtp f args postdom_args.
       W4.Pred sym {- predicate to branch on -} ->
       C.PausedFrame p sym ext rtp f {- true path -} ->
-      C.PausedFrame p sym ext rtp f  {- false path -} ->
+      C.PausedFrame p sym ext rtp f {- false path -} ->
       C.CrucibleBranchTarget f postdom_args {- merge point -} ->
-      C.SimState p sym ext rtp f ('Just args) {- simulator state -} ->
+      C.SimState p sym ext rtp f ('Just args {- simulator state -}) ->
       IO ()
-    }
+  }
 
 -- | Execute an 'IO' action for each symbolic branch executed.
 branchTracerFeature ::
