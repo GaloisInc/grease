@@ -10,6 +10,8 @@ from sys import exit, stderr
 
 COMMENT = "// CFLAGS: "
 
+GROUPS = {"LLVM": ["-emit-llvm", "-frecord-command-line"]}
+
 
 def eprint(*args, **kwargs):
     print(*args, file=stderr, **kwargs)
@@ -29,12 +31,27 @@ def gather(txt):
     return raw_flags
 
 
+def process(raw_flags):
+    processed_flags = []
+    for flag in raw_flags:
+        if flag.startswith("$"):
+            flag = flag.removeprefix("$")
+            try:
+                processed_flags += GROUPS[flag]
+            except KeyError:
+                die("unknown flag group: ${flag}")
+        else:
+            processed_flags.append(flag)
+    return processed_flags
+
+
 def extract(path):
     if not path.is_file():
         die("not a file: {path}")
 
     raw_flags = gather(path.read_text())
-    return " ".join(raw_flags)
+    flags = process(raw_flags)
+    return " ".join(flags)
 
 
 parser = ArgumentParser()

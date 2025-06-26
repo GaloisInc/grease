@@ -1,6 +1,6 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// CFLAGS: -emit-llvm -frecord-command-line
+// CFLAGS: $LLVM
 
 /// flags {"--symbol", "test"}
 /// go(prog)
