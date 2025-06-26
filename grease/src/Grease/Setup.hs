@@ -242,7 +242,7 @@ setupPtr la bak layout nm sel target = do
     sym ->
     Mem.MemImpl sym ->
     Selector ext argTys ts' regTy ->
-    -- \| Pointer to write bytes to
+    -- Pointer to write bytes to
     C.RegValue sym (Mem.LLVMPointerType w) ->
     [Word8] ->
     Setup sym ext argTys w (Mem.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
@@ -277,7 +277,7 @@ setupPtr la bak layout nm sel target = do
     sym ->
     Mem.MemImpl sym ->
     Selector ext argTys ts' regTy ->
-    -- \| Pointer to write bytes to
+    -- Pointer to write bytes to
     C.RegValue sym (Mem.LLVMPointerType w) ->
     Bytes ->
     Setup sym ext argTys w (Mem.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))

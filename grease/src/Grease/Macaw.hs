@@ -169,9 +169,9 @@ globalMemoryHooks arch relocs =
     forall sym.
     C.IsSymInterface sym =>
     sym ->
-    -- \| The prefix to use in the symbolic byte's name.
+    -- The prefix to use in the symbolic byte's name.
     String ->
-    -- \| The index to use as a suffix symbolic byte's name (zero-indexed).
+    -- The index to use as a suffix symbolic byte's name (zero-indexed).
     Int ->
     IO (W4.SymBV sym 8)
   symbolicByte sym name idx = do

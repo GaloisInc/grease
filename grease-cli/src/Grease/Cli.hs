@@ -269,7 +269,7 @@ simOpts = do
   allRequirementStrs =
     List.map (Text.unpack . displayReq) [minBound .. maxBound]
 
-  -- \| Format a list of two or more possible values for a command-line
+  -- Format a list of two or more possible values for a command-line
   -- option by separating each value with a comma (if necessary) and
   -- parenthesizing the results.
   --

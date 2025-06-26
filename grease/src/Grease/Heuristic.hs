@@ -524,7 +524,7 @@ macawHeuristics la rNames =
     sym ->
     Cursor.Last ts ~ Mem.LLVMPointerType (MC.ArchAddrWidth arch) =>
     W4.ProgramLoc ->
-    -- \| Argument names
+    -- Argument names
     Ctx.Assignment (Const String) (Symbolic.MacawCrucibleRegTypes arch) ->
     ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.MacawCrucibleRegTypes arch) ->
     Mem.MemoryError sym ->
