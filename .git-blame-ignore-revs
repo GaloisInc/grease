@@ -1,0 +1,4 @@
+# To be used with git --ignore-revs-file to ignore large reformatting commits in git blame
+
+# fourmolu format
+2bd518384c57da71dfbf10b67219514f3b0ac85f
