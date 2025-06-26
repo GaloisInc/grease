@@ -42,6 +42,12 @@ jobs:
       - name: Ensure the Ghidra script is formatted
         run: ruff format --check --diff ghidra_scripts
 
+      - name: Lint the CFLAGS script with ruff
+        run: ruff check grease-cli/tests/extract-cflags.py
+
+      - name: Ensure the CFLAGS script is formatted
+        run: ruff format --check --diff grease-cli/tests/extract-cflags.py
+
       - name: Run hlint
         run: |
           curl \

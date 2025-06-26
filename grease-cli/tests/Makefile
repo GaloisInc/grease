@@ -201,10 +201,10 @@ $(STANDALONE_SHARED_LIBRARY_PPC32_SOS): %/test.ppc32.elf: %/test.c
 	$(PPC32CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -o $@
 
 $(BCS): %/test.bc: %/test.c
-	$(X64CC) $(shell ./extract-cflags.sh $<) -c -o $@ $<
+	$(X64CC) $(shell ./extract-cflags.py $<) -c -o $@ $<
 
 llvm-bc/%.bc: llvm-bc/%.c
-	$(X64CC) $(shell ./extract-cflags.sh $<) -c -o $@ $<
+	$(X64CC) $(shell ./extract-cflags.py $<) -c -o $@ $<
 
 clean:
 	rm -f $(EXES)
