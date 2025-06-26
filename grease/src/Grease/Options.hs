@@ -101,6 +101,9 @@ data SimOpts
   -- ^ Default: 'False'.
   , simInitialPreconditions :: Maybe FilePath
   -- ^ Path containing initial function preconditions in shapes DSL
+  , simEnableDWARFPreconditions :: Bool
+  -- ^ Enables parsing DWARF to extract initial shape types. This option is
+  -- superseded by `simInitialPreconditions` and does not do anything in LLVM mode.
   , simLoopBound :: LoopBound
   -- ^ Maximum number of iterations of each program loop/maximum number of
   -- recursive calls to the same function

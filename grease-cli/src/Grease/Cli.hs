@@ -42,7 +42,8 @@ megaparsecReader p = Opt.eitherReader $ \rawStr ->
 boundedEnumMetavar ::
   forall a f proxy.
   (Bounded a, Enum a, Opt.HasMetavar f, Show a) =>
-  proxy a -> Opt.Mod f a
+  proxy a ->
+  Opt.Mod f a
 boundedEnumMetavar _ = Opt.metavar $ varShowS ""
  where
   -- Use ShowS (i.e., a difference list of strings) below to amortize the cost
@@ -186,6 +187,8 @@ simOpts = do
             <> Opt.metavar "FILE"
             <> Opt.help "Initial precondition for use in refinement"
         )
+  simEnableDWARFPreconditions <-
+    Opt.switch (Opt.long "enable-dwarf-preconditions" <> Opt.help "enables dwarf parsing based initial shapes. manual shapes supersede these shapes.")
   simProfileTo <-
     Opt.optional $
       Opt.strOption

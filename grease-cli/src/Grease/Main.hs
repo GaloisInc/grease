@@ -35,7 +35,7 @@ import Control.Monad (forM, forM_, mapM_, when, (>>=))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bool (Bool (..), not, otherwise, (&&), (||))
 import Data.ByteString qualified as BS
-import Data.Either (Either (..))
+import Data.Either (Either (..), either)
 import Data.ElfEdit qualified as Elf
 import Data.Eq ((==))
 import Data.Foldable (traverse_)
@@ -58,6 +58,7 @@ import Data.Macaw.BinaryLoader.AArch32 ()
 import Data.Macaw.BinaryLoader.X86 ()
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
+import Data.Macaw.Dwarf (dwarfInfoFromElf)
 import Data.Macaw.Dwarf qualified as Dwarf
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
@@ -270,6 +271,31 @@ withMemOptions opts k =
           }
    in k
 
+loadDwarfpreconditions ::
+  ExtShape ext ~ PtrShape ext w =>
+  Mem.HasPtrWidth w =>
+  -- | Is DWARF enabled
+  Bool ->
+  -- | Argument names
+  Ctx.Assignment (Const.Const String) tys ->
+  -- | Initial arguments
+  Shape.ArgShapes ext NoTag tys ->
+  -- | Macaw CFG for DWARF
+  MacawCfgConfig arch ->
+  -- | Arch context for abi info
+  ArchContext arch ->
+  -- | Target function address
+  Maybe (MM.MemWord (MC.RegAddrWidth (MC.ArchReg arch))) ->
+  IO (Shape.ArgShapes ext NoTag tys)
+loadDwarfpreconditions dwarfPrecs argNames initShapes macawCfgConfig archContext targetAddr =
+  let dwarfPrs = do
+        addr <- targetAddr
+        elf <- snd . Elf.getElf <$> mcElf macawCfgConfig
+        let (_, cus) = dwarfInfoFromElf elf
+        shps <- Shape.fromDwarfInfo archContext addr cus
+        either (const Nothing) Just (Shape.replaceShapes argNames initShapes shps)
+   in pure $ (if dwarfPrecs then fromMaybe initShapes dwarfPrs else initShapes)
+
 loadInitialPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
   Mem.HasPtrWidth w =>
@@ -288,7 +314,7 @@ loadInitialPreconditions preconds names initArgs =
         case Parse.parseShapes path txt of
           Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
           Right parsed -> pure parsed
-      case Parse.replaceShapes names initArgs parsed of
+      case Shape.replaceShapes names initArgs parsed of
         Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
         Right shapes -> pure shapes
 
@@ -599,7 +625,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
   initArgs_ <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let argNames = fmapFC (Const . getValueName) rNameAssign
-  dwarfedArgs <- loadDwarfpreconditions (simEnableDWARFPreconditions simOpts) argNames initArgs_ macawCfgConfig mdEntryAbsAddr
+  dwarfedArgs <- loadDwarfpreconditions (simEnableDWARFPreconditions simOpts) argNames initArgs_ macawCfgConfig archCtx mdEntryAbsAddr
   initArgs <-
     loadInitialPreconditions (simInitialPreconditions simOpts) argNames dwarfedArgs
 
