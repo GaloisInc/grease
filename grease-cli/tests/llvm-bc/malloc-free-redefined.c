@@ -2,7 +2,7 @@
 
 // A regression test for gitlab#156.
 
-// CFLAGS: -emit-llvm -frecord-command-line
+// CFLAGS: $LLVM
 
 /// flags {"--symbol", "test"}
 /// go(prog)

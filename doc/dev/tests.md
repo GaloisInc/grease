@@ -68,8 +68,8 @@ organized into different subdirectories:
 
 2. `llvm-bc/`: LLVM bitcode files (via `grease`'s LLVM frontend). Each of these
    test cases has the file extension `*.bc`. Files in this directory may specify
-   additional flags to be passed to the C compiler using the special comment
-   `// CFLAGS: `, e.g., `// CFLAGS: -g`.
+   additional flags to be passed to the C compiler, see "Embedded C compiler
+   flags" below.
 
 3. `arm`: AArch32 machine-code CFGs (via `macaw-aarch32-syntax`). Each of these
    test cases has the file extension `*.armv7l.cbl`.
@@ -106,6 +106,15 @@ specify it as the only entrypoint:
 
 void test(/* ... */) { /* ... */ }
 ```
+
+## Embedded C compiler flags
+
+Tests in the `llvm-bc/` directory may embed additional flags to pass to the C
+compiler using the special comment syntax `// CFLAGS: `, e.g., `// CFLAGS: -g`.
+
+The script that extracts these flags also supports flag *groups*, which start
+with `$`. The only flag group currently supported is `$LLVM`, which expands to
+`-emit-llvm -frecord-command-line`.
 
 ## Writing good tests
 

@@ -4,7 +4,7 @@
 // as `memset` are properly handled; and for gitlab#186, test that the
 // heuristics handle `memset` by allocating enough space.
 
-// CFLAGS: -emit-llvm -frecord-command-line
+// CFLAGS: $LLVM
 
 /// flags {"--symbol", "test"}
 /// go(prog)
