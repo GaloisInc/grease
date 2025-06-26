@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// CFLAGS: -emit-llvm -frecord-command-line
+
 /// flags {"--symbol-startup-override", "test:tests/llvm-bc/extra/startup-override.llvm.cbl"}
 /// go(prog)
 

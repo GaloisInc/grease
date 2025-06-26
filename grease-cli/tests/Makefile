@@ -119,10 +119,11 @@ SOS = $(SHARED_LIBRARY_ARM_SOS) $(SHARED_LIBRARY_X64_SOS) $(SHARED_LIBRARY_PPC32
 
 BC_DIRS = $(shell find llvm-bc/ -mindepth 1 -maxdepth 1 -type d)
 BCS = $(addsuffix /test.bc,$(BC_DIRS))
+STANDALONE_BCS = $(patsubst %.c, %.bc, $(wildcard llvm-bc/*.c))
 
 .PHONY: all fmt clean
 
-all: $(EXES) $(SOS) $(BCS)
+all: $(EXES) $(SOS) $(BCS) $(STANDALONE_BCS)
 
 fmt:
 	clang-format -i $(DIRS:=/test.c)
@@ -200,7 +201,10 @@ $(STANDALONE_SHARED_LIBRARY_PPC32_SOS): %/test.ppc32.elf: %/test.c
 	$(PPC32CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -o $@
 
 $(BCS): %/test.bc: %/test.c
-	$(X64CC) -emit-llvm -frecord-command-line -c -o $@ $<
+	$(X64CC) $(shell ./extract-cflags.sh $<) -c -o $@ $<
+
+llvm-bc/%.bc: llvm-bc/%.c
+	$(X64CC) $(shell ./extract-cflags.sh $<) -c -o $@ $<
 
 clean:
 	rm -f $(EXES)

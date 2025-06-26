@@ -67,7 +67,9 @@ organized into different subdirectories:
    the file extension `*.llvm.cbl`.
 
 2. `llvm-bc/`: LLVM bitcode files (via `grease`'s LLVM frontend). Each of these
-   test cases has the file extension `*.bc`.
+   test cases has the file extension `*.bc`. Files in this directory may specify
+   additional flags to be passed to the C compiler using the special comment
+   `// CFLAGS: `, e.g., `// CFLAGS: -g`.
 
 3. `arm`: AArch32 machine-code CFGs (via `macaw-aarch32-syntax`). Each of these
    test cases has the file extension `*.armv7l.cbl`.
