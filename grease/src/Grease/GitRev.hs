@@ -1,9 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
--- \| These are placed in their own module to minimize the cost of recompilation
+-- | These are placed in their own module to minimize the cost of recompilation
 -- due to Template Haskell.
-
--- |
+--
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.GitRev (hash, branch, dirty) where

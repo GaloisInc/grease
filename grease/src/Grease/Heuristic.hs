@@ -1,7 +1,3 @@
--- \|
--- Module      : Grease.Heuristic
---
--- For an overview of refinement, see "Grease.Refinement".
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
@@ -9,7 +5,10 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- |
+-- | Module      : Grease.Heuristic
+--
+-- For an overview of refinement, see "Grease.Refinement".
+--
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Heuristic (
