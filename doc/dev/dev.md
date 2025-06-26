@@ -86,6 +86,15 @@ fourmolu --mode inplace $(git ls-files '*.hs')
 One can either configure formatting commands as a [pre-commit hook](https://git-scm.com/docs/githooks#_pre_commit) or [auto-format on save](https://code.visualstudio.com/docs/editing/codebasics#_formatting) to avoid formatting issues.
 The repo is already formatted with fourmolu so new formatting changes should be localized to behavioral changes. Further discussion of the rationale for the enforcement of a fourmolu style and commit hygiene is available in this [formatting discussion](./formatting.md).
 
+
+#### Ignoring large repository reformats in git blame
+
+Git blame is often helpful for determining commits related to changing a given line. Unfortunately, large scale code automated code changes (e.g. reformatting) can pollute the blame with a commit that is not functionally relevant to the given line. This repository maintains a `.git-blame-ignore-revs` to ignore this type of commit. The file lists past reformatting commits. To use this file to ignore these commits when running git blame configure git with the following command:
+
+```sh
+git config blame.ignorerevsfile .git-blame-ignore-revs
+```
+
 ### hlint
 
 We treat a small number of hlint warnings as errors in CI. To run hlint locally, try:
