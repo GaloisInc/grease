@@ -1,10 +1,9 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- \| See @doc/shared-libraries.md@ for user-facing documentation about PLT
+-- | See @doc/shared-libraries.md@ for user-facing documentation about PLT
 -- stubs.
-
--- |
+--
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.PLT (

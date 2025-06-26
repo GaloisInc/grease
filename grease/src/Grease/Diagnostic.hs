@@ -1,8 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 
--- \| Functionality for logging diagnostic messages in @grease@.
-
--- |
+-- | Functionality for logging diagnostic messages in @grease@
+--
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Diagnostic (

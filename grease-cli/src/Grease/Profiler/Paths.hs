@@ -1,9 +1,8 @@
--- \| Various file paths to @sympro-ui@ files and directories, which are
+-- | Various file paths to @sympro-ui@ files and directories, which are
 -- consulted in "Grease.Profiler.EmbeddedData". Ideally, we'd just put these
 -- directly in "Grease.Profiler.EmbeddedData", but that would trip up GHC
 -- staging restrictions.
-
--- |
+--
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Profiler.Paths (
