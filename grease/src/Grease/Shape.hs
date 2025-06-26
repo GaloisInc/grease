@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -41,14 +42,18 @@ import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Dwarf (CompileUnit (cuRanges, cuSubprograms), Range (rangeBegin, rangeEnd), Subprogram (subEntryPC, subParamMap))
 import Data.Macaw.Dwarf qualified as MDwarf
 import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Map (toAscList)
+import Data.Parameterized (mkNatRepr)
 import Data.Parameterized.Classes (ShowF (..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Ctx (Ctx)
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
 import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
+import Data.Word (Word64)
 import GHC.Show qualified as GShow
-import Grease.Shape.Pointer (PtrShape, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
+import Grease.Shape.NoTag (NoTag (NoTag))
+import Grease.Shape.Pointer (PtrShape (ShapePtrBV), minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Extension (LLVM)
