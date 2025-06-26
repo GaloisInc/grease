@@ -101,12 +101,12 @@ elfRelocationMap _ loadOpts ehi =
   -- exception.
   resolveRelocSym ::
     Show reloc =>
-    -- \| The relocation type (only used for displaying information in an
+    -- The relocation type (only used for displaying information in an
     -- exception).
     reloc ->
-    -- \| The relocation's address.
+    -- The relocation's address.
     MM.MemWord w ->
-    -- \| The relocation symbol's index in the dynamic symbol table.
+    -- The relocation symbol's index in the dynamic symbol table.
     Word32 ->
     BS.ByteString
   resolveRelocSym reloc addr idx =

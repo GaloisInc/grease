@@ -1,12 +1,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
--- \|
--- Copyright        : (c) Galois, Inc. 2024
--- Maintainer       : GREASE Maintainers <grease@galois.com>
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
 import Diagrams.Backend.SVG.CmdLine
 import Diagrams.Prelude
+
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
 
 main :: IO ()
 main = mainWith (pad 1.1 (centerXY plotWithLegend))
