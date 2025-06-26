@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// CFLAGS: -emit-llvm -frecord-command-line
+
 /// flags {"--symbol", "test"}
 /// flags {"--overrides", "tests/llvm-bc/extra/my_malloc.llvm.cbl"}
 /// go(prog)
