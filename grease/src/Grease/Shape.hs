@@ -61,6 +61,7 @@ import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import Data.Word (Word64)
 import GHC.Show qualified as GShow
 import Grease.Macaw.Arch (ArchContext, archABIParams)
+import Grease.Macaw.RegName (RegName (..))
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (PtrShape (ShapePtrBV), minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Grease.Utility (GreaseException (..))
@@ -416,15 +417,15 @@ takeJust f (h : tl) =
     Nothing -> []
     Just e -> e : takeJust f tl
 
-shapeFromVar :: MDwarf.Variable -> Maybe (C.Some (PtrShape ext w NoTag))
+shapeFromVar :: MDwarf.Variable -> Maybe (C.Some (Shape ext NoTag))
 shapeFromVar = undefined
 
 shapeFromDwarf :: ArchContext arch -> Subprogram -> ParsedShapes ext
 shapeFromDwarf aContext sub =
   let ascParams = takeJust shapeFromVar $ snd <$> (toAscList $ subParamMap sub)
-      abiregs = aContext Lens.^. archABIParams
+      abiregs = (\(RegName x) -> Text.pack x) <$> aContext Lens.^. archABIParams
       named = Map.fromList $ zip abiregs ascParams
-   in undefined
+   in ParsedShapes{_getParsedShapes = named}
 
 fromDwarfInfo :: ArchContext arch -> MC.MemWord (MC.RegAddrWidth (MC.ArchReg arch)) -> [Data.Macaw.Dwarf.CompileUnit] -> Maybe (ParsedShapes ext)
 fromDwarfInfo aContext addr cus =
