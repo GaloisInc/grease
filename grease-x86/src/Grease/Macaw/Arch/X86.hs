@@ -24,6 +24,7 @@ import Data.Word (Word64)
 import Grease.Macaw.Arch (ArchContext (..), ArchRegs, ArchReloc)
 import Grease.Macaw.Arch.X86.Reg (getX86Reg, modifyX86Reg)
 import Grease.Macaw.Load.Relocation (RelocType (..))
+import Grease.Macaw.RegName (RegName (..))
 import Grease.Options (ExtraStackSlots)
 import Grease.Shape.Pointer (x64StackPtrShape)
 import Grease.Utility (GreaseException (..), bytes64LE)
@@ -38,6 +39,10 @@ import Stubs.Syscall.X86_64.Linux qualified as Stubs
 import What4.Interface qualified as W4
 
 type instance ArchReloc X86.X86_64 = EE.X86_64_RelocationType
+
+-- | x64 System-V assumed
+reglist :: [String]
+reglist = ["RDI", "RSI", "RDX", "RCX", "R8", "R9"]
 
 x86Ctx ::
   (?memOpts :: Mem.MemOptions) =>
@@ -84,6 +89,7 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
         -- override it.
         _archRegOverrides = Map.empty
       , _archOffsetStackPointerPostCall = x64FixupStackPointer
+      , _archABIParams = RegName <$> reglist
       }
 
 x64RelocSupported :: EE.X86_64_RelocationType -> Maybe RelocType

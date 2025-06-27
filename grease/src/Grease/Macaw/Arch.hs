@@ -28,6 +28,7 @@ module Grease.Macaw.Arch (
   archInitGlobals,
   archRegOverrides,
   archOffsetStackPointerPostCall,
+  archABIParams,
 ) where
 
 import Control.Lens.TH (makeLenses)
@@ -245,6 +246,9 @@ data ArchContext arch = ArchContext
   -- Currently, x86-64 is the only supported architecture that does something
   -- non-trivial here. All other architectures can simply leave the stack
   -- pointer by implementing @'_archOffsetStackPointerPostCall' = 'pure'@.
+  , _archABIParams :: [RegName]
+  -- ^ The ordered integer and pointer ABI registers for the Architecture. In the future
+  -- this should handle things like stack params, and multiple calling conventions.
   }
 
 makeLenses ''ArchContext

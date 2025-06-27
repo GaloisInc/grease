@@ -28,29 +28,50 @@ module Grease.Shape (
   minimalShapeWithPtrs',
   traverseShapeWithType,
   tagWithType,
+  ParsedShapes (..),
+  TypeMismatch (..),
+  replaceShapes,
+  fromDwarfInfo,
 ) where
 
 import Control.Applicative (Alternative (empty))
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
+import Control.Monad (foldM)
+import Data.Functor.Const qualified as Const
 import Data.Functor.Identity (Identity (Identity, runIdentity))
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Dwarf (CompileUnit (cuRanges, cuSubprograms), Range (rangeBegin, rangeEnd), Subprogram (subEntryPC, subParamMap))
+import Data.Macaw.Dwarf qualified as MDwarf
 import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Map (toAscList)
+import Data.Map qualified as Map
+import Data.Parameterized (mkNatRepr)
 import Data.Parameterized.Classes (ShowF (..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Ctx (Ctx)
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
 import Data.Parameterized.TraversableFC qualified as TFC
+import Data.Sequence qualified as Seq
+import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
+import Data.Word (Word64)
 import GHC.Show qualified as GShow
-import Grease.Shape.Pointer (PtrShape, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
+import Grease.Macaw.Arch (ArchContext, archABIParams)
+import Grease.Macaw.RegName (RegName (..))
+import Grease.Shape.NoTag (NoTag (NoTag))
+import Grease.Shape.Pointer (MemShape (Initialized, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget (PtrTarget), minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.LLVM.Bytes (toBytes)
 import Lang.Crucible.LLVM.Extension (LLVM)
+import Lang.Crucible.LLVM.MemModel (HasPtrWidth)
 import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.Types qualified as CT
 import Prettyprinter qualified as PP
 import Text.Show qualified as Show
 
@@ -314,3 +335,164 @@ deriving instance (ShowExt ext tag, ShowF tag) => Show (ArgShapes ext tag tys)
 instance (MC.PrettyF tag, PrettyExt ext tag) => PP.Pretty (ArgShapes ext tag tys) where
   pretty (ArgShapes regs) =
     MC.foldlFC (\doc rShape -> PP.vcat [doc, PP.pretty rShape]) "" regs
+
+-- * Replacing
+
+data TypeMismatch
+  = TypeMismatch
+  { typeMismatchName :: String
+  , expectedType :: C.Some CT.TypeRepr
+  , foundType :: C.Some CT.TypeRepr
+  }
+  deriving Show
+
+instance PP.Pretty TypeMismatch where
+  pretty tm =
+    PP.hsep
+      [ "Type mismatch for"
+      , PP.pretty (typeMismatchName tm) PP.<> ":"
+      , "expected:"
+      , PP.viaShow (expectedType tm)
+      , "but found:"
+      , PP.viaShow (foundType tm)
+      ]
+
+newtype ParsedShapes ext
+  = ParsedShapes {_getParsedShapes :: Map.Map Text (C.Some (Shape ext NoTag))}
+
+-- | Given an initial, provisional list of arguments and a set of replacements
+-- for some of them, calculate a new list of arguments.
+replaceShapes ::
+  forall ext w tys.
+  ExtShape ext ~ PtrShape ext w =>
+  HasPtrWidth w =>
+  -- | Argument names
+  Ctx.Assignment (Const.Const String) tys ->
+  -- | Initial arguments
+  ArgShapes ext NoTag tys ->
+  -- | Replacement arguments
+  ParsedShapes ext ->
+  Either TypeMismatch (ArgShapes ext NoTag tys)
+replaceShapes names (ArgShapes args) (ParsedShapes replacements) =
+  -- TODO: Check that all the map keys are expected
+  ArgShapes
+    <$> Ctx.zipWithM (\(Const.Const nm) s -> replaceOne nm s) names args
+ where
+  replaceOne :: String -> Shape ext NoTag t -> Either TypeMismatch (Shape ext NoTag t)
+  replaceOne nm s =
+    case Map.lookup (Text.pack nm) replacements of
+      Just (C.Some replace) ->
+        let ty = shapeType ptrShapeType s
+         in let ty' = shapeType ptrShapeType replace
+             in case testEquality ty ty' of
+                  Just Refl -> Right replace
+                  Nothing ->
+                    Left $
+                      TypeMismatch
+                        { typeMismatchName = nm
+                        , expectedType = C.Some ty
+                        , foundType = C.Some ty'
+                        }
+      Nothing -> Right s
+
+isInSubProg :: Word64 -> Subprogram -> Bool
+isInSubProg w sub = maybe False id ((==) w <$> subEntryPC sub)
+
+rightToMaybe :: Either a b -> Maybe b
+rightToMaybe (Left _) = Nothing
+rightToMaybe (Right b) = Just b
+
+extractType :: Subprogram -> MDwarf.TypeRef -> Maybe MDwarf.TypeApp
+extractType sprog vrTy =
+  do
+    let mp = MDwarf.subTypeMap sprog
+    (mbtypeApp, _) <- Map.lookup vrTy mp
+    rightToMaybe mbtypeApp
+
+constructPtrTarget :: Subprogram -> MDwarf.TypeApp -> Maybe (PtrTarget w NoTag)
+constructPtrTarget sprog tyApp =
+  PtrTarget Nothing <$> shapeSeq tyApp
+ where
+  ishape w = Just $ Seq.singleton $ Initialized NoTag (toBytes w)
+  padding :: (Integral a) => a -> MemShape w NoTag
+  padding w = Uninitialized (toBytes w)
+  -- if we dont know where to place members we have to fail/just place some bytes
+  buildMember :: Word64 -> MDwarf.Member -> Maybe (Word64, Seq.Seq (MemShape w NoTag))
+  buildMember loc mem =
+    ( \(memLoc, memByteSize) ->
+        do
+          padd <- Just (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
+          membershape <- shapeOfTyApp $ MDwarf.memberType mem
+          let nextLoc = memLoc + memByteSize
+          Just (nextLoc, padd Seq.>< membershape)
+    )
+      =<< (Just (,) <*> MDwarf.memberLoc mem <*> MDwarf.memberByteSize mem)
+  shapeOfTyApp :: MDwarf.TypeRef -> Maybe (Seq.Seq (MemShape w NoTag))
+  shapeOfTyApp x = shapeSeq =<< extractType sprog x
+
+  shapeSeq :: MDwarf.TypeApp -> Maybe (Seq.Seq (MemShape w NoTag))
+  shapeSeq (MDwarf.UnsignedIntType w) = ishape w
+  shapeSeq (MDwarf.SignedIntType w) = ishape w
+  shapeSeq MDwarf.SignedCharType = ishape (1 :: Int)
+  shapeSeq MDwarf.UnsignedCharType = ishape (1 :: Int)
+  -- Need modification to DWARF to collect counts properly + evaluate ops for ub
+  shapeSeq (MDwarf.ArrayType _elTy _ub) = Nothing
+  -- need to compute padding between els, infront of els and at end
+  shapeSeq (MDwarf.StructType sdecl) =
+    let structSize = MDwarf.structByteSize sdecl
+     in do
+          (currLoc, seqs) <-
+            foldM
+              ( \(currloc, seqs) mem ->
+                  do
+                    (nextLoc, additionalShapes) <- buildMember currloc mem
+                    Just (nextLoc, seqs Seq.>< additionalShapes)
+              )
+              (0, Seq.empty)
+              (MDwarf.structMembers sdecl)
+          endPad <- Just (if currLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - currLoc))
+          Just $ (seqs Seq.>< endPad)
+  shapeSeq _ = Nothing
+
+pointerShapeOfDwarf :: Subprogram -> MDwarf.TypeApp -> Maybe (C.Some (PtrShape ext w NoTag))
+pointerShapeOfDwarf _ (MDwarf.UnsignedIntType w) =
+  case mkNatRepr $ fromIntegral w of
+    C.Some w' -> case C.isPosNat w' of
+      Just C.LeqProof -> Just $ C.Some $ ShapePtrBV NoTag w'
+      _ -> Nothing
+pointerShapeOfDwarf sprog (MDwarf.PointerType (Just _) tyRef) =
+  let mshape = constructPtrTarget sprog =<< extractType sprog =<< tyRef
+   in C.Some . ShapePtr NoTag (Offset (toBytes (0 :: Int))) <$> mshape
+pointerShapeOfDwarf _ _ = Nothing
+
+-- Is there really nothing available that looks like this?
+takeJust :: (a -> Maybe b) -> [a] -> [b]
+takeJust _ [] = []
+takeJust f (h : tl) =
+  case f h of
+    Nothing -> []
+    Just e -> e : takeJust f tl
+
+shapeFromVar :: (ExtShape ext ~ PtrShape ext wptr) => Subprogram -> MDwarf.Variable -> Maybe (C.Some (Shape ext NoTag))
+shapeFromVar sprog vr = C.mapSome ShapeExt <$> (pointerShapeOfDwarf sprog =<< extractType sprog =<< MDwarf.varType vr)
+
+shapeFromDwarf :: (ExtShape ext ~ PtrShape ext wptr) => ArchContext arch -> Subprogram -> ParsedShapes ext
+shapeFromDwarf aContext sub =
+  let ascParams = takeJust (shapeFromVar sub) $ snd <$> (toAscList $ subParamMap sub)
+      abiregs = (\(RegName x) -> Text.pack x) <$> aContext Lens.^. archABIParams
+      named = Map.fromList $ zip abiregs ascParams
+   in ParsedShapes{_getParsedShapes = named}
+
+fromDwarfInfo :: (ExtShape ext ~ PtrShape ext wptr) => ArchContext arch -> MC.MemWord (MC.RegAddrWidth (MC.ArchReg arch)) -> [Data.Macaw.Dwarf.CompileUnit] -> Maybe (ParsedShapes ext)
+fromDwarfInfo aContext addr cus =
+  let mval = MC.memWordValue addr
+   in let targetCu =
+            List.find
+              ( \x ->
+                  let rs = cuRanges x
+                   in let isInCU = any (\x -> let mval = MC.memWordValue addr in rangeBegin x <= mval && mval < rangeEnd x) rs
+                       in isInCU
+              )
+              cus
+       in let targetSubProg = (\x -> List.find (isInSubProg mval) (cuSubprograms x)) =<< targetCu
+           in shapeFromDwarf aContext <$> targetSubProg
