@@ -1,4 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -39,6 +38,7 @@ import Control.Applicative (Alternative (empty))
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
+import Control.Monad (foldM)
 import Data.Functor.Const qualified as Const
 import Data.Functor.Identity (Identity (Identity, runIdentity))
 import Data.Kind (Type)
@@ -55,6 +55,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Ctx (Ctx)
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
 import Data.Parameterized.TraversableFC qualified as TFC
+import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
@@ -63,9 +64,10 @@ import GHC.Show qualified as GShow
 import Grease.Macaw.Arch (ArchContext, archABIParams)
 import Grease.Macaw.RegName (RegName (..))
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (PtrShape (ShapePtrBV), minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
+import Grease.Shape.Pointer (MemShape (Initialized, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget (PtrTarget), minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
+import Lang.Crucible.LLVM.Bytes (toBytes)
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel (HasPtrWidth)
 import Lang.Crucible.LLVM.MemModel qualified as Mem
@@ -400,14 +402,68 @@ rightToMaybe :: Either a b -> Maybe b
 rightToMaybe (Left _) = Nothing
 rightToMaybe (Right b) = Just b
 
-pointerShapeOfDwarf :: MDwarf.TypeApp -> Maybe (C.Some (PtrShape ext w NoTag))
-pointerShapeOfDwarf (MDwarf.UnsignedIntType w) =
+extractType :: Subprogram -> MDwarf.TypeRef -> Maybe MDwarf.TypeApp
+extractType sprog vrTy =
+  do
+    let mp = MDwarf.subTypeMap sprog
+    (mbtypeApp, _) <- Map.lookup vrTy mp
+    rightToMaybe mbtypeApp
+
+constructPtrTarget :: Subprogram -> MDwarf.TypeApp -> Maybe (PtrTarget w NoTag)
+constructPtrTarget sprog tyApp =
+  PtrTarget Nothing <$> shapeSeq tyApp
+ where
+  ishape w = Just $ Seq.singleton $ Initialized NoTag (toBytes w)
+  padding :: (Integral a) => a -> MemShape w NoTag
+  padding w = Uninitialized (toBytes w)
+  -- if we dont know where to place members we have to fail/just place some bytes
+  buildMember :: Word64 -> MDwarf.Member -> Maybe (Word64, Seq.Seq (MemShape w NoTag))
+  buildMember loc mem =
+    ( \(memLoc, memByteSize) ->
+        do
+          padd <- Just (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
+          membershape <- shapeOfTyApp $ MDwarf.memberType mem
+          let nextLoc = memLoc + memByteSize
+          Just (nextLoc, padd Seq.>< membershape)
+    )
+      =<< (Just (,) <*> MDwarf.memberLoc mem <*> MDwarf.memberByteSize mem)
+  shapeOfTyApp :: MDwarf.TypeRef -> Maybe (Seq.Seq (MemShape w NoTag))
+  shapeOfTyApp x = shapeSeq =<< extractType sprog x
+
+  shapeSeq :: MDwarf.TypeApp -> Maybe (Seq.Seq (MemShape w NoTag))
+  shapeSeq (MDwarf.UnsignedIntType w) = ishape w
+  shapeSeq (MDwarf.SignedIntType w) = ishape w
+  shapeSeq MDwarf.SignedCharType = ishape (1 :: Int)
+  shapeSeq MDwarf.UnsignedCharType = ishape (1 :: Int)
+  -- Need modification to DWARF to collect counts properly + evaluate ops for ub
+  shapeSeq (MDwarf.ArrayType _elTy _ub) = Nothing
+  -- need to compute padding between els, infront of els and at end
+  shapeSeq (MDwarf.StructType sdecl) =
+    let structSize = MDwarf.structByteSize sdecl
+     in do
+          (currLoc, seqs) <-
+            foldM
+              ( \(currloc, seqs) mem ->
+                  do
+                    (nextLoc, additionalShapes) <- buildMember currloc mem
+                    Just (nextLoc, seqs Seq.>< additionalShapes)
+              )
+              (0, Seq.empty)
+              (MDwarf.structMembers sdecl)
+          endPad <- Just (if currLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - currLoc))
+          Just $ (seqs Seq.>< endPad)
+  shapeSeq _ = Nothing
+
+pointerShapeOfDwarf :: Subprogram -> MDwarf.TypeApp -> Maybe (C.Some (PtrShape ext w NoTag))
+pointerShapeOfDwarf _ (MDwarf.UnsignedIntType w) =
   case mkNatRepr $ fromIntegral w of
     C.Some w' -> case C.isPosNat w' of
       Just C.LeqProof -> Just $ C.Some $ ShapePtrBV NoTag w'
       _ -> Nothing
-pointerShapeOfDwarf (MDwarf.PointerType (Just _) _) = Nothing
-pointerShapeOfDwarf _ = Nothing
+pointerShapeOfDwarf sprog (MDwarf.PointerType (Just _) tyRef) =
+  let mshape = constructPtrTarget sprog =<< extractType sprog =<< tyRef
+   in C.Some . ShapePtr NoTag (Offset (toBytes (0 :: Int))) <$> mshape
+pointerShapeOfDwarf _ _ = Nothing
 
 -- Is there really nothing available that looks like this?
 takeJust :: (a -> Maybe b) -> [a] -> [b]
@@ -417,17 +473,17 @@ takeJust f (h : tl) =
     Nothing -> []
     Just e -> e : takeJust f tl
 
-shapeFromVar :: MDwarf.Variable -> Maybe (C.Some (Shape ext NoTag))
-shapeFromVar = undefined
+shapeFromVar :: (ExtShape ext ~ PtrShape ext wptr) => Subprogram -> MDwarf.Variable -> Maybe (C.Some (Shape ext NoTag))
+shapeFromVar sprog vr = C.mapSome ShapeExt <$> (pointerShapeOfDwarf sprog =<< extractType sprog =<< MDwarf.varType vr)
 
-shapeFromDwarf :: ArchContext arch -> Subprogram -> ParsedShapes ext
+shapeFromDwarf :: (ExtShape ext ~ PtrShape ext wptr) => ArchContext arch -> Subprogram -> ParsedShapes ext
 shapeFromDwarf aContext sub =
-  let ascParams = takeJust shapeFromVar $ snd <$> (toAscList $ subParamMap sub)
+  let ascParams = takeJust (shapeFromVar sub) $ snd <$> (toAscList $ subParamMap sub)
       abiregs = (\(RegName x) -> Text.pack x) <$> aContext Lens.^. archABIParams
       named = Map.fromList $ zip abiregs ascParams
    in ParsedShapes{_getParsedShapes = named}
 
-fromDwarfInfo :: ArchContext arch -> MC.MemWord (MC.RegAddrWidth (MC.ArchReg arch)) -> [Data.Macaw.Dwarf.CompileUnit] -> Maybe (ParsedShapes ext)
+fromDwarfInfo :: (ExtShape ext ~ PtrShape ext wptr) => ArchContext arch -> MC.MemWord (MC.RegAddrWidth (MC.ArchReg arch)) -> [Data.Macaw.Dwarf.CompileUnit] -> Maybe (ParsedShapes ext)
 fromDwarfInfo aContext addr cus =
   let mval = MC.memWordValue addr
    in let targetCu =
