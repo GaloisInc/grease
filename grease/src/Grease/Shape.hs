@@ -49,6 +49,7 @@ import Data.Macaw.Dwarf qualified as MDwarf
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map (toAscList)
 import Data.Map qualified as Map
+import Data.Maybe (fromMaybe, isJust)
 import Data.Parameterized (mkNatRepr)
 import Data.Parameterized.Classes (ShowF (..))
 import Data.Parameterized.Context qualified as Ctx
@@ -60,6 +61,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import Data.Word (Word64)
+import Debug.Trace (trace)
 import GHC.Show qualified as GShow
 import Grease.Macaw.Arch (ArchContext, archABIParams)
 import Grease.Macaw.RegName (RegName (..))
@@ -396,7 +398,18 @@ replaceShapes names (ArgShapes args) (ParsedShapes replacements) =
       Nothing -> Right s
 
 isInSubProg :: Word64 -> Subprogram -> Bool
-isInSubProg w sub = maybe False id ((==) w <$> subEntryPC sub)
+isInSubProg w sub =
+  let entryMatch = (==) w <$> MDwarf.subEntryPC sub
+      def = fromMaybe False
+   in def
+        ( do
+            sdef <- MDwarf.subDef sub
+            lpc <- MDwarf.subLowPC sdef
+            hpc <- MDwarf.subHighPC sdef
+            let res = w >= lpc && w < (lpc + hpc)
+            pure $ trace ("res:" ++ show res) res
+        )
+        || def entryMatch
 
 rightToMaybe :: Either a b -> Maybe b
 rightToMaybe (Left _) = Nothing
@@ -426,7 +439,7 @@ constructPtrTarget sprog tyApp =
           let nextLoc = memLoc + memByteSize
           Just (nextLoc, padd Seq.>< membershape)
     )
-      =<< (Just (,) <*> MDwarf.memberLoc mem <*> MDwarf.memberByteSize mem)
+      =<< trace ((show $ MDwarf.memberLoc mem) ++ " " ++ (show $ MDwarf.memberByteSize mem)) (Just (,) <*> MDwarf.memberLoc mem <*> MDwarf.memberByteSize mem)
   shapeOfTyApp :: MDwarf.TypeRef -> Maybe (Seq.Seq (MemShape w NoTag))
   shapeOfTyApp x = shapeSeq =<< extractType sprog x
 
@@ -483,16 +496,39 @@ shapeFromDwarf aContext sub =
       named = Map.fromList $ zip abiregs ascParams
    in ParsedShapes{_getParsedShapes = named}
 
-fromDwarfInfo :: (ExtShape ext ~ PtrShape ext wptr) => ArchContext arch -> MC.MemWord (MC.RegAddrWidth (MC.ArchReg arch)) -> [Data.Macaw.Dwarf.CompileUnit] -> Maybe (ParsedShapes ext)
+fromDwarfInfo :: (ExtShape ext ~ PtrShape ext wptr) => ArchContext arch -> Word64 -> [Data.Macaw.Dwarf.CompileUnit] -> Maybe (ParsedShapes ext)
 fromDwarfInfo aContext addr cus =
-  let mval = MC.memWordValue addr
-   in let targetCu =
-            List.find
-              ( \x ->
-                  let rs = cuRanges x
-                   in let isInCU = any (\x -> let mval = MC.memWordValue addr in rangeBegin x <= mval && mval < rangeEnd x) rs
-                       in isInCU
-              )
-              cus
-       in let targetSubProg = (\x -> List.find (isInSubProg mval) (cuSubprograms x)) =<< targetCu
-           in shapeFromDwarf aContext <$> targetSubProg
+  let res =
+        ( let mval = addr
+           in let targetCu =
+                    List.find
+                      ( \x ->
+                          let rs = cuRanges x
+                           in let isInCU =
+                                    any
+                                      ( \range ->
+                                          let begin = rangeBegin range
+                                              end = rangeEnd range
+                                           in trace (show begin ++ "r:" ++ show end) (begin <= mval && mval < end)
+                                      )
+                                      rs
+                               in isInCU
+                      )
+                      cus
+               in let targetSubProg = (\x -> List.find (isInSubProg mval) (cuSubprograms x)) =<< targetCu
+                   in trace
+                        ("Cu:" ++ show targetCu ++ "Subprog: " ++ show targetSubProg ++ " Target addr: " ++ show mval)
+                        ( shapeFromDwarf
+                            aContext
+                            <$> targetSubProg
+                        )
+        )
+   in trace
+        ( "callingdwarf "
+            ++ show (isJust res)
+            ++ " "
+            ++ ( show $
+                  List.length cus
+               )
+        )
+        res

@@ -27,18 +27,19 @@ module Grease.Main (
   logResults,
 ) where
 
-import Control.Applicative (pure)
+import Control.Applicative (pure, (<*>))
 import Control.Concurrent.Async (cancel)
 import Control.Exception.Safe (Handler (..), MonadThrow, catches, throw)
 import Control.Lens (to, (.~), (^.))
-import Control.Monad (forM, forM_, mapM_, when, (>>=))
+import Control.Monad (forM, forM_, mapM_, sequence, when, (=<<), (>>=))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bool (Bool (..), not, otherwise, (&&), (||))
 import Data.ByteString qualified as BS
 import Data.Either (Either (..), either)
+import Data.ElfEdit (headerPhdrs)
 import Data.ElfEdit qualified as Elf
 import Data.Eq ((==))
-import Data.Foldable (traverse_)
+import Data.Foldable (concat, find, traverse_)
 import Data.Function (const, id, ($), (&), (.))
 import Data.Functor (fmap, (<$>), (<&>))
 import Data.Functor.Const (Const (..))
@@ -46,6 +47,7 @@ import Data.Functor.Const qualified as Const
 import Data.IORef (modifyIORef, newIORef)
 import Data.IntMap qualified as IntMap
 import Data.LLVM.BitCode (parseBitCodeFromFile)
+import Data.List ((++))
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.AArch32.Symbolic qualified as AArch32Symbolic
@@ -98,6 +100,9 @@ import Data.Traversable (for, traverse)
 import Data.Tuple (fst, snd)
 import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
+import Data.Word (Word64)
+import Data.Word qualified as Word
+import Debug.Trace (trace)
 import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Bug qualified as Bug
@@ -188,7 +193,7 @@ import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
-import Prelude (Integral, Num (..), fromIntegral)
+import Prelude (Integer, Integral, Num (..), fromIntegral, toInteger)
 
 -- | Results of analysis, one per given 'Entrypoint'
 newtype Results = Results {getResults :: Map Entrypoint Batch}
@@ -285,14 +290,15 @@ loadDwarfpreconditions ::
   -- | Arch context for abi info
   ArchContext arch ->
   -- | Target function address
-  Maybe (MM.MemWord (MC.RegAddrWidth (MC.ArchReg arch))) ->
+  Maybe Word64 ->
   IO (Shape.ArgShapes ext NoTag tys)
 loadDwarfpreconditions dwarfPrecs argNames initShapes macawCfgConfig archContext targetAddr =
   let dwarfPrs = do
         addr <- targetAddr
         elf <- snd . Elf.getElf <$> mcElf macawCfgConfig
-        let (_, cus) = dwarfInfoFromElf elf
-        shps <- Shape.fromDwarfInfo archContext addr cus
+        let (errs, cus) = dwarfInfoFromElf elf
+        let traced_cus = trace (concat errs) cus
+        shps <- Shape.fromDwarfInfo archContext addr traced_cus
         either (const Nothing) Just (Shape.replaceShapes argNames initShapes shps)
    in pure $ (if dwarfPrecs then fromMaybe initShapes dwarfPrs else initShapes)
 
@@ -625,7 +631,19 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
   initArgs_ <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let argNames = fmapFC (Const . getValueName) rNameAssign
-  dwarfedArgs <- loadDwarfpreconditions (simEnableDWARFPreconditions simOpts) argNames initArgs_ macawCfgConfig archCtx mdEntryAbsAddr
+  -- Is there a better way to do this resolution? We need the pc absent any position independent loading
+  -- so we find the segment that corresponds by checking for all segments if segindex->memsegment -> the segment of the target addr
+  let segIndexToSegment = MM.memSegmentIndexMap memory
+  let targetSegment = fst <$> ((\seg -> find (\(_, seg2) -> seg == seg2) (Map.toList segIndexToSegment)) =<< (MM.segoffSegment <$> mbCfgAddr))
+  let mbSegment = (\bin -> find (\phdr -> (Just $ Elf.phdrSegmentIndex phdr) == targetSegment) $ headerPhdrs bin) =<< mcElf macawCfgConfig
+  let mbNewAddr =
+        ( \(seghdr, entAddr) ->
+            trace
+              ("Pheader: " ++ show (Elf.phdrSegmentIndex seghdr))
+              ((MM.memWordValue $ MM.segoffOffset entAddr) + fromIntegral (Elf.phdrSegmentVirtAddr seghdr))
+        )
+          <$> ((,) <$> mbSegment <*> mbCfgAddr)
+  dwarfedArgs <- loadDwarfpreconditions (simEnableDWARFPreconditions simOpts) argNames initArgs_ macawCfgConfig archCtx mbNewAddr
   initArgs <-
     loadInitialPreconditions (simInitialPreconditions simOpts) argNames dwarfedArgs
 
@@ -1071,7 +1089,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
         pltStubSegOffToNameMap
 
   let mprotectAddr = Map.lookup "mprotect" pltStubNameToSegOffMap
-
+  _ <- putStrLn (Text.pack $ concat $ fmap (\x -> show x ++ " \n") $ Map.toList $ MM.memSegmentIndexMap memory)
   entries <-
     if List.null (simEntryPoints simOpts)
       then do
