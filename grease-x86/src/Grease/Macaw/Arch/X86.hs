@@ -43,7 +43,7 @@ type instance ArchReloc X86.X86_64 = EE.X86_64_RelocationType
 
 -- | x64 System-V assumed
 reglist :: [Some.Some X86.X86Reg]
-reglist = Some.Some <$> [X86.RDI, X86.RSI, X86.RDX, X86.RCX, X86.R8, X86.R9]
+reglist = Some.Some <$> X86.x86ArgumentRegs
 
 x86Ctx ::
   (?memOpts :: Mem.MemOptions) =>
