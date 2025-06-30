@@ -279,6 +279,7 @@ withMemOptions opts k =
 loadDwarfpreconditions ::
   ExtShape ext ~ PtrShape ext w =>
   Mem.HasPtrWidth w =>
+  Symbolic.SymArchConstraints arch =>
   -- | Is DWARF enabled
   Bool ->
   -- | Argument names
@@ -299,7 +300,8 @@ loadDwarfpreconditions dwarfPrecs argNames initShapes macawCfgConfig archContext
         let (errs, cus) = dwarfInfoFromElf elf
         let traced_cus = trace (concat errs) cus
         shps <- Shape.fromDwarfInfo archContext addr traced_cus
-        either (const Nothing) Just (Shape.replaceShapes argNames initShapes shps)
+        let repl = Shape.replaceShapes argNames initShapes shps
+        either (const Nothing) Just (trace ("repl: " ++ show repl) repl)
    in pure $ (if dwarfPrecs then fromMaybe initShapes dwarfPrs else initShapes)
 
 loadInitialPreconditions ::
