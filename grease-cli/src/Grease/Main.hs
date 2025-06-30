@@ -273,7 +273,7 @@ withMemOptions opts k =
           }
    in k
 
-loadDwarfpreconditions ::
+loadDwarfPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
   Mem.HasPtrWidth w =>
   Symbolic.SymArchConstraints arch =>
@@ -290,7 +290,7 @@ loadDwarfpreconditions ::
   -- | Target function address
   Maybe Word64 ->
   IO (Shape.ArgShapes ext NoTag tys)
-loadDwarfpreconditions dwarfPrecs argNames initShapes macawCfgConfig archContext targetAddr =
+loadDwarfPreconditions dwarfPrecs argNames initShapes macawCfgConfig archContext targetAddr =
   let dwarfPrs = do
         addr <- targetAddr
         elf <- snd . Elf.getElf <$> mcElf macawCfgConfig
@@ -639,7 +639,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
             (MM.memWordValue $ MM.segoffOffset entAddr) + fromIntegral (Elf.phdrSegmentVirtAddr seghdr)
         )
           <$> ((,) <$> mbSegment <*> mbCfgAddr)
-  dwarfedArgs <- loadDwarfpreconditions (simEnableDWARFPreconditions simOpts) argNames initArgs_ macawCfgConfig archCtx mbNewAddr
+  dwarfedArgs <- loadDwarfPreconditions (simEnableDWARFPreconditions simOpts) argNames initArgs_ macawCfgConfig archCtx mbNewAddr
   initArgs <-
     loadInitialPreconditions (simInitialPreconditions simOpts) argNames dwarfedArgs
 
