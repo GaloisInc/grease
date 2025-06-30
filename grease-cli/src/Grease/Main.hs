@@ -1085,7 +1085,6 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
         pltStubSegOffToNameMap
 
   let mprotectAddr = Map.lookup "mprotect" pltStubNameToSegOffMap
-  _ <- putStrLn (Text.pack $ concat $ fmap (\x -> show x ++ " \n") $ Map.toList $ MM.memSegmentIndexMap memory)
   entries <-
     if List.null (simEntryPoints simOpts)
       then do
