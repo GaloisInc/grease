@@ -494,7 +494,8 @@ pointerShapeOfDwarf _ _ sprog (MDwarf.PointerType _ tyRef) =
    in (C.Some <$> pshape)
 pointerShapeOfDwarf _ _ _ _ = Nothing
 
--- Is there really nothing available that looks like this?
+-- Stops after the first nothing to avoid adding shapes after
+-- failing to build some shape (this would result in shapes applying to incorrect registers)
 takeJust :: (a -> Maybe b) -> [a] -> [b]
 takeJust _ [] = []
 takeJust f (h : tl) =
