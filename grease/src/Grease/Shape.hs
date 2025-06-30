@@ -69,7 +69,7 @@ import GHC.Show qualified as GShow
 import Grease.Macaw.Arch (ArchContext, archABIParams)
 import Grease.Macaw.RegName (RegName (..), mkRegName)
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (MemShape (Initialized, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget (PtrTarget), minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
+import Grease.Shape.Pointer (MemShape (Initialized, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget (PtrTarget), memShapeSize, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (toBytes)
@@ -425,7 +425,7 @@ extractType sprog vrTy =
     (mbtypeApp, _) <- Map.lookup vrTy mp
     rightToMaybe mbtypeApp
 
-constructPtrTarget :: Subprogram -> MDwarf.TypeApp -> Maybe (PtrTarget w NoTag)
+constructPtrTarget :: HasPtrWidth w => Subprogram -> MDwarf.TypeApp -> Maybe (PtrTarget w NoTag)
 constructPtrTarget sprog tyApp =
   PtrTarget Nothing <$> shapeSeq (trace ("tyApp: " ++ show tyApp) tyApp)
  where
@@ -436,14 +436,15 @@ constructPtrTarget sprog tyApp =
   -- if we dont know where to place members we have to fail/just place some bytes
   buildMember :: Word64 -> MDwarf.Member -> Maybe (Word64, Seq.Seq (MemShape w NoTag))
   buildMember loc mem =
-    ( \(memLoc, memByteSize) ->
+    ( \memLoc ->
         do
           padd <- Just (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
           membershape <- shapeOfTyApp $ MDwarf.memberType mem
-          let nextLoc = memLoc + memByteSize
+          let memByteSize = sum $ memShapeSize ?ptrWidth <$> membershape
+          let nextLoc = memLoc + fromIntegral memByteSize
           Just (nextLoc, padd Seq.>< membershape)
     )
-      =<< trace ((show $ MDwarf.memberLoc mem) ++ " " ++ (show $ MDwarf.memberByteSize mem)) (Just (,) <*> MDwarf.memberLoc mem <*> MDwarf.memberByteSize mem)
+      =<< trace ((show $ MDwarf.memberLoc mem) ++ " " ++ (show $ MDwarf.memberByteSize mem)) (MDwarf.memberLoc mem)
   shapeOfTyApp :: MDwarf.TypeRef -> Maybe (Seq.Seq (MemShape w NoTag))
   shapeOfTyApp x = shapeSeq =<< extractType sprog x
 
