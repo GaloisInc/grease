@@ -46,14 +46,13 @@ import Data.Functor.Identity (Identity (Identity, runIdentity))
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
-import Data.Macaw.Dwarf (CompileUnit (cuRanges, cuSubprograms), Range (rangeBegin, rangeEnd), Subprogram (subEntryPC, subParamMap))
+import Data.Macaw.Dwarf (CompileUnit (cuRanges, cuSubprograms), Range (rangeBegin, rangeEnd), Subprogram (subParamMap))
 import Data.Macaw.Dwarf qualified as MDwarf
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Types qualified as MT
 import Data.Map (toAscList)
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe, isJust)
-import Data.Parameterized (mkNatRepr)
+import Data.Maybe (fromMaybe)
 import Data.Parameterized.Classes (ShowF (..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Ctx (Ctx)
@@ -64,7 +63,6 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import Data.Word (Word64)
-import Debug.Trace (trace)
 import GHC.Show qualified as GShow
 import Grease.Macaw.Arch (ArchContext, archABIParams)
 import Grease.Macaw.RegName (RegName (..), mkRegName)
@@ -385,12 +383,12 @@ replaceShapes names (ArgShapes args) (ParsedShapes replacements) =
  where
   replaceOne :: String -> Shape ext NoTag t -> Either TypeMismatch (Shape ext NoTag t)
   replaceOne nm s =
-    case Map.lookup (Text.pack (trace ("looking up replacement " ++ nm) nm)) replacements of
+    case Map.lookup (Text.pack nm) replacements of
       Just (C.Some replace) ->
         let ty = shapeType ptrShapeType s
          in let ty' = shapeType ptrShapeType replace
              in case testEquality ty ty' of
-                  Just Refl -> trace "replaced" $ Right replace
+                  Just Refl -> Right replace
                   Nothing ->
                     Left $
                       TypeMismatch
@@ -410,7 +408,7 @@ isInSubProg w sub =
             lpc <- MDwarf.subLowPC sdef
             hpc <- MDwarf.subHighPC sdef
             let res = w >= lpc && w < (lpc + hpc)
-            pure $ trace ("res:" ++ show res) res
+            pure $ res
         )
         || def entryMatch
 
@@ -427,7 +425,7 @@ extractType sprog vrTy =
 
 constructPtrTarget :: HasPtrWidth w => Subprogram -> MDwarf.TypeApp -> Maybe (PtrTarget w NoTag)
 constructPtrTarget sprog tyApp =
-  PtrTarget Nothing <$> shapeSeq (trace ("tyApp: " ++ show tyApp) tyApp)
+  PtrTarget Nothing <$> shapeSeq tyApp
  where
   -- TODO: are these always byte fields?
   ishape w = Just $ Seq.singleton $ Initialized NoTag (toBytes w)
@@ -444,7 +442,7 @@ constructPtrTarget sprog tyApp =
           let nextLoc = memLoc + fromIntegral memByteSize
           Just (nextLoc, padd Seq.>< membershape)
     )
-      =<< trace ((show $ MDwarf.memberLoc mem) ++ " " ++ (show $ MDwarf.memberByteSize mem)) (MDwarf.memberLoc mem)
+      =<< MDwarf.memberLoc mem
   shapeOfTyApp :: MDwarf.TypeRef -> Maybe (Seq.Seq (MemShape w NoTag))
   shapeOfTyApp x = shapeSeq =<< extractType sprog x
 
@@ -457,7 +455,7 @@ constructPtrTarget sprog tyApp =
   shapeSeq (MDwarf.ArrayType _elTy _ub) = Nothing
   -- need to compute padding between els, infront of els and at end
   shapeSeq (MDwarf.StructType sdecl) =
-    let structSize = trace "using struct dwarf case" MDwarf.structByteSize sdecl
+    let structSize = MDwarf.structByteSize sdecl
      in do
           (currLoc, seqs) <-
             foldM
@@ -482,10 +480,9 @@ pointerShapeOfDwarf :: (HasPtrWidth w, Symbolic.SymArchConstraints arch) => Arch
 pointerShapeOfDwarf _ r _ (MDwarf.SignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ r _ (MDwarf.UnsignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ _ sprog (MDwarf.PointerType _ tyRef) =
-  let mshape = constructPtrTarget sprog =<< (trace "extractedType" $ extractType sprog) =<< tyRef
+  let mshape = constructPtrTarget sprog =<< extractType sprog =<< tyRef
       pshape = ShapePtr NoTag (Offset (toBytes (0 :: Int))) <$> mshape
-      ty = ptrShapeType <$> pshape
-   in trace ("in pointer shape of dwarf " ++ show ty) (C.Some <$> pshape)
+   in (C.Some <$> pshape)
 pointerShapeOfDwarf _ _ _ _ = Nothing
 
 -- Is there really nothing available that looks like this?
@@ -498,8 +495,7 @@ takeJust f (h : tl) =
 
 shapeFromVar :: (ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr, Symbolic.SymArchConstraints arch) => ArchContext arch -> MC.ArchReg arch tp -> Subprogram -> MDwarf.Variable -> Maybe (C.Some (Shape ext NoTag))
 shapeFromVar arch buildingForReg sprog vr =
-  let x = ?ptrWidth
-   in trace ("shapeVarCase " ++ show x) (C.mapSome ShapeExt <$> (pointerShapeOfDwarf arch buildingForReg sprog =<< extractType sprog =<< MDwarf.varType vr))
+  C.mapSome ShapeExt <$> (pointerShapeOfDwarf arch buildingForReg sprog =<< extractType sprog =<< MDwarf.varType vr)
 
 shapeFromDwarf :: (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr) => ArchContext arch -> Subprogram -> ParsedShapes ext
 shapeFromDwarf aContext sub =
@@ -517,7 +513,7 @@ shapeFromDwarf aContext sub =
         args
     named = Map.fromList $ ascParams
    in
-    trace ("ascParams " ++ show ascParams ++ "\ndwarf shapes: " ++ show named) ParsedShapes{_getParsedShapes = named}
+    ParsedShapes{_getParsedShapes = named}
 
 fromDwarfInfo :: (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr) => ArchContext arch -> Word64 -> [Data.Macaw.Dwarf.CompileUnit] -> Maybe (ParsedShapes ext)
 fromDwarfInfo aContext addr cus =
@@ -532,26 +528,16 @@ fromDwarfInfo aContext addr cus =
                                       ( \range ->
                                           let begin = rangeBegin range
                                               end = rangeEnd range
-                                           in trace (show begin ++ "r:" ++ show end) (begin <= mval && mval < end)
+                                           in begin <= mval && mval < end
                                       )
                                       rs
                                in isInCU
                       )
                       cus
                in let targetSubProg = (\x -> List.find (isInSubProg mval) (cuSubprograms x)) =<< targetCu
-                   in trace
-                        ("Cu:" ++ show targetCu ++ "Subprog: " ++ show targetSubProg ++ " Target addr: " ++ show mval)
-                        ( shapeFromDwarf
-                            aContext
-                            <$> targetSubProg
-                        )
+                   in ( shapeFromDwarf
+                          aContext
+                          <$> targetSubProg
+                      )
         )
-   in trace
-        ( "callingdwarf "
-            ++ show (isJust res)
-            ++ " "
-            ++ ( show $
-                  List.length cus
-               )
-        )
-        res
+   in res

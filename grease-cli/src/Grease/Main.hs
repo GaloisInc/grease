@@ -31,7 +31,7 @@ import Control.Applicative (pure, (<*>))
 import Control.Concurrent.Async (cancel)
 import Control.Exception.Safe (Handler (..), MonadThrow, catches, throw)
 import Control.Lens (to, (.~), (^.))
-import Control.Monad (forM, forM_, mapM_, sequence, when, (=<<), (>>=))
+import Control.Monad (forM, forM_, mapM_, when, (=<<), (>>=))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bool (Bool (..), not, otherwise, (&&), (||))
 import Data.ByteString qualified as BS
@@ -61,7 +61,6 @@ import Data.Macaw.BinaryLoader.X86 ()
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Dwarf (dwarfInfoFromElf)
-import Data.Macaw.Dwarf qualified as Dwarf
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
 import Data.Macaw.Memory.LoadCommon qualified as MML
@@ -101,8 +100,6 @@ import Data.Tuple (fst, snd)
 import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
 import Data.Word (Word64)
-import Data.Word qualified as Word
-import Debug.Trace (trace)
 import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Bug qualified as Bug
@@ -193,7 +190,7 @@ import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
-import Prelude (Integer, Integral, Num (..), fromIntegral, toInteger)
+import Prelude (Integral, Num (..), fromIntegral)
 
 -- | Results of analysis, one per given 'Entrypoint'
 newtype Results = Results {getResults :: Map Entrypoint Batch}
@@ -297,11 +294,10 @@ loadDwarfpreconditions dwarfPrecs argNames initShapes macawCfgConfig archContext
   let dwarfPrs = do
         addr <- targetAddr
         elf <- snd . Elf.getElf <$> mcElf macawCfgConfig
-        let (errs, cus) = dwarfInfoFromElf elf
-        let traced_cus = trace (concat errs) cus
-        shps <- Shape.fromDwarfInfo archContext addr traced_cus
+        let (_, cus) = dwarfInfoFromElf elf
+        shps <- Shape.fromDwarfInfo archContext addr cus
         let repl = Shape.replaceShapes argNames initShapes shps
-        either (const Nothing) Just (trace ("repl: " ++ show repl) repl)
+        either (const Nothing) Just repl
    in pure $ (if dwarfPrecs then fromMaybe initShapes dwarfPrs else initShapes)
 
 loadInitialPreconditions ::
@@ -640,9 +636,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let mbSegment = (\bin -> find (\phdr -> (Just $ Elf.phdrSegmentIndex phdr) == targetSegment) $ headerPhdrs bin) =<< mcElf macawCfgConfig
   let mbNewAddr =
         ( \(seghdr, entAddr) ->
-            trace
-              ("Pheader: " ++ show (Elf.phdrSegmentIndex seghdr))
-              ((MM.memWordValue $ MM.segoffOffset entAddr) + fromIntegral (Elf.phdrSegmentVirtAddr seghdr))
+            (MM.memWordValue $ MM.segoffOffset entAddr) + fromIntegral (Elf.phdrSegmentVirtAddr seghdr)
         )
           <$> ((,) <$> mbSegment <*> mbCfgAddr)
   dwarfedArgs <- loadDwarfpreconditions (simEnableDWARFPreconditions simOpts) argNames initArgs_ macawCfgConfig archCtx mbNewAddr
