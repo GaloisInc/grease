@@ -470,13 +470,22 @@ constructPtrTarget sprog tyApp =
           Just $ (seqs Seq.>< endPad)
   shapeSeq _ = Nothing
 
-intPtrShape :: Symbolic.SymArchConstraints arch => MC.ArchReg arch tp -> Maybe (C.Some (PtrShape ext w NoTag))
+intPtrShape ::
+  Symbolic.SymArchConstraints arch =>
+  MC.ArchReg arch tp ->
+  Maybe (C.Some (PtrShape ext w NoTag))
 intPtrShape reg =
   case MT.typeRepr reg of
     MT.BVTypeRepr w -> Just $ C.Some $ ShapePtrBV NoTag w
     _ -> Nothing
 
-pointerShapeOfDwarf :: (HasPtrWidth w, Symbolic.SymArchConstraints arch) => ArchContext arch -> MC.ArchReg arch tp -> Subprogram -> MDwarf.TypeApp -> Maybe (C.Some (PtrShape ext w NoTag))
+pointerShapeOfDwarf ::
+  (HasPtrWidth w, Symbolic.SymArchConstraints arch) =>
+  ArchContext arch ->
+  MC.ArchReg arch tp ->
+  Subprogram ->
+  MDwarf.TypeApp ->
+  Maybe (C.Some (PtrShape ext w NoTag))
 pointerShapeOfDwarf _ r _ (MDwarf.SignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ r _ (MDwarf.UnsignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ _ sprog (MDwarf.PointerType _ tyRef) =
@@ -493,7 +502,16 @@ takeJust f (h : tl) =
     Nothing -> []
     Just e -> e : takeJust f tl
 
-shapeFromVar :: (ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr, Symbolic.SymArchConstraints arch) => ArchContext arch -> MC.ArchReg arch tp -> Subprogram -> MDwarf.Variable -> Maybe (C.Some (Shape ext NoTag))
+shapeFromVar ::
+  ( ExtShape ext ~ PtrShape ext wptr
+  , Mem.HasPtrWidth wptr
+  , Symbolic.SymArchConstraints arch
+  ) =>
+  ArchContext arch ->
+  MC.ArchReg arch tp ->
+  Subprogram ->
+  MDwarf.Variable ->
+  Maybe (C.Some (Shape ext NoTag))
 shapeFromVar arch buildingForReg sprog vr =
   C.mapSome ShapeExt <$> (pointerShapeOfDwarf arch buildingForReg sprog =<< extractType sprog =<< MDwarf.varType vr)
 
@@ -515,7 +533,12 @@ shapeFromDwarf aContext sub =
    in
     ParsedShapes{_getParsedShapes = named}
 
-fromDwarfInfo :: (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr) => ArchContext arch -> Word64 -> [Data.Macaw.Dwarf.CompileUnit] -> Maybe (ParsedShapes ext)
+fromDwarfInfo ::
+  (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr) =>
+  ArchContext arch ->
+  Word64 ->
+  [Data.Macaw.Dwarf.CompileUnit] ->
+  Maybe (ParsedShapes ext)
 fromDwarfInfo aContext addr cus =
   let res =
         ( let mval = addr
