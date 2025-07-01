@@ -280,6 +280,8 @@ loadDwarfPreconditions ::
   Symbolic.SymArchConstraints arch =>
   -- | Is DWARF enabled
   Bool ->
+  -- | How much to unroll recursive types
+  TypeUnrollingBound ->
   -- | Argument names
   Ctx.Assignment (Const.Const String) tys ->
   -- | Initial arguments
@@ -291,12 +293,12 @@ loadDwarfPreconditions ::
   -- | Target function address
   Maybe Word64 ->
   IO (Shape.ArgShapes ext NoTag tys)
-loadDwarfPreconditions dwarfPrecs argNames initShapes macawCfgConfig archContext targetAddr =
+loadDwarfPreconditions dwarfPrecs tyUnrollBound argNames initShapes macawCfgConfig archContext targetAddr =
   let dwarfPrs = do
         addr <- targetAddr
         elf <- snd . Elf.getElf <$> mcElf macawCfgConfig
         let (_, cus) = dwarfInfoFromElf elf
-        shps <- Shape.fromDwarfInfo archContext addr cus
+        shps <- Shape.fromDwarfInfo archContext tyUnrollBound addr cus
         let repl = Shape.replaceShapes argNames initShapes shps
         either (const Nothing) Just repl
    in pure $ (if dwarfPrecs then trace "dwarf stuff " (fromMaybe initShapes dwarfPrs) else initShapes)
@@ -640,7 +642,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
             (MM.memWordValue $ MM.segoffOffset entAddr) + fromIntegral (Elf.phdrSegmentVirtAddr seghdr)
         )
           <$> ((,) <$> mbSegment <*> mbCfgAddr)
-  dwarfedArgs <- loadDwarfPreconditions (simEnableDWARFPreconditions simOpts) argNames initArgs_ macawCfgConfig archCtx mbNewAddr
+  dwarfedArgs <- loadDwarfPreconditions (simEnableDWARFPreconditions simOpts) (simTypeUnrollingBound simOpts) argNames initArgs_ macawCfgConfig archCtx mbNewAddr
   initArgs <-
     loadInitialPreconditions (simInitialPreconditions simOpts) argNames dwarfedArgs
 

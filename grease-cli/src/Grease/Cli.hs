@@ -187,6 +187,14 @@ simOpts = do
             <> Opt.metavar "FILE"
             <> Opt.help "Initial precondition for use in refinement"
         )
+  simTypeUnrollingBound <-
+    GO.TypeUnrollingBound
+      <$> Opt.option
+        Opt.auto
+        ( Opt.long "type-unrolling-bound"
+            <> Opt.help "Number of recursive pointers to visit during DWARF shape building"
+            <> Opt.value GO.defaultTypeUnrollingBound
+        )
   simEnableDWARFPreconditions <-
     Opt.switch (Opt.long "enable-dwarf-preconditions" <> Opt.help "enables dwarf parsing based initial shapes. manual shapes supersede these shapes.")
   simProfileTo <-

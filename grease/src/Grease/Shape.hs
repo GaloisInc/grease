@@ -68,6 +68,7 @@ import Debug.Trace (trace)
 import GHC.Show qualified as GShow
 import Grease.Macaw.Arch (ArchContext, archABIParams)
 import Grease.Macaw.RegName (RegName (..), mkRegName)
+import Grease.Options (TypeUnrollingBound (..))
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (MemShape (Exactly, Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget (PtrTarget), TaggedByte (..), memShapeSize, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Grease.Utility (GreaseException (..))
@@ -425,8 +426,13 @@ extractType sprog vrTy =
     (mbtypeApp, _) <- Map.lookup vrTy mp
     rightToMaybe mbtypeApp
 
-constructPtrTarget :: HasPtrWidth w => Subprogram -> MDwarf.TypeApp -> StateT VisitState Maybe (PtrTarget w NoTag)
-constructPtrTarget sprog tyApp =
+constructPtrTarget ::
+  HasPtrWidth w =>
+  TypeUnrollingBound ->
+  Subprogram ->
+  MDwarf.TypeApp ->
+  StateT VisitState Maybe (PtrTarget w NoTag)
+constructPtrTarget tyUnrollBound sprog tyApp =
   PtrTarget Nothing <$> shapeSeq tyApp
  where
   -- TODO: are these always byte fields?
@@ -476,7 +482,7 @@ constructPtrTarget sprog tyApp =
               lift $ Just $ (seqs Seq.>< endPad)
           )
   shapeSeq (MDwarf.PointerType _ maybeRef) =
-    let mshape = constructPtrMemShapeFromRef sprog =<< (lift $ maybeRef)
+    let mshape = constructPtrMemShapeFromRef tyUnrollBound sprog =<< (lift $ maybeRef)
      in Seq.singleton <$> mshape
   shapeSeq _ = lift $ Nothing
 
@@ -487,17 +493,17 @@ nullPtr =
   let zbyt = TaggedByte{taggedByteTag = NoTag, taggedByteValue = 0}
    in Exactly (take (fromInteger $ CT.intValue ?ptrWidth `div` 8) $ repeat $ zbyt)
 
-constructPtrMemShapeFromRef :: HasPtrWidth w => Subprogram -> MDwarf.TypeRef -> StateT VisitState Maybe (MemShape w NoTag)
-constructPtrMemShapeFromRef sprog ref =
+constructPtrMemShapeFromRef :: HasPtrWidth w => TypeUnrollingBound -> Subprogram -> MDwarf.TypeRef -> StateT VisitState Maybe (MemShape w NoTag)
+constructPtrMemShapeFromRef tyUnrollBound sprog ref =
   do
     mp <- get
     let ct = fromMaybe 0 $ Map.lookup ref mp
     _ <- put (Map.insert ref (ct + 1) mp)
-    if ct > 3
+    if ct > coerce tyUnrollBound
       then
         pure $ nullPtr
       else
-        let mshape = constructPtrTarget sprog =<< (lift $ extractType sprog ref)
+        let mshape = constructPtrTarget tyUnrollBound sprog =<< (lift $ extractType sprog ref)
          in (\x -> pure $ Pointer NoTag (Offset (toBytes (0 :: Int))) x) =<< mshape
 
 intPtrShape ::
@@ -512,17 +518,18 @@ intPtrShape reg =
 pointerShapeOfDwarf ::
   (HasPtrWidth w, Symbolic.SymArchConstraints arch) =>
   ArchContext arch ->
+  TypeUnrollingBound ->
   MC.ArchReg arch tp ->
   Subprogram ->
   MDwarf.TypeApp ->
   Maybe (C.Some (PtrShape ext w NoTag))
-pointerShapeOfDwarf _ r _ (MDwarf.SignedIntType _) = intPtrShape r
-pointerShapeOfDwarf _ r _ (MDwarf.UnsignedIntType _) = intPtrShape r
-pointerShapeOfDwarf _ _ sprog (MDwarf.PointerType _ tyRef) =
-  let mshape = evalStateT (constructPtrTarget sprog =<< (lift $ (extractType sprog =<< tyRef))) Map.empty
+pointerShapeOfDwarf _ _ r _ (MDwarf.SignedIntType _) = intPtrShape r
+pointerShapeOfDwarf _ _ r _ (MDwarf.UnsignedIntType _) = intPtrShape r
+pointerShapeOfDwarf _ tyUnrollBound _ sprog (MDwarf.PointerType _ tyRef) =
+  let mshape = evalStateT (constructPtrTarget tyUnrollBound sprog =<< (lift $ (extractType sprog =<< tyRef))) Map.empty
       pshape = ShapePtr NoTag (Offset (toBytes (0 :: Int))) <$> mshape
    in (C.Some <$> pshape)
-pointerShapeOfDwarf _ _ _ _ = Nothing
+pointerShapeOfDwarf _ _ _ _ _ = Nothing
 
 -- Stops after the first nothing to avoid adding shapes after
 -- failing to build some shape (this would result in shapes applying to incorrect registers)
@@ -539,15 +546,16 @@ shapeFromVar ::
   , Symbolic.SymArchConstraints arch
   ) =>
   ArchContext arch ->
+  TypeUnrollingBound ->
   MC.ArchReg arch tp ->
   Subprogram ->
   MDwarf.Variable ->
   Maybe (C.Some (Shape ext NoTag))
-shapeFromVar arch buildingForReg sprog vr =
-  C.mapSome ShapeExt <$> (pointerShapeOfDwarf arch buildingForReg sprog =<< extractType sprog =<< MDwarf.varType vr)
+shapeFromVar arch tyUnrollBound buildingForReg sprog vr =
+  C.mapSome ShapeExt <$> (pointerShapeOfDwarf arch tyUnrollBound buildingForReg sprog =<< extractType sprog =<< MDwarf.varType vr)
 
-shapeFromDwarf :: (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr) => ArchContext arch -> Subprogram -> ParsedShapes ext
-shapeFromDwarf aContext sub =
+shapeFromDwarf :: (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr) => ArchContext arch -> TypeUnrollingBound -> Subprogram -> ParsedShapes ext
+shapeFromDwarf aContext tyUnrollBound sub =
   let
     abiregs = aContext Lens.^. archABIParams
     args = (zip abiregs $ snd <$> (toAscList $ subParamMap sub))
@@ -556,7 +564,7 @@ shapeFromDwarf aContext sub =
         ( \(reg, var) ->
             do
               C.Some r <- pure reg
-              shp <- shapeFromVar aContext r sub var
+              shp <- shapeFromVar aContext tyUnrollBound r sub var
               pure (Text.pack $ coerce $ mkRegName r, shp)
         )
         args
@@ -567,10 +575,11 @@ shapeFromDwarf aContext sub =
 fromDwarfInfo ::
   (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr) =>
   ArchContext arch ->
+  TypeUnrollingBound ->
   Word64 ->
   [Data.Macaw.Dwarf.CompileUnit] ->
   Maybe (ParsedShapes ext)
-fromDwarfInfo aContext addr cus =
+fromDwarfInfo aContext tyUnrollBound addr cus =
   let res =
         trace
           "looking at dwarf"
@@ -593,6 +602,7 @@ fromDwarfInfo aContext addr cus =
                  in let targetSubProg = (\x -> List.find (isInSubProg mval) (cuSubprograms x)) =<< targetCu
                      in ( shapeFromDwarf
                             aContext
+                            tyUnrollBound
                             <$> targetSubProg
                         )
           )
