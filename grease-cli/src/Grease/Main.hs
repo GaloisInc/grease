@@ -301,7 +301,7 @@ loadDwarfPreconditions dwarfPrecs tyUnrollBound argNames initShapes macawCfgConf
         shps <- Shape.fromDwarfInfo archContext tyUnrollBound addr cus
         let repl = Shape.replaceShapes argNames initShapes shps
         either (const Nothing) Just repl
-   in pure $ (if dwarfPrecs then trace "dwarf stuff " (fromMaybe initShapes dwarfPrs) else initShapes)
+   in pure $ if dwarfPrecs then fromMaybe initShapes dwarfPrs else initShapes
 
 loadInitialPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
@@ -636,10 +636,14 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   -- so we find the segment that corresponds by checking for all segments if segindex->memsegment -> the segment of the target addr
   let segIndexToSegment = MM.memSegmentIndexMap memory
   let targetSegment = fst <$> ((\seg -> find (\(_, seg2) -> seg == seg2) (Map.toList segIndexToSegment)) =<< (MM.segoffSegment <$> mbCfgAddr))
-  let mbSegment = (\bin -> find (\phdr -> (Just $ Elf.phdrSegmentIndex phdr) == targetSegment) $ headerPhdrs bin) =<< mcElf macawCfgConfig
+  let mbSegment =
+        ( do
+            bin <- mcElf macawCfgConfig
+            find (\phdr -> (Just $ Elf.phdrSegmentIndex phdr) == targetSegment) $ headerPhdrs bin
+        )
   let mbNewAddr =
-        ( \(seghdr, entAddr) ->
-            (MM.memWordValue $ MM.segoffOffset entAddr) + fromIntegral (Elf.phdrSegmentVirtAddr seghdr)
+        ( \(segHdr, entAddr) ->
+            (MM.memWordValue $ MM.segoffOffset entAddr) + fromIntegral (Elf.phdrSegmentVirtAddr segHdr)
         )
           <$> ((,) <$> mbSegment <*> mbCfgAddr)
   dwarfedArgs <- loadDwarfPreconditions (simEnableDWARFPreconditions simOpts) (simTypeUnrollingBound simOpts) argNames initArgs_ macawCfgConfig archCtx mbNewAddr

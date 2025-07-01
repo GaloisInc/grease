@@ -247,8 +247,9 @@ data ArchContext arch = ArchContext
   -- non-trivial here. All other architectures can simply leave the stack
   -- pointer by implementing @'_archOffsetStackPointerPostCall' = 'pure'@.
   , _archABIParams :: [C.Some (MC.ArchReg arch)]
-  -- ^ The ordered integer and pointer ABI registers for the Architecture. In the future
-  -- this should handle things like stack params, and multiple calling conventions.
+  -- ^ The ordered integer and pointer ABI registers for the architecture. I
+  -- TODO: In the future this should handle things like stack params https://github.com/GaloisInc/grease/issues/260
+  -- TODO: In the future this should handle multiple calling conventions. https://github.com/GaloisInc/grease/issues/261
   }
 
 makeLenses ''ArchContext

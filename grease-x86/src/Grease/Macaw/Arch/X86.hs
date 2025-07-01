@@ -42,8 +42,8 @@ import What4.Interface qualified as W4
 type instance ArchReloc X86.X86_64 = EE.X86_64_RelocationType
 
 -- | x64 System-V assumed
-reglist :: [Some.Some X86.X86Reg]
-reglist = Some.Some <$> X86.x86ArgumentRegs
+regList :: [Some.Some X86.X86Reg]
+regList = Some.Some <$> X86.x86ArgumentRegs
 
 x86Ctx ::
   (?memOpts :: Mem.MemOptions) =>
@@ -90,7 +90,7 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
         -- override it.
         _archRegOverrides = Map.empty
       , _archOffsetStackPointerPostCall = x64FixupStackPointer
-      , _archABIParams = reglist
+      , _archABIParams = regList
       }
 
 x64RelocSupported :: EE.X86_64_RelocationType -> Maybe RelocType

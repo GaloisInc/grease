@@ -1,7 +1,7 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- \| See @doc/shared-libraries.md@ for user-facing documentation about PLT
+-- | See @doc/shared-libraries.md@ for user-facing documentation about PLT
 -- stubs.
 --
 -- Copyright        : (c) Galois, Inc. 2024
@@ -112,7 +112,8 @@ pltStubSymbols pltStubInfo loadOptions ehi =
 
   withinPltSection ::
     (Ord (Elf.ElfWordType w), Num (Elf.ElfWordType w)) =>
-    MM.MemWord w -> Bool
+    MM.MemWord w ->
+    Bool
   withinPltSection addr =
     case Elf.findSectionByName ".plt" elf of
       [section] -> withinSection addr section
@@ -120,7 +121,9 @@ pltStubSymbols pltStubInfo loadOptions ehi =
 
   withinSection ::
     (Ord (Elf.ElfWordType w), Num (Elf.ElfWordType w)) =>
-    MM.MemWord w -> Elf.ElfSection (Elf.ElfWordType w) -> Bool
+    MM.MemWord w ->
+    Elf.ElfSection (Elf.ElfWordType w) ->
+    Bool
   withinSection addr section =
     let addr' :: Elf.ElfWordType w
         addr' = fromIntegral addr

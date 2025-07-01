@@ -1,6 +1,6 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 
--- \| Functionality for converting 'Stubs.Syscall's into functions
+-- | Functionality for converting 'Stubs.Syscall's into functions
 -- that can be simulated within @macaw-symbolic@.
 --
 -- Copyright        : (c) Galois, Inc. 2024

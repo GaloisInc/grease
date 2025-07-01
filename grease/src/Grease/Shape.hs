@@ -363,6 +363,8 @@ instance PP.Pretty TypeMismatch where
       , PP.viaShow (foundType tm)
       ]
 
+-- | A mapping from argument name to the shape for that argument. Intended to be used with
+-- 'replaceShapes' to initialize members of an initial 'ArgShape' with user or elsewhere defined shapes.
 newtype ParsedShapes ext
   = ParsedShapes {_getParsedShapes :: Map.Map Text (C.Some (Shape ext NoTag))}
 
@@ -401,7 +403,11 @@ replaceShapes names (ArgShapes args) (ParsedShapes replacements) =
                         }
       Nothing -> Right s
 
-isInSubProg :: Word64 -> Subprogram -> Bool
+isInSubProg ::
+  -- | the program counter from the base of the target ELF
+  Word64 ->
+  Subprogram ->
+  Bool
 isInSubProg w sub =
   let entryMatch = (==) w <$> MDwarf.subEntryPC sub
       def = fromMaybe False
@@ -410,8 +416,7 @@ isInSubProg w sub =
             sdef <- MDwarf.subDef sub
             lpc <- MDwarf.subLowPC sdef
             hpc <- MDwarf.subHighPC sdef
-            let res = w >= lpc && w < (lpc + hpc)
-            pure $ res
+            pure $ w >= lpc && w < (lpc + hpc)
         )
         || def entryMatch
 
@@ -435,23 +440,22 @@ constructPtrTarget ::
 constructPtrTarget tyUnrollBound sprog tyApp =
   PtrTarget Nothing <$> shapeSeq tyApp
  where
-  -- TODO: are these always byte fields?
   ishape w = lift $ Just $ Seq.singleton $ Initialized NoTag (toBytes w)
   padding :: (Integral a) => a -> MemShape w NoTag
   padding w = Uninitialized (toBytes w)
   -- if we dont know where to place members we have to fail/just place some bytes
   buildMember :: HasPtrWidth w => Word64 -> MDwarf.Member -> StateT VisitState Maybe (Word64, Seq.Seq (MemShape w NoTag))
-  buildMember loc mem =
+  buildMember loc member =
     let memRes =
           ( \memLoc ->
               do
                 padd <- lift $ Just (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
-                membershape <- shapeOfTyApp $ MDwarf.memberType mem
-                let memByteSize = sum $ memShapeSize ?ptrWidth <$> membershape
+                memberShape <- shapeOfTyApp $ MDwarf.memberType member
+                let memByteSize = sum $ memShapeSize ?ptrWidth <$> memberShape
                 let nextLoc = memLoc + fromIntegral memByteSize
-                lift $ Just (nextLoc, padd Seq.>< membershape)
+                lift $ Just (nextLoc, padd Seq.>< memberShape)
           )
-            =<< (lift $ MDwarf.memberLoc mem)
+            =<< (lift $ MDwarf.memberLoc member)
      in memRes
   shapeOfTyApp :: (HasPtrWidth w) => MDwarf.TypeRef -> StateT VisitState Maybe (Seq.Seq (MemShape w NoTag))
   shapeOfTyApp x = shapeSeq =<< trace ("extracting type " ++ (show $ extractType sprog x)) (lift . extractType sprog) =<< pure x

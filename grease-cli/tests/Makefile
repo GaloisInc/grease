@@ -95,7 +95,7 @@ SHARED_LIBRARY_PPC32_EXES = $(addsuffix /test.ppc32.elf,$(SHARED_LIBRARY_DIRS))
 # that links against the shared library. Note that we use the file extension
 # .elf rather than .so in order to make it easier for the grease test suite to
 # discover the shared libraries.
-STANDALONE_SHARED_LIBRARY_DIRS = sanity/pass/simulate_from_shared_library 
+STANDALONE_SHARED_LIBRARY_DIRS = sanity/pass/simulate_from_shared_library
 STANDALONE_SHARED_LIBRARY_ARM_SOS    = $(addsuffix /test.armv7l.elf,$(STANDALONE_SHARED_LIBRARY_DIRS))
 STANDALONE_SHARED_LIBRARY_X64_SOS    = $(addsuffix /test.x64.elf,$(STANDALONE_SHARED_LIBRARY_DIRS))
 STANDALONE_SHARED_LIBRARY_PPC32_SOS  = $(addsuffix /test.ppc32.elf,$(STANDALONE_SHARED_LIBRARY_DIRS))
