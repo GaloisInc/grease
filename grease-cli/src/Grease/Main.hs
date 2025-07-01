@@ -630,8 +630,11 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
   initArgs_ <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let argNames = fmapFC (Const . getValueName) rNameAssign
-  -- Is there a better way to do this resolution? We need the pc absent any position independent loading
-  -- so we find the segment that corresponds by checking for all segments if segindex->memsegment -> the segment of the target addr
+  -- We need to find the pc for DWARF which is relative to the ELF absent it's base load address
+  -- We find this address by finding the segment that corresponds to the target address
+  --  by checking for all ELF segments (mapped to Macaw segments)
+  -- and finding the ELF segment that corresponds to the Macaw segment for the target address.
+  -- The target mbNewAddr is then the found segments virtual address + the offset of the original addr.
   let segIndexToSegment = MM.memSegmentIndexMap memory
   let targetSegment = fst <$> ((\seg -> find (\(_, seg2) -> seg == seg2) (Map.toList segIndexToSegment)) =<< (MM.segoffSegment <$> mbCfgAddr))
   let mbSegment =
