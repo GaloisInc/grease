@@ -484,7 +484,7 @@ constructPtrTarget tyUnrollBound sprog tyApp =
               lift $ Just $ (seqs Seq.>< endPad)
           )
   shapeSeq (MDwarf.PointerType _ maybeRef) =
-    let mshape = constructPtrMemShapeFromRef tyUnrollBound sprog =<< (lift $ maybeRef)
+    let mshape = constructPtrMemShapeFromRef tyUnrollBound sprog =<< lift maybeRef
      in Seq.singleton <$> mshape
   shapeSeq _ = lift $ Nothing
 
@@ -505,7 +505,7 @@ constructPtrMemShapeFromRef tyUnrollBound sprog ref =
       then
         pure $ nullPtr
       else
-        let memShape = constructPtrTarget tyUnrollBound sprog =<< (lift $ extractType sprog ref)
+        let memShape = constructPtrTarget tyUnrollBound sprog =<< extractType sprog ref
          in (\x -> pure $ Pointer NoTag (Offset 0) x) =<< memShape
 
 intPtrShape ::
@@ -565,51 +565,49 @@ shapeFromDwarf aContext tyUnrollBound sub =
   let
     abiRegs = aContext Lens.^. archABIParams
     args = (zip abiRegs $ snd <$> (toAscList $ subParamMap sub))
+    regAssignmentFromDwarfVar reg var =
+      do
+        C.Some r <- pure reg
+        shp <- shapeFromVar aContext tyUnrollBound r sub var
+        pure (Text.pack $ coerce $ mkRegName r, shp)
     ascParams =
       takeJust
-        ( \(reg, var) ->
-            do
-              C.Some r <- pure reg
-              shp <- shapeFromVar aContext tyUnrollBound r sub var
-              pure (Text.pack $ coerce $ mkRegName r, shp)
-        )
+        (uncurry regAssignmentFromDwarfVar)
         args
-    named = Map.fromList $ ascParams
    in
-    ParsedShapes{_getParsedShapes = named}
+    ParsedShapes{_getParsedShapes = Map.fromList ascParams}
 
+-- | Given a list of `Data.Macaw.Dwarf.CompileUnit` attempts to find a subprogram corresponding to
+-- the provided PC and synthesize a shape from the DWARF provided prototype for the function.
+-- The provided PC is relative to the base of the image (as is represented in DWARF).
 fromDwarfInfo ::
   (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr) =>
   ArchContext arch ->
   TypeUnrollingBound ->
+  -- | The entrypoint PC of the target subprogram relative to the target ELF object.
   Word64 ->
   [Data.Macaw.Dwarf.CompileUnit] ->
   Maybe (ParsedShapes ext)
 fromDwarfInfo aContext tyUnrollBound addr cus =
-  let res =
-        trace
-          "looking at dwarf"
-          ( let mval = addr
-             in let targetCu =
-                      List.find
-                        ( \x ->
-                            let rs = cuRanges x
-                             in let isInCU =
-                                      any
-                                        ( \range ->
-                                            let begin = rangeBegin range
-                                                end = rangeEnd range
-                                             in begin <= mval && mval < end
-                                        )
-                                        rs
-                                 in isInCU
+  do
+    targetCu <-
+      List.find
+        ( \x ->
+            let rs = cuRanges x
+             in let isInCU =
+                      any
+                        ( \range ->
+                            let begin = rangeBegin range
+                                end = rangeEnd range
+                             in begin <= addr && addr < end
                         )
-                        cus
-                 in let targetSubProg = (\x -> List.find (isInSubProg mval) (cuSubprograms x)) =<< targetCu
-                     in ( shapeFromDwarf
-                            aContext
-                            tyUnrollBound
-                            <$> targetSubProg
-                        )
-          )
-   in res
+                        rs
+                 in isInCU
+        )
+        cus
+    targetSubProg <- List.find (isInSubProg addr) (cuSubprograms targetCu)
+    pure $
+      shapeFromDwarf
+        aContext
+        tyUnrollBound
+        targetSubProg

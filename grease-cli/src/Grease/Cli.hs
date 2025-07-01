@@ -193,6 +193,7 @@ simOpts = do
         Opt.auto
         ( Opt.long "type-unrolling-bound"
             <> Opt.help "Number of recursive pointers to visit during DWARF shape building"
+            <> Opt.showDefault
             <> Opt.value GO.defaultTypeUnrollingBound
         )
   simEnableDWARFPreconditions <-
