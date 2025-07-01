@@ -402,23 +402,6 @@ replaceShapes names (ArgShapes args) (ParsedShapes replacements) =
                         }
       Nothing -> Right s
 
-isInSubProg ::
-  -- | the program counter from the declared virtual address of the loaded ELF segment
-  Word64 ->
-  Subprogram ->
-  Bool
-isInSubProg w sub =
-  let entryMatch = (==) w <$> MDwarf.subEntryPC sub
-      def = fromMaybe False
-   in def
-        ( do
-            sdef <- MDwarf.subDef sub
-            lpc <- MDwarf.subLowPC sdef
-            hpc <- MDwarf.subHighPC sdef
-            pure $ w >= lpc && w < (lpc + hpc)
-        )
-        || def entryMatch
-
 rightToMaybe :: Either a b -> Maybe b
 rightToMaybe (Left _) = Nothing
 rightToMaybe (Right b) = Just b
@@ -592,15 +575,13 @@ fromDwarfInfo aContext tyUnrollBound addr cus =
       List.find
         ( \x ->
             let rs = cuRanges x
-             in let isInCU =
-                      any
-                        ( \range ->
-                            let begin = rangeBegin range
-                                end = rangeEnd range
-                             in begin <= addr && addr < end
-                        )
-                        rs
-                 in isInCU
+                isInCU range =
+                  let begin = rangeBegin range
+                      end = rangeEnd range
+                   in begin <= addr
+                        && addr
+                          < end
+             in any isInCU rs
         )
         cus
     targetSubProg <- List.find (isInSubProg addr) (cuSubprograms targetCu)
@@ -609,3 +590,19 @@ fromDwarfInfo aContext tyUnrollBound addr cus =
         aContext
         tyUnrollBound
         targetSubProg
+ where
+  isInSubProg ::
+    Word64 ->
+    Subprogram ->
+    Bool
+  isInSubProg w sub =
+    let entryMatch = (==) w <$> MDwarf.subEntryPC sub
+        def = fromMaybe False
+     in def
+          ( do
+              sdef <- MDwarf.subDef sub
+              lpc <- MDwarf.subLowPC sdef
+              hpc <- MDwarf.subHighPC sdef
+              pure $ w >= lpc && w < (lpc + hpc)
+          )
+          || def entryMatch
