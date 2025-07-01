@@ -485,7 +485,7 @@ type VisitState = Map.Map MDwarf.TypeRef Int
 nullPtr :: HasPtrWidth w => (MemShape w NoTag)
 nullPtr =
   let zbyt = TaggedByte{taggedByteTag = NoTag, taggedByteValue = 0}
-   in Exactly (take (fromInteger $ CT.intValue ?ptrWidth) $ repeat $ zbyt)
+   in Exactly (take (fromInteger $ CT.intValue ?ptrWidth `div` 8) $ repeat $ zbyt)
 
 constructPtrMemShapeFromRef :: HasPtrWidth w => Subprogram -> MDwarf.TypeRef -> StateT VisitState Maybe (MemShape w NoTag)
 constructPtrMemShapeFromRef sprog ref =
