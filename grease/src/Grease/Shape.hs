@@ -52,7 +52,7 @@ import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Types qualified as MT
 import Data.Map (toAscList)
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Parameterized.Classes (ShowF (..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Ctx (Ctx)
@@ -63,11 +63,12 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import Data.Word (Word64)
+import Debug.Trace (trace)
 import GHC.Show qualified as GShow
 import Grease.Macaw.Arch (ArchContext, archABIParams)
 import Grease.Macaw.RegName (RegName (..), mkRegName)
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (MemShape (Initialized, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget (PtrTarget), memShapeSize, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
+import Grease.Shape.Pointer (MemShape (Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget (PtrTarget), memShapeSize, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (toBytes)
@@ -432,21 +433,25 @@ constructPtrTarget sprog tyApp =
   padding :: (Integral a) => a -> MemShape w NoTag
   padding w = Uninitialized (toBytes w)
   -- if we dont know where to place members we have to fail/just place some bytes
-  buildMember :: Word64 -> MDwarf.Member -> Maybe (Word64, Seq.Seq (MemShape w NoTag))
+  buildMember :: HasPtrWidth w => Word64 -> MDwarf.Member -> Maybe (Word64, Seq.Seq (MemShape w NoTag))
   buildMember loc mem =
-    ( \memLoc ->
-        do
-          padd <- Just (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
-          membershape <- shapeOfTyApp $ MDwarf.memberType mem
-          let memByteSize = sum $ memShapeSize ?ptrWidth <$> membershape
-          let nextLoc = memLoc + fromIntegral memByteSize
-          Just (nextLoc, padd Seq.>< membershape)
-    )
-      =<< MDwarf.memberLoc mem
-  shapeOfTyApp :: MDwarf.TypeRef -> Maybe (Seq.Seq (MemShape w NoTag))
-  shapeOfTyApp x = shapeSeq =<< extractType sprog x
+    let memRes =
+          ( \memLoc ->
+              do
+                padd <- Just (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
+                membershape <- shapeOfTyApp $ MDwarf.memberType mem
+                let memByteSize = sum $ memShapeSize ?ptrWidth <$> membershape
+                let nextLoc = memLoc + fromIntegral memByteSize
+                Just (nextLoc, padd Seq.>< membershape)
+          )
+            =<< MDwarf.memberLoc mem
+     in trace
+          ("at member " ++ show loc ++ " res: " ++ (show $ isJust $ memRes))
+          memRes
+  shapeOfTyApp :: (HasPtrWidth w) => MDwarf.TypeRef -> Maybe (Seq.Seq (MemShape w NoTag))
+  shapeOfTyApp x = shapeSeq =<< trace ("extracting type " ++ (show $ extractType sprog x)) (extractType sprog x)
 
-  shapeSeq :: MDwarf.TypeApp -> Maybe (Seq.Seq (MemShape w NoTag))
+  shapeSeq :: (HasPtrWidth w) => MDwarf.TypeApp -> Maybe (Seq.Seq (MemShape w NoTag))
   shapeSeq (MDwarf.UnsignedIntType w) = ishape w
   shapeSeq (MDwarf.SignedIntType w) = ishape w
   shapeSeq MDwarf.SignedCharType = ishape (1 :: Int)
@@ -456,18 +461,24 @@ constructPtrTarget sprog tyApp =
   -- need to compute padding between els, infront of els and at end
   shapeSeq (MDwarf.StructType sdecl) =
     let structSize = MDwarf.structByteSize sdecl
-     in do
-          (currLoc, seqs) <-
-            foldM
-              ( \(currloc, seqs) mem ->
-                  do
-                    (nextLoc, additionalShapes) <- buildMember currloc mem
-                    Just (nextLoc, seqs Seq.>< additionalShapes)
-              )
-              (0, Seq.empty)
-              (MDwarf.structMembers sdecl)
-          endPad <- Just (if currLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - currLoc))
-          Just $ (seqs Seq.>< endPad)
+     in trace
+          "in struct"
+          ( do
+              (currLoc, seqs) <-
+                foldM
+                  ( \(currloc, seqs) mem ->
+                      do
+                        (nextLoc, additionalShapes) <- buildMember currloc mem
+                        Just (nextLoc, seqs Seq.>< additionalShapes)
+                  )
+                  (0, Seq.empty)
+                  (MDwarf.structMembers sdecl)
+              endPad <- Just (if currLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - currLoc))
+              Just $ (seqs Seq.>< endPad)
+          )
+  shapeSeq (MDwarf.PointerType _ maybeRef) =
+    let mshape = constructPtrTarget sprog =<< extractType sprog =<< maybeRef
+     in Seq.singleton <$> Pointer NoTag (Offset (toBytes (0 :: Int))) <$> mshape
   shapeSeq _ = Nothing
 
 intPtrShape ::
@@ -542,26 +553,28 @@ fromDwarfInfo ::
   Maybe (ParsedShapes ext)
 fromDwarfInfo aContext addr cus =
   let res =
-        ( let mval = addr
-           in let targetCu =
-                    List.find
-                      ( \x ->
-                          let rs = cuRanges x
-                           in let isInCU =
-                                    any
-                                      ( \range ->
-                                          let begin = rangeBegin range
-                                              end = rangeEnd range
-                                           in begin <= mval && mval < end
-                                      )
-                                      rs
-                               in isInCU
-                      )
-                      cus
-               in let targetSubProg = (\x -> List.find (isInSubProg mval) (cuSubprograms x)) =<< targetCu
-                   in ( shapeFromDwarf
-                          aContext
-                          <$> targetSubProg
-                      )
-        )
+        trace
+          "looking at dwarf"
+          ( let mval = addr
+             in let targetCu =
+                      List.find
+                        ( \x ->
+                            let rs = cuRanges x
+                             in let isInCU =
+                                      any
+                                        ( \range ->
+                                            let begin = rangeBegin range
+                                                end = rangeEnd range
+                                             in begin <= mval && mval < end
+                                        )
+                                        rs
+                                 in isInCU
+                        )
+                        cus
+                 in let targetSubProg = (\x -> List.find (isInSubProg mval) (cuSubprograms x)) =<< targetCu
+                     in ( shapeFromDwarf
+                            aContext
+                            <$> targetSubProg
+                        )
+          )
    in res

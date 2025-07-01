@@ -100,6 +100,7 @@ import Data.Tuple (fst, snd)
 import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
 import Data.Word (Word64)
+import Debug.Trace (trace)
 import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Bug qualified as Bug
@@ -298,7 +299,7 @@ loadDwarfPreconditions dwarfPrecs argNames initShapes macawCfgConfig archContext
         shps <- Shape.fromDwarfInfo archContext addr cus
         let repl = Shape.replaceShapes argNames initShapes shps
         either (const Nothing) Just repl
-   in pure $ (if dwarfPrecs then fromMaybe initShapes dwarfPrs else initShapes)
+   in pure $ (if dwarfPrecs then trace "dwarf stuff " (fromMaybe initShapes dwarfPrs) else initShapes)
 
 loadInitialPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
