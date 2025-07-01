@@ -53,7 +53,7 @@ import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Types qualified as MT
 import Data.Map (toAscList)
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe)
 import Data.Parameterized.Classes (ShowF (..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Ctx (Ctx)
@@ -64,13 +64,12 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import Data.Word (Word64)
-import Debug.Trace (trace)
 import GHC.Show qualified as GShow
 import Grease.Macaw.Arch (ArchContext, archABIParams)
 import Grease.Macaw.RegName (RegName (..), mkRegName)
 import Grease.Options (TypeUnrollingBound (..))
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (MemShape (Exactly, Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget (PtrTarget), TaggedByte (..), memShapeSize, minimalPtrShape, ptrShapeType, ptrTarget, traversePtrShapeWithType)
+import Grease.Shape.Pointer (MemShape (Exactly, Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget, TaggedByte (..), memShapeSize, minimalPtrShape, ptrShapeType, ptrTarget, traversePtrShapeWithType)
 import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (toBytes)
@@ -455,7 +454,7 @@ constructPtrTarget tyUnrollBound sprog tyApp =
       lift $ Just (nextLoc, padd Seq.>< memberShape)
 
   shapeOfTyApp :: (HasPtrWidth w) => MDwarf.TypeRef -> StateT VisitState Maybe (Seq.Seq (MemShape w NoTag))
-  shapeOfTyApp x = shapeSeq =<< trace ("extracting type " ++ (show $ extractType sprog x)) (lift . extractType sprog) =<< pure x
+  shapeOfTyApp x = shapeSeq =<< lift . extractType sprog =<< pure x
 
   shapeSeq :: (HasPtrWidth w) => MDwarf.TypeApp -> StateT VisitState Maybe (Seq.Seq (MemShape w NoTag))
   shapeSeq (MDwarf.UnsignedIntType w) = ishape w
@@ -468,21 +467,18 @@ constructPtrTarget tyUnrollBound sprog tyApp =
   -- need to compute padding between elements, in-front of the first element, and at end
   shapeSeq (MDwarf.StructType sdecl) =
     let structSize = MDwarf.structByteSize sdecl
-     in trace
-          "in struct"
-          ( do
-              (endLoc, seqs) <-
-                foldM
-                  ( \(currLoc, seqs) mem ->
-                      do
-                        (nextLoc, additionalShapes) <- buildMember currLoc mem
-                        lift $ Just (nextLoc, seqs Seq.>< additionalShapes)
-                  )
-                  (0, Seq.empty)
-                  (MDwarf.structMembers sdecl)
-              let endPad = if endLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - endLoc)
-              lift $ Just $ (seqs Seq.>< endPad)
-          )
+     in do
+          (endLoc, seqs) <-
+            foldM
+              ( \(currLoc, seqs) mem ->
+                  do
+                    (nextLoc, additionalShapes) <- buildMember currLoc mem
+                    lift $ Just (nextLoc, seqs Seq.>< additionalShapes)
+              )
+              (0, Seq.empty)
+              (MDwarf.structMembers sdecl)
+          let endPad = if endLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - endLoc)
+          lift $ Just $ (seqs Seq.>< endPad)
   shapeSeq (MDwarf.PointerType _ maybeRef) =
     let mshape = constructPtrMemShapeFromRef tyUnrollBound sprog =<< lift maybeRef
      in Seq.singleton <$> mshape
@@ -505,7 +501,7 @@ constructPtrMemShapeFromRef tyUnrollBound sprog ref =
       then
         pure $ nullPtr
       else
-        let memShape = constructPtrTarget tyUnrollBound sprog =<< extractType sprog ref
+        let memShape = constructPtrTarget tyUnrollBound sprog =<< (lift $ extractType sprog ref)
          in (\x -> pure $ Pointer NoTag (Offset 0) x) =<< memShape
 
 intPtrShape ::

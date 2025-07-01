@@ -39,7 +39,7 @@ import Data.Either (Either (..), either)
 import Data.ElfEdit (headerPhdrs)
 import Data.ElfEdit qualified as Elf
 import Data.Eq ((==))
-import Data.Foldable (concat, find, traverse_)
+import Data.Foldable (find, traverse_)
 import Data.Function (const, id, ($), (&), (.))
 import Data.Functor (fmap, (<$>), (<&>))
 import Data.Functor.Const (Const (..))
@@ -47,7 +47,6 @@ import Data.Functor.Const qualified as Const
 import Data.IORef (modifyIORef, newIORef)
 import Data.IntMap qualified as IntMap
 import Data.LLVM.BitCode (parseBitCodeFromFile)
-import Data.List ((++))
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.AArch32.Symbolic qualified as AArch32Symbolic
@@ -100,7 +99,6 @@ import Data.Tuple (fst, snd)
 import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
 import Data.Word (Word64)
-import Debug.Trace (trace)
 import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Bug qualified as Bug
