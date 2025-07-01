@@ -20,6 +20,7 @@ import Data.Macaw.ARM.ARMReg qualified as ARM
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map qualified as Map
 import Data.Parameterized.NatRepr (knownNat)
+import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
 import Data.Word (Word32)
 import Grease.Macaw.Arch (ArchContext (..), ArchReloc)
@@ -80,6 +81,8 @@ armCtx halloc mbReturnAddr stackArgSlots = do
       , _archInitGlobals = Stubs.aarch32LinuxInitGlobals tlsGlob
       , _archRegOverrides = regOverrides
       , _archOffsetStackPointerPostCall = pure
+      , -- assumes AAPCS32 https://github.com/ARM-software/abi-aa/blob/main/aapcs32/aapcs32.rst#parameter-passing
+        _archABIParams = Some.Some <$> [ARM.r0, ARM.r1, ARM.r2, ARM.r3]
       }
 
 armRelocSupported :: EE.ARM32_RelocationType -> Maybe RelocType

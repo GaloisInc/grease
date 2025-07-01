@@ -135,7 +135,7 @@ library
 
     , containers
     , safe-exceptions
-
+    , dismantle-ppc
     , bv-sized
     , crucible
     , crucible-llvm
