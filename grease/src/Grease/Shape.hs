@@ -40,6 +40,7 @@ import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
 import Control.Monad (foldM)
+import Control.Monad.State (MonadState (get, put), MonadTrans (lift), StateT, evalStateT)
 import Data.Coerce
 import Data.Functor.Const qualified as Const
 import Data.Functor.Identity (Identity (Identity, runIdentity))
@@ -68,7 +69,7 @@ import GHC.Show qualified as GShow
 import Grease.Macaw.Arch (ArchContext, archABIParams)
 import Grease.Macaw.RegName (RegName (..), mkRegName)
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (MemShape (Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget (PtrTarget), memShapeSize, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
+import Grease.Shape.Pointer (MemShape (Exactly, Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget (PtrTarget), TaggedByte (..), memShapeSize, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (toBytes)
@@ -424,40 +425,38 @@ extractType sprog vrTy =
     (mbtypeApp, _) <- Map.lookup vrTy mp
     rightToMaybe mbtypeApp
 
-constructPtrTarget :: HasPtrWidth w => Subprogram -> MDwarf.TypeApp -> Maybe (PtrTarget w NoTag)
+constructPtrTarget :: HasPtrWidth w => Subprogram -> MDwarf.TypeApp -> StateT VisitState Maybe (PtrTarget w NoTag)
 constructPtrTarget sprog tyApp =
   PtrTarget Nothing <$> shapeSeq tyApp
  where
   -- TODO: are these always byte fields?
-  ishape w = Just $ Seq.singleton $ Initialized NoTag (toBytes w)
+  ishape w = lift $ Just $ Seq.singleton $ Initialized NoTag (toBytes w)
   padding :: (Integral a) => a -> MemShape w NoTag
   padding w = Uninitialized (toBytes w)
   -- if we dont know where to place members we have to fail/just place some bytes
-  buildMember :: HasPtrWidth w => Word64 -> MDwarf.Member -> Maybe (Word64, Seq.Seq (MemShape w NoTag))
+  buildMember :: HasPtrWidth w => Word64 -> MDwarf.Member -> StateT VisitState Maybe (Word64, Seq.Seq (MemShape w NoTag))
   buildMember loc mem =
     let memRes =
           ( \memLoc ->
               do
-                padd <- Just (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
+                padd <- lift $ Just (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
                 membershape <- shapeOfTyApp $ MDwarf.memberType mem
                 let memByteSize = sum $ memShapeSize ?ptrWidth <$> membershape
                 let nextLoc = memLoc + fromIntegral memByteSize
-                Just (nextLoc, padd Seq.>< membershape)
+                lift $ Just (nextLoc, padd Seq.>< membershape)
           )
-            =<< MDwarf.memberLoc mem
-     in trace
-          ("at member " ++ show loc ++ " res: " ++ (show $ isJust $ memRes))
-          memRes
-  shapeOfTyApp :: (HasPtrWidth w) => MDwarf.TypeRef -> Maybe (Seq.Seq (MemShape w NoTag))
-  shapeOfTyApp x = shapeSeq =<< trace ("extracting type " ++ (show $ extractType sprog x)) (extractType sprog x)
+            =<< (lift $ MDwarf.memberLoc mem)
+     in memRes
+  shapeOfTyApp :: (HasPtrWidth w) => MDwarf.TypeRef -> StateT VisitState Maybe (Seq.Seq (MemShape w NoTag))
+  shapeOfTyApp x = shapeSeq =<< trace ("extracting type " ++ (show $ extractType sprog x)) (lift . extractType sprog) =<< pure x
 
-  shapeSeq :: (HasPtrWidth w) => MDwarf.TypeApp -> Maybe (Seq.Seq (MemShape w NoTag))
+  shapeSeq :: (HasPtrWidth w) => MDwarf.TypeApp -> StateT VisitState Maybe (Seq.Seq (MemShape w NoTag))
   shapeSeq (MDwarf.UnsignedIntType w) = ishape w
   shapeSeq (MDwarf.SignedIntType w) = ishape w
   shapeSeq MDwarf.SignedCharType = ishape (1 :: Int)
   shapeSeq MDwarf.UnsignedCharType = ishape (1 :: Int)
   -- Need modification to DWARF to collect counts properly + evaluate ops for ub
-  shapeSeq (MDwarf.ArrayType _elTy _ub) = Nothing
+  shapeSeq (MDwarf.ArrayType _elTy _ub) = lift $ Nothing
   -- need to compute padding between els, infront of els and at end
   shapeSeq (MDwarf.StructType sdecl) =
     let structSize = MDwarf.structByteSize sdecl
@@ -469,17 +468,37 @@ constructPtrTarget sprog tyApp =
                   ( \(currloc, seqs) mem ->
                       do
                         (nextLoc, additionalShapes) <- buildMember currloc mem
-                        Just (nextLoc, seqs Seq.>< additionalShapes)
+                        lift $ Just (nextLoc, seqs Seq.>< additionalShapes)
                   )
                   (0, Seq.empty)
                   (MDwarf.structMembers sdecl)
-              endPad <- Just (if currLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - currLoc))
-              Just $ (seqs Seq.>< endPad)
+              endPad <- lift $ Just (if currLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - currLoc))
+              lift $ Just $ (seqs Seq.>< endPad)
           )
   shapeSeq (MDwarf.PointerType _ maybeRef) =
-    let mshape = constructPtrTarget sprog =<< extractType sprog =<< maybeRef
-     in Seq.singleton <$> Pointer NoTag (Offset (toBytes (0 :: Int))) <$> mshape
-  shapeSeq _ = Nothing
+    let mshape = constructPtrMemShapeFromRef sprog =<< (lift $ maybeRef)
+     in Seq.singleton <$> mshape
+  shapeSeq _ = lift $ Nothing
+
+type VisitState = Map.Map MDwarf.TypeRef Int
+
+nullPtr :: HasPtrWidth w => (MemShape w NoTag)
+nullPtr =
+  let zbyt = TaggedByte{taggedByteTag = NoTag, taggedByteValue = 0}
+   in Exactly (take (fromInteger $ CT.intValue ?ptrWidth) $ repeat $ zbyt)
+
+constructPtrMemShapeFromRef :: HasPtrWidth w => Subprogram -> MDwarf.TypeRef -> StateT VisitState Maybe (MemShape w NoTag)
+constructPtrMemShapeFromRef sprog ref =
+  do
+    mp <- get
+    let ct = fromMaybe 0 $ Map.lookup ref mp
+    _ <- put (Map.insert ref (ct + 1) mp)
+    if ct > 3
+      then
+        pure $ nullPtr
+      else
+        let mshape = constructPtrTarget sprog =<< (lift $ extractType sprog ref)
+         in (\x -> pure $ Pointer NoTag (Offset (toBytes (0 :: Int))) x) =<< mshape
 
 intPtrShape ::
   Symbolic.SymArchConstraints arch =>
@@ -500,7 +519,7 @@ pointerShapeOfDwarf ::
 pointerShapeOfDwarf _ r _ (MDwarf.SignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ r _ (MDwarf.UnsignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ _ sprog (MDwarf.PointerType _ tyRef) =
-  let mshape = constructPtrTarget sprog =<< extractType sprog =<< tyRef
+  let mshape = evalStateT (constructPtrTarget sprog =<< (lift $ (extractType sprog =<< tyRef))) Map.empty
       pshape = ShapePtr NoTag (Offset (toBytes (0 :: Int))) <$> mshape
    in (C.Some <$> pshape)
 pointerShapeOfDwarf _ _ _ _ = Nothing
