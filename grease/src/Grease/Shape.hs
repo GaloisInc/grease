@@ -70,7 +70,7 @@ import Grease.Macaw.Arch (ArchContext, archABIParams)
 import Grease.Macaw.RegName (RegName (..), mkRegName)
 import Grease.Options (TypeUnrollingBound (..))
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (MemShape (Exactly, Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget (PtrTarget), TaggedByte (..), memShapeSize, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
+import Grease.Shape.Pointer (MemShape (Exactly, Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget (PtrTarget), TaggedByte (..), memShapeSize, minimalPtrShape, ptrShapeType, ptrTarget, traversePtrShapeWithType)
 import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (toBytes)
@@ -438,7 +438,7 @@ constructPtrTarget ::
   MDwarf.TypeApp ->
   StateT VisitState Maybe (PtrTarget w NoTag)
 constructPtrTarget tyUnrollBound sprog tyApp =
-  PtrTarget Nothing <$> shapeSeq tyApp
+  ptrTarget Nothing <$> shapeSeq tyApp
  where
   ishape w = lift $ Just $ Seq.singleton $ Initialized NoTag (toBytes w)
   padding :: (Integral a) => a -> MemShape w NoTag
@@ -446,17 +446,14 @@ constructPtrTarget tyUnrollBound sprog tyApp =
   -- if we dont know where to place members we have to fail/just place some bytes
   buildMember :: HasPtrWidth w => Word64 -> MDwarf.Member -> StateT VisitState Maybe (Word64, Seq.Seq (MemShape w NoTag))
   buildMember loc member =
-    let memRes =
-          ( \memLoc ->
-              do
-                padd <- lift $ Just (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
-                memberShape <- shapeOfTyApp $ MDwarf.memberType member
-                let memByteSize = sum $ memShapeSize ?ptrWidth <$> memberShape
-                let nextLoc = memLoc + fromIntegral memByteSize
-                lift $ Just (nextLoc, padd Seq.>< memberShape)
-          )
-            =<< (lift $ MDwarf.memberLoc member)
-     in memRes
+    do
+      memLoc <- lift $ MDwarf.memberLoc member
+      padd <- lift $ Just (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
+      memberShape <- shapeOfTyApp $ MDwarf.memberType member
+      let memByteSize = sum $ memShapeSize ?ptrWidth <$> memberShape
+      let nextLoc = memLoc + fromIntegral memByteSize
+      lift $ Just (nextLoc, padd Seq.>< memberShape)
+
   shapeOfTyApp :: (HasPtrWidth w) => MDwarf.TypeRef -> StateT VisitState Maybe (Seq.Seq (MemShape w NoTag))
   shapeOfTyApp x = shapeSeq =<< trace ("extracting type " ++ (show $ extractType sprog x)) (lift . extractType sprog) =<< pure x
 
@@ -465,24 +462,25 @@ constructPtrTarget tyUnrollBound sprog tyApp =
   shapeSeq (MDwarf.SignedIntType w) = ishape w
   shapeSeq MDwarf.SignedCharType = ishape (1 :: Int)
   shapeSeq MDwarf.UnsignedCharType = ishape (1 :: Int)
-  -- Need modification to DWARF to collect counts properly + evaluate ops for ub
+  -- Need modification to DWARF to collect DW_TAG_count and properly evaluate dwarf ops for upper bounds in subranges
+  -- https://github.com/GaloisInc/grease/issues/263
   shapeSeq (MDwarf.ArrayType _elTy _ub) = lift $ Nothing
-  -- need to compute padding between els, infront of els and at end
+  -- need to compute padding between elements, in-front of the first element, and at end
   shapeSeq (MDwarf.StructType sdecl) =
     let structSize = MDwarf.structByteSize sdecl
      in trace
           "in struct"
           ( do
-              (currLoc, seqs) <-
+              (endLoc, seqs) <-
                 foldM
-                  ( \(currloc, seqs) mem ->
+                  ( \(currLoc, seqs) mem ->
                       do
-                        (nextLoc, additionalShapes) <- buildMember currloc mem
+                        (nextLoc, additionalShapes) <- buildMember currLoc mem
                         lift $ Just (nextLoc, seqs Seq.>< additionalShapes)
                   )
                   (0, Seq.empty)
                   (MDwarf.structMembers sdecl)
-              endPad <- lift $ Just (if currLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - currLoc))
+              let endPad = if endLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - endLoc)
               lift $ Just $ (seqs Seq.>< endPad)
           )
   shapeSeq (MDwarf.PointerType _ maybeRef) =
@@ -507,8 +505,8 @@ constructPtrMemShapeFromRef tyUnrollBound sprog ref =
       then
         pure $ nullPtr
       else
-        let mshape = constructPtrTarget tyUnrollBound sprog =<< (lift $ extractType sprog ref)
-         in (\x -> pure $ Pointer NoTag (Offset (toBytes (0 :: Int))) x) =<< mshape
+        let memShape = constructPtrTarget tyUnrollBound sprog =<< (lift $ extractType sprog ref)
+         in (\x -> pure $ Pointer NoTag (Offset 0) x) =<< memShape
 
 intPtrShape ::
   Symbolic.SymArchConstraints arch =>
@@ -530,9 +528,9 @@ pointerShapeOfDwarf ::
 pointerShapeOfDwarf _ _ r _ (MDwarf.SignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ _ r _ (MDwarf.UnsignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ tyUnrollBound _ sprog (MDwarf.PointerType _ tyRef) =
-  let mshape = evalStateT (constructPtrTarget tyUnrollBound sprog =<< (lift $ (extractType sprog =<< tyRef))) Map.empty
-      pshape = ShapePtr NoTag (Offset (toBytes (0 :: Int))) <$> mshape
-   in (C.Some <$> pshape)
+  let memShape = evalStateT (constructPtrTarget tyUnrollBound sprog =<< (lift $ (extractType sprog =<< tyRef))) Map.empty
+      pointerShape = ShapePtr NoTag (Offset 0) <$> memShape
+   in (C.Some <$> pointerShape)
 pointerShapeOfDwarf _ _ _ _ _ = Nothing
 
 -- Stops after the first nothing to avoid adding shapes after
@@ -556,13 +554,17 @@ shapeFromVar ::
   MDwarf.Variable ->
   Maybe (C.Some (Shape ext NoTag))
 shapeFromVar arch tyUnrollBound buildingForReg sprog vr =
-  C.mapSome ShapeExt <$> (pointerShapeOfDwarf arch tyUnrollBound buildingForReg sprog =<< extractType sprog =<< MDwarf.varType vr)
+  C.mapSome ShapeExt
+    <$> ( pointerShapeOfDwarf arch tyUnrollBound buildingForReg sprog
+            =<< extractType sprog
+            =<< MDwarf.varType vr
+        )
 
 shapeFromDwarf :: (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr) => ArchContext arch -> TypeUnrollingBound -> Subprogram -> ParsedShapes ext
 shapeFromDwarf aContext tyUnrollBound sub =
   let
-    abiregs = aContext Lens.^. archABIParams
-    args = (zip abiregs $ snd <$> (toAscList $ subParamMap sub))
+    abiRegs = aContext Lens.^. archABIParams
+    args = (zip abiRegs $ snd <$> (toAscList $ subParamMap sub))
     ascParams =
       takeJust
         ( \(reg, var) ->
