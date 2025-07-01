@@ -27,7 +27,7 @@ module Grease.Main (
   logResults,
 ) where
 
-import Control.Applicative (pure, (<*>))
+import Control.Applicative (pure)
 import Control.Concurrent.Async (cancel)
 import Control.Exception.Safe (Handler (..), MonadThrow, catches, throw)
 import Control.Lens (to, (.~), (^.))
@@ -57,6 +57,7 @@ import Data.Macaw.BinaryLoader (BinaryLoader)
 import Data.Macaw.BinaryLoader qualified as Loader
 import Data.Macaw.BinaryLoader.AArch32 ()
 import Data.Macaw.BinaryLoader.X86 ()
+import Data.Macaw.CFG (ArchSegmentOff)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Dwarf (dwarfInfoFromElf)
@@ -272,6 +273,32 @@ withMemOptions opts k =
           }
    in k
 
+-- \| Find the pc for DWARF which is relative to the ELF absent its base load address.
+-- We find this address by finding the segment that corresponds to the target address
+--  by checking for all ELF segments (mapped to Macaw segments)
+-- and finding the ELF segment that corresponds to the Macaw segment for the target address.
+-- The target mbNewAddr is then the found segments virtual address + the offset of the original addr.
+addressToELFAddress ::
+  Integral (Elf.ElfWordType (MC.ArchAddrWidth arch)) =>
+  MacawCfgConfig arch ->
+  Maybe (ArchSegmentOff arch) ->
+  MM.Memory (MC.RegAddrWidth (MC.ArchReg arch)) ->
+  Maybe Word64
+addressToELFAddress macawCfgConfig mbCfgAddr memory =
+  do
+    let segIndexToSegment = MM.memSegmentIndexMap memory
+    let targetSegment = fst <$> ((\seg -> find (\(_, seg2) -> seg == seg2) (Map.toList segIndexToSegment)) =<< (MM.segoffSegment <$> mbCfgAddr))
+    let mbSegment =
+          do
+            bin <- mcElf macawCfgConfig
+            find (\phdr -> (Just $ Elf.phdrSegmentIndex phdr) == targetSegment) $ headerPhdrs bin
+    let mbNewAddr =
+          do
+            segHdr <- mbSegment
+            entAddr <- mbCfgAddr
+            pure $ (MM.memWordValue $ MM.segoffOffset entAddr) + fromIntegral (Elf.phdrSegmentVirtAddr segHdr)
+    mbNewAddr
+
 loadDwarfPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
   Mem.HasPtrWidth w =>
@@ -286,7 +313,7 @@ loadDwarfPreconditions ::
   Shape.ArgShapes ext NoTag tys ->
   -- | Macaw CFG for DWARF
   MacawCfgConfig arch ->
-  -- | Arch context for abi info
+  -- | Architecture-specific information, needed for ABI info
   ArchContext arch ->
   -- | Target function address
   Maybe Word64 ->
@@ -630,24 +657,15 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
   initArgs_ <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let argNames = fmapFC (Const . getValueName) rNameAssign
-  -- We need to find the pc for DWARF which is relative to the ELF absent it's base load address
-  -- We find this address by finding the segment that corresponds to the target address
-  --  by checking for all ELF segments (mapped to Macaw segments)
-  -- and finding the ELF segment that corresponds to the Macaw segment for the target address.
-  -- The target mbNewAddr is then the found segments virtual address + the offset of the original addr.
-  let segIndexToSegment = MM.memSegmentIndexMap memory
-  let targetSegment = fst <$> ((\seg -> find (\(_, seg2) -> seg == seg2) (Map.toList segIndexToSegment)) =<< (MM.segoffSegment <$> mbCfgAddr))
-  let mbSegment =
-        ( do
-            bin <- mcElf macawCfgConfig
-            find (\phdr -> (Just $ Elf.phdrSegmentIndex phdr) == targetSegment) $ headerPhdrs bin
-        )
-  let mbNewAddr =
-        ( \(segHdr, entAddr) ->
-            (MM.memWordValue $ MM.segoffOffset entAddr) + fromIntegral (Elf.phdrSegmentVirtAddr segHdr)
-        )
-          <$> ((,) <$> mbSegment <*> mbCfgAddr)
-  dwarfedArgs <- loadDwarfPreconditions (simEnableDWARFPreconditions simOpts) (simTypeUnrollingBound simOpts) argNames initArgs_ macawCfgConfig archCtx mbNewAddr
+  dwarfedArgs <-
+    loadDwarfPreconditions
+      (simEnableDWARFPreconditions simOpts)
+      (simTypeUnrollingBound simOpts)
+      argNames
+      initArgs_
+      macawCfgConfig
+      archCtx
+      (addressToELFAddress macawCfgConfig mbCfgAddr memory)
   initArgs <-
     loadInitialPreconditions (simInitialPreconditions simOpts) argNames dwarfedArgs
 

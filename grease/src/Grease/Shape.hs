@@ -29,10 +29,12 @@ module Grease.Shape (
   minimalShapeWithPtrs',
   traverseShapeWithType,
   tagWithType,
+  fromDwarfInfo,
+
+  -- * Replacing
   ParsedShapes (..),
   TypeMismatch (..),
   replaceShapes,
-  fromDwarfInfo,
 ) where
 
 import Control.Applicative (Alternative (empty))
@@ -341,8 +343,6 @@ instance (MC.PrettyF tag, PrettyExt ext tag) => PP.Pretty (ArgShapes ext tag tys
   pretty (ArgShapes regs) =
     MC.foldlFC (\doc rShape -> PP.vcat [doc, PP.pretty rShape]) "" regs
 
--- * Replacing
-
 data TypeMismatch
   = TypeMismatch
   { typeMismatchName :: String
@@ -403,7 +403,7 @@ replaceShapes names (ArgShapes args) (ParsedShapes replacements) =
       Nothing -> Right s
 
 isInSubProg ::
-  -- | the program counter from the base of the target ELF
+  -- | the program counter from the declared virtual address of the loaded ELF segment
   Word64 ->
   Subprogram ->
   Bool
@@ -440,7 +440,7 @@ constructPtrTarget tyUnrollBound sprog tyApp =
   ptrTarget Nothing <$> shapeSeq tyApp
  where
   ishape w = lift $ Just $ Seq.singleton $ Initialized NoTag (toBytes w)
-  padding :: (Integral a) => a -> MemShape w NoTag
+  padding :: Integral a => a -> MemShape w NoTag
   padding w = Uninitialized (toBytes w)
   -- if we dont know where to place members we have to fail/just place some bytes
   buildMember :: HasPtrWidth w => Word64 -> MDwarf.Member -> StateT VisitState Maybe (Word64, Seq.Seq (MemShape w NoTag))
@@ -448,10 +448,10 @@ constructPtrTarget tyUnrollBound sprog tyApp =
     do
       memLoc <- lift $ MDwarf.memberLoc member
       padd <- lift $ Just (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
-      memberShape <- shapeOfTyApp $ MDwarf.memberType member
-      let memByteSize = sum $ memShapeSize ?ptrWidth <$> memberShape
+      memberShapes <- shapeOfTyApp $ MDwarf.memberType member
+      let memByteSize = sum $ memShapeSize ?ptrWidth <$> memberShapes
       let nextLoc = memLoc + fromIntegral memByteSize
-      lift $ Just (nextLoc, padd Seq.>< memberShape)
+      lift $ Just (nextLoc, padd Seq.>< memberShapes)
 
   shapeOfTyApp :: (HasPtrWidth w) => MDwarf.TypeRef -> StateT VisitState Maybe (Seq.Seq (MemShape w NoTag))
   shapeOfTyApp x = shapeSeq =<< lift . extractType sprog =<< pure x
@@ -461,10 +461,11 @@ constructPtrTarget tyUnrollBound sprog tyApp =
   shapeSeq (MDwarf.SignedIntType w) = ishape w
   shapeSeq MDwarf.SignedCharType = ishape (1 :: Int)
   shapeSeq MDwarf.UnsignedCharType = ishape (1 :: Int)
-  -- Need modification to DWARF to collect DW_TAG_count and properly evaluate dwarf ops for upper bounds in subranges
-  -- https://github.com/GaloisInc/grease/issues/263
+  -- TODO(#263): Need modification to DWARF to collect DW_TAG_count and properly evaluate dwarf ops for upper bounds in subranges
   shapeSeq (MDwarf.ArrayType _elTy _ub) = lift $ Nothing
   -- need to compute padding between elements, in-front of the first element, and at end
+  -- we could get a missing DWARF member per the format so we have to do something about padding in-front
+  -- even if in practice this should not occur.
   shapeSeq (MDwarf.StructType sdecl) =
     let structSize = MDwarf.structByteSize sdecl
      in do
@@ -492,17 +493,18 @@ nullPtr =
    in Exactly (take (fromInteger $ CT.intValue ?ptrWidth `div` 8) $ repeat $ zbyt)
 
 constructPtrMemShapeFromRef :: HasPtrWidth w => TypeUnrollingBound -> Subprogram -> MDwarf.TypeRef -> StateT VisitState Maybe (MemShape w NoTag)
-constructPtrMemShapeFromRef tyUnrollBound sprog ref =
+constructPtrMemShapeFromRef bound@(TypeUnrollingBound tyUnrollBound) sprog ref =
   do
     mp <- get
     let ct = fromMaybe 0 $ Map.lookup ref mp
     _ <- put (Map.insert ref (ct + 1) mp)
-    if ct > coerce tyUnrollBound
+    if ct > tyUnrollBound
       then
         pure $ nullPtr
-      else
-        let memShape = constructPtrTarget tyUnrollBound sprog =<< (lift $ extractType sprog ref)
-         in (\x -> pure $ Pointer NoTag (Offset 0) x) =<< memShape
+      else do
+        ty <- lift $ extractType sprog ref
+        tgt <- constructPtrTarget bound sprog ty
+        pure $ Pointer NoTag (Offset 0) tgt
 
 intPtrShape ::
   Symbolic.SymArchConstraints arch =>

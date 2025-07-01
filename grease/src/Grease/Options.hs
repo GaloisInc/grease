@@ -30,6 +30,7 @@ import Grease.Solver (Solver (..))
 newtype TypeUnrollingBound = TypeUnrollingBound Int
   deriving Show
 
+-- | See 'simTypeUnrollingBound'
 defaultTypeUnrollingBound :: Int
 defaultTypeUnrollingBound = 3
 
