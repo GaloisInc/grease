@@ -30,7 +30,6 @@ import Data.Coerce (coerce)
 import Data.Either qualified as Either
 import Data.Foldable qualified as Foldable
 import Data.Functor qualified as Functor
-import Data.Functor.Const qualified as Const
 import Data.IntMap (IntMap)
 import Data.IntMap qualified as IntMap
 import Data.Kind (Type)
@@ -50,7 +49,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Traversable qualified as Traversable
 import Data.Tuple qualified as Tuple
-import Data.Type.Equality (testEquality, type (:~:) (Refl))
+import Data.Type.Equality (type (:~:) (Refl))
 import Data.Void (Void)
 import Data.Word (Word8)
 import GHC.TypeLits (Nat)
