@@ -183,6 +183,7 @@ print =
   \case
     Shape.ShapeBool _tag -> pure "bool"
     Shape.ShapeUnit _tag -> pure "unit"
+    Shape.ShapeFloat _tag fi -> pure (PP.pretty fi)
     Shape.ShapeStruct _tag fields -> printStruct fields
     Shape.ShapeExt ext -> printPtr ext
 

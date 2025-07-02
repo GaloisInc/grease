@@ -93,6 +93,8 @@ instance ShowF f => Show (SomeTyped f) where
 type Shape :: Type -> (C.CrucibleType -> Type) -> C.CrucibleType -> Type
 data Shape ext tag t where
   ShapeBool :: tag C.BoolType -> Shape ext tag C.BoolType
+  ShapeFloat ::
+    tag (C.FloatType fi) -> C.FloatInfoRepr fi -> Shape ext tag (C.FloatType fi)
   ShapeExt ::
     ExtShape ext tag t ->
     Shape ext tag t
@@ -144,10 +146,12 @@ instance
 showTag :: ShowF tag => tag x -> String
 showTag tag = List.concat ["[", showF tag, "]"]
 
+-- | Intended for debugging
 instance (ShowExt ext tag, ShowF tag) => ShowF (Shape ext tag) where
   showF =
     \case
       ShapeBool tag -> "bool" List.++ showTag tag
+      ShapeFloat tag f -> show f List.++ showTag tag
       ShapeStruct tag fields ->
         List.concat @[]
           [ "("
@@ -172,6 +176,7 @@ instance (MC.PrettyF tag, PrettyExt ext tag) => MC.PrettyF (Shape ext tag) where
   prettyF =
     \case
       ShapeBool tag -> "bool" PP.<> ppTag tag
+      ShapeFloat tag f -> PP.pretty f PP.<> ppTag tag
       ShapeStruct tag fields ->
         PP.tupled (MC.foldlFC (\l s -> MC.prettyF s : l) [] fields) PP.<> ppTag tag
       ShapeUnit tag -> "unit" PP.<> ppTag tag
@@ -187,6 +192,7 @@ instance TFC.TraversableFC (ExtShape ext) => TFC.TraversableFC (Shape ext) where
   traverseFC f =
     \case
       ShapeBool tag -> ShapeBool <$> f tag
+      ShapeFloat tag fi -> ShapeFloat <$> f tag <*> pure fi
       ShapeStruct tag fields ->
         ShapeStruct <$> f tag <*> traverseFC (traverseFC f) fields
       ShapeUnit tag -> ShapeUnit <$> f tag
@@ -202,6 +208,7 @@ traverseShapeWithType ::
 traverseShapeWithType f =
   \case
     ShapeBool tag -> ShapeBool <$> f C.BoolRepr tag
+    ShapeFloat tag fi -> ShapeFloat <$> f (C.FloatRepr fi) tag <*> pure fi
     ShapeStruct tag fields ->
       let fieldTypes = fmapFC (shapeType ptrShapeType) fields
        in ShapeStruct
@@ -227,6 +234,7 @@ getTag ::
 getTag extTag =
   \case
     ShapeBool tag -> tag
+    ShapeFloat tag _fi -> tag
     ShapeStruct tag _fields -> tag
     ShapeUnit tag -> tag
     ShapeExt ext -> extTag ext
@@ -239,6 +247,7 @@ setTag ::
 setTag extTag shape tag =
   case shape of
     ShapeBool _tag -> ShapeBool tag
+    ShapeFloat _tag fi -> ShapeFloat tag fi
     ShapeStruct _tag fields -> ShapeStruct tag fields
     ShapeUnit _tag -> ShapeUnit tag
     ShapeExt ext -> ShapeExt (extTag ext tag)
@@ -258,6 +267,7 @@ shapeType ::
 shapeType extType =
   \case
     ShapeBool{} -> C.BoolRepr
+    ShapeFloat _tag fi -> C.FloatRepr fi
     ShapeStruct _tag fields ->
       C.StructRepr (TFC.fmapFC (shapeType extType) fields)
     ShapeUnit _tag -> C.UnitRepr
@@ -272,6 +282,7 @@ minimalShape ::
 minimalShape ext mkTag =
   \case
     t@C.BoolRepr -> ShapeBool <$> mkTag t
+    t@(C.FloatRepr fi) -> ShapeFloat <$> mkTag t <*> pure fi
     t@(C.StructRepr fields) ->
       ShapeStruct
         <$> mkTag t
@@ -293,7 +304,7 @@ minimalShapeWithPtrs mkTag =
   minimalShape
     ( \case
         Mem.LLVMPointerRepr w -> minimalPtrShape mkTag w
-        _ -> throw @m $ GreaseException "Could not determine minimal shape for argument"
+        t -> throw @m $ GreaseException ("Could not determine minimal shape for argument of type " <> Text.pack (show (PP.pretty t)))
     )
     mkTag
 

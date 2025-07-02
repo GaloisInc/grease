@@ -164,6 +164,7 @@ convertShape as =
   \case
     Shape.ShapeUnit NoTag -> Either.Right (Shape.ShapeUnit NoTag)
     Shape.ShapeBool NoTag -> Either.Right (Shape.ShapeBool NoTag)
+    Shape.ShapeFloat NoTag fi -> Either.Right (Shape.ShapeFloat NoTag fi)
     Shape.ShapeStruct tag fields ->
       Shape.ShapeStruct tag
         Functor.<$> TFC.traverseFC (convertShape as) fields

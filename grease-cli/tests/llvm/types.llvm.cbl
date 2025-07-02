@@ -27,5 +27,24 @@
   (start start:
     (return ())))
 
-; TODO(#268): Support floats
-;; check "Exception: Could not determine minimal shape for argument"
+;; check [[
+;; %0: bool
+;; %1: 
+;; %2: XX
+;; %3: XX XX
+;; %4: XX XX XX XX
+;; %5: 000000+0000000000000000
+;; %6: XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX
+;; %7: XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX
+;; %8: XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX
+;; %9: Half
+;; %10: Float
+;; %11: Double
+;; %12: Quad
+;; %13: DoubleDouble
+;; %14: X86_80
+;; %15: {bool, unit}
+;; %16: unit
+;; 
+;; 000000: 
+;; ]]
