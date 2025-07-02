@@ -210,7 +210,7 @@ pointerShapeOfDwarf ::
 pointerShapeOfDwarf _ _ r _ (MDwarf.SignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ _ r _ (MDwarf.UnsignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ tyUnrollBound _ sprog (MDwarf.PointerType _ tyRef) =
-  let memShape = constructPtrTarget tyUnrollBound sprog Map.empty =<< (extractType sprog =<< tyRef)
+  let memShape = constructPtrTarget tyUnrollBound sprog Map.empty =<< extractType sprog =<< tyRef
       pointerShape = ShapePtr NoTag (Offset 0) <$> memShape
    in (C.Some <$> pointerShape)
 pointerShapeOfDwarf _ _ _ _ _ = Nothing
