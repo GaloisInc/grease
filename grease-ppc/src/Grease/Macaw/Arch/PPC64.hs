@@ -19,8 +19,10 @@ import Data.Macaw.PPC.Symbolic.Regs qualified as PPC.Symbolic.Regs
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map qualified as Map
 import Data.Parameterized.NatRepr (knownNat)
+import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
 import Data.Word (Word64)
+import Dismantle.PPC qualified as D
 import Grease.Macaw.Arch (ArchContext (..), ArchReloc)
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Macaw.RegName (RegName (..))
@@ -88,6 +90,11 @@ ppc64Ctx mbReturnAddr stackArgSlots loadedBinary = do
       , _archInitGlobals = \_ mem globals -> pure (mem, globals)
       , _archRegOverrides = regOverrides
       , _archOffsetStackPointerPostCall = pure
+      , _archABIParams =
+          -- IBM Docs https://www.ibm.com/docs/en/aix/7.1.0?topic=overview-register-usage-conventions
+          [ Some.Some (PPC.PPC_GP (D.GPR rnum))
+          | rnum <- [3 .. 10]
+          ]
       }
 
 ppc64RelocSupported :: EE.PPC64_RelocationType -> Maybe RelocType

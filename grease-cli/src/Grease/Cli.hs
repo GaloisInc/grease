@@ -21,6 +21,7 @@ import Data.Void (Void)
 import Grease.Diagnostic.Severity qualified as Sev
 import Grease.Entrypoint
 import Grease.Macaw.PLT
+import Grease.Options (SimOpts (simEnableDWARFPreconditions))
 import Grease.Options qualified as GO
 import Grease.Panic (panic)
 import Grease.Requirement (displayReq, reqParser)
@@ -41,7 +42,8 @@ megaparsecReader p = Opt.eitherReader $ \rawStr ->
 boundedEnumMetavar ::
   forall a f proxy.
   (Bounded a, Enum a, Opt.HasMetavar f, Show a) =>
-  proxy a -> Opt.Mod f a
+  proxy a ->
+  Opt.Mod f a
 boundedEnumMetavar _ = Opt.metavar $ varShowS ""
  where
   -- Use ShowS (i.e., a difference list of strings) below to amortize the cost
@@ -185,6 +187,17 @@ simOpts = do
             <> Opt.metavar "FILE"
             <> Opt.help "Initial precondition for use in refinement"
         )
+  simTypeUnrollingBound <-
+    GO.TypeUnrollingBound
+      <$> Opt.option
+        Opt.auto
+        ( Opt.long "type-unrolling-bound"
+            <> Opt.help "Number of recursive pointers to visit during DWARF shape building"
+            <> Opt.showDefault
+            <> Opt.value GO.defaultTypeUnrollingBound
+        )
+  simEnableDWARFPreconditions <-
+    Opt.switch (Opt.long "enable-dwarf-preconditions" <> Opt.help "enables dwarf parsing based initial shapes. manual shapes supersede these shapes.")
   simProfileTo <-
     Opt.optional $
       Opt.strOption

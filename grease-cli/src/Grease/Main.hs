@@ -119,6 +119,7 @@ import Grease.Macaw.Arch.PPC32 (ppc32Ctx)
 import Grease.Macaw.Arch.PPC64 (ppc64Ctx)
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
+import Grease.Macaw.Dwarf (loadDwarfPreconditions)
 import Grease.Macaw.Load (LoadedProgram (..), load)
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMap)
@@ -287,7 +288,7 @@ loadInitialPreconditions preconds names initArgs =
         case Parse.parseShapes path txt of
           Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
           Right parsed -> pure parsed
-      case Parse.replaceShapes names initArgs parsed of
+      case Shape.replaceShapes names initArgs parsed of
         Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
         Right shapes -> pure shapes
 
@@ -598,8 +599,24 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
   initArgs_ <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let argNames = fmapFC (Const . getValueName) rNameAssign
+  let shouldUseDwarf = simEnableDWARFPreconditions simOpts
+  let dwarfedArgs =
+        fromMaybe
+          initArgs_
+          ( do
+              elfHdr <- mcElf macawCfgConfig
+              addr <- mbCfgAddr
+              loadDwarfPreconditions
+                addr
+                memory
+                (simTypeUnrollingBound simOpts)
+                argNames
+                initArgs_
+                elfHdr
+                archCtx
+          )
   initArgs <-
-    loadInitialPreconditions (simInitialPreconditions simOpts) argNames initArgs_
+    loadInitialPreconditions (simInitialPreconditions simOpts) argNames (if shouldUseDwarf then dwarfedArgs else initArgs_)
 
   EntrypointCfgs
     { entrypointStartupOv = mbStartupOvSsa
@@ -1043,7 +1060,6 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
         pltStubSegOffToNameMap
 
   let mprotectAddr = Map.lookup "mprotect" pltStubNameToSegOffMap
-
   entries <-
     if List.null (simEntryPoints simOpts)
       then do

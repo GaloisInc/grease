@@ -8,6 +8,8 @@ module Grease.Options (
   defaultLoopBound,
   Milliseconds (..),
   defaultTimeout,
+  defaultTypeUnrollingBound,
+  TypeUnrollingBound (..),
   MutableGlobalState (..),
   allMutableGlobalStates,
   ExtraStackSlots (..),
@@ -24,6 +26,13 @@ import Grease.Entrypoint
 import Grease.Macaw.PLT
 import Grease.Requirement (Requirement)
 import Grease.Solver (Solver (..))
+
+newtype TypeUnrollingBound = TypeUnrollingBound Int
+  deriving Show
+
+-- | See 'simTypeUnrollingBound'
+defaultTypeUnrollingBound :: Int
+defaultTypeUnrollingBound = 3
 
 newtype LoopBound = LoopBound Word64
   deriving Show
@@ -101,6 +110,11 @@ data SimOpts
   -- ^ Default: 'False'.
   , simInitialPreconditions :: Maybe FilePath
   -- ^ Path containing initial function preconditions in shapes DSL
+  , simEnableDWARFPreconditions :: Bool
+  -- ^ Enables parsing DWARF to extract initial shape types. This option is
+  -- superseded by `simInitialPreconditions` and does not do anything in LLVM mode.
+  , simTypeUnrollingBound :: TypeUnrollingBound
+  -- ^ Bounds the number of times a recursive pointer will be visited when building shapes from DWARF (bounded to 3 recursive pointers by default).
   , simLoopBound :: LoopBound
   -- ^ Maximum number of iterations of each program loop/maximum number of
   -- recursive calls to the same function

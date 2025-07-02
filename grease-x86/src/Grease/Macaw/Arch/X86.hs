@@ -19,6 +19,7 @@ import Data.Macaw.X86 qualified as X86
 import Data.Macaw.X86.X86Reg qualified as X86
 import Data.Map qualified as Map
 import Data.Parameterized.NatRepr qualified as NatRepr
+import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
 import Data.Word (Word64)
 import Grease.Macaw.Arch (ArchContext (..), ArchRegs, ArchReloc)
@@ -38,6 +39,10 @@ import Stubs.Syscall.X86_64.Linux qualified as Stubs
 import What4.Interface qualified as W4
 
 type instance ArchReloc X86.X86_64 = EE.X86_64_RelocationType
+
+-- | x64 System-V assumed
+regList :: [Some.Some X86.X86Reg]
+regList = Some.Some <$> X86.x86ArgumentRegs
 
 x86Ctx ::
   (?memOpts :: Mem.MemOptions) =>
@@ -84,6 +89,7 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
         -- override it.
         _archRegOverrides = Map.empty
       , _archOffsetStackPointerPostCall = x64FixupStackPointer
+      , _archABIParams = regList
       }
 
 x64RelocSupported :: EE.X86_64_RelocationType -> Maybe RelocType

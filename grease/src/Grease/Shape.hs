@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -28,29 +29,41 @@ module Grease.Shape (
   minimalShapeWithPtrs',
   traverseShapeWithType,
   tagWithType,
+
+  -- * Replacing
+  ParsedShapes (..),
+  TypeMismatch (..),
+  replaceShapes,
 ) where
 
 import Control.Applicative (Alternative (empty))
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
+import Data.Functor.Const qualified as Const
 import Data.Functor.Identity (Identity (Identity, runIdentity))
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Map qualified as Map
 import Data.Parameterized.Classes (ShowF (..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Ctx (Ctx)
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
 import Data.Parameterized.TraversableFC qualified as TFC
+import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import GHC.Show qualified as GShow
+import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrShape, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Extension (LLVM)
+import Lang.Crucible.LLVM.MemModel (HasPtrWidth)
 import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.Types qualified as CT
 import Prettyprinter qualified as PP
 import Text.Show qualified as Show
 
@@ -314,3 +327,62 @@ deriving instance (ShowExt ext tag, ShowF tag) => Show (ArgShapes ext tag tys)
 instance (MC.PrettyF tag, PrettyExt ext tag) => PP.Pretty (ArgShapes ext tag tys) where
   pretty (ArgShapes regs) =
     MC.foldlFC (\doc rShape -> PP.vcat [doc, PP.pretty rShape]) "" regs
+
+data TypeMismatch
+  = TypeMismatch
+  { typeMismatchName :: String
+  , expectedType :: C.Some CT.TypeRepr
+  , foundType :: C.Some CT.TypeRepr
+  }
+  deriving Show
+
+instance PP.Pretty TypeMismatch where
+  pretty tm =
+    PP.hsep
+      [ "Type mismatch for"
+      , PP.pretty (typeMismatchName tm) PP.<> ":"
+      , "expected:"
+      , PP.viaShow (expectedType tm)
+      , "but found:"
+      , PP.viaShow (foundType tm)
+      ]
+
+-- | A mapping from argument name to the shape for that argument. Intended to be used with
+-- 'replaceShapes' to initialize members of an initial 'ArgShape' with user or elsewhere defined shapes.
+newtype ParsedShapes ext
+  = ParsedShapes {_getParsedShapes :: Map.Map Text (C.Some (Shape ext NoTag))}
+
+-- | Given an initial, provisional list of arguments and a set of replacements
+-- for some of them, calculate a new list of arguments.
+replaceShapes ::
+  forall ext w tys.
+  ExtShape ext ~ PtrShape ext w =>
+  HasPtrWidth w =>
+  -- | Argument names
+  Ctx.Assignment (Const.Const String) tys ->
+  -- | Initial arguments
+  ArgShapes ext NoTag tys ->
+  -- | Replacement arguments
+  ParsedShapes ext ->
+  Either TypeMismatch (ArgShapes ext NoTag tys)
+replaceShapes names (ArgShapes args) (ParsedShapes replacements) =
+  -- TODO: Check that all the map keys are expected
+  ArgShapes
+    <$> Ctx.zipWithM (\(Const.Const nm) s -> replaceOne nm s) names args
+ where
+  replaceOne :: String -> Shape ext NoTag t -> Either TypeMismatch (Shape ext NoTag t)
+  replaceOne nm s =
+    case Map.lookup (Text.pack nm) replacements of
+      Just (C.Some replace) ->
+        let ty = shapeType ptrShapeType s
+         in let ty' = shapeType ptrShapeType replace
+             in case testEquality ty ty' of
+                  Just Refl -> Right replace
+                  Nothing ->
+                    Left $
+                      TypeMismatch
+                        { typeMismatchName = nm
+                        , expectedType = C.Some ty
+                        , foundType = C.Some ty'
+                        }
+      Nothing -> Right s

@@ -176,6 +176,7 @@ library
     , macaw-symbolic-syntax
     , stubs-common
     , stubs-wrapper
+    , galois-dwarf
     , what4
 
   exposed-modules:
@@ -210,6 +211,7 @@ library
     Grease.Macaw
     Grease.Macaw.Arch
     Grease.Macaw.Discovery
+    Grease.Macaw.Dwarf
     Grease.Macaw.Load
     Grease.Macaw.Load.Diagnostic
     Grease.Macaw.Load.Relocation

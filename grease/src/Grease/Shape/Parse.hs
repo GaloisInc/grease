@@ -19,8 +19,6 @@ module Grease.Shape.Parse (
   parseShapes,
   ParsedShapes (..),
   ParseError (..),
-  TypeMismatch (..),
-  replaceShapes,
 ) where
 
 import Control.Applicative qualified as Applicative
@@ -32,7 +30,6 @@ import Data.Coerce (coerce)
 import Data.Either qualified as Either
 import Data.Foldable qualified as Foldable
 import Data.Functor qualified as Functor
-import Data.Functor.Const qualified as Const
 import Data.IntMap (IntMap)
 import Data.IntMap qualified as IntMap
 import Data.Kind (Type)
@@ -52,12 +49,12 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Traversable qualified as Traversable
 import Data.Tuple qualified as Tuple
-import Data.Type.Equality (testEquality, type (:~:) (Refl))
+import Data.Type.Equality (type (:~:) (Refl))
 import Data.Void (Void)
 import Data.Word (Word8)
 import GHC.TypeLits (Nat)
 import Grease.Panic (panic)
-import Grease.Shape (ExtShape, Shape)
+import Grease.Shape (ExtShape, ParsedShapes (..), Shape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (BlockId (BlockId, getBlockId), Offset, PtrShape)
@@ -198,9 +195,6 @@ instance PP.Pretty ParseError where
       ParseError err -> PP.pretty (MP.errorBundlePretty err)
       MissingBlock (BlockId blk) ->
         PP.pretty ("Missing definition for allocation " List.++ showHex blk "")
-
-newtype ParsedShapes ext
-  = ParsedShapes {_getParsedShapes :: Map Text (Some (Shape ext NoTag))}
 
 parseShapes ::
   forall ext w.
@@ -403,59 +397,3 @@ parseOffset :: Parser PtrShape.Offset
 parseOffset = PtrShape.Offset . (Bytes.toBytes @Int) Functor.<$> MPCL.hexadecimal
 
 -----------------------------------------------------------
-
--- * Replacing
-
-data TypeMismatch
-  = TypeMismatch
-  { typeMismatchName :: String
-  , expectedType :: Some CT.TypeRepr
-  , foundType :: Some CT.TypeRepr
-  }
-  deriving Show
-
-instance PP.Pretty TypeMismatch where
-  pretty tm =
-    PP.hsep
-      [ "Type mismatch for"
-      , PP.pretty (typeMismatchName tm) PP.<> ":"
-      , "expected:"
-      , PP.viaShow (expectedType tm)
-      , "but found:"
-      , PP.viaShow (foundType tm)
-      ]
-
--- | Given an initial, provisional list of arguments and a set of replacements
--- for some of them, calculate a new list of arguments.
-replaceShapes ::
-  forall ext w tys.
-  ExtShape ext ~ PtrShape ext w =>
-  HasPtrWidth w =>
-  -- | Argument names
-  Ctx.Assignment (Const.Const String) tys ->
-  -- | Initial arguments
-  Shape.ArgShapes ext NoTag tys ->
-  -- | Replacement arguments
-  ParsedShapes ext ->
-  Either TypeMismatch (Shape.ArgShapes ext NoTag tys)
-replaceShapes names (Shape.ArgShapes args) (ParsedShapes replacements) =
-  -- TODO: Check that all the map keys are expected
-  Shape.ArgShapes
-    Functor.<$> Ctx.zipWithM (\(Const.Const nm) s -> replaceOne nm s) names args
- where
-  replaceOne :: String -> Shape ext NoTag t -> Either TypeMismatch (Shape ext NoTag t)
-  replaceOne nm s =
-    case Map.lookup (Text.pack nm) replacements of
-      Maybe.Just (Some replace) ->
-        let ty = Shape.shapeType PtrShape.ptrShapeType s
-         in let ty' = Shape.shapeType PtrShape.ptrShapeType replace
-             in case testEquality ty ty' of
-                  Maybe.Just Refl -> Either.Right replace
-                  Maybe.Nothing ->
-                    Either.Left $
-                      TypeMismatch
-                        { typeMismatchName = nm
-                        , expectedType = Some ty
-                        , foundType = Some ty'
-                        }
-      Maybe.Nothing -> Either.Right s
