@@ -1,7 +1,9 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE TypeFamilies #-}
 
--- | Dwarf shape parsing and initialization
+-- | Dwarf shape parsing and initialization. Currently due to downstream parsing support
+-- this module only supports parsing DWARFv4. 'loadDwarfPreconditions' will attempt to find a
+-- a DWARF prototype for a target entrypoint and build an initial shape based on the high-level types.
 --
 -- Copyright        : (c) Galois, Inc. 2025
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
@@ -66,6 +68,10 @@ addressToELFAddress bin entAddr memory _ =
             pure $ (MM.memWordValue $ MM.segoffOffset entAddr) + fromIntegral (Elf.phdrSegmentVirtAddr segHdr)
     mbNewAddr
 
+-- | For a given function address, attempts to find a DWARF subprogram
+-- that represents that function and build a new 'Shape.ArgShapes' by writing
+-- shapes built from high-level type information for each parameter to the initial minimal
+-- shape.
 loadDwarfPreconditions ::
   forall arch ext tys.
   Symbolic.SymArchConstraints arch =>
