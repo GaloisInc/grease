@@ -91,14 +91,14 @@ To create a [pre-commit hook](https://git-scm.com/docs/githooks#_pre_commit):
 cat <<'EOF' > .git/hooks/pre-commit
 #!/usr/bin/env bash
 
-# Run Fourmolu on changed files before committing, see `doc/dev/dev.md`
+# Run Fourmolu on changed files before committing
 
 set -eu
 
 files=$(git diff --name-only --cached -- '*.hs')
 if [[ -n "${files}" ]]; then
-    fourmolu --mode inplace "${files}"
-    git add "${files}"
+    fourmolu --mode inplace ${files[@]}
+    git add ${files[@]}
 fi
 EOF
 chmod +x .git/hooks/pre-commit
