@@ -20,14 +20,18 @@ int sum_list(struct llnode *in) {
   return sum;
 }
 
+// Each test checks where the null pointer was placed
+
 // all: flags {"--symbol", "sum_list", "--enable-dwarf-preconditions", "--no-heuristics"}
 // x64: go(prog) 
-// x64: ok()
+// x64: check("00000b: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00")
 
 // all: flags {"--symbol", "sum_list", "--enable-dwarf-preconditions", "--no-heuristics", "--type-unrolling-bound", "12"}
 // x64: go(prog) 
 // x64: ok()
+// x64: check("000014: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00")
 
 // all: flags {"--symbol", "sum_list", "--enable-dwarf-preconditions", "--no-heuristics", "--type-unrolling-bound", "0"}
 // x64: go(prog) 
 // x64: ok()
+// check("000008: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00")
