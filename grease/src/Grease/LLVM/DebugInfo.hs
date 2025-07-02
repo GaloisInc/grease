@@ -107,6 +107,7 @@ asPtrTarget =
 
   -- For structs, we need to add uninitialized padding bytes between their
   -- fields.
+  structPtrTarget :: [LDU.StructFieldInfo] -> PtrShape.PtrTarget 64 NoTag
   structPtrTarget fields =
     let ?ptrWidth = knownNat @64
      in let tgt = PtrShape.ptrTarget Nothing (fieldsPtrTarget fields)
@@ -121,12 +122,15 @@ asPtrTarget =
                   , "Found size " ++ show tgtSize
                   ]
 
+  fieldsPtrTarget :: [LDU.StructFieldInfo] -> Seq (PtrShape.MemShape 64 NoTag)
   fieldsPtrTarget =
     let ?ptrWidth = knownNat @64
      in snd . Foldable.foldl' go (0, Seq.empty)
    where
     go (bytesWritten, memShapes) sfi =
       let
+        -- Compute the number of padding bytes needed and the shape of the
+        -- field, add them both to the sequence of shapes for the struct.
         !bitsWritten = fromIntegral (Bytes.bytesToBits bytesWritten)
         !missingBits = LDU.sfiOffset sfi - bitsWritten
         !missingBytes = Bytes.bitsToBytes missingBits
@@ -155,6 +159,7 @@ asPtrTarget =
               , "Size: " ++ show tgtSz
               ]
 
+-- Only supports simple pointer- and integer-like types at the moment.
 decodeType :: Mem.HasPtrWidth 64 => LDU.Info -> Maybe DITypeView
 decodeType =
   \case
