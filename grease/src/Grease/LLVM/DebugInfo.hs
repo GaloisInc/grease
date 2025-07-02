@@ -7,7 +7,9 @@
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 --
--- Deduce initial argument shapes from LLVM debug info.
+-- Deduce initial argument shapes from types contained in LLVM debug info.
+--
+-- c.f. "Grease.Macaw.Dwarf".
 module Grease.LLVM.DebugInfo (
   diArgShapes,
 ) where
@@ -164,7 +166,8 @@ decodeType =
     LDU.Union{} -> Nothing
     LDU.Unknown -> Nothing
 
-setupArg ::
+-- | Infer the 'Shape' of a single argument from debug information
+diArgShape ::
   ( ExtShape ext ~ PtrShape ext 64
   , Mem.HasPtrWidth 64
   ) =>
@@ -172,7 +175,7 @@ setupArg ::
   Int ->
   C.TypeRepr t ->
   IO (Shape ext NoTag t)
-setupArg tyViews i t = do
+diArgShape tyViews i t = do
   let fallback = Shape.minimalShapeWithPtrs (pure . const NoTag) t
   case tyViews Seq.!? i of
     Just (Just tyView) ->
@@ -184,7 +187,7 @@ setupArg tyViews i t = do
         _ -> fallback
     _ -> fallback
 
--- | Deduce initial argument shapes from LLVM debug info.
+-- | Deduce initial argument shapes from types contained in LLVM debug info.
 diArgShapes ::
   ( ExtShape ext ~ PtrShape ext 64
   , Mem.HasPtrWidth 64
@@ -199,5 +202,5 @@ diArgShapes fnName argTys llvmMod = do
   case LDU.computeFunctionTypes llvmMod fnSymb of
     Just (_retTy : argTyInfos) -> do
       let argTyViews = Seq.fromList (List.map (decodeType =<<) argTyInfos)
-      Ctx.traverseWithIndex (\idx -> setupArg argTyViews (Ctx.indexVal idx)) argTys
+      Ctx.traverseWithIndex (\idx -> diArgShape argTyViews (Ctx.indexVal idx)) argTys
     _ -> defaults

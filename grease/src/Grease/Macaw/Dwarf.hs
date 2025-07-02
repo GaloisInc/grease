@@ -5,6 +5,8 @@
 -- this module only supports parsing DWARFv4. 'loadDwarfPreconditions' will attempt to find a
 -- a DWARF prototype for a target entrypoint and build an initial shape based on the high-level types.
 --
+-- c.f. "Grease.LLVM.DebugInfo".
+--
 -- Copyright        : (c) Galois, Inc. 2025
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Dwarf (loadDwarfPreconditions) where

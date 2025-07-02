@@ -600,7 +600,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
   initArgs_ <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let argNames = fmapFC (Const . getValueName) rNameAssign
-  let shouldUseDwarf = simEnableDWARFPreconditions simOpts
+  let shouldUseDwarf = simEnableDebugInfoPreconditions simOpts
   let dwarfedArgs =
         fromMaybe
           initArgs_
@@ -1147,8 +1147,10 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
       argNames = imapFC (\i _ -> Const ('%' : show i)) argTys
   initArgs_ <-
     case llvmMod of
-      Nothing -> traverseFC (minimalShapeWithPtrs (pure . const NoTag)) argTys
-      Just div -> GLD.diArgShapes (C.handleName (C.cfgHandle cfg)) argTys div
+      Just m
+        | simEnableDebugInfoPreconditions simOpts ->
+            GLD.diArgShapes (C.handleName (C.cfgHandle cfg)) argTys m
+      _ -> traverseFC (minimalShapeWithPtrs (pure . const NoTag)) argTys
   initArgs <-
     loadInitialPreconditions (simInitialPreconditions simOpts) argNames (ArgShapes initArgs_)
 

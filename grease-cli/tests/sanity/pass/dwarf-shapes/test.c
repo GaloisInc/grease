@@ -9,6 +9,6 @@ struct bar {
 
 int foo(int x, int *y, struct bar *z) { return x + *y + z->x; }
 
-// all: flags {"--symbol", "foo", "--enable-dwarf-preconditions", "--no-heuristics"}
+// all: flags {"--symbol", "foo", "--use-debug-info-types", "--no-heuristics"}
 // x64: go(prog)
 // x64: ok()

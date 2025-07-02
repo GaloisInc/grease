@@ -21,7 +21,7 @@ import Data.Void (Void)
 import Grease.Diagnostic.Severity qualified as Sev
 import Grease.Entrypoint
 import Grease.Macaw.PLT
-import Grease.Options (SimOpts (simEnableDWARFPreconditions))
+import Grease.Options (SimOpts (simEnableDebugInfoPreconditions))
 import Grease.Options qualified as GO
 import Grease.Panic (panic)
 import Grease.Requirement (displayReq, reqParser)
@@ -196,8 +196,8 @@ simOpts = do
             <> Opt.showDefault
             <> Opt.value GO.defaultTypeUnrollingBound
         )
-  simEnableDWARFPreconditions <-
-    Opt.switch (Opt.long "enable-dwarf-preconditions" <> Opt.help "enables dwarf parsing based initial shapes. manual shapes supersede these shapes.")
+  simEnableDebugInfoPreconditions <-
+    Opt.switch (Opt.long "use-debug-info-types" <> Opt.help "Use types in debug info to infer initial preconditions. Superseded by --initial-precondition.")
   simProfileTo <-
     Opt.optional $
       Opt.strOption

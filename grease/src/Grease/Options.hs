@@ -110,9 +110,9 @@ data SimOpts
   -- ^ Default: 'False'.
   , simInitialPreconditions :: Maybe FilePath
   -- ^ Path containing initial function preconditions in shapes DSL
-  , simEnableDWARFPreconditions :: Bool
-  -- ^ Enables parsing DWARF to extract initial shape types. This option is
-  -- superseded by `simInitialPreconditions` and does not do anything in LLVM mode.
+  , simEnableDebugInfoPreconditions :: Bool
+  -- ^ Enables parsing debug info to extract initial shape types. This option is
+  -- superseded by `simInitialPreconditions`.
   , simTypeUnrollingBound :: TypeUnrollingBound
   -- ^ Bounds the number of times a recursive pointer will be visited when building shapes from DWARF (bounded to 3 recursive pointers by default).
   , simLoopBound :: LoopBound
