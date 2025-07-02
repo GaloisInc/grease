@@ -66,6 +66,7 @@ concShape ::
 concShape =
   \case
     s@Shape.ShapeBool{} -> s
+    s@Shape.ShapeFloat{} -> s
     s@Shape.ShapeStruct{} -> s
     s@Shape.ShapeUnit{} -> s
     Shape.ShapeExt ext -> Shape.ShapeExt (concPtrShape ext)

@@ -404,6 +404,9 @@ setupShape la bak layout nm tRepr sel s = do
       b <- liftIO (W4.freshConstant sym (safeSymbol nm) W4.BaseBoolRepr)
       b' <- zoom setupAnns (Anns.annotate sym sel b)
       pure (ShapeBool (C.RV b'))
+    ShapeFloat _tag fi -> do
+      f <- liftIO $ C.freshFloatConstant sym (safeSymbol nm) fi
+      pure (ShapeFloat (C.RV f) fi)
     ShapeExt (ShapePtrBV _tag w) -> do
       bv <- freshPtrBv sym sel nm w
       pure (ShapeExt (ShapePtrBV (C.RV bv) w))
