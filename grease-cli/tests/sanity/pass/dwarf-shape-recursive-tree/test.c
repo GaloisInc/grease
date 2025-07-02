@@ -1,8 +1,8 @@
 /* Copyright (c) Galois, Inc. 2025 */
 
-// Tests that heuristics are unneeded when using dwarf populated shapes to
-// create a memory precondition that allows sum_list to execute.
-// Tests that the recursive type instantiation is bounded
+// Tests that heuristics are unneeded when using dwarf populated shapes
+// to initialize a tree. The tree has an implicit invariant that if next != null then both 
+// lhs and rhs are initialized.
 
 struct tree;
 struct treenode {
@@ -15,8 +15,10 @@ struct tree {
   struct treenode *next;
 };
 
-// getting this to only be safe when balanced is a bit annoying
-// we always assume init by one
+// Getting this to only be safe when balanced is a bit annoying.
+// A normal person would write this code to just check in != NULL but then 
+// this code would work with a precondition that is unbalanced, so we instead check the child to make sure that implicitly 
+// lhs and rhs must be initialized together. 
 int sum_tree(struct tree *in) {
   int val = in->x;
   if (in->next) {
@@ -27,8 +29,14 @@ int sum_tree(struct tree *in) {
   return val;
 }
 
-// Checks that we have a 34 null pointer which is on the RHS and larger than would be the case without even unrolling
+// Checks that we have multiple unrollings both of the lhs and rhs
+
+
+// x64: precond=[[000031: XX XX XX XX ## ## ## ## 000032+0000000000000000
+// x64:000032: 000033+0000000000000000 000034+0000000000000000
+// x64:000033: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00
+// x64:000034: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00]]
 
 // all: flags {"--symbol", "sum_tree", "--enable-dwarf-preconditions", "--no-heuristics"} 
 // x64: go(prog)
-// x64: check("000034: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00")
+// x64: check(precond)
