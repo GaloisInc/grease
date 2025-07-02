@@ -27,7 +27,8 @@ int sum_tree(struct tree *in) {
   return val;
 }
 
-// Each test checks where the null pointer was placed
+// Checks that we have a 34 null pointer which is on the RHS and larger than would be the case without even unrolling
 
 // all: flags {"--symbol", "sum_tree", "--enable-dwarf-preconditions", "--no-heuristics"} 
 // x64: go(prog)
+// x64: check("000034: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00")
