@@ -61,12 +61,12 @@ decodeBasicTypeName =
 
 -- It is acceptable for this function to under-estimate the size of a type:
 -- GREASE's heuristics will expand the allocation as necessary.
-minTypeSize :: LDU.Info -> Bytes
+minTypeSize :: Mem.HasPtrWidth w => LDU.Info -> Bytes
 minTypeSize =
   \case
     LDU.ArrInfo _elemTy -> 0 -- arrays can be empty
     LDU.BaseType _nm dibt -> Bytes.bitsToBytes (L.dibtSize dibt)
-    LDU.Pointer _ty -> 8 -- assuming x86_64
+    LDU.Pointer _ty -> Bytes.bitsToBytes (natValue ?ptrWidth)
     LDU.Structure _nm fields -> structSize fields
     LDU.Typedef _nm ty -> minTypeSize ty
     LDU.Union _nm fields -> unionSize fields
@@ -92,7 +92,7 @@ minTypeSize =
 --
 -- It is acceptable for this function to under-estimate the size of a type:
 -- GREASE's heuristics will expand the allocation as necessary.
-asPtrTarget :: LDU.Info -> PtrShape.PtrTarget 64 NoTag
+asPtrTarget :: Mem.HasPtrWidth 64 => LDU.Info -> PtrShape.PtrTarget 64 NoTag
 asPtrTarget =
   \case
     LDU.ArrInfo _elemTy -> PtrShape.PtrTarget Nothing Seq.empty
@@ -155,7 +155,7 @@ asPtrTarget =
               , "Size: " ++ show tgtSz
               ]
 
-decodeType :: LDU.Info -> Maybe DITypeView
+decodeType :: Mem.HasPtrWidth 64 => LDU.Info -> Maybe DITypeView
 decodeType =
   \case
     LDU.ArrInfo _elemTy -> Nothing
