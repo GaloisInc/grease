@@ -83,9 +83,26 @@ cabal install fourmolu-0.18.0.0
 fourmolu --mode inplace $(git ls-files '*.hs')
 ```
 
-One can either configure formatting commands as a [pre-commit hook](https://git-scm.com/docs/githooks#_pre_commit) or [auto-format on save](https://code.visualstudio.com/docs/editing/codebasics#_formatting) to avoid formatting issues.
+One can configure [auto-format on save](https://code.visualstudio.com/docs/editing/codebasics#_formatting) to avoid formatting issues.
 The repo is already formatted with fourmolu so new formatting changes should be localized to behavioral changes. Further discussion of the rationale for the enforcement of a fourmolu style and commit hygiene is available in this [formatting discussion](./formatting.md).
 
+To create a [pre-commit hook](https://git-scm.com/docs/githooks#_pre_commit):
+```
+cat <<'EOF' > .git/hooks/pre-commit
+#!/usr/bin/env bash
+
+# Run Fourmolu on changed files before committing
+
+set -eu
+
+files=$(git diff --name-only --cached -- '*.hs')
+if [[ -n "${files}" ]]; then
+    fourmolu --mode inplace ${files[@]}
+    git add ${files[@]}
+fi
+EOF
+chmod +x .git/hooks/pre-commit
+```
 
 #### Ignoring large repository reformats in git blame
 
