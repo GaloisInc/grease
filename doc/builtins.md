@@ -254,8 +254,8 @@ The following overrides merit a bit of discussion:
 The types in the list above represent Crucible types according to the following
 schema:
 
-- `double`: (there is no syntax for this Crucible type)
-- `float`: (there is no syntax for this Crucible type)
+- `double`: `(FP Double)`
+- `float`: `(FP Float)`
 - `i<N>`: `(Ptr <N>)`
 - `<<LANES> x i<N>>`: (there is no syntax for this Crucible type)
 - `ptr`: `(Ptr <word-size>)`
