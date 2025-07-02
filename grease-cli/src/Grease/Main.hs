@@ -31,15 +31,14 @@ import Control.Applicative (pure)
 import Control.Concurrent.Async (cancel)
 import Control.Exception.Safe (Handler (..), MonadThrow, catches, throw)
 import Control.Lens (to, (.~), (^.))
-import Control.Monad (forM, forM_, mapM_, when, (=<<), (>>=))
+import Control.Monad (forM, forM_, mapM_, when, (>>=))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bool (Bool (..), not, otherwise, (&&), (||))
 import Data.ByteString qualified as BS
-import Data.Either (Either (..), either)
-import Data.ElfEdit (headerPhdrs)
+import Data.Either (Either (..))
 import Data.ElfEdit qualified as Elf
 import Data.Eq ((==))
-import Data.Foldable (find, traverse_)
+import Data.Foldable (traverse_)
 import Data.Function (const, id, ($), (&), (.))
 import Data.Functor (fmap, (<$>), (<&>))
 import Data.Functor.Const (Const (..))
@@ -57,10 +56,8 @@ import Data.Macaw.BinaryLoader (BinaryLoader)
 import Data.Macaw.BinaryLoader qualified as Loader
 import Data.Macaw.BinaryLoader.AArch32 ()
 import Data.Macaw.BinaryLoader.X86 ()
-import Data.Macaw.CFG (ArchSegmentOff)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
-import Data.Macaw.Dwarf (dwarfInfoFromElf)
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
 import Data.Macaw.Memory.LoadCommon qualified as MML
@@ -99,7 +96,6 @@ import Data.Traversable (for, traverse)
 import Data.Tuple (fst, snd)
 import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
-import Data.Word (Word64)
 import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Bug qualified as Bug
@@ -123,6 +119,7 @@ import Grease.Macaw.Arch.PPC32 (ppc32Ctx)
 import Grease.Macaw.Arch.PPC64 (ppc64Ctx)
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
+import Grease.Macaw.Dwarf (loadDwarfPreconditions)
 import Grease.Macaw.Load (LoadedProgram (..), load)
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMap)
@@ -272,61 +269,6 @@ withMemOptions opts k =
             Mem.noSatisfyingWriteFreshConstant = False
           }
    in k
-
--- \| Find the pc for DWARF which is relative to the ELF absent its base load address.
--- We find this address by finding the segment that corresponds to the target address
---  by checking for all ELF segments (mapped to Macaw segments)
--- and finding the ELF segment that corresponds to the Macaw segment for the target address.
--- The target mbNewAddr is then the found segments virtual address + the offset of the original addr.
-addressToELFAddress ::
-  Integral (Elf.ElfWordType (MC.ArchAddrWidth arch)) =>
-  MacawCfgConfig arch ->
-  Maybe (ArchSegmentOff arch) ->
-  MM.Memory (MC.RegAddrWidth (MC.ArchReg arch)) ->
-  Maybe Word64
-addressToELFAddress macawCfgConfig mbCfgAddr memory =
-  do
-    let segIndexToSegment = MM.memSegmentIndexMap memory
-    let targetSegment = fst <$> ((\seg -> find (\(_, seg2) -> seg == seg2) (Map.toList segIndexToSegment)) =<< (MM.segoffSegment <$> mbCfgAddr))
-    let mbSegment =
-          do
-            bin <- mcElf macawCfgConfig
-            find (\phdr -> (Just $ Elf.phdrSegmentIndex phdr) == targetSegment) $ headerPhdrs bin
-    let mbNewAddr =
-          do
-            segHdr <- mbSegment
-            entAddr <- mbCfgAddr
-            pure $ (MM.memWordValue $ MM.segoffOffset entAddr) + fromIntegral (Elf.phdrSegmentVirtAddr segHdr)
-    mbNewAddr
-
-loadDwarfPreconditions ::
-  ExtShape ext ~ PtrShape ext w =>
-  Mem.HasPtrWidth w =>
-  Symbolic.SymArchConstraints arch =>
-  -- | Is DWARF enabled
-  Bool ->
-  -- | How much to unroll recursive types
-  TypeUnrollingBound ->
-  -- | Argument names
-  Ctx.Assignment (Const.Const String) tys ->
-  -- | Initial arguments
-  Shape.ArgShapes ext NoTag tys ->
-  -- | Macaw CFG for DWARF
-  MacawCfgConfig arch ->
-  -- | Architecture-specific information, needed for ABI info
-  ArchContext arch ->
-  -- | Target function address
-  Maybe Word64 ->
-  IO (Shape.ArgShapes ext NoTag tys)
-loadDwarfPreconditions dwarfPrecs tyUnrollBound argNames initShapes macawCfgConfig archContext targetAddr =
-  let dwarfPrs = do
-        addr <- targetAddr
-        elf <- snd . Elf.getElf <$> mcElf macawCfgConfig
-        let (_, cus) = dwarfInfoFromElf elf
-        shps <- Shape.fromDwarfInfo archContext tyUnrollBound addr cus
-        let repl = Shape.replaceShapes argNames initShapes shps
-        either (const Nothing) Just repl
-   in pure $ if dwarfPrecs then fromMaybe initShapes dwarfPrs else initShapes
 
 loadInitialPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
@@ -657,17 +599,24 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
   initArgs_ <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let argNames = fmapFC (Const . getValueName) rNameAssign
-  dwarfedArgs <-
-    loadDwarfPreconditions
-      (simEnableDWARFPreconditions simOpts)
-      (simTypeUnrollingBound simOpts)
-      argNames
-      initArgs_
-      macawCfgConfig
-      archCtx
-      (addressToELFAddress macawCfgConfig mbCfgAddr memory)
+  let shouldUseDwarf = simEnableDWARFPreconditions simOpts
+  let dwarfedArgs =
+        fromMaybe
+          initArgs_
+          ( do
+              elfHdr <- mcElf macawCfgConfig
+              addr <- mbCfgAddr
+              loadDwarfPreconditions
+                addr
+                memory
+                (simTypeUnrollingBound simOpts)
+                argNames
+                initArgs_
+                elfHdr
+                archCtx
+          )
   initArgs <-
-    loadInitialPreconditions (simInitialPreconditions simOpts) argNames dwarfedArgs
+    loadInitialPreconditions (simInitialPreconditions simOpts) argNames (if shouldUseDwarf then dwarfedArgs else initArgs_)
 
   EntrypointCfgs
     { entrypointStartupOv = mbStartupOvSsa

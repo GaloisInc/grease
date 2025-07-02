@@ -248,8 +248,8 @@ data ArchContext arch = ArchContext
   -- pointer by implementing @'_archOffsetStackPointerPostCall' = 'pure'@.
   , _archABIParams :: [C.Some (MC.ArchReg arch)]
   -- ^ The ordered integer and pointer ABI registers for the architecture. I
-  -- TODO(260): In the future this should handle things like stack params.
-  -- TODO(261): In the future this should handle multiple calling conventions.
+  -- TODO(#260): In the future this should handle things like stack params.
+  -- TODO(#261): In the future this should handle multiple calling conventions.
   }
 
 makeLenses ''ArchContext

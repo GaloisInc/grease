@@ -29,7 +29,6 @@ module Grease.Shape (
   minimalShapeWithPtrs',
   traverseShapeWithType,
   tagWithType,
-  fromDwarfInfo,
 
   -- * Replacing
   ParsedShapes (..),
@@ -41,40 +40,26 @@ import Control.Applicative (Alternative (empty))
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
-import Control.Monad (foldM)
-import Control.Monad.State (MonadState (get, put), MonadTrans (lift), StateT, evalStateT)
-import Data.Coerce
 import Data.Functor.Const qualified as Const
 import Data.Functor.Identity (Identity (Identity, runIdentity))
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
-import Data.Macaw.Dwarf (CompileUnit (cuRanges, cuSubprograms), Range (rangeBegin, rangeEnd), Subprogram (subParamMap))
-import Data.Macaw.Dwarf qualified as MDwarf
 import Data.Macaw.Symbolic qualified as Symbolic
-import Data.Macaw.Types qualified as MT
-import Data.Map (toAscList)
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe)
 import Data.Parameterized.Classes (ShowF (..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Ctx (Ctx)
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
 import Data.Parameterized.TraversableFC qualified as TFC
-import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
-import Data.Word (Word64)
 import GHC.Show qualified as GShow
-import Grease.Macaw.Arch (ArchContext, archABIParams)
-import Grease.Macaw.RegName (RegName (..), mkRegName)
-import Grease.Options (TypeUnrollingBound (..))
-import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (MemShape (Exactly, Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget, TaggedByte (..), memShapeSize, minimalPtrShape, ptrShapeType, ptrTarget, traversePtrShapeWithType)
+import Grease.Shape.NoTag (NoTag)
+import Grease.Shape.Pointer (PtrShape, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.LLVM.Bytes (toBytes)
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel (HasPtrWidth)
 import Lang.Crucible.LLVM.MemModel qualified as Mem
@@ -401,208 +386,3 @@ replaceShapes names (ArgShapes args) (ParsedShapes replacements) =
                         , foundType = C.Some ty'
                         }
       Nothing -> Right s
-
-rightToMaybe :: Either a b -> Maybe b
-rightToMaybe (Left _) = Nothing
-rightToMaybe (Right b) = Just b
-
-extractType :: Subprogram -> MDwarf.TypeRef -> Maybe MDwarf.TypeApp
-extractType sprog vrTy =
-  do
-    let mp = MDwarf.subTypeMap sprog
-    (mbtypeApp, _) <- Map.lookup vrTy mp
-    rightToMaybe mbtypeApp
-
-constructPtrTarget ::
-  HasPtrWidth w =>
-  TypeUnrollingBound ->
-  Subprogram ->
-  MDwarf.TypeApp ->
-  StateT VisitState Maybe (PtrTarget w NoTag)
-constructPtrTarget tyUnrollBound sprog tyApp =
-  ptrTarget Nothing <$> shapeSeq tyApp
- where
-  ishape w = lift $ Just $ Seq.singleton $ Initialized NoTag (toBytes w)
-  padding :: Integral a => a -> MemShape w NoTag
-  padding w = Uninitialized (toBytes w)
-  -- if we dont know where to place members we have to fail/just place some bytes
-  buildMember :: HasPtrWidth w => Word64 -> MDwarf.Member -> StateT VisitState Maybe (Word64, Seq.Seq (MemShape w NoTag))
-  buildMember loc member =
-    do
-      memLoc <- lift $ MDwarf.memberLoc member
-      padd <- lift $ Just (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
-      memberShapes <- shapeOfTyApp $ MDwarf.memberType member
-      let memByteSize = sum $ memShapeSize ?ptrWidth <$> memberShapes
-      let nextLoc = memLoc + fromIntegral memByteSize
-      lift $ Just (nextLoc, padd Seq.>< memberShapes)
-
-  shapeOfTyApp :: (HasPtrWidth w) => MDwarf.TypeRef -> StateT VisitState Maybe (Seq.Seq (MemShape w NoTag))
-  shapeOfTyApp x = shapeSeq =<< lift . extractType sprog =<< pure x
-
-  shapeSeq :: (HasPtrWidth w) => MDwarf.TypeApp -> StateT VisitState Maybe (Seq.Seq (MemShape w NoTag))
-  shapeSeq (MDwarf.UnsignedIntType w) = ishape w
-  shapeSeq (MDwarf.SignedIntType w) = ishape w
-  shapeSeq MDwarf.SignedCharType = ishape (1 :: Int)
-  shapeSeq MDwarf.UnsignedCharType = ishape (1 :: Int)
-  -- TODO(#263): Need modification to DWARF to collect DW_TAG_count and properly evaluate dwarf ops for upper bounds in subranges
-  shapeSeq (MDwarf.ArrayType _elTy _ub) = lift $ Nothing
-  -- need to compute padding between elements, in-front of the first element, and at end
-  -- we could get a missing DWARF member per the format so we have to do something about padding in-front
-  -- even if in practice this should not occur.
-  shapeSeq (MDwarf.StructType sdecl) =
-    let structSize = MDwarf.structByteSize sdecl
-     in do
-          (endLoc, seqs) <-
-            foldM
-              ( \(currLoc, seqs) mem ->
-                  do
-                    (nextLoc, additionalShapes) <- buildMember currLoc mem
-                    lift $ Just (nextLoc, seqs Seq.>< additionalShapes)
-              )
-              (0, Seq.empty)
-              (MDwarf.structMembers sdecl)
-          let endPad = if endLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - endLoc)
-          lift $ Just $ (seqs Seq.>< endPad)
-  shapeSeq (MDwarf.PointerType _ maybeRef) =
-    let mshape = constructPtrMemShapeFromRef tyUnrollBound sprog =<< lift maybeRef
-     in Seq.singleton <$> mshape
-  shapeSeq _ = lift $ Nothing
-
-type VisitState = Map.Map MDwarf.TypeRef Int
-
-nullPtr :: HasPtrWidth w => (MemShape w NoTag)
-nullPtr =
-  let zbyt = TaggedByte{taggedByteTag = NoTag, taggedByteValue = 0}
-   in Exactly (take (fromInteger $ CT.intValue ?ptrWidth `div` 8) $ repeat $ zbyt)
-
-constructPtrMemShapeFromRef :: HasPtrWidth w => TypeUnrollingBound -> Subprogram -> MDwarf.TypeRef -> StateT VisitState Maybe (MemShape w NoTag)
-constructPtrMemShapeFromRef bound@(TypeUnrollingBound tyUnrollBound) sprog ref =
-  do
-    mp <- get
-    let ct = fromMaybe 0 $ Map.lookup ref mp
-    _ <- put (Map.insert ref (ct + 1) mp)
-    if ct > tyUnrollBound
-      then
-        pure $ nullPtr
-      else do
-        ty <- lift $ extractType sprog ref
-        tgt <- constructPtrTarget bound sprog ty
-        pure $ Pointer NoTag (Offset 0) tgt
-
-intPtrShape ::
-  Symbolic.SymArchConstraints arch =>
-  MC.ArchReg arch tp ->
-  Maybe (C.Some (PtrShape ext w NoTag))
-intPtrShape reg =
-  case MT.typeRepr reg of
-    MT.BVTypeRepr w -> Just $ C.Some $ ShapePtrBV NoTag w
-    _ -> Nothing
-
-pointerShapeOfDwarf ::
-  (HasPtrWidth w, Symbolic.SymArchConstraints arch) =>
-  ArchContext arch ->
-  TypeUnrollingBound ->
-  MC.ArchReg arch tp ->
-  Subprogram ->
-  MDwarf.TypeApp ->
-  Maybe (C.Some (PtrShape ext w NoTag))
-pointerShapeOfDwarf _ _ r _ (MDwarf.SignedIntType _) = intPtrShape r
-pointerShapeOfDwarf _ _ r _ (MDwarf.UnsignedIntType _) = intPtrShape r
-pointerShapeOfDwarf _ tyUnrollBound _ sprog (MDwarf.PointerType _ tyRef) =
-  let memShape = evalStateT (constructPtrTarget tyUnrollBound sprog =<< (lift $ (extractType sprog =<< tyRef))) Map.empty
-      pointerShape = ShapePtr NoTag (Offset 0) <$> memShape
-   in (C.Some <$> pointerShape)
-pointerShapeOfDwarf _ _ _ _ _ = Nothing
-
--- Stops after the first nothing to avoid adding shapes after
--- failing to build some shape (this would result in shapes applying to incorrect registers)
-takeJust :: (a -> Maybe b) -> [a] -> [b]
-takeJust _ [] = []
-takeJust f (h : tl) =
-  case f h of
-    Nothing -> []
-    Just e -> e : takeJust f tl
-
-shapeFromVar ::
-  ( ExtShape ext ~ PtrShape ext wptr
-  , Mem.HasPtrWidth wptr
-  , Symbolic.SymArchConstraints arch
-  ) =>
-  ArchContext arch ->
-  TypeUnrollingBound ->
-  MC.ArchReg arch tp ->
-  Subprogram ->
-  MDwarf.Variable ->
-  Maybe (C.Some (Shape ext NoTag))
-shapeFromVar arch tyUnrollBound buildingForReg sprog vr =
-  C.mapSome ShapeExt
-    <$> ( pointerShapeOfDwarf arch tyUnrollBound buildingForReg sprog
-            =<< extractType sprog
-            =<< MDwarf.varType vr
-        )
-
-shapeFromDwarf :: (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr) => ArchContext arch -> TypeUnrollingBound -> Subprogram -> ParsedShapes ext
-shapeFromDwarf aContext tyUnrollBound sub =
-  let
-    abiRegs = aContext Lens.^. archABIParams
-    args = (zip abiRegs $ snd <$> (toAscList $ subParamMap sub))
-    regAssignmentFromDwarfVar reg var =
-      do
-        C.Some r <- pure reg
-        shp <- shapeFromVar aContext tyUnrollBound r sub var
-        pure (Text.pack $ coerce $ mkRegName r, shp)
-    ascParams =
-      takeJust
-        (uncurry regAssignmentFromDwarfVar)
-        args
-   in
-    ParsedShapes{_getParsedShapes = Map.fromList ascParams}
-
--- | Given a list of `Data.Macaw.Dwarf.CompileUnit` attempts to find a subprogram corresponding to
--- the provided PC and synthesize a shape from the DWARF provided prototype for the function.
--- The provided PC is relative to the base of the image (as is represented in DWARF).
-fromDwarfInfo ::
-  (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr) =>
-  ArchContext arch ->
-  TypeUnrollingBound ->
-  -- | The entrypoint PC of the target subprogram relative to the target ELF object.
-  Word64 ->
-  [Data.Macaw.Dwarf.CompileUnit] ->
-  Maybe (ParsedShapes ext)
-fromDwarfInfo aContext tyUnrollBound addr cus =
-  do
-    targetCu <-
-      List.find
-        ( \x ->
-            let rs = cuRanges x
-                isInCU range =
-                  let begin = rangeBegin range
-                      end = rangeEnd range
-                   in begin <= addr
-                        && addr
-                          < end
-             in any isInCU rs
-        )
-        cus
-    targetSubProg <- List.find (isInSubProg addr) (cuSubprograms targetCu)
-    pure $
-      shapeFromDwarf
-        aContext
-        tyUnrollBound
-        targetSubProg
- where
-  isInSubProg ::
-    Word64 ->
-    Subprogram ->
-    Bool
-  isInSubProg w sub =
-    let entryMatch = (==) w <$> MDwarf.subEntryPC sub
-        def = fromMaybe False
-     in def
-          ( do
-              sdef <- MDwarf.subDef sub
-              lpc <- MDwarf.subLowPC sdef
-              hpc <- MDwarf.subHighPC sdef
-              pure $ w >= lpc && w < (lpc + hpc)
-          )
-          || def entryMatch
