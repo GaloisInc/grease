@@ -37,6 +37,6 @@ int sum_tree(struct tree *in) {
 // x64:000033: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00
 // x64:000034: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00]]
 
-// all: flags {"--symbol", "sum_tree", "--enable-dwarf-preconditions", "--no-heuristics"} 
+// all: flags {"--symbol", "sum_tree", "--use-debug-info-types", "--no-heuristics"} 
 // x64: go(prog)
 // x64: check(precond)

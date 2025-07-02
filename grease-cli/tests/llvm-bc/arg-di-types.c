@@ -3,6 +3,7 @@
 // CFLAGS: $LLVM -g
 
 /// flags {"--symbol", "test"}
+/// flags {"--use-debug-info-types"}
 /// go(prog)
 
 #include <stdbool.h>
@@ -119,7 +120,7 @@ int test(
 /// 00000a: 
 /// 00000b: 
 /// ]]
-/// -- NOTE: 09 and 0a are most empty because `Info` doesn't handle qualifiers:
+/// -- NOTE: 09 and 0a are empty because `Info` doesn't handle qualifiers:
 /// -- https://github.com/GaloisInc/llvm-pretty/issues/162
 /// check "Using precondition:"
 /// check(precond)
