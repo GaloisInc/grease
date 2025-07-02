@@ -100,7 +100,7 @@ STANDALONE_SHARED_LIBRARY_ARM_SOS    = $(addsuffix /test.armv7l.elf,$(STANDALONE
 STANDALONE_SHARED_LIBRARY_X64_SOS    = $(addsuffix /test.x64.elf,$(STANDALONE_SHARED_LIBRARY_DIRS))
 STANDALONE_SHARED_LIBRARY_PPC32_SOS  = $(addsuffix /test.ppc32.elf,$(STANDALONE_SHARED_LIBRARY_DIRS))
 
-SHARED_LIBARY_DWARFV4_DIRS = sanity/pass/dwarf-shapes sanity/pass/dwarf-shape-recursive
+SHARED_LIBARY_DWARFV4_DIRS = sanity/pass/dwarf-shapes sanity/pass/dwarf-shape-recursive sanity/pass/dwarf-shape-recursive-tree
 SHARED_LIBARY_DWARFV4_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV4_DIRS))
 
 STATIC_DIRS = $(filter-out $(DYNAMIC_DIRS) $(DYNAMIC_PIE_DIRS) $(STRIPPED_STATIC_DIRS) $(STATIC_WITH_LIBS_DIRS) $(STACK_PROTECTOR_DIRS) $(SHARED_LIBRARY_DIRS) $(STANDALONE_SHARED_LIBRARY_DIRS) $(SHARED_LIBARY_DWARFV4_DIRS), $(DIRS))
