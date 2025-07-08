@@ -286,9 +286,13 @@ loadInitialPreconditions preconds names initArgs =
     Just path -> do
       txt <- Text.IO.readFile path
       parsed <-
-        case Parse.parseShapes path txt of
-          Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
-          Right parsed -> pure parsed
+        if ".json" `List.isSuffixOf` path
+          then case Shape.parseJsonShapes path txt of
+            Left err -> throw (GreaseException (Text.pack err))
+            Right parsed -> pure parsed
+          else case Parse.parseShapes path txt of
+            Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
+            Right parsed -> pure parsed
       case Shape.replaceShapes names initArgs parsed of
         Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
         Right shapes -> pure shapes

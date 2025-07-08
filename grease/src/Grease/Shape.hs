@@ -34,12 +34,23 @@ module Grease.Shape (
   ParsedShapes (..),
   TypeMismatch (..),
   replaceShapes,
+
+  -- * JSON
+  parseJsonShape,
+  parseJsonShapeWithPtrs,
+  parseJsonShapes,
 ) where
 
 import Control.Applicative (Alternative (empty))
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
+import Data.Aeson ((.:))
+import Data.Aeson qualified as Aeson
+import Data.Aeson.Key qualified as Aeson
+import Data.Aeson.KeyMap qualified as Aeson
+import Data.Aeson.Types qualified as Aeson
+import Data.ByteString qualified as BS
 import Data.Functor.Const qualified as Const
 import Data.Functor.Identity (Identity (Identity, runIdentity))
 import Data.Kind (Type)
@@ -50,14 +61,17 @@ import Data.Map qualified as Map
 import Data.Parameterized.Classes (ShowF (..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Ctx (Ctx)
+import Data.Parameterized.Some (Some (Some))
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
 import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
+import Data.Traversable qualified as Traversable
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import GHC.Show qualified as GShow
-import Grease.Shape.NoTag (NoTag)
-import Grease.Shape.Pointer (PtrShape, minimalPtrShape, ptrShapeType, traversePtrShapeWithType)
+import Grease.Shape.NoTag (NoTag (NoTag))
+import Grease.Shape.Pointer (PtrShape, minimalPtrShape, parseJsonPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Extension (LLVM)
@@ -397,3 +411,84 @@ replaceShapes names (ArgShapes args) (ParsedShapes replacements) =
                         , foundType = C.Some ty'
                         }
       Nothing -> Right s
+
+-- | Given a parser for @tag@s and 'ShapeExt's, parse 'Shape's from JSON
+parseJsonShape ::
+  -- | Parser for @tag@s
+  (forall t. Aeson.Value -> Aeson.Parser (tag t)) ->
+  -- | Parser for 'ExtShape's
+  (Aeson.Value -> Aeson.Parser (Some (ExtShape ext tag))) ->
+  -- | JSON value to parse
+  Aeson.Value ->
+  Aeson.Parser (Some (Shape ext tag))
+parseJsonShape parseTag parseExt =
+  Aeson.withObject "Shape" $ \v -> do
+    ty <- v .: "type" :: Aeson.Parser Text
+    let tg = v .: "tag"
+    case ty of
+      "bool" -> Some . ShapeBool <$> (parseTag =<< tg)
+      "ext" -> doParseExt v
+      "float" -> parseFloat tg v
+      "struct" -> parseStruct tg v
+      "unit" -> Some . ShapeUnit <$> (parseTag =<< tg)
+      _ -> fail ("Unknown Shape type: " ++ Text.unpack ty)
+ where
+  doParseExt v = do
+    Some s <- parseExt =<< v .: "val"
+    pure (Some (ShapeExt s))
+
+  parseFloat tg v = do
+    Some fi <- parseFloatRepr =<< v .: "info"
+    tag <- parseTag =<< tg
+    pure (Some (ShapeFloat tag fi))
+   where
+    parseFloatRepr =
+      Aeson.withText "info" $
+        \case
+          "half" -> pure (Some CT.HalfFloatRepr)
+          "single" -> pure (Some CT.SingleFloatRepr)
+          "double" -> pure (Some CT.DoubleFloatRepr)
+          "quad" -> pure (Some CT.QuadFloatRepr)
+          "x86_80" -> pure (Some CT.X86_80FloatRepr)
+          "double double" -> pure (Some CT.DoubleDoubleFloatRepr)
+          t -> fail ("Unexpected float info: " ++ Text.unpack t)
+
+  parseStruct tg v = do
+    fields <- traverse (parseJsonShape parseTag parseExt) =<< v .: "fields"
+    Some fields' <- pure (Ctx.fromList fields)
+    tag <- parseTag =<< tg
+    pure (Some (ShapeStruct tag fields'))
+
+-- | Given a parser for @tag@s, parse 'Shape's containing 'PtrShape's from JSON
+parseJsonShapeWithPtrs ::
+  Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
+  ExtShape ext ~ PtrShape ext w =>
+  -- | Parser for @tag@s
+  (forall t. Aeson.Value -> Aeson.Parser (tag t)) ->
+  -- | JSON value to parse
+  Aeson.Value ->
+  Aeson.Parser (Some (Shape ext tag))
+parseJsonShapeWithPtrs parseTag =
+  parseJsonShape parseTag (parseJsonPtrShape parseTag)
+
+-- | Parse a series of 'Shape's containing 'PtrShape's from JSON
+parseJsonShapes ::
+  ExtShape ext ~ PtrShape ext w =>
+  HasPtrWidth w =>
+  -- | Path to file containing JSON, used in error messages
+  FilePath ->
+  -- | JSON blob as 'Text'
+  Text ->
+  Either String (ParsedShapes ext)
+parseJsonShapes path txt = do
+  obj <-
+    mapLeft (("In file " ++ path ++ ": ") ++) $
+      Aeson.eitherDecode @Aeson.Object (BS.fromStrict (Text.encodeUtf8 txt))
+  fmap (ParsedShapes . Map.fromList) $
+    Traversable.for (Aeson.toList obj) $ \(k, v) -> do
+      case Aeson.parse (parseJsonShapeWithPtrs (const (pure NoTag))) v of
+        Aeson.Error e -> Left e
+        Aeson.Success s -> Right (Aeson.toText k, s)
+ where
+  mapLeft f (Left l) = Left (f l)
+  mapLeft _ r = r
