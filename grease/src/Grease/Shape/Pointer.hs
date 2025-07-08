@@ -30,6 +30,7 @@ module Grease.Shape.Pointer (
   setPtrTag,
   ptrShapeTag,
   minimalPtrShape,
+  parseJsonPtrShape,
   x64StackPtrShape,
   ppcStackPtrShape,
   armStackPtrShape,
@@ -45,21 +46,29 @@ module Grease.Shape.Pointer (
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens qualified as Lens
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.Aeson ((.:))
+import Data.Aeson.KeyMap qualified as Aeson
+import Data.Aeson.Types qualified as Aeson
 import Data.BitVector.Sized (BV)
+import Data.BitVector.Sized qualified as BV
 import Data.Foldable qualified as Foldable
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Parameterized.Classes (ShowF (..))
 import Data.Parameterized.NatRepr (NatRepr, natValue)
+import Data.Parameterized.NatRepr qualified as NatRepr
+import Data.Parameterized.Some (Some (Some))
 import Data.Parameterized.TraversableF qualified as TF
 import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Proxy (Proxy (Proxy))
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
+import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import Data.Word (Word8)
-import GHC.TypeLits (type Natural)
+import GHC.TypeLits (type Natural, type (<=))
 import Grease.Cursor
 import Grease.Cursor.Pointer (Dereference (..))
 import Grease.Options (ExtraStackSlots (..))
@@ -561,6 +570,80 @@ minimalPtrShape mkTag w =
         Just C.Refl ->
           ShapePtr <$> tag <*> pure (Offset 0) <*> pure (ptrTarget Nothing Seq.empty)
         Nothing -> ShapePtrBV <$> tag <*> pure w
+
+-- | Parse a 'PtrShape' from JSON
+parseJsonPtrShape ::
+  forall ext w tag.
+  Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
+  -- | Parser for @tag@s
+  (forall t. Aeson.Value -> Aeson.Parser (tag t)) ->
+  Aeson.Value ->
+  Aeson.Parser (Some (PtrShape ext w tag))
+parseJsonPtrShape parseTag =
+  Aeson.withObject "Shape" $ \v -> do
+    ty <- v .: "type" :: Aeson.Parser Text
+    case ty of
+      "bv" ->
+        withWidth v $ \w -> do
+          tag <- parseTag =<< v .: "tag"
+          pure (Some (ShapePtrBV tag w))
+      "bv-lit" ->
+        withWidth v $ \w -> do
+          tag <- parseTag =<< v .: "tag"
+          val <- v .: "val"
+          pure (Some (ShapePtrBVLit tag w (BV.mkBV w val)))
+      "ptr" -> do
+        tag <- parseTag =<< v .: "tag"
+        offset <- parseOffset v
+        tgt <- parseJsonPtrTarget =<< v .: "target"
+        pure (Some (ShapePtr tag offset tgt))
+      t -> fail ("Unknown pointer type: " ++ Text.unpack t)
+ where
+  withWidth ::
+    Aeson.KeyMap Aeson.Value ->
+    (forall n. 1 <= n => NatRepr n -> Aeson.Parser r) ->
+    Aeson.Parser r
+  withWidth v k = do
+    wNat <- v .: "width"
+    Some w <- pure (NatRepr.mkNatRepr wNat)
+    case NatRepr.testLeq (NatRepr.knownNat @1) w of
+      Nothing -> fail "Cannot have zero-width bitvector"
+      Just NatRepr.LeqProof -> k w
+
+  parseOffset v = Offset . Bytes.toBytes @Int <$> v .: "offset"
+
+  parseJsonPtrTarget ::
+    Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
+    Aeson.Value ->
+    Aeson.Parser (PtrTarget w tag)
+  parseJsonPtrTarget v =
+    ptrTarget Nothing . Seq.fromList <$> Aeson.listParser parseJsonMemShape v
+
+  parseJsonMemShape ::
+    Aeson.Value ->
+    Aeson.Parser (MemShape w tag)
+  parseJsonMemShape =
+    Aeson.withObject "MemShape" $ \v -> do
+      ty <- (v .: "type" :: Aeson.Parser Text)
+      case ty of
+        "exactly" -> do
+          let parseByte =
+                Aeson.withObject "byte" $ \v' -> do
+                  tag <- parseTag =<< v' .: "tag"
+                  val <- v' .: "val"
+                  pure (TaggedByte tag val)
+          bytes <- Aeson.listParser parseByte =<< v .: "exactly"
+          pure (Exactly bytes)
+        "init" -> do
+          tag <- parseTag =<< v .: "tag"
+          Initialized tag . Bytes.toBytes @Int <$> v .: "init"
+        "ptr" -> do
+          tag <- parseTag =<< v .: "tag"
+          offset <- parseOffset v
+          tgt <- parseJsonPtrTarget =<< v .: "target"
+          pure (Pointer tag offset tgt)
+        "uninit" -> Uninitialized . Bytes.toBytes @Int <$> v .: "uninit"
+        t -> fail ("Unknown memory shape type: " ++ Text.unpack t)
 
 -- | The x86_64 stack pointer points to the end of a large, fresh, mostly-
 -- uninitialized allocation, which is typical for a stack pointer. The very end

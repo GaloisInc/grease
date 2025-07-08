@@ -1,0 +1,5 @@
+{
+  "rax": { "type": "ext", "val": { "tag": null, "type": "bv", "width": 64 } },
+  "rcx": { "type": "ext", "val": { "tag": null, "type": "bv-lit", "width": 64, "val": 42 } },
+  "rdx": { "type": "ext", "val": { "tag": null, "type": "ptr", "offset": 4, "target": [{ "type": "uninit", "uninit": 4 }, { "type": "init", "tag": null, "init": 4 }] } }
+}
