@@ -23,8 +23,8 @@ import Data.ByteString qualified as BS
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
-import Data.Macaw.Symbolic.Backend qualified as Symbolic
 import Data.Macaw.Symbolic.Concretize qualified as Symbolic
+import Data.Macaw.Symbolic.Memory.Strings qualified as DMSMS
 import Data.Word (Word8)
 import GHC.Stack qualified as Stack
 import Grease.Utility (OnlineSolverAndBackend)
@@ -52,8 +52,6 @@ loadString ::
   C.GlobalVar Mem.Mem ->
   -- | The @macaw-symbolic@ memory model configuration.
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  -- | The endianness of the architecture.
-  MC.Endianness ->
   -- | The pointer to the string.
   C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   -- | If @'Just' n@, read a maximum of @n@ characters. If 'Nothing', read until
@@ -67,9 +65,7 @@ loadString ::
     ( [W4.SymBV sym 8]
     , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
     )
-loadString bak mvar mmConf endian ptr0 maxChars0 st = do
-  memImpl <- Symbolic.getMem st mvar
-  let sym = C.backendGetSym bak
+loadString bak mvar mmConf ptr0 maxChars st = do
   -- Normally, the lazy `macaw-symbolic` memory model would resolve all pointer
   -- reads, which would avoid the need to do this ourselves here. Nevertheless,
   -- we intentionally disable this pointer-resolving in our instantiation of the
@@ -78,35 +74,7 @@ loadString bak mvar mmConf endian ptr0 maxChars0 st = do
   -- would not succeed, as `grease` would be unable to conclude that the loaded
   -- string ends with a concrete null terminator character.
   ptr1 <- Symbolic.resolveLLVMPtr bak (C.regValue ptr0)
-  let ptrEntry1 = C.RegEntry Mem.PtrRepr ptr1
-
-  let go ::
-        ([W4.SymBV sym 8] -> [W4.SymBV sym 8]) ->
-        C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
-        Maybe Int ->
-        C.SimState p sym (Symbolic.MacawExt arch) rtp f args ->
-        IO
-          ( [W4.SymBV sym 8]
-          , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
-          )
-      go f p maxChars st0
-        | maxChars == Just 0 =
-            pure (f [], st0)
-        | otherwise = do
-            let addrWidth = MC.addrWidthRepr ?ptrWidth
-            let readInfo = MC.BVMemRepr (W4.knownNat @1) endian
-            (v, st1) <-
-              liftIO $ Symbolic.doReadMemModel mvar mmConf addrWidth readInfo p st0
-            x <- liftIO $ Mem.projectLLVM_bv bak v
-            if (BV.asUnsigned <$> W4.asBV x) == Just 0
-              then pure (f [], st1) -- We have encountered a null terminator, so stop.
-              else do
-                one <- liftIO $ W4.bvOne sym Mem.PtrWidth
-                p' <- liftIO $ Mem.doPtrAddOffset bak memImpl (C.regValue p) one
-                let pEntry' = C.RegEntry Mem.PtrRepr p'
-                go (\xs -> f (x : xs)) pEntry' (subtract 1 <$> maxChars) st1
-
-  go id ptrEntry1 maxChars0 st
+  DMSMS.loadConcretelyNullTerminatedString mvar mmConf st ptr1 maxChars
 
 -- | Like 'loadString', except that each character read is asserted to be
 -- concrete. If a symbolic character is encountered, this function will
@@ -123,7 +91,6 @@ loadConcreteString ::
   bak ->
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  MC.Endianness ->
   C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   Maybe Int ->
   C.SimState p sym (Symbolic.MacawExt arch) rtp f args ->
@@ -131,8 +98,8 @@ loadConcreteString ::
     ( BS.ByteString
     , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
     )
-loadConcreteString bak mvar mmConf endian ptr maxChars st0 = do
-  (symBytes, st1) <- loadString bak mvar mmConf endian ptr maxChars st0
+loadConcreteString bak mvar mmConf ptr maxChars st0 = do
+  (symBytes, st1) <- loadString bak mvar mmConf ptr maxChars st0
   bytes <- traverse concretizeByte symBytes
   pure (BS.pack bytes, st1)
  where
