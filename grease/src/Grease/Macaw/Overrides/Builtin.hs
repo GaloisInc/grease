@@ -24,7 +24,6 @@ import Data.Sequence qualified as Seq
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Grease.LLVM.Overrides.Builtin (libcOverrides)
-import Grease.Macaw.Arch (ArchContext)
 import Grease.Macaw.Overrides.Defs (customStubsOverrides)
 import Grease.Panic qualified as Panic
 import Grease.Utility (llvmOverrideName)
@@ -54,16 +53,15 @@ builtinStubsOverrides ::
   bak ->
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  ArchContext arch ->
   SymIO.LLVMFileSystem (MC.ArchAddrWidth arch) ->
   Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
-builtinStubsOverrides bak mvar mmConf archCtx fs =
+builtinStubsOverrides bak mvar mmConf fs =
   customOvs <> fromLlvmOvs
  where
   -- Custom overrides that are only applicable at the machine code level (and
   -- therefore do not belong in crucible-llvm).
   customOvs :: Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
-  customOvs = Seq.fromList (customStubsOverrides mvar mmConf archCtx)
+  customOvs = Seq.fromList (customStubsOverrides mvar mmConf)
 
   -- Overrides that arise from crucible-llvm.
   fromLlvmOvs :: Seq.Seq (Stubs.SomeFunctionOverride p sym arch)

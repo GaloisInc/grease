@@ -11,20 +11,17 @@ module Grease.Macaw.Overrides.Defs (
   customStubsOverrides,
 ) where
 
-import Control.Lens (to, (^.))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State (MonadState (..), StateT (..), evalStateT)
 import Data.BitVector.Sized qualified as BV
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
 import Data.List qualified as List
-import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
 import Data.Vector qualified as Vec
-import Grease.Macaw.Arch (ArchContext, archInfo)
 import Grease.Macaw.Memory (loadConcreteString)
 import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as C
@@ -47,16 +44,15 @@ customStubsOverrides ::
   ) =>
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  ArchContext arch ->
   [Stubs.SomeFunctionOverride p sym arch]
-customStubsOverrides mvar mmConf archCtx =
+customStubsOverrides mvar mmConf =
   [ -- Functions that need to read strings using the macaw-symbolic memory
     -- model
-    Stubs.SomeFunctionOverride (buildAssertFailOverride mvar mmConf archCtx)
-  , Stubs.SomeFunctionOverride (buildAssertRtnOverride mvar mmConf archCtx)
-  , Stubs.SomeFunctionOverride (buildPutsOverride mvar mmConf archCtx)
-  , Stubs.SomeFunctionOverride (buildPrintfOverride mvar mmConf archCtx)
-  , Stubs.SomeFunctionOverride (buildPrintfChkOverride mvar mmConf archCtx)
+    Stubs.SomeFunctionOverride (buildAssertFailOverride mvar mmConf)
+  , Stubs.SomeFunctionOverride (buildAssertRtnOverride mvar mmConf)
+  , Stubs.SomeFunctionOverride (buildPutsOverride mvar mmConf)
+  , Stubs.SomeFunctionOverride (buildPrintfOverride mvar mmConf)
+  , Stubs.SomeFunctionOverride (buildPrintfChkOverride mvar mmConf)
   , -- Functions that do not appear at the LLVM level but do appear at the
     -- machine code level
     Stubs.SomeFunctionOverride buildStackChkFailOverride
@@ -77,7 +73,6 @@ buildAssertFailOverride ::
   ) =>
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  ArchContext arch ->
   Stubs.FunctionOverride
     p
     sym
@@ -89,10 +84,10 @@ buildAssertFailOverride ::
     )
     arch
     C.UnitType
-buildAssertFailOverride mvar mmConf archCtx =
+buildAssertFailOverride mvar mmConf =
   W4.withKnownNat ?ptrWidth $
     Stubs.mkFunctionOverride "__assert_fail" $ \bak args ->
-      Ctx.uncurryAssignment (callAssert bak mvar mmConf archCtx) args
+      Ctx.uncurryAssignment (callAssert bak mvar mmConf) args
 
 -- | An override for the @__assert_rtn@ function. This assumes that the fourth
 -- argument points to an entirely concrete string.
@@ -108,7 +103,6 @@ buildAssertRtnOverride ::
   ) =>
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  ArchContext arch ->
   Stubs.FunctionOverride
     p
     sym
@@ -120,10 +114,10 @@ buildAssertRtnOverride ::
     )
     arch
     C.UnitType
-buildAssertRtnOverride mvar mmConf archCtx =
+buildAssertRtnOverride mvar mmConf =
   W4.withKnownNat ?ptrWidth $
     Stubs.mkFunctionOverride "__assert_rtn" $ \bak args ->
-      Ctx.uncurryAssignment (callAssert bak mvar mmConf archCtx) args
+      Ctx.uncurryAssignment (callAssert bak mvar mmConf) args
 
 -- | Call the @__assert_fail@ or @__assert_rtn@ function. These are internal
 -- functions that the @assert@ function is liable to compile down to, depending
@@ -140,18 +134,16 @@ callAssert ::
   bak ->
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  ArchContext arch ->
   C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) r args ret ()
-callAssert bak mvar mmConf archCtx _pfn _pfile _pline ptxt = do
+callAssert bak mvar mmConf _pfn _pfile _pline ptxt = do
   let sym = C.backendGetSym bak
   st0 <- get
-  let endian = archCtx ^. archInfo . to MI.archEndianness
   let maxSize = Nothing
-  (txt, st1) <- liftIO $ loadConcreteString bak mvar mmConf endian ptxt maxSize st0
+  (txt, st1) <- liftIO $ loadConcreteString bak mvar mmConf ptxt maxSize st0
   put st1
   let err = C.AssertFailureSimError "Call to assert()" (BSC.unpack txt)
   _ <- liftIO $ C.addFailedAssertion bak err
@@ -172,18 +164,17 @@ buildPrintfOverride ::
   ) =>
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  ArchContext arch ->
   Stubs.FunctionOverride
     p
     sym
     (Ctx.EmptyCtx Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch))
     arch
     (Mem.LLVMPointerType (MC.ArchAddrWidth arch))
-buildPrintfOverride mvar mmConf archCtx =
+buildPrintfOverride mvar mmConf =
   W4.withKnownNat ?ptrWidth $
     Stubs.mkVariadicFunctionOverride "printf" $ \bak args gva ->
       Ctx.uncurryAssignment
-        (\formatStrPtr -> callPrintf bak mvar mmConf archCtx formatStrPtr gva)
+        (\formatStrPtr -> callPrintf bak mvar mmConf formatStrPtr gva)
         args
 
 -- | An override for the @__printf_chk@ function. This assumes that the first
@@ -200,7 +191,6 @@ buildPrintfChkOverride ::
   ) =>
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  ArchContext arch ->
   Stubs.FunctionOverride
     p
     sym
@@ -210,11 +200,11 @@ buildPrintfChkOverride ::
     )
     arch
     (Mem.LLVMPointerType (MC.ArchAddrWidth arch))
-buildPrintfChkOverride mvar mmConf archCtx =
+buildPrintfChkOverride mvar mmConf =
   W4.withKnownNat ?ptrWidth $
     Stubs.mkVariadicFunctionOverride "__printf_chk" $ \bak args gva ->
       Ctx.uncurryAssignment
-        (\_flg formatStrPtr -> callPrintf bak mvar mmConf archCtx formatStrPtr gva)
+        (\_flg formatStrPtr -> callPrintf bak mvar mmConf formatStrPtr gva)
         args
 
 -- | Call the @printf@ or @__printf_chk@ function. This assumes that the pointer
@@ -229,7 +219,6 @@ callPrintf ::
   bak ->
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  ArchContext arch ->
   C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   Stubs.GetVarArg sym ->
   C.OverrideSim
@@ -240,15 +229,14 @@ callPrintf ::
     args
     ret
     (Mem.LLVMPtr sym (MC.ArchAddrWidth arch))
-callPrintf bak mvar mmConf archCtx formatStrPtr gva = do
+callPrintf bak mvar mmConf formatStrPtr gva = do
   let sym = C.backendGetSym bak
   st0 <- get
-  let endian = archCtx ^. archInfo . to MI.archEndianness
   let maxSize = Nothing
   -- Read format string
   (formatStr, st1) <-
     liftIO $
-      loadConcreteString bak mvar mmConf endian formatStrPtr maxSize st0
+      loadConcreteString bak mvar mmConf formatStrPtr maxSize st0
   put st1
   -- Parse format directives
   case Printf.parseDirectives (BS.unpack formatStr) of
@@ -331,17 +319,16 @@ buildPutsOverride ::
   ) =>
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  ArchContext arch ->
   Stubs.FunctionOverride
     p
     sym
     (Ctx.EmptyCtx Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch))
     arch
     (Mem.LLVMPointerType (MC.ArchAddrWidth arch))
-buildPutsOverride mvar mmConf archCtx =
+buildPutsOverride mvar mmConf =
   W4.withKnownNat ?ptrWidth $
     Stubs.mkFunctionOverride "puts" $ \bak args ->
-      Ctx.uncurryAssignment (callPuts bak mvar mmConf archCtx) args
+      Ctx.uncurryAssignment (callPuts bak mvar mmConf) args
 
 -- | Call the @puts@ function. This assumes that the pointer argument points to
 -- an entirely concrete string.
@@ -355,7 +342,6 @@ callPuts ::
   bak ->
   C.GlobalVar Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  ArchContext arch ->
   C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   C.OverrideSim
     p
@@ -365,13 +351,12 @@ callPuts ::
     args
     ret
     (Mem.LLVMPtr sym (MC.ArchAddrWidth arch))
-callPuts bak mvar mmConf archCtx strPtr = do
+callPuts bak mvar mmConf strPtr = do
   let sym = C.backendGetSym bak
   st0 <- get
-  let endian = archCtx ^. archInfo . to MI.archEndianness
   let strEntry = C.RegEntry Mem.PtrRepr (C.regValue strPtr)
   let maxSize = Nothing
-  (str, st1) <- liftIO $ loadConcreteString bak mvar mmConf endian strEntry maxSize st0
+  (str, st1) <- liftIO $ loadConcreteString bak mvar mmConf strEntry maxSize st0
   put st1
   h <- C.printHandle <$> C.getContext
   liftIO $ BSC.hPutStrLn h str

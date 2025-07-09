@@ -646,7 +646,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
       mkInitState regs' mem' ssa'@(C.SomeCFG ssaCfg') = do
         mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
         (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
-        let builtinOvs = builtinStubsOverrides bak mvar memCfg0 archCtx fs
+        let builtinOvs = builtinStubsOverrides bak mvar memCfg0 fs
         let userOvPaths = simOverrides simOpts
         fnOvsMap <- liftIO $ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
         fnAddrOvsRaw <- liftIO $ mconcat <$> traverse parseOverridesYaml (simOverridesYaml simOpts)
