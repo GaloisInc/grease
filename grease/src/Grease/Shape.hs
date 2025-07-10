@@ -415,7 +415,7 @@ replaceShapes names (ArgShapes args) (ParsedShapes replacements) =
 -- | Given a parser for @tag@s and 'ShapeExt's, parse 'Shape's from JSON
 parseJsonShape ::
   -- | Parser for @tag@s
-  (forall t. Aeson.Value -> Aeson.Parser (tag t)) ->
+  (forall t. Aeson.KeyMap Aeson.Value -> Aeson.Parser (tag t)) ->
   -- | Parser for 'ExtShape's
   (Aeson.Value -> Aeson.Parser (Some (ExtShape ext tag))) ->
   -- | JSON value to parse
@@ -424,22 +424,21 @@ parseJsonShape ::
 parseJsonShape parseTag parseExt =
   Aeson.withObject "Shape" $ \v -> do
     ty <- v .: "type" :: Aeson.Parser Text
-    let tg = v .: "tag"
     case ty of
-      "bool" -> Some . ShapeBool <$> (parseTag =<< tg)
+      "bool" -> Some . ShapeBool <$> parseTag v
       "ext" -> doParseExt v
-      "float" -> parseFloat tg v
-      "struct" -> parseStruct tg v
-      "unit" -> Some . ShapeUnit <$> (parseTag =<< tg)
+      "float" -> parseFloat v
+      "struct" -> parseStruct v
+      "unit" -> Some . ShapeUnit <$> parseTag v
       _ -> fail ("Unknown Shape type: " ++ Text.unpack ty)
  where
   doParseExt v = do
     Some s <- parseExt =<< v .: "val"
     pure (Some (ShapeExt s))
 
-  parseFloat tg v = do
+  parseFloat v = do
     Some fi <- parseFloatRepr =<< v .: "info"
-    tag <- parseTag =<< tg
+    tag <- parseTag v
     pure (Some (ShapeFloat tag fi))
    where
     parseFloatRepr =
@@ -453,10 +452,10 @@ parseJsonShape parseTag parseExt =
           "double double" -> pure (Some CT.DoubleDoubleFloatRepr)
           t -> fail ("Unexpected float info: " ++ Text.unpack t)
 
-  parseStruct tg v = do
+  parseStruct v = do
     fields <- traverse (parseJsonShape parseTag parseExt) =<< v .: "fields"
     Some fields' <- pure (Ctx.fromList fields)
-    tag <- parseTag =<< tg
+    tag <- parseTag v
     pure (Some (ShapeStruct tag fields'))
 
 -- | Given a parser for @tag@s, parse 'Shape's containing 'PtrShape's from JSON
@@ -464,7 +463,7 @@ parseJsonShapeWithPtrs ::
   Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
   ExtShape ext ~ PtrShape ext w =>
   -- | Parser for @tag@s
-  (forall t. Aeson.Value -> Aeson.Parser (tag t)) ->
+  (forall t. Aeson.KeyMap Aeson.Value -> Aeson.Parser (tag t)) ->
   -- | JSON value to parse
   Aeson.Value ->
   Aeson.Parser (Some (Shape ext tag))

@@ -576,7 +576,7 @@ parseJsonPtrShape ::
   forall ext w tag.
   Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
   -- | Parser for @tag@s
-  (forall t. Aeson.Value -> Aeson.Parser (tag t)) ->
+  (forall t. Aeson.KeyMap Aeson.Value -> Aeson.Parser (tag t)) ->
   Aeson.Value ->
   Aeson.Parser (Some (PtrShape ext w tag))
 parseJsonPtrShape parseTag =
@@ -585,15 +585,15 @@ parseJsonPtrShape parseTag =
     case ty of
       "bv" ->
         withWidth v $ \w -> do
-          tag <- parseTag =<< v .: "tag"
+          tag <- parseTag v
           pure (Some (ShapePtrBV tag w))
       "bv-lit" ->
         withWidth v $ \w -> do
-          tag <- parseTag =<< v .: "tag"
+          tag <- parseTag v
           val <- v .: "val"
           pure (Some (ShapePtrBVLit tag w (BV.mkBV w val)))
       "ptr" -> do
-        tag <- parseTag =<< v .: "tag"
+        tag <- parseTag v
         offset <- parseOffset v
         tgt <- parseJsonPtrTarget =<< v .: "target"
         pure (Some (ShapePtr tag offset tgt))
@@ -629,16 +629,16 @@ parseJsonPtrShape parseTag =
         "exactly" -> do
           let parseByte =
                 Aeson.withObject "byte" $ \v' -> do
-                  tag <- parseTag =<< v' .: "tag"
+                  tag <- parseTag v
                   val <- v' .: "val"
                   pure (TaggedByte tag val)
           bytes <- Aeson.listParser parseByte =<< v .: "exactly"
           pure (Exactly bytes)
         "init" -> do
-          tag <- parseTag =<< v .: "tag"
+          tag <- parseTag v
           Initialized tag . Bytes.toBytes @Int <$> v .: "init"
         "ptr" -> do
-          tag <- parseTag =<< v .: "tag"
+          tag <- parseTag v
           offset <- parseOffset v
           tgt <- parseJsonPtrTarget =<< v .: "target"
           pure (Pointer tag offset tgt)
