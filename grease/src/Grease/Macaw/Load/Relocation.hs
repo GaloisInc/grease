@@ -89,8 +89,8 @@ elfRelocationMap _ loadOpts ehi =
   -- relocations. If the given binary does not have a symbol table, then this
   -- table will be empty.
   dynSymtab :: Vec.Vector (EE.SymtabEntry BS.ByteString (EE.ElfWordType w))
-  dynSymtab = case EE.decodeHeaderDynsym ehi of
-    Just (Right v) -> EE.symtabEntries v
+  dynSymtab = case EE.decodeHeaderDynsymLenient ehi of
+    Right (Just v) -> EE.symtabEntries v
     _ -> Vec.empty
 
   -- Look up the name of a dynamic relocation from its dynamic symbol table
