@@ -189,8 +189,8 @@ dynamicFunAddrs ::
   Elf.ElfHeaderInfo w ->
   [(W4.FunctionName, (Elf.SymtabEntry BS.ByteString (Elf.ElfWordType w), MM.MemWord w))]
 dynamicFunAddrs loadOpts ehi =
-  case Elf.decodeHeaderDynsym ehi of
-    Just (Right symtab) ->
+  case Elf.decodeHeaderDynsymLenient ehi of
+    Right (Just symtab) ->
       Elf.elfClassInstances (Elf.headerClass (Elf.header ehi)) (funAddrs symtab)
     _ -> []
  where
