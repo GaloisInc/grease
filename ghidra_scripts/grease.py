@@ -39,7 +39,7 @@ import tempfile
 
 try:
     import typing
-except: 
+except ImportError: 
     class FakeObj:
         TYPE_CHECKING = False
     typing = FakeObj()
