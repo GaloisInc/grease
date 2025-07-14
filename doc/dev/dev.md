@@ -165,6 +165,7 @@ developers.
 - Check for out-of-date documentation
 - Fix warnings from `cabal haddock`
 - Review and triage old issues
+- Create tests for [issues labeled "status/needs test"]
 - Search for and fix broken [links to the GREASE documentation]
 - Update versions of dependencies and tools
   - Bump bounds on Hackage dependencies (`cabal outdated` can help)
@@ -178,6 +179,8 @@ developers.
   - Update versions of tools used in the Dockerfile:
     - `ghcup`
 
+
+[issues labeled "status/needs test"]: https://github.com/GaloisInc/grease/issues?q=label%3A%22status%2Fneeds%20test%22
 [links to the GREASE documentation]: https://github.com/search?q=owner%3AGaloisInc+%2Fgaloisinc.github.io%5C%2Fgrease%5C%2F%2F&type=code
 
 ## GHC versions
