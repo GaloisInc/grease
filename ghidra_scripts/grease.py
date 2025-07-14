@@ -41,7 +41,7 @@ try:
     import typing
 except ImportError:
     # TYPE_CHECKING is a special variable set during
-    # type checking. Imports must be top level for the type checker to use 
+    # type checking. Imports must be top level for the type checker to use
     # them properly so we set this value to false when we cannot import typing.
     # This trick allows the python script to run in jython where import typing fails.
     class FakeObj:
