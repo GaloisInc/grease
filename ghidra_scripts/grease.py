@@ -35,7 +35,15 @@ import os
 import re
 import subprocess
 import tempfile
-import typing
+
+
+try:
+    import typing
+except: 
+    class FakeObj:
+        TYPE_CHECKING = False
+    typing = FakeObj()
+
 
 if typing.TYPE_CHECKING:
     from ghidra.ghidra_builtins import *  # type: ignore
