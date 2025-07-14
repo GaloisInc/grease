@@ -38,7 +38,7 @@ import tempfile
 import typing
 
 if typing.TYPE_CHECKING:
-    from ghidra.ghidra_builtins import * # type: ignore
+    from ghidra.ghidra_builtins import *  # type: ignore
 
 
 from java.awt import Color
