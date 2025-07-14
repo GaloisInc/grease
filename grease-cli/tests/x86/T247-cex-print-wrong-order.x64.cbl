@@ -1,7 +1,8 @@
 ; Copyright (c) Galois, Inc. 2025
 
-; Regression test for #247, wherein GREASE prints the contents of an allocation
-; in the wrong order as part of a counterexample.
+; Regression test for #247, wherein GREASE prints the contents of an
+; allocation in the wrong order as part of a counterexample when
+; `--initial-precondition` is used.
 
 ;; flags {"--symbol", "test"}
 ;; flags {"--initial-precondition", "tests/x86/extra/T247-cex-print-wrong-order.txt"}
