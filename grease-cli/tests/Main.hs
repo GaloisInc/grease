@@ -227,6 +227,7 @@ fileTest d f =
     ".bc" -> [oughtaBc d f]
     ".cbl" -> [oughtaSexp d f]
     ".elf" -> [oughtaBin d f]
+    ".elf-dw4" -> [oughtaBin d f]
     _ -> []
 
 -- | Recursively walk a directory tree, discovering tests
