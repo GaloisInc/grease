@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -9,13 +10,19 @@ module Grease.Main.Diagnostic (
   severity,
 ) where
 
+import Data.Functor.Const (Const)
 import Data.List qualified as List
+import Data.Macaw.Memory qualified as MM
+import Data.Parameterized.Context qualified as Ctx
 import Data.Text qualified as Text
 import Data.Void (Void, absurd)
 import Grease.Diagnostic.Severity (Severity (Debug, Info, Warn))
 import Grease.Entrypoint (Entrypoint, EntrypointLocation)
 import Grease.Output (BatchStatus)
 import Grease.Requirement (Requirement, displayReq)
+import Grease.Shape (ArgShapes (ArgShapes), ExtShape, PrettyExt)
+import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Print qualified as ShapePP
 import Grease.Time (Nanoseconds, nanosToMillis)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.CFG.Core qualified as C
@@ -27,6 +34,17 @@ data Diagnostic where
     EntrypointLocation -> BatchStatus -> Diagnostic
   AnalyzingEntrypoint ::
     Entrypoint -> Diagnostic
+  LoadedPrecondition ::
+    forall w ext tag tys.
+    ( ExtShape ext ~ PtrShape ext w
+    , PrettyExt ext tag
+    ) =>
+    FilePath ->
+    MM.AddrWidthRepr w ->
+    -- | Argument names
+    Ctx.Assignment (Const String) tys ->
+    ArgShapes ext tag tys ->
+    Diagnostic
   FinishedAnalyzingEntrypoint ::
     EntrypointLocation -> Nanoseconds -> Diagnostic
   NoEntrypoints ::
@@ -60,6 +78,11 @@ instance PP.Pretty Diagnostic where
           , "took"
           , PP.pretty (nanosToMillis duration)
           ]
+      LoadedPrecondition path w argNames (ArgShapes argShapes) ->
+        PP.vcat
+          [ "Loaded precondition from path" PP.<+> PP.pretty path PP.<> ":"
+          , ShapePP.evalPrinter (printCfg w) (ShapePP.printNamedShapes argNames argShapes)
+          ]
       NoEntrypoints ->
         "No entry points specified, analyzing all known functions."
       SimulationTestingRequirements rs ->
@@ -79,6 +102,13 @@ instance PP.Pretty Diagnostic where
             , C.ppCFG' True (C.postdomInfo cfg) cfg
             ]
       TypeContextError e -> fmap absurd e
+   where
+    printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w
+    printCfg w =
+      ShapePP.PrinterConfig
+        { ShapePP.cfgAddrWidth = w
+        , ShapePP.cfgRleThreshold = 8
+        }
 
 severity :: Diagnostic -> Severity
 severity =
@@ -86,6 +116,7 @@ severity =
     AnalyzedEntrypoint{} -> Info
     AnalyzingEntrypoint{} -> Info
     FinishedAnalyzingEntrypoint{} -> Debug
+    LoadedPrecondition{} -> Debug
     NoEntrypoints -> Warn
     SimulationTestingRequirements{} -> Info
     SimulationAllGoalsPassed{} -> Info

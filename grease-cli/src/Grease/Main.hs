@@ -274,13 +274,15 @@ withMemOptions opts k =
 loadInitialPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
   Mem.HasPtrWidth w =>
+  MM.MemWidth w =>
+  GreaseLogAction ->
   Maybe FilePath ->
   -- | Argument names
   Ctx.Assignment (Const.Const String) tys ->
   -- | Initial arguments
   Shape.ArgShapes ext NoTag tys ->
   IO (Shape.ArgShapes ext NoTag tys)
-loadInitialPreconditions preconds names initArgs =
+loadInitialPreconditions la preconds names initArgs =
   case preconds of
     Nothing -> pure initArgs
     Just path -> do
@@ -293,9 +295,13 @@ loadInitialPreconditions preconds names initArgs =
           else case Parse.parseShapes path txt of
             Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
             Right parsed -> pure parsed
-      case Shape.replaceShapes names initArgs parsed of
-        Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
-        Right shapes -> pure shapes
+      precond <-
+        case Shape.replaceShapes names initArgs parsed of
+          Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
+          Right shapes -> pure shapes
+      let addrWidth = MC.addrWidthRepr ?ptrWidth
+      doLog la (Diag.LoadedPrecondition path addrWidth names precond)
+      pure precond
 
 toBatchBug ::
   Mem.HasPtrWidth wptr =>
@@ -621,7 +627,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
                 archCtx
           )
   initArgs <-
-    loadInitialPreconditions (simInitialPreconditions simOpts) argNames (if shouldUseDwarf then dwarfedArgs else initArgs_)
+    loadInitialPreconditions la (simInitialPreconditions simOpts) argNames (if shouldUseDwarf then dwarfedArgs else initArgs_)
 
   EntrypointCfgs
     { entrypointStartupOv = mbStartupOvSsa
@@ -1156,7 +1162,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
             GLD.diArgShapes (C.handleName (C.cfgHandle cfg)) argTys m
       _ -> traverseFC (minimalShapeWithPtrs (pure . const NoTag)) argTys
   initArgs <-
-    loadInitialPreconditions (simInitialPreconditions simOpts) argNames (ArgShapes initArgs_)
+    loadInitialPreconditions la (simInitialPreconditions simOpts) argNames (ArgShapes initArgs_)
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   result <- withMemOptions simOpts $
