@@ -101,15 +101,14 @@ STANDALONE_SHARED_LIBRARY_X64_SOS    = $(addsuffix /test.x64.elf,$(STANDALONE_SH
 STANDALONE_SHARED_LIBRARY_PPC32_SOS  = $(addsuffix /test.ppc32.elf,$(STANDALONE_SHARED_LIBRARY_DIRS))
 
 
-DWARF_DIRS = sanity/pass/dwarf-shapes sanity/pass/dwarf-shape-recursive sanity/pass/dwarf-shape-recursive-tree
-SHARED_LIBARY_DWARFV4_DIRS = sanity/pass/dwarf-shapes-dawrfv4
+SHARED_LIBARY_DWARFV4_DIRS = sanity/pass/dwarf-shapes-dwarfv4
 SHARED_LIBARY_DWARFV4_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV4_DIRS))
 
-SHARED_LIBARY_DWARFV5_DIRS = $(DWARF_DIRS)
-SHARED_LIBARY_DWARFV5_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV4_DIRS))
+SHARED_LIBARY_DWARFV5_DIRS = sanity/pass/dwarf-shapes sanity/pass/dwarf-shape-recursive sanity/pass/dwarf-shape-recursive-tree
+SHARED_LIBARY_DWARFV5_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV5_DIRS))
 
 
-STATIC_DIRS = $(filter-out $(DYNAMIC_DIRS) $(DYNAMIC_PIE_DIRS) $(STRIPPED_STATIC_DIRS) $(STATIC_WITH_LIBS_DIRS) $(STACK_PROTECTOR_DIRS) $(SHARED_LIBRARY_DIRS) $(STANDALONE_SHARED_LIBRARY_DIRS) $(DWARF_DIRS), $(DIRS))
+STATIC_DIRS = $(filter-out $(DYNAMIC_DIRS) $(DYNAMIC_PIE_DIRS) $(STRIPPED_STATIC_DIRS) $(STATIC_WITH_LIBS_DIRS) $(STACK_PROTECTOR_DIRS) $(SHARED_LIBRARY_DIRS) $(STANDALONE_SHARED_LIBRARY_DIRS) $(SHARED_LIBARY_DWARFV4_DIRS) $(SHARED_LIBARY_DWARFV5_DIRS), $(DIRS))
 STATIC_ARM_EXES   = $(addsuffix /test.armv7l.elf,$(STATIC_DIRS))
 # See discussion on !288 for why libpng-cve-2018-13785 appears here.
 STATIC_X64_EXES   = $(addsuffix /test.x64.elf,$(STATIC_DIRS) refine/neg/libpng-cve-2018-13785)
