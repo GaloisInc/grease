@@ -102,8 +102,8 @@ STANDALONE_SHARED_LIBRARY_PPC32_SOS  = $(addsuffix /test.ppc32.elf,$(STANDALONE_
 
 
 DWARF_DIRS = sanity/pass/dwarf-shapes sanity/pass/dwarf-shape-recursive sanity/pass/dwarf-shape-recursive-tree
-SHARED_LIBARY_DWARFV4_DIRS = $(DWARF_DIRS)
-SHARED_LIBARY_DWARFV4_X64_SOS = $(addsuffix /test.x64.elf-dw4,$(SHARED_LIBARY_DWARFV4_DIRS))
+SHARED_LIBARY_DWARFV4_DIRS = sanity/pass/dwarf-shapes-dawrfv4
+SHARED_LIBARY_DWARFV4_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV4_DIRS))
 
 SHARED_LIBARY_DWARFV5_DIRS = $(DWARF_DIRS)
 SHARED_LIBARY_DWARFV5_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV4_DIRS))
@@ -209,7 +209,7 @@ $(STANDALONE_SHARED_LIBRARY_X64_SOS): %/test.x64.elf: %/test.c
 $(STANDALONE_SHARED_LIBRARY_PPC32_SOS): %/test.ppc32.elf: %/test.c
 	$(PPC32CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -o $@
 
-$(SHARED_LIBARY_DWARFV4_X64_SOS): %/test.x64.elf-dw4: %/test.c
+$(SHARED_LIBARY_DWARFV4_X64_SOS): %/test.x64.elf: %/test.c
 	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -gdwarf-4 -fpic -shared $< -o $@
 
 $(SHARED_LIBARY_DWARFV5_X64_SOS): %/test.x64.elf: %/test.c
