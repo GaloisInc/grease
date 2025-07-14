@@ -23,7 +23,8 @@
 # @copyright Galois Inc. 2024
 
 # Many names are defined by Ghidra, but Ruff doesn't know that
-# ruff: noqa: F821
+# Also allow star imports for builtin stubs
+# ruff: noqa: F821 F405 F403
 
 # This one is just too opinionated
 # ruff: noqa: E741
@@ -34,6 +35,11 @@ import os
 import re
 import subprocess
 import tempfile
+import typing
+
+if typing.TYPE_CHECKING:
+    from ghidra.ghidra_builtins import *  # type: ignore
+
 
 from java.awt import Color
 
