@@ -1,6 +1,6 @@
 ; Copyright (c) Galois, Inc. 2025
 
-; Regression test for #79, wherein the must-fail heuristic has a false positive
+; Regression test for #279, wherein the must-fail heuristic has a false positive
 ; on simple Macaw memory model loads.
 
 ;; flags {"--symbol", "test"}
@@ -14,6 +14,6 @@
     (let _ (pointer-read (Bitvector 8) le ptr1))
     (return regs)))
 
-; TODO(#79): Heuristics should be able to account for this load by expanding
+; TODO(#279): Heuristics should be able to account for this load by expanding
 ; *rdi.
 ;; must_fail()
