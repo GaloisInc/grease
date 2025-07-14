@@ -7,7 +7,7 @@ Using [virtualenvwrapper](https://virtualenvwrapper.readthedocs.io/en/latest/) o
 
 ```sh
 mkvirtualenv ghidradev
-workon ghidradev 
+workon ghidradev
 pip install ghidra-stubs
 ```
 
