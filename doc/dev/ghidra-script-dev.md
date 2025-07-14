@@ -12,3 +12,7 @@ pip install ghidra-stubs
 ```
 
 Editors that support type stubs will be able to use this virtualenv to provide partial autocomplete support.
+
+## Linting
+
+See the [linting section of the dev docs](dev.md) for discussion of how to lint this script with ruff.
