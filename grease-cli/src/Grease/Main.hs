@@ -67,6 +67,7 @@ import Data.Macaw.PPC.Symbolic qualified as PPCSymbolic
 import Data.Macaw.PPC.Symbolic.Syntax qualified as PPCSyn
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Debug qualified as MDebug
+import Data.Macaw.Symbolic.Memory qualified as MSM (ignoreMacawAssertions)
 import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
 import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
 import Data.Macaw.X86 qualified as X86
@@ -621,6 +622,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let sym = C.backendGetSym bak
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
+  let ?processMacawAssert = MSM.ignoreMacawAssertions
   (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory (simMutGlobs simOpts) relocs
 
   let (tyCtxErrs, tyCtx) = TCtx.mkTypeContext dl IntMap.empty []
