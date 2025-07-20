@@ -245,7 +245,11 @@ buildErrMaps = do
   bbMapRef <- newIORef Map.empty
   let recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
         modifyIORef bbMapRef $ Map.insert ann (CrucibleLLVMError bb callStack)
-  pure (bbMapRef, recordLLVMAnnotation, undefined)
+  let processMacawAssert = \sym p err -> do
+        (ann, p') <- W4.annotateTerm sym p
+        _ <- modifyIORef bbMapRef $ Map.insert ann (MacawMemError err)
+        pure p'
+  pure (bbMapRef, recordLLVMAnnotation, processMacawAssert)
 
 -- | How to consume the results of trying to prove a goal. Not exported.
 consumer ::
