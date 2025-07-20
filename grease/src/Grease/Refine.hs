@@ -240,7 +240,7 @@ extractCLLVMError _ = Nothing
 type MacawAssertionCallback sym = sym -> W4.Pred sym -> MSM.MacawError sym -> IO (W4.Pred sym)
 type LLVMMemModelCallback sym = LLCS.CallStack -> Mem.BoolAnn sym -> CLLVM.BadBehavior sym -> IO ()
 
-buildErrMaps :: forall sym t. IO (IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)), LLVMMemModelCallback sym, MacawAssertionCallback sym)
+buildErrMaps :: forall t st fs bldr. (bldr ~ (W4.ExprBuilder t st fs)) => IO (IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription bldr)), LLVMMemModelCallback bldr, MacawAssertionCallback bldr)
 buildErrMaps = do
   bbMapRef <- newIORef Map.empty
   let recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
