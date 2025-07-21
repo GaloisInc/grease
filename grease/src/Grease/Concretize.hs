@@ -28,6 +28,7 @@ import Data.Foldable (toList)
 import Data.Functor.Const (Const)
 import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Symbolic.Memory (MacawError (UnmappedGlobalMemoryAccess))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
@@ -144,7 +145,10 @@ instance Concretize ErrorDescription where
   concretize sym (W4.GroundEvalFn gFn) (CrucibleLLVMError bb cs) = do
     bb' <- Mem.concBadBehavior sym gFn bb
     pure (CrucibleLLVMError bb' cs)
-  concretize _ (W4.GroundEvalFn _) (MacawMemError _) = undefined
+  concretize sym (W4.GroundEvalFn gFn) (MacawMemError memerr) = do
+    (UnmappedGlobalMemoryAccess ptrVal) <- pure memerr
+    cptr <- Mem.concPtr sym gFn ptrVal
+    pure $ MacawMemError (UnmappedGlobalMemoryAccess cptr)
 
 makeConcretizedData ::
   forall solver sym ext wptr bak t st argTys fm.
