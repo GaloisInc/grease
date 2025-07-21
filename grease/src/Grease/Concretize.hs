@@ -138,10 +138,13 @@ data ConcretizedData sym ext argTys
   }
 
 class Concretize e where
-  concretize :: forall sym t. sym -> W4.GroundEvalFn t -> e sym -> IO (e sym)
+  concretize :: forall sym t st fs. (WI.IsExprBuilder sym, sym ~ W4.ExprBuilder t st fs) => sym -> W4.GroundEvalFn t -> e sym -> IO (e sym)
 
 instance Concretize ErrorDescription where
-  concretize sym (W4.GroundEvalFn gFn) = undefined
+  concretize sym (W4.GroundEvalFn gFn) (CrucibleLLVMError bb cs) = do
+    bb' <- Mem.concBadBehavior sym gFn bb
+    pure (CrucibleLLVMError bb' cs)
+  concretize _ (W4.GroundEvalFn _) (MacawMemError _) = undefined
 
 makeConcretizedData ::
   forall solver sym ext wptr bak t st argTys fm.
