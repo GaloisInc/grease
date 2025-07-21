@@ -6,18 +6,24 @@ module Grease.MustFail (
   checkOneMustFail,
 ) where
 
+import Control.Applicative ((<|>))
 import Control.Lens ((^.))
 import Control.Lens qualified as Lens
 import Control.Monad qualified as Monad
+import Data.BitVector.Sized qualified as BV
 import Data.Function qualified as Function
 import Data.List qualified as List
+import Data.Macaw.Symbolic.Memory (MacawError (UnmappedGlobalMemoryAccess))
+import Data.Maybe (fromMaybe)
 import Data.Traversable qualified as Traversable
 import Data.Tuple qualified as Tuple
+import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online (OnlineBackend, withSolverProcess)
 import Lang.Crucible.Backend.Simple (Flags)
 import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.Errors.MemoryError qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLLVM
 import Lang.Crucible.Simulator.SimError qualified as C
 import What4.Expr.Builder qualified as W4
 import What4.Interface qualified as W4
@@ -25,13 +31,35 @@ import What4.LabeledPred qualified as W4
 import What4.Protocol.Online qualified as W4
 import What4.SatResult qualified as W4
 
+extractPotentiallyAnnotated :: (W4.IsExprBuilder sym, exp ~ W4.SymExpr sym tp) => sym -> exp -> (exp -> Maybe b) -> Maybe b
+extractPotentiallyAnnotated bldr expr trans =
+  tryAnn <|> tryUnannotated
+ where
+  tryAnn = trans expr
+  tryUnannotated = trans =<< W4.getUnannotatedTerm bldr expr
+
+-- tryAnn <|> tryUnann
+
+isConcreteNullPointer :: W4.IsExprBuilder sym => sym -> CLLVM.LLVMPtr sym w -> Bool
+isConcreteNullPointer bldr ptr =
+  fromMaybe
+    False
+    ( do
+        let (base, off) = CLLVM.llvmPointerView ptr
+        extbase <- extractPotentiallyAnnotated bldr (W4.natToIntegerPure base) W4.asInteger
+        extoff <- BV.asUnsigned <$> extractPotentiallyAnnotated bldr off W4.asBV
+        pure $ extbase == 0 && extoff == 0
+    )
+
 -- | Should this proof obligation be excluded from consideration by the must-
 -- fail heuristic?
 excludeMustFail ::
+  W4.IsExprBuilder sym =>
+  sym ->
   C.ProofObligation sym ->
-  Maybe (Mem.BadBehavior sym) ->
+  Maybe (ErrorDescription sym) ->
   Bool
-excludeMustFail obligation minfo =
+excludeMustFail bldr obligation minfo =
   let reason = C.simErrorReason (obligation ^. Lens.to C.proofGoal ^. W4.labeledPredMsg)
    in let msg = C.simErrorReasonMsg reason
        in List.or @[]
@@ -39,22 +67,18 @@ excludeMustFail obligation minfo =
                 -- Symbolic function pointers may arise from calling function pointers that
                 -- appear in function arguments. This is not a bug, just something GREASE
                 -- can't handle.
-                Just (Mem.BBMemoryError (Mem.MemoryError _ (Mem.BadFunctionPointer Mem.SymbolicPointer))) ->
+                Just (CrucibleLLVMError (Mem.BBMemoryError (Mem.MemoryError _ (Mem.BadFunctionPointer Mem.SymbolicPointer))) _) ->
                   True
-                _
-                  | -- macaw-symbolic does not make it straightforward to track which terms
-                    -- give rise to out-of-bounds global writes, so we catch these errors
-                    -- here in a very hacky way. See
-                    -- https://github.com/GaloisInc/macaw/issues/429 for a proposal to
-                    -- improve macaw-symbolic's assertion tracking so that we can intercept
-                    -- this properly.
-                    "PointerWrite outside of static memory range" `List.isPrefixOf` msg
-                      &&
-                      -- Make an exception for the concretely-null pointer
-                      not ("PointerWrite outside of static memory range (known BlockID 0): 0x0" `List.isPrefixOf` msg) ->
-                      True
-                  | otherwise ->
-                      False
+                Just (MacawMemError (UnmappedGlobalMemoryAccess ptrVal)) ->
+                  -- macaw-symbolic does not make it straightforward to track which terms
+                  -- give rise to out-of-bounds global writes, so we catch these errors
+                  -- here in a very hacky way. See
+                  -- https://github.com/GaloisInc/macaw/issues/429 for a proposal to
+                  -- improve macaw-symbolic's assertion tracking so that we can intercept
+                  -- this properly.
+                  not (isConcreteNullPointer bldr ptrVal)
+                _ ->
+                  False
             , -- Hitting a loop/recursion bound does not indicate a bug in the program
               case reason of
                 C.ResourceExhausted{} -> True
@@ -116,11 +140,12 @@ checkOneMustFail ::
   , sym ~ W4.ExprBuilder t st (Flags fm)
   , bak ~ OnlineBackend solver t st (Flags fm)
   ) =>
+  sym ->
   bak ->
   -- | Predicates for which no heuristic succeeded
-  [(C.ProofObligation sym, Maybe (Mem.BadBehavior sym))] ->
+  [(C.ProofObligation sym, Maybe (ErrorDescription sym))] ->
   IO Bool
-checkOneMustFail bak failed =
-  if List.any (Tuple.uncurry excludeMustFail) failed
+checkOneMustFail bldr bak failed =
+  if List.any (Tuple.uncurry $ excludeMustFail bldr) failed
     then pure False
     else oneMustFail bak (List.map Tuple.fst failed)

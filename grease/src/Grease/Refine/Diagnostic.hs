@@ -14,8 +14,10 @@ import Control.Lens ((^.))
 import Data.Functor.Const (Const (..))
 import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Symbolic.Memory (MacawError (..))
 import Data.Parameterized.Context qualified as Ctx
 import Grease.Diagnostic.Severity (Severity (Debug, Info))
+import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
 import Grease.Heuristic.Result qualified as Heuristic
 import Grease.Shape (ArgShapes (..), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrShape)
@@ -76,7 +78,7 @@ data Diagnostic where
     -- | Goal that failed (the negation of this predicate was satisfiable)
     W4.LabeledPred (W4.Pred sym) C.SimError ->
     -- | Description of the problem, if available
-    Maybe (Mem.CallStack, Mem.BadBehavior sym) ->
+    Maybe (ErrorDescription sym) ->
     Diagnostic
 
 instance PP.Pretty Diagnostic where
@@ -124,8 +126,9 @@ instance PP.Pretty Diagnostic where
           , PP.indent 4 (C.ppSimError $ lp ^. W4.labeledPredMsg)
           , -- , PP.indent 4 (W4.ppExpr $ lp ^. W4.labeledPred)
             case minfo of
+              Just (MacawMemError (UnmappedGlobalMemoryAccess _)) -> "<Unmapped memory>"
               Nothing -> "<no details available>"
-              Just (callStack, bb) ->
+              Just (CrucibleLLVMError bb callStack) ->
                 let ppCs = Mem.ppCallStack callStack
                  in PP.vcat $
                       [PP.indent 4 (Mem.ppBB bb)]
