@@ -225,17 +225,9 @@ combiner = C.Combiner $ \mr1 mr2 -> do
         ProveNoHeuristic errs2 ->
           pure (failed (ProveNoHeuristic (errs1 <> errs2)))
 
-data ErrorDescription sym
-  = CrucibleLLVMError (CLLVM.BadBehavior sym) LLCS.CallStack
-  | MacawMemError (MSM.MacawError sym)
-
 extractCLLVMError :: ErrorDescription sym -> Maybe (LLCS.CallStack, CLLVM.BadBehavior sym)
 extractCLLVMError (CrucibleLLVMError behavior cs) = Just (cs, behavior)
 extractCLLVMError _ = Nothing
-
--- buildErrMaps :: (IORef (Map
---     (W4.SymAnnotation (W4.ExprBuilder scope st (W4.Flags fm)) W4.BaseBoolType)
---     (CallStack, BadBehavior (W4.ExprBuilder scope st (W4.Flags fm)))))
 
 type MacawAssertionCallback sym = sym -> W4.Pred sym -> MSM.MacawError sym -> IO (W4.Pred sym)
 type LLVMMemModelCallback sym = LLCS.CallStack -> Mem.BoolAnn sym -> CLLVM.BadBehavior sym -> IO ()
