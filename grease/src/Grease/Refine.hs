@@ -184,7 +184,7 @@ data NoHeuristic sym ext tys
   = NoHeuristic
   { noHeuristicGoal :: C.ProofObligation sym
   , noHeuristicConcretizedData :: ConcretizedData sym ext tys
-  , noHeuristicError :: Maybe (Mem.BadBehavior sym)
+  , noHeuristicError :: Maybe (ErrorDescription sym)
   }
 
 data ProveRefineResult sym ext tys
@@ -288,7 +288,7 @@ consumer bak anns execResult la heuristics argNames argShapes bbMap initState =
         (ann : _) -> case Map.lookup ann bbMap of
           Nothing ->
             throw . GreaseException $ "Predicate annotation was not found in bad behavior map: " <> tshow ann
-          info -> pure $ (extractCLLVMError =<< info)
+          info -> pure info
     case result of
       C.Proved{} -> do
         doLog la (Diag.SolverGoalPassed (C.simErrorLoc simErr))
@@ -313,7 +313,7 @@ consumer bak anns execResult la heuristics argNames argShapes bbMap initState =
               RefinedPrecondition fc' -> pure $ ProveRefine fc'
               Unknown -> runHeuristics hs fc
           runHeuristics [] _ =
-            let err = fmap Tuple.snd minfo
+            let err = minfo
              in pure (ProveNoHeuristic (NE.singleton (NoHeuristic goal cData err)))
         runHeuristics heuristics argShapes
       C.Unknown{} ->
