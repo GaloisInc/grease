@@ -140,12 +140,12 @@ checkOneMustFail ::
   , sym ~ W4.ExprBuilder t st (Flags fm)
   , bak ~ OnlineBackend solver t st (Flags fm)
   ) =>
-  sym ->
   bak ->
   -- | Predicates for which no heuristic succeeded
   [(C.ProofObligation sym, Maybe (ErrorDescription sym))] ->
   IO Bool
-checkOneMustFail bldr bak failed =
-  if List.any (Tuple.uncurry $ excludeMustFail bldr) failed
-    then pure False
-    else oneMustFail bak (List.map Tuple.fst failed)
+checkOneMustFail bak failed =
+  let bldr = C.backendGetSym bak
+   in if List.any (Tuple.uncurry $ excludeMustFail bldr) failed
+        then pure False
+        else oneMustFail bak (List.map Tuple.fst failed)
