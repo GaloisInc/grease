@@ -30,6 +30,8 @@ import Data.Bool qualified as Bool
 import Data.Function ((&))
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Macaw.Symbolic.Memory (MacawError (UnmappedGlobalMemoryAccess))
+import Data.Macaw.Symbolic.Memory qualified as MSM
 import Data.Maybe qualified as Maybe
 import Data.Parameterized.Classes (IxedF' (..))
 import Data.Parameterized.Context qualified as Ctx
@@ -59,11 +61,13 @@ import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.Errors qualified as CLLVM
 import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.Errors.MemoryError qualified as Mem
 import Lang.Crucible.LLVM.Errors.UndefinedBehavior qualified as Mem
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel qualified as Mem hiding (Mem)
+import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Generic qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
@@ -79,12 +83,16 @@ import What4.ProgramLoc qualified as W4
 doLog :: GreaseLogAction -> Diag.Diagnostic -> IO ()
 doLog la diag = LJ.writeLog la (HeuristicDiagnostic diag)
 
+data ErrorDescription sym
+  = CrucibleLLVMError (CLLVM.BadBehavior sym) LLCS.CallStack
+  | MacawMemError (MSM.MacawError sym)
+
 type RefineHeuristic sym bak ext tys =
   bak ->
   Anns.Annotations sym ext tys ->
   InitialMem sym ->
   C.ProofObligation sym ->
-  Maybe (Mem.CallStack, Mem.BadBehavior sym) ->
+  Maybe (ErrorDescription sym) ->
   -- Argument names
   Ctx.Assignment (Const String) tys ->
   ArgShapes ext NoTag tys ->
@@ -430,9 +438,9 @@ pointerHeuristics la ptrHeuristic byteHeuristic =
       let labeledPred = C.proofGoal obligation
       let loc = C.simErrorLoc (labeledPred ^. W4.labeledPredMsg)
       case minfo of
-        Just (_cs, Mem.BBUndefinedBehavior ub) ->
+        Just (CrucibleLLVMError (Mem.BBUndefinedBehavior ub) _cs) ->
           handleUB la anns sym loc args ub
-        Just (_cs, Mem.BBMemoryError memErr@(Mem.MemoryError op reason)) -> do
+        Just (CrucibleLLVMError (Mem.BBMemoryError memErr@(Mem.MemoryError op reason)) _cs) -> do
           let onePtrHeuristics =
                 applyMemoryHeuristics la anns sym ptrHeuristic byteHeuristic loc initMem memErr argNames args
           case op of
@@ -449,6 +457,7 @@ pointerHeuristics la ptrHeuristic byteHeuristic =
                   r1 <- onePtrHeuristics dst
                   r2 <- onePtrHeuristics src
                   pure (mergeResultsOptimistic r1 r2)
+        Just (MacawMemError (UnmappedGlobalMemoryAccess _)) -> pure Unknown
         Nothing -> pure Unknown
   ]
 
