@@ -99,6 +99,7 @@ import Data.Tuple (fst, snd)
 import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
 import GHC.TypeNats (KnownNat)
+import Debug.Trace (trace)
 import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Bug qualified as Bug
@@ -624,7 +625,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let sym = C.backendGetSym bak
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
-  let ?processMacawAssert = MSM.defaultProcessMacawAssertion
+  let ?processMacawAssert = \_ p _ -> trace "My top level process callback" (pure p)
   (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory (simMutGlobs simOpts) relocs
 
   let (tyCtxErrs, tyCtx) = TCtx.mkTypeContext dl IntMap.empty []
@@ -743,8 +744,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
     (args, setupMem, setupAnns) <- setup la bak dl rNameAssign regTypes argShapes initMem
     regs' <- liftIO (overrideRegs (argVals args))
     (bbMapRef, recordLLVMAnnotation, processMacawAssert) <- liftIO buildErrMaps
-    let ?recordLLVMAnnotation = recordLLVMAnnotation
-    let ?processMacawAssert = processMacawAssert
+    let ?recordLLVMAnnotation = \x y z -> trace "axsadkjadjl" (recordLLVMAnnotation x y z)
+    let ?processMacawAssert = \x y -> trace "annotating y" (processMacawAssert x y)
     (fs0, st) <- mkInitState regs' setupMem ssa
     -- The order of the heuristics is significant, the 'macawHeuristics'
     -- find a sensible initial memory layout, which is necessary before
