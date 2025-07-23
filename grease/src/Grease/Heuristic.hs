@@ -34,6 +34,7 @@ import Data.Maybe qualified as Maybe
 import Data.Parameterized.Classes (IxedF' (..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
+import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Tuple qualified as Tuple
@@ -121,6 +122,12 @@ refinePtrArg ::
   IO (HeuristicResult ext argTys)
 refinePtrArg la args modify sel =
   case args ^. selectArg sel of
+    ShapeExt (ShapePtrBV _tag w) | Just Refl <- testEquality w ?ptrWidth -> do
+      let pt = ptrTarget Nothing Seq.empty
+      doLog la $ Diag.HeuristicPtrTarget pt
+      pt' <- modify pt
+      let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (Offset 0) pt')
+      pure $ RefinedPrecondition args'
     ShapeExt (ShapePtr _tag offset pt) -> do
       doLog la $ Diag.HeuristicPtrTarget pt
       pt' <- modify pt

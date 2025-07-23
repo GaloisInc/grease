@@ -12,6 +12,6 @@
 ;; check "Using precondition:"
 ;; check "rax: XX XX XX XX XX XX XX XX"
 ;; check "rcx: 000000000000002a"
-;; check "rdx: 000001+0000000000000004"
-;; check "000001: ## ## ## ## XX XX XX XX"
+;; check "rdx: 000000+0000000000000004"
+;; check "000000: ## ## ## ## XX XX XX XX"
 
