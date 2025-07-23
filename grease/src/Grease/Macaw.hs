@@ -42,7 +42,6 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.List qualified as P.List
 import Data.Parameterized.Map qualified as MapF
 import Data.Proxy (Proxy (Proxy))
-import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Data.Type.Equality ((:~:) (Refl))
 import Data.Word (Word64, Word8)
@@ -326,10 +325,7 @@ minimalArgShapes _bak arch mbEntryAddr = do
       | otherwise -> do
           shape <- case MT.typeRepr r of
             MT.BoolTypeRepr -> pure (ShapeBool NoTag)
-            MT.BVTypeRepr w ->
-              case testEquality w $ MT.knownNat @(MC.ArchAddrWidth arch) of
-                Just C.Refl -> pure $ ShapeExt (ShapePtr NoTag (Offset 0) (ptrTarget Nothing Seq.Empty))
-                Nothing -> pure $ ShapeExt (ShapePtrBV NoTag w)
+            MT.BVTypeRepr w -> pure $ ShapeExt (ShapePtrBV NoTag w)
             MT.TupleTypeRepr P.List.Nil -> pure $ ShapeStruct NoTag Ctx.empty
             _ -> throw $ GreaseException "Could not determine minimal shape for register"
           pure shape

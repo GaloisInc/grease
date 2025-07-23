@@ -372,6 +372,9 @@ In practice, we pick option (2). There are a couple of reasons for this:
   are live at a given moment. Starting off with a bitvector value (with a
   concrete block number) mitigates this issue somewhat, as we can avoid symbolic
   block numbers at least some of the time.
+
+It is worth noting that GREASE's default heuristics do not make empty sequences
+of MemShapes exactly because their treatment is ambiguous in this way.
 -}
 
 -- | Create 'C.RegValue's from a 'Shape'.

@@ -565,11 +565,7 @@ minimalPtrShape ::
   NatRepr w ->
   m (PtrShape ext wptr tag (Mem.LLVMPointerType w))
 minimalPtrShape mkTag w =
-  let tag = mkTag (Mem.LLVMPointerRepr w)
-   in case C.testEquality w ?ptrWidth of
-        Just C.Refl ->
-          ShapePtr <$> tag <*> pure (Offset 0) <*> pure (ptrTarget Nothing Seq.empty)
-        Nothing -> ShapePtrBV <$> tag <*> pure w
+  ShapePtrBV <$> mkTag (Mem.LLVMPointerRepr w) <*> pure w
 
 -- | Parse a 'PtrShape' from JSON
 parseJsonPtrShape ::

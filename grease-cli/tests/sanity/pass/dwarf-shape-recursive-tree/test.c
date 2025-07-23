@@ -31,12 +31,10 @@ int sum_tree(struct tree *in) {
 
 // Checks that we have multiple unrollings both of the lhs and rhs
 
-
-// x64: precond=[[000031: XX XX XX XX ## ## ## ## 000032+0000000000000000
-// x64:000032: 000033+0000000000000000 000034+0000000000000000
-// x64:000033: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00
-// x64:000034: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00]]
-
 // all: flags {"--symbol", "sum_tree", "--use-debug-info-types", "--no-heuristics"} 
 // x64: go(prog)
-// x64: check(precond)
+// x64: check "00002b: XX XX XX XX ## ## ## ## 00002c+0000000000000000"
+// x64: check "00002c: 00002d+0000000000000000 00002e+0000000000000000"
+// x64: check "00002d: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00"
+// x64: check "00002e: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00"
+
