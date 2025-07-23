@@ -130,6 +130,8 @@ data SimOpts
   -- ^ Overrides in YAML format
   , simProgPath :: FilePath
   -- ^ Path to program to simulate
+  , simRawBinaryMode :: Bool
+  -- ^ Parse binary in raw binary mode (non-elf position dependent executable)
   , simPltStubs :: [PltStub]
   -- ^ User-specified PLT stubs to consider in addition to the stubs that
   -- @grease@ discovers via heuristics.

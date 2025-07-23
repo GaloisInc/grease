@@ -227,6 +227,9 @@ simOpts = do
           <> Opt.showDefault
           <> Opt.help "The SMT solver to use for solving proof goals"
       )
+  simRawBinaryMode <-
+    Opt.switch
+      (Opt.long "raw-binary" <> Opt.help "load binary as a position dependent non-elf")
   simErrorSymbolicFunCalls <-
     GO.ErrorSymbolicFunCalls
       <$> Opt.switch

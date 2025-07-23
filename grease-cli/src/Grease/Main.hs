@@ -55,6 +55,7 @@ import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.BinaryLoader (BinaryLoader)
 import Data.Macaw.BinaryLoader qualified as Loader
 import Data.Macaw.BinaryLoader.AArch32 ()
+import Data.Macaw.BinaryLoader.RawBinary ()
 import Data.Macaw.BinaryLoader.X86 ()
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
@@ -121,7 +122,7 @@ import Grease.Macaw.Arch.PPC64 (ppc64Ctx)
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.Dwarf (loadDwarfPreconditions)
-import Grease.Macaw.Load (LoadedProgram (..), load)
+import Grease.Macaw.Load (LoadedProgram (..), load, loadOptions)
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMap)
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
@@ -188,7 +189,7 @@ import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
-import Prelude (Integral, Num (..), fromIntegral)
+import Prelude (Integral, Num (..), fromIntegral, undefined)
 
 -- | Results of analysis, one per given 'Entrypoint'
 newtype Results = Results {getResults :: Map Entrypoint Batch}
@@ -1418,6 +1419,59 @@ simulateARMSyntax simOpts la = withMemOptions simOpts $ do
   archCtx <- armCtx halloc Nothing (simStackArgumentSlots simOpts)
   simulateMacawSyntax la halloc archCtx simOpts AArch32Syn.aarch32ParserHooks
 
+simulateMacawRaw ::
+  forall arch.
+  ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
+  , Symbolic.SymArchConstraints arch
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
+  , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
+  , Show (ArchReloc arch)
+  , ?memOpts :: Mem.MemOptions
+  ) =>
+  GreaseLogAction ->
+  MM.Memory (MC.ArchAddrWidth arch) ->
+  C.HandleAllocator ->
+  ArchContext arch ->
+  SimOpts ->
+  CSyn.ParserHooks (Symbolic.MacawExt arch) ->
+  IO Results
+simulateMacawRaw la memory halloc archCtx simOpts parserHooks = do
+  let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
+  prog <- parseProgram halloc (simProgPath simOpts)
+  CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
+  cfgs <- entrypointCfgMap la halloc prog (simEntryPoints simOpts)
+  let cfgs' = Map.map (\cfg -> MacawEntrypointCfgs cfg Nothing) cfgs
+  let dl = macawDataLayout archCtx
+  let setupHook :: forall sym. Macaw.SetupHook sym arch
+      setupHook = Macaw.syntaxSetupHook la dl cfgs prog
+  let macawCfgConfig =
+        MacawCfgConfig
+          { mcDataLayout = dl
+          , mcMprotectAddr = Nothing
+          , mcLoadOptions = MML.defaultLoadOptions
+          , mcSymMap = Map.empty
+          , mcPltStubs = Map.empty
+          , mcDynFunMap = Map.empty
+          , mcRelocs = Map.empty
+          , mcMemory = memory
+          , mcTxtBounds = (0, 0)
+          , mcElf = Nothing
+          }
+  simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs'
+
+simulateARMRaw :: SimOpts -> GreaseLogAction -> IO Results
+simulateARMRaw simOpts la = withMemOptions simOpts $ do
+  bs <- BS.readFile (simProgPath simOpts)
+  let ?ptrWidth = knownNat @32
+  let ldr = Loader.RawBin bs
+  -- TODO: we should allow setting a load offset via an option
+  let opts = loadOptions False
+  lded <- Loader.loadBinary @ARM.ARM opts ldr
+  halloc <- C.newHandleAllocator
+  archCtx <- armCtx halloc Nothing (simStackArgumentSlots simOpts)
+  simulateMacawRaw la (Loader.memoryImage lded) halloc archCtx simOpts AArch32Syn.aarch32ParserHooks
+
 simulateARM :: SimOpts -> GreaseLogAction -> IO Results
 simulateARM simOpts la = do
   let ?ptrWidth = knownNat @32
@@ -1533,21 +1587,25 @@ simulateFile ::
   SimOpts ->
   GreaseLogAction ->
   IO Results
-simulateFile opts =
+simulateFile opts la =
   let path = simProgPath opts
    in -- This list also appears in {overrides,sexp}.md
       if
-        | ".armv7l.elf" `List.isSuffixOf` path -> simulateARM opts
-        | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32 opts
-        | ".ppc64.elf" `List.isSuffixOf` path -> simulatePPC64 opts
-        | ".x64.elf" `List.isSuffixOf` path -> simulateX86 opts
-        | ".bc" `List.isSuffixOf` path -> simulateLlvm Trans.defaultTranslationOptions opts
-        | ".armv7l.cbl" `List.isSuffixOf` path -> simulateARMSyntax opts
-        | ".ppc32.cbl" `List.isSuffixOf` path -> simulatePPC32Syntax opts
-        | ".ppc64.cbl" `List.isSuffixOf` path -> simulatePPC64Syntax opts
-        | ".x64.cbl" `List.isSuffixOf` path -> simulateX86Syntax opts
-        | ".llvm.cbl" `List.isSuffixOf` path -> simulateLlvmSyntax opts
-        | otherwise -> simulateElf opts
+        | (simRawBinaryMode opts) ->
+            if
+              | ".armv7l.elf" `List.isSuffixOf` path -> simulateARMRaw opts la
+              | otherwise -> throw (GreaseException "Unsupported file suffix for raw binary mode")
+        | ".armv7l.elf" `List.isSuffixOf` path -> simulateARM opts la
+        | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32 opts la
+        | ".ppc64.elf" `List.isSuffixOf` path -> simulatePPC64 opts la
+        | ".x64.elf" `List.isSuffixOf` path -> simulateX86 opts la
+        | ".bc" `List.isSuffixOf` path -> simulateLlvm Trans.defaultTranslationOptions opts la
+        | ".armv7l.cbl" `List.isSuffixOf` path -> simulateARMSyntax opts la
+        | ".ppc32.cbl" `List.isSuffixOf` path -> simulatePPC32Syntax opts la
+        | ".ppc64.cbl" `List.isSuffixOf` path -> simulatePPC64Syntax opts la
+        | ".x64.cbl" `List.isSuffixOf` path -> simulateX86Syntax opts la
+        | ".llvm.cbl" `List.isSuffixOf` path -> simulateLlvmSyntax opts la
+        | otherwise -> simulateElf opts la
 
 -- | Also used in the test suite
 logResults :: GreaseLogAction -> Results -> IO ()
