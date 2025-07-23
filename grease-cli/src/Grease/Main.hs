@@ -183,13 +183,14 @@ import System.Directory (Permissions, getPermissions)
 import System.FilePath (FilePath)
 import System.IO (IO)
 import Text.LLVM qualified as L
+import Text.Read (readMaybe)
 import Text.Show (Show (..))
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
-import Prelude (Integral, Num (..), fromIntegral, undefined)
+import Prelude (Integer, Integral, Num (..), fromIntegral, undefined)
 
 -- | Results of analysis, one per given 'Entrypoint'
 newtype Results = Results {getResults :: Map Entrypoint Batch}
@@ -1436,29 +1437,47 @@ simulateMacawRaw ::
   SimOpts ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
   IO Results
-simulateMacawRaw la memory halloc archCtx simOpts parserHooks = do
-  let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
-  prog <- parseProgram halloc (simProgPath simOpts)
-  CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
-  cfgs <- entrypointCfgMap la halloc prog (simEntryPoints simOpts)
-  let cfgs' = Map.map (\cfg -> MacawEntrypointCfgs cfg Nothing) cfgs
-  let dl = macawDataLayout archCtx
-  let setupHook :: forall sym. Macaw.SetupHook sym arch
-      setupHook = Macaw.syntaxSetupHook la dl cfgs prog
-  let macawCfgConfig =
-        MacawCfgConfig
-          { mcDataLayout = dl
-          , mcMprotectAddr = Nothing
-          , mcLoadOptions = MML.defaultLoadOptions
-          , mcSymMap = Map.empty
-          , mcPltStubs = Map.empty
-          , mcDynFunMap = Map.empty
-          , mcRelocs = Map.empty
-          , mcMemory = memory
-          , mcTxtBounds = (0, 0)
-          , mcElf = Nothing
-          }
-  simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs'
+simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
+  do
+    let entries = simEntryPoints simOpts
+    let entryAddrs :: [(Maybe FilePath, Text.Text, Integer)] = Maybe.mapMaybe (\(x, override) -> (override,x,) <$> (readMaybe $ Text.unpack x)) $ List.concat $ List.map (\case Entrypoint{entrypointLocation = EntrypointAddress x, entrypointStartupOvPath = override} -> [(x, override)]; _ -> []) entries
+    let buildAddrSegs = Maybe.mapMaybe (\(pth, t, intaddr) -> (pth,t,) <$> (MM.resolveAbsoluteAddr memory $ fromIntegral intaddr)) entryAddrs
+    let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
+    cfgs <-
+      fmap Map.fromList $ forM buildAddrSegs $ \(mbOverride, entText, entAddr) -> do
+        C.Reg.SomeCFG cfg <- discoverFunction la halloc archCtx memory Map.empty Map.empty entAddr
+        mbStartupOv <-
+          traverse (parseEntrypointStartupOv halloc) mbOverride
+        let entrypointCfgs =
+              EntrypointCfgs
+                { entrypointStartupOv = mbStartupOv
+                , entrypointCfg = C.Reg.AnyCFG cfg
+                }
+        pure (Entrypoint{entrypointLocation = EntrypointAddress entText, entrypointStartupOvPath = mbOverride}, MacawEntrypointCfgs entrypointCfgs (Just entAddr))
+    let setupHook :: forall sym. SetupHook sym arch
+        setupHook = Macaw.binSetupHook cfgs
+    let dl = macawDataLayout archCtx
+    let macawCfgConfig =
+          MacawCfgConfig
+            { mcDataLayout = dl
+            , mcMprotectAddr = Nothing
+            , mcLoadOptions = MML.defaultLoadOptions
+            , mcSymMap = Map.empty
+            , mcPltStubs = Map.empty
+            , mcDynFunMap = Map.empty
+            , mcRelocs = Map.empty
+            , mcMemory = memory
+            , mcTxtBounds = (0, 0)
+            , mcElf = Nothing
+            }
+    simulateMacawCfgs
+      la
+      halloc
+      macawCfgConfig
+      archCtx
+      simOpts
+      setupHook
+      cfgs
 
 simulateARMRaw :: SimOpts -> GreaseLogAction -> IO Results
 simulateARMRaw simOpts la = withMemOptions simOpts $ do

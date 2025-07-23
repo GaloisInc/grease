@@ -4,6 +4,6 @@
 
 int test(int *x) { return *x; }
 
-// all: flags {"--entrypoint", "foo", "--use-debug-info-types", "--no-heuristics"}
-// x64: go(prog)
-// x64: ok()
+// all: flags {"--address", "0", "--raw-binary"}
+// arm: go(prog)
+// arm: ok()
