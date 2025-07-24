@@ -1509,7 +1509,7 @@ simulateRawArch simOpts la halloc hooks archCtx end = do
   bs <- BS.readFile (simProgPath simOpts)
   let ldr = Loader.RawBin bs end
   -- TODO: we should allow setting a load offset via an option
-  let opts = MML.LoadOptions{MML.loadOffset = Just $ fromIntegral $ simRawBinaryOffset simOpts}
+  let opts = MML.LoadOptions{MML.loadOffset = Just $ simRawBinaryOffset simOpts}
   lded <- Loader.loadBinary @arch opts ldr
   simulateMacawRaw la (Loader.memoryImage lded) halloc archCtx simOpts hooks
 
