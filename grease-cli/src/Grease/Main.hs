@@ -525,7 +525,6 @@ simulateMacawCfg ::
   , Symbolic.SymArchConstraints arch
   , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
-  , BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , Show (ArchReloc arch)
   , ?memOpts :: Mem.MemOptions
@@ -803,7 +802,6 @@ simulateMacawCfgs ::
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
   , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
-  , BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , Show (ArchReloc arch)
   , ?memOpts :: Mem.MemOptions
@@ -1425,7 +1423,6 @@ simulateMacawRaw ::
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
   , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
-  , BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , Show (ArchReloc arch)
   , ?memOpts :: Mem.MemOptions
