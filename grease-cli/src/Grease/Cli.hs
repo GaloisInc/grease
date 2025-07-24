@@ -341,8 +341,8 @@ processSimOpts sOpts =
 
 opts :: Opt.Parser GO.Opts
 opts = do
-  optsJSON <- Opt.switch (Opt.long "json" <> Opt.help "output JSON")
   optsSimOpts <- processSimOpts <$> simOpts
+  optsJSON <- Opt.switch (Opt.long "json" <> Opt.help "output JSON")
 
   let minSeverity = Sev.severityToNat Sev.Info
   -- count the `-v`s
