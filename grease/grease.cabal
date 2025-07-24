@@ -194,6 +194,7 @@ library
     Grease.Cursor.Pointer
     Grease.Diagnostic
     Grease.Diagnostic.Severity
+    Grease.ErrorDescription
     Grease.Entrypoint
     Grease.Heuristic
     Grease.Heuristic.Diagnostic

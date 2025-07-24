@@ -20,6 +20,7 @@ module Grease.Heuristic (
   mustFailHeuristic,
   llvmHeuristics,
   macawHeuristics,
+  ErrorDescription (..),
 ) where
 
 import Control.Applicative (Alternative ((<|>)), Const (..))
@@ -30,6 +31,8 @@ import Data.Bool qualified as Bool
 import Data.Function ((&))
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Macaw.Symbolic.Memory (MacawError (UnmappedGlobalMemoryAccess))
+import Data.Macaw.Symbolic.Memory qualified as MSM
 import Data.Maybe qualified as Maybe
 import Data.Parameterized.Classes (IxedF' (..))
 import Data.Parameterized.Context qualified as Ctx
@@ -44,6 +47,7 @@ import Grease.Bug.UndefinedBehavior qualified as UB
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer (Dereference)
 import Grease.Diagnostic
+import Grease.ErrorDescription (ErrorDescription (..))
 import Grease.Heuristic.Diagnostic qualified as Diag
 import Grease.Heuristic.Result
 import Grease.Macaw.RegName (RegNames, getRegName, mkRegName)
@@ -59,11 +63,13 @@ import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.Errors qualified as CLLVM
 import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.Errors.MemoryError qualified as Mem
 import Lang.Crucible.LLVM.Errors.UndefinedBehavior qualified as Mem
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel qualified as Mem hiding (Mem)
+import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Generic qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
@@ -84,7 +90,7 @@ type RefineHeuristic sym bak ext tys =
   Anns.Annotations sym ext tys ->
   InitialMem sym ->
   C.ProofObligation sym ->
-  Maybe (Mem.CallStack, Mem.BadBehavior sym) ->
+  Maybe (ErrorDescription sym) ->
   -- Argument names
   Ctx.Assignment (Const String) tys ->
   ArgShapes ext NoTag tys ->
@@ -379,35 +385,37 @@ mustFailHeuristic ::
   ) =>
   RefineHeuristic sym bak ext argTys
 mustFailHeuristic bak _anns _initMem obligation minfo _argNames _args =
-  if MustFail.excludeMustFail obligation (Tuple.snd <$> minfo)
-    then pure Unknown
-    else do
-      mustFail <- MustFail.oneMustFail bak [obligation]
-      let lp = C.proofGoal obligation
-      let simError = lp ^. W4.labeledPredMsg
-      let loc = C.simErrorLoc simError
-      let bug =
-            Bug.BugInstance
-              { Bug.bugType = Bug.MustFail
-              , Bug.bugLoc = ppProgramLoc loc
-              , Bug.bugDetails = do
-                  let txt = tshow (C.ppSimError simError)
-                  case minfo of
-                    Just (callStack, badBehavior) ->
-                      let txt' = tshow (Mem.ppBB badBehavior)
-                       in Just $
-                            if Mem.null callStack
-                              then txt'
-                              else txt' <> "\nin context:\n" <> tshow (Mem.ppCallStack callStack)
-                    Nothing -> Just txt
-              , Bug.bugUb = do
-                  -- Maybe
-                  (_cs, Mem.BBUndefinedBehavior ub) <- minfo
-                  Just (UB.makeUb ub)
-              }
-      if Bool.not mustFail
+  let sym = C.backendGetSym bak
+   in if MustFail.excludeMustFail sym obligation minfo
         then pure Unknown
-        else pure (PossibleBug bug)
+        else do
+          mustFail <- MustFail.oneMustFail bak [obligation]
+          let lp = C.proofGoal obligation
+          let simError = lp ^. W4.labeledPredMsg
+          let loc = C.simErrorLoc simError
+          let bug =
+                Bug.BugInstance
+                  { Bug.bugType = Bug.MustFail
+                  , Bug.bugLoc = ppProgramLoc loc
+                  , Bug.bugDetails = do
+                      let txt = tshow (C.ppSimError simError)
+                      case minfo of
+                        Just (CrucibleLLVMError badBehavior callStack) ->
+                          let txt' = tshow (Mem.ppBB badBehavior)
+                           in Just $
+                                if Mem.null callStack
+                                  then txt'
+                                  else txt' <> "\nin context:\n" <> tshow (Mem.ppCallStack callStack)
+                        -- Ok for now since we exclude macaw errors
+                        _ -> Just txt
+                  , Bug.bugUb = do
+                      -- Maybe
+                      (CrucibleLLVMError (Mem.BBUndefinedBehavior ub) _) <- minfo
+                      Just (UB.makeUb ub)
+                  }
+          if Bool.not mustFail
+            then pure Unknown
+            else pure (PossibleBug bug)
 
 pointerHeuristics ::
   forall wptr solver sym bak t st fs ext argTys.
@@ -430,9 +438,9 @@ pointerHeuristics la ptrHeuristic byteHeuristic =
       let labeledPred = C.proofGoal obligation
       let loc = C.simErrorLoc (labeledPred ^. W4.labeledPredMsg)
       case minfo of
-        Just (_cs, Mem.BBUndefinedBehavior ub) ->
+        Just (CrucibleLLVMError (Mem.BBUndefinedBehavior ub) _cs) ->
           handleUB la anns sym loc args ub
-        Just (_cs, Mem.BBMemoryError memErr@(Mem.MemoryError op reason)) -> do
+        Just (CrucibleLLVMError (Mem.BBMemoryError memErr@(Mem.MemoryError op reason)) _cs) -> do
           let onePtrHeuristics =
                 applyMemoryHeuristics la anns sym ptrHeuristic byteHeuristic loc initMem memErr argNames args
           case op of
@@ -449,6 +457,7 @@ pointerHeuristics la ptrHeuristic byteHeuristic =
                   r1 <- onePtrHeuristics dst
                   r2 <- onePtrHeuristics src
                   pure (mergeResultsOptimistic r1 r2)
+        Just (MacawMemError (UnmappedGlobalMemoryAccess _)) -> pure Unknown
         Nothing -> pure Unknown
   ]
 
