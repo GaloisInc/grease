@@ -1513,6 +1513,22 @@ simulateARMRaw simOpts la = withMemOptions simOpts $ do
   archCtx <- armCtx halloc Nothing (simStackArgumentSlots simOpts)
   simulateRawArch simOpts la halloc AArch32Syn.aarch32ParserHooks archCtx MM.LittleEndian
 
+-- TODO(#287) We cannot load ppc64 raw because of https://github.com/GaloisInc/macaw/issues/415 we
+-- do not have a TOC
+simulatePPC32Raw :: SimOpts -> GreaseLogAction -> IO Results
+simulatePPC32Raw simOpts la = withMemOptions simOpts $ do
+  let ?ptrWidth = knownNat @32
+  halloc <- C.newHandleAllocator
+  archCtx <- ppc32Ctx Nothing (simStackArgumentSlots simOpts)
+  simulateRawArch simOpts la halloc PPCSyn.ppc32ParserHooks archCtx MM.LittleEndian
+
+simulateX86Raw :: SimOpts -> GreaseLogAction -> IO Results
+simulateX86Raw simOpts la = withMemOptions simOpts $ do
+  let ?ptrWidth = knownNat @64
+  halloc <- C.newHandleAllocator
+  archCtx <- x86Ctx halloc Nothing (simStackArgumentSlots simOpts)
+  simulateRawArch simOpts la halloc X86Syn.x86ParserHooks archCtx MM.LittleEndian
+
 simulateARM :: SimOpts -> GreaseLogAction -> IO Results
 simulateARM simOpts la = do
   let ?ptrWidth = knownNat @32
@@ -1635,6 +1651,8 @@ simulateFile opts la =
         | (simRawBinaryMode opts) ->
             if
               | ".armv7l.elf" `List.isSuffixOf` path -> simulateARMRaw opts la
+              | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32Raw opts la
+              | ".x64.elf" `List.isSuffixOf` path -> simulateX86Raw opts la
               | otherwise -> throw (GreaseException "Unsupported file suffix for raw binary mode")
         | ".armv7l.elf" `List.isSuffixOf` path -> simulateARM opts la
         | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32 opts la
