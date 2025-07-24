@@ -97,6 +97,7 @@ import Data.Traversable (for, traverse)
 import Data.Tuple (fst, snd)
 import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
+import GHC.TypeNats (KnownNat)
 import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Bug qualified as Bug
@@ -1476,17 +1477,41 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
       setupHook
       cfgs
 
-simulateARMRaw :: SimOpts -> GreaseLogAction -> IO Results
-simulateARMRaw simOpts la = withMemOptions simOpts $ do
+simulateRawArch ::
+  forall arch.
+  ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , MM.MemWidth
+      (MC.RegAddrWidth (MC.ArchReg arch))
+  , KnownNat
+      (MC.RegAddrWidth (MC.ArchReg arch))
+  , C.IsSyntaxExtension (Symbolic.MacawExt arch)
+  , Symbolic.SymArchConstraints arch
+  , Integral
+      (Elf.ElfWordType (MC.RegAddrWidth (MC.ArchReg arch)))
+  , Show (ArchReloc arch)
+  , ?memOpts :: Mem.MemOptions
+  ) =>
+  SimOpts ->
+  GreaseLogAction ->
+  C.HandleAllocator ->
+  CSyn.ParserHooks (Symbolic.MacawExt arch) ->
+  ArchContext arch ->
+  MM.Endianness ->
+  IO Results
+simulateRawArch simOpts la halloc hooks archCtx end = do
   bs <- BS.readFile (simProgPath simOpts)
-  let ?ptrWidth = knownNat @32
-  let ldr = Loader.RawBin bs MM.LittleEndian
+  let ldr = Loader.RawBin bs end
   -- TODO: we should allow setting a load offset via an option
   let opts = MML.LoadOptions{MML.loadOffset = Just $ fromIntegral $ simRawBinaryOffset simOpts}
-  lded <- Loader.loadBinary @ARM.ARM opts ldr
+  lded <- Loader.loadBinary @arch opts ldr
+  simulateMacawRaw la (Loader.memoryImage lded) halloc archCtx simOpts hooks
+
+simulateARMRaw :: SimOpts -> GreaseLogAction -> IO Results
+simulateARMRaw simOpts la = withMemOptions simOpts $ do
+  let ?ptrWidth = knownNat @32
   halloc <- C.newHandleAllocator
   archCtx <- armCtx halloc Nothing (simStackArgumentSlots simOpts)
-  simulateMacawRaw la (Loader.memoryImage lded) halloc archCtx simOpts AArch32Syn.aarch32ParserHooks
+  simulateRawArch simOpts la halloc AArch32Syn.aarch32ParserHooks archCtx MM.LittleEndian
 
 simulateARM :: SimOpts -> GreaseLogAction -> IO Results
 simulateARM simOpts la = do
