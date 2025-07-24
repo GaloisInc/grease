@@ -1458,7 +1458,10 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
                 { entrypointStartupOv = mbStartupOv
                 , entrypointCfg = C.Reg.AnyCFG cfg
                 }
-        pure (Entrypoint{entrypointLocation = EntrypointAddress entText, entrypointStartupOvPath = mbOverride}, MacawEntrypointCfgs entrypointCfgs (Just entAddr))
+        pure
+          ( Entrypoint{entrypointLocation = EntrypointAddress entText, entrypointStartupOvPath = mbOverride}
+          , MacawEntrypointCfgs entrypointCfgs (Just entAddr)
+          )
     let setupHook :: forall sym. SetupHook sym arch
         setupHook = Macaw.binSetupHook cfgs
     let dl = macawDataLayout archCtx
