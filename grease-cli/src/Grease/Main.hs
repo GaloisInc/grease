@@ -190,7 +190,7 @@ import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
-import Prelude (Integer, Integral, Num (..), fromIntegral, undefined)
+import Prelude (Integer, Integral, Num (..), fromIntegral)
 
 -- | Results of analysis, one per given 'Entrypoint'
 newtype Results = Results {getResults :: Map Entrypoint Batch}
