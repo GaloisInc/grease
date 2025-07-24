@@ -1483,7 +1483,7 @@ simulateARMRaw :: SimOpts -> GreaseLogAction -> IO Results
 simulateARMRaw simOpts la = withMemOptions simOpts $ do
   bs <- BS.readFile (simProgPath simOpts)
   let ?ptrWidth = knownNat @32
-  let ldr = Loader.RawBin bs
+  let ldr = Loader.RawBin bs MM.LittleEndian
   -- TODO: we should allow setting a load offset via an option
   let opts = MML.LoadOptions{MML.loadOffset = Just $ fromIntegral $ simRawBinaryOffset simOpts}
   lded <- Loader.loadBinary @ARM.ARM opts ldr
