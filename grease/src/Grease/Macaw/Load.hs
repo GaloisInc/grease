@@ -11,7 +11,6 @@
 module Grease.Macaw.Load (
   LoadedProgram (..),
   load,
-  loadOptions,
 ) where
 
 import Control.Exception.Safe (throw)

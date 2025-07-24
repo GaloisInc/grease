@@ -4,6 +4,6 @@
 
 int test(int *x) { return *x; }
 
-// all: flags {"--address", "0", "--raw-binary"}
+// all: flags {"--load-base", "0x1000", "--address", "0x1000", "--raw-binary"}
 // arm: go(prog)
 // arm: ok()

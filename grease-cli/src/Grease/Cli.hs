@@ -241,6 +241,14 @@ simOpts = do
                   ]
               )
         )
+  simRawBinaryOffset <-
+    Opt.option
+      Opt.auto
+      ( Opt.long "load-base"
+          <> Opt.metavar "NUM"
+          <> Opt.value 0
+          <> Opt.help "The load base for a raw binary"
+      )
   simErrorSymbolicSyscalls <-
     GO.ErrorSymbolicSyscalls
       <$> Opt.switch

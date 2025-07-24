@@ -122,7 +122,7 @@ import Grease.Macaw.Arch.PPC64 (ppc64Ctx)
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.Dwarf (loadDwarfPreconditions)
-import Grease.Macaw.Load (LoadedProgram (..), load, loadOptions)
+import Grease.Macaw.Load (LoadedProgram (..), load)
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMap)
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
@@ -1485,7 +1485,7 @@ simulateARMRaw simOpts la = withMemOptions simOpts $ do
   let ?ptrWidth = knownNat @32
   let ldr = Loader.RawBin bs
   -- TODO: we should allow setting a load offset via an option
-  let opts = loadOptions False
+  let opts = MML.LoadOptions{MML.loadOffset = Just $ fromIntegral $ simRawBinaryOffset simOpts}
   lded <- Loader.loadBinary @ARM.ARM opts ldr
   halloc <- C.newHandleAllocator
   archCtx <- armCtx halloc Nothing (simStackArgumentSlots simOpts)
