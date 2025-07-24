@@ -57,12 +57,14 @@ boundedEnumMetavar _ = Opt.metavar $ varShowS ""
 
 entrypointParser :: Opt.Parser Entrypoint
 entrypointParser =
-  addressParser
-    Opt.<|> symbolParser
-    Opt.<|> coreDumpParser
-    Opt.<|> addressStartupOvParser
-    Opt.<|> symbolStartupOvParser
+  inGroup addressParser
+    Opt.<|> inGroup symbolParser
+    Opt.<|> inGroup coreDumpParser
+    Opt.<|> inGroup addressStartupOvParser
+    Opt.<|> inGroup symbolStartupOvParser
  where
+  inGroup = Opt.parserOptionGroup "Entrypoint options"
+
   addressParser =
     entrypointNoStartupOv . EntrypointAddress
       <$> Opt.strOption
@@ -231,16 +233,17 @@ simOpts = do
     Opt.switch
       (Opt.long "raw-binary" <> Opt.help "load binary as a position dependent non-elf")
   simErrorSymbolicFunCalls <-
-    GO.ErrorSymbolicFunCalls
-      <$> Opt.switch
-        ( Opt.long "error-symbolic-fun-calls"
-            <> Opt.help
-              ( String.unlines
-                  [ "Throw an error if attempting to call a symbolic function handle or pointer"
-                  , "(by default, these calls will be skipped)"
-                  ]
-              )
-        )
+    fmap GO.ErrorSymbolicFunCalls $
+      Opt.parserOptionGroup callOptionsGroup $
+        Opt.switch
+          ( Opt.long "error-symbolic-fun-calls"
+              <> Opt.help
+                ( String.unlines
+                    [ "Throw an error if attempting to call a symbolic function handle or pointer"
+                    , "(by default, these calls will be skipped)"
+                    ]
+                )
+          )
   simRawBinaryOffset <-
     Opt.option
       Opt.auto
@@ -250,27 +253,29 @@ simOpts = do
           <> Opt.help "The load base for a raw binary"
       )
   simErrorSymbolicSyscalls <-
-    GO.ErrorSymbolicSyscalls
-      <$> Opt.switch
-        ( Opt.long "error-symbolic-syscalls"
-            <> Opt.help
-              ( String.unlines
-                  [ "Throw an error if attempting to make a syscall with a symbolic number"
-                  , "(by default, these calls will be skipped)"
-                  ]
-              )
-        )
+    fmap GO.ErrorSymbolicSyscalls $
+      Opt.parserOptionGroup callOptionsGroup $
+        Opt.switch
+          ( Opt.long "error-symbolic-syscalls"
+              <> Opt.help
+                ( String.unlines
+                    [ "Throw an error if attempting to make a syscall with a symbolic number"
+                    , "(by default, these calls will be skipped)"
+                    ]
+                )
+          )
   simSkipInvalidCallAddrs <-
-    GO.SkipInvalidCallAddrs
-      <$> Opt.switch
-        ( Opt.long "skip-invalid-call-addrs"
-            <> Opt.help
-              ( String.unlines
-                  [ "Skip calls to invalid addresses."
-                  , "(by default, these calls will result in an error)"
-                  ]
-              )
-        )
+    fmap GO.SkipInvalidCallAddrs $
+      Opt.parserOptionGroup callOptionsGroup $
+        Opt.switch
+          ( Opt.long "skip-invalid-call-addrs"
+              <> Opt.help
+                ( String.unlines
+                    [ "Skip calls to invalid addresses."
+                    , "(by default, these calls will result in an error)"
+                    ]
+                )
+          )
   simRust <-
     Opt.switch
       ( Opt.long "rust"
@@ -286,6 +291,8 @@ simOpts = do
       )
   pure GO.SimOpts{..}
  where
+  callOptionsGroup = "Call options"
+
   allMutableGlobalStateStrs :: [String]
   allMutableGlobalStateStrs = List.map show GO.allMutableGlobalStates
 

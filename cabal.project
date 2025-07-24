@@ -1,3 +1,6 @@
+-- https://github.com/kquick/tasty-sugar/issues/4
+allow-newer: tasty-sugar:optparse-applicative
+
 packages:
   grease/grease.cabal
   grease-cli/grease-cli.cabal
