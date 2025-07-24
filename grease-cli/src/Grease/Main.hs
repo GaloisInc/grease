@@ -55,7 +55,7 @@ import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.BinaryLoader (BinaryLoader)
 import Data.Macaw.BinaryLoader qualified as Loader
 import Data.Macaw.BinaryLoader.AArch32 ()
-import Data.Macaw.BinaryLoader.RawBinary ()
+import Data.Macaw.BinaryLoader.Raw ()
 import Data.Macaw.BinaryLoader.X86 ()
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
@@ -1438,11 +1438,18 @@ simulateMacawRaw ::
 simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
   do
     let entries = simEntryPoints simOpts
-    let entryAddrs :: [(Maybe FilePath, Text.Text, Integer)] = Maybe.mapMaybe (\(x, override) -> (override,x,) <$> (readMaybe $ Text.unpack x)) $ List.concat $ List.map (\case Entrypoint{entrypointLocation = EntrypointAddress x, entrypointStartupOvPath = override} -> [(x, override)]; _ -> []) entries
-    let buildAddrSegs = Maybe.mapMaybe (\(pth, t, intaddr) -> (pth,t,) <$> (MM.resolveAbsoluteAddr memory $ fromIntegral intaddr)) entryAddrs
+    let getAddressEntrypoint ent = do
+          (txt, fpath) <- case ent of
+            Entrypoint{entrypointLocation = EntrypointAddress x, entrypointStartupOvPath = override} -> Just (x, override)
+            _ -> Nothing
+          intAddr <- (readMaybe $ Text.unpack txt :: Maybe Integer)
+          addr <- MM.resolveAbsoluteAddr memory $ fromIntegral intAddr
+          pure (fpath, txt, addr)
+
+    let entryAddrs :: [(Maybe FilePath, Text.Text, MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)))] = Maybe.mapMaybe getAddressEntrypoint entries
     let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
     cfgs <-
-      fmap Map.fromList $ forM buildAddrSegs $ \(mbOverride, entText, entAddr) -> do
+      fmap Map.fromList $ forM entryAddrs $ \(mbOverride, entText, entAddr) -> do
         C.Reg.SomeCFG cfg <- discoverFunction la halloc archCtx memory Map.empty Map.empty entAddr
         mbStartupOv <-
           traverse (parseEntrypointStartupOv halloc) mbOverride
