@@ -1438,10 +1438,12 @@ simulateMacawRaw ::
 simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
   do
     let entries = simEntryPoints simOpts
+    -- When loading a binary in raw mode
+    -- symbol entrypoints cannot be used
     let getAddressEntrypoint ent = do
           (txt, fpath) <- case ent of
             Entrypoint{entrypointLocation = EntrypointAddress x, entrypointStartupOvPath = override} -> Just (x, override)
-            _ -> Nothing
+            _ -> throw (GreaseException "When loading a binary in raw mode, only address entrypoints are valid")
           intAddr <- (readMaybe $ Text.unpack txt :: Maybe Integer)
           addr <- MM.resolveAbsoluteAddr memory $ fromIntegral intAddr
           pure (fpath, txt, addr)
@@ -1487,6 +1489,8 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
       setupHook
       cfgs
 
+-- | Given an arch runs the raw loader
+-- loading a binary in a single segment at a fixed offset
 simulateRawArch ::
   forall arch.
   ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
