@@ -1655,7 +1655,7 @@ simulateFile opts la =
   let path = simProgPath opts
    in -- This list also appears in {overrides,sexp}.md
       if
-        | (simRawBinaryMode opts) ->
+        | simRawBinaryMode opts ->
             if
               | ".armv7l.elf" `List.isSuffixOf` path -> simulateARMRaw opts la
               | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32Raw opts la
