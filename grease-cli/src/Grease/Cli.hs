@@ -113,12 +113,33 @@ entrypointParser =
 simpleShapesParser :: Opt.Parser (Map Text SimpleShape)
 simpleShapesParser = fmap Map.fromList $ Opt.many $ do
   let argName = TM.takeWhile1P Nothing (\c -> Char.isAscii c && c /= ':')
-  Opt.option
-    (megaparsecReader ((,) <$> argName <*> (TM.chunk ":" *> Simple.parseUninit)))
-    ( Opt.long "arg-buf-uninit"
-        <> Opt.metavar "ARG:N"
-        <> Opt.help "initialize argument ARG to a pointer to an uninitialized buffer of N bytes"
-    )
+  let withArgName p = megaparsecReader ((,) <$> argName <*> (TM.chunk ":" *> p))
+  Opt.asum
+    [ Opt.option
+        (withArgName Simple.parseBufUninit)
+        ( Opt.long "arg-buf-uninit"
+            <> Opt.metavar "ARG:N"
+            <> Opt.help "initialize argument ARG to a pointer to an uninitialized buffer of N bytes"
+        )
+    , Opt.option
+        (withArgName Simple.parseBufInit)
+        ( Opt.long "arg-buf-init"
+            <> Opt.metavar "ARG:N"
+            <> Opt.help "initialize argument ARG to a pointer to an initialized buffer of N symbolic bytes"
+        )
+    , Opt.option
+        (withArgName Simple.parseArgU32)
+        ( Opt.long "arg-u32"
+            <> Opt.metavar "ARG:N"
+            <> Opt.help "initialize argument ARG to an unsigned 32-bit integer"
+        )
+    , Opt.option
+        (withArgName Simple.parseArgU64)
+        ( Opt.long "arg-u64"
+            <> Opt.metavar "ARG:N"
+            <> Opt.help "initialize argument ARG to an unsigned 64-bit integer"
+        )
+    ]
 
 simOpts :: Opt.Parser GO.SimOpts
 simOpts = do
