@@ -1150,6 +1150,35 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
           }
   simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs
 
+-- | Compute the initial 'ArgShapes' for an LLVM CFG.
+--
+-- Sources argument shapes from:
+--
+-- 1. A default initial shape for each register (via 'minimalShapeWithPtrs')
+-- 2. DWARF debug info (via 'GLD.diArgShapes') if
+--    'simEnableDebugInfoPreconditions' is 'True'
+-- 3. A shape DSL file (via 'loadInitialPreconditions')
+--
+-- Later steps override earlier ones.
+llvmInitArgShapes ::
+  Mem.HasPtrWidth 64 =>
+  GreaseLogAction ->
+  SimOpts ->
+  Maybe L.Module ->
+  Ctx.Assignment (Const String) argTys ->
+  -- | The CFG of the user-requested entrypoint function.
+  C.CFG CLLVM.LLVM blocks argTys ret ->
+  IO (ArgShapes CLLVM.LLVM NoTag argTys)
+llvmInitArgShapes la simOpts llvmMod argNames cfg = do
+  let argTys = C.cfgArgTypes cfg
+  initArgs_ <-
+    case llvmMod of
+      Just m
+        | simEnableDebugInfoPreconditions simOpts ->
+            GLD.diArgShapes (C.handleName (C.cfgHandle cfg)) argTys m
+      _ -> traverseFC (minimalShapeWithPtrs (pure . const NoTag)) argTys
+  loadInitialPreconditions la (simInitialPreconditions simOpts) argNames (ArgShapes initArgs_)
+
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.
   ( Mem.HasPtrWidth (CLLVM.ArchWidth arch)
@@ -1188,18 +1217,11 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
   let argTys = C.cfgArgTypes cfg
       -- Display the arguments as though they are unnamed LLVM virtual registers.
       argNames = imapFC (\i _ -> Const ('%' : show i)) argTys
-  initArgs_ <-
-    case llvmMod of
-      Just m
-        | simEnableDebugInfoPreconditions simOpts ->
-            GLD.diArgShapes (C.handleName (C.cfgHandle cfg)) argTys m
-      _ -> traverseFC (minimalShapeWithPtrs (pure . const NoTag)) argTys
-  initArgs <-
-    loadInitialPreconditions la (simInitialPreconditions simOpts) argNames (ArgShapes initArgs_)
+  initArgShapes <- llvmInitArgShapes la simOpts llvmMod argNames cfg
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   result <- withMemOptions simOpts $
-    refinementLoop la (simMaxIters simOpts) (simTimeout simOpts) argNames initArgs $ \argShapes -> do
+    refinementLoop la (simMaxIters simOpts) (simTimeout simOpts) argNames initArgShapes $ \argShapes -> do
       let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
       let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
       let dl = TCtx.llvmDataLayout typeCtx
@@ -1248,7 +1270,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
 
   res <- case result of
     RefinementBug b cData ->
-      pure (BatchBug (toBatchBug fm MM.Addr64 argNames argTys initArgs b cData))
+      pure (BatchBug (toBatchBug fm MM.Addr64 argNames argTys initArgShapes b cData))
     RefinementCantRefine b ->
       pure (BatchCantRefine b)
     RefinementItersExceeded ->
@@ -1263,7 +1285,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
           pure $
             BatchCouldNotInfer $
               errs <&> \noHeuristic ->
-                toFailedPredicate fm MM.Addr64 argNames argTys initArgs noHeuristic
+                toFailedPredicate fm MM.Addr64 argNames argTys initArgShapes noHeuristic
     RefinementSuccess _argShapes -> pure (BatchChecks Map.empty)
   traverse_ cancel (fmap snd profFeatLog)
   pure res
