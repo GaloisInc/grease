@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
@@ -12,6 +13,7 @@
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Shape.Pointer (
+  ExtraStackSlots (..),
   TaggedByte (..),
   traverseTaggedByte,
   MemShape (..),
@@ -71,7 +73,6 @@ import Data.Word (Word8)
 import GHC.TypeLits (type Natural, type (<=))
 import Grease.Cursor
 import Grease.Cursor.Pointer (Dereference (..))
-import Grease.Options (ExtraStackSlots (..))
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Utility
 import Lang.Crucible.CFG.Core qualified as C
@@ -79,6 +80,12 @@ import Lang.Crucible.LLVM.Bytes (Bytes (..))
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Prettyprinter qualified as PP
+
+-- | Allocate this many pointer-sized stack slots beyond the return address,
+-- which are reserved for stack-spilled arguments.
+newtype ExtraStackSlots = ExtraStackSlots {getExtraStackSlots :: Int}
+  -- See Note [Derive Read/Show instances with the newtype strategy]
+  deriving newtype (Enum, Eq, Integral, Num, Ord, Read, Real, Show)
 
 newtype BlockId = BlockId {getBlockId :: Int}
   deriving (Eq, Ord, Show)

@@ -1,5 +1,6 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 -- |
@@ -12,7 +13,10 @@ module Grease.Cli (
 ) where
 
 import Control.Applicative (optional, (<**>))
+import Data.Char qualified as Char
 import Data.List qualified as List
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Proxy (Proxy (..))
 import Data.String qualified as String
 import Data.Text (Text)
@@ -21,10 +25,11 @@ import Data.Void (Void)
 import Grease.Diagnostic.Severity qualified as Sev
 import Grease.Entrypoint
 import Grease.Macaw.PLT
-import Grease.Options (SimOpts (simEnableDebugInfoPreconditions))
 import Grease.Options qualified as GO
 import Grease.Panic (panic)
 import Grease.Requirement (displayReq, reqParser)
+import Grease.Shape.Simple (SimpleShape)
+import Grease.Shape.Simple qualified as Simple
 import Grease.Solver (Solver (..))
 import Grease.Version (verStr)
 import Options.Applicative qualified as Opt
@@ -57,12 +62,14 @@ boundedEnumMetavar _ = Opt.metavar $ varShowS ""
 
 entrypointParser :: Opt.Parser Entrypoint
 entrypointParser =
-  addressParser
-    Opt.<|> symbolParser
-    Opt.<|> coreDumpParser
-    Opt.<|> addressStartupOvParser
-    Opt.<|> symbolStartupOvParser
+  inGroup addressParser
+    Opt.<|> inGroup symbolParser
+    Opt.<|> inGroup coreDumpParser
+    Opt.<|> inGroup addressStartupOvParser
+    Opt.<|> inGroup symbolStartupOvParser
  where
+  inGroup = Opt.parserOptionGroup "Entrypoint options"
+
   addressParser =
     entrypointNoStartupOv . EntrypointAddress
       <$> Opt.strOption
@@ -102,6 +109,60 @@ entrypointParser =
           <> Opt.metavar "SYMBOL:FILE"
           <> Opt.help "name of entrypoint symbol, and the path to its startup override (in Crucible S-expression syntax)"
       )
+
+initPrecondOptsParser :: Opt.Parser GO.InitialPreconditionOpts
+initPrecondOptsParser = Opt.parserOptionGroup "Initial precondition options" $ do
+  initPrecondPath <-
+    Opt.optional $
+      Opt.strOption
+        ( Opt.long "initial-precondition"
+            <> Opt.metavar "FILE"
+            <> Opt.help "Initial precondition for use in refinement"
+        )
+  initPrecondUseDebugInfo <-
+    Opt.switch (Opt.long "use-debug-info-types" <> Opt.help "Use types in debug info to infer initial preconditions. Superseded by --initial-precondition.")
+  initPrecondTypeUnrollingBound <-
+    GO.TypeUnrollingBound
+      <$> Opt.option
+        Opt.auto
+        ( Opt.long "type-unrolling-bound"
+            <> Opt.help "Number of recursive pointers to visit during DWARF shape building"
+            <> Opt.showDefault
+            <> Opt.value GO.defaultTypeUnrollingBound
+        )
+  initPrecondSimpleShapes <- simpleShapesParser
+  pure GO.InitialPreconditionOpts{..}
+
+simpleShapesParser :: Opt.Parser (Map Text SimpleShape)
+simpleShapesParser = fmap Map.fromList $ Opt.many $ do
+  let argName = TM.takeWhile1P Nothing (\c -> Char.isAscii c && c /= ':')
+  let withArgName p = megaparsecReader ((,) <$> argName <*> (TM.chunk ":" *> p))
+  Opt.asum
+    [ Opt.option
+        (withArgName Simple.parseBufUninit)
+        ( Opt.long "arg-buf-uninit"
+            <> Opt.metavar "ARG:N"
+            <> Opt.help "initialize argument ARG to a pointer to an uninitialized buffer of N bytes"
+        )
+    , Opt.option
+        (withArgName Simple.parseBufInit)
+        ( Opt.long "arg-buf-init"
+            <> Opt.metavar "ARG:N"
+            <> Opt.help "initialize argument ARG to a pointer to an initialized buffer of N symbolic bytes"
+        )
+    , Opt.option
+        (withArgName Simple.parseArgU32)
+        ( Opt.long "arg-u32"
+            <> Opt.metavar "ARG:N"
+            <> Opt.help "initialize argument ARG to an unsigned 32-bit integer"
+        )
+    , Opt.option
+        (withArgName Simple.parseArgU64)
+        ( Opt.long "arg-u64"
+            <> Opt.metavar "ARG:N"
+            <> Opt.help "initialize argument ARG to an unsigned 64-bit integer"
+        )
+    ]
 
 simOpts :: Opt.Parser GO.SimOpts
 simOpts = do
@@ -180,24 +241,6 @@ simOpts = do
             <> Opt.metavar "ADDR:NAME"
             <> Opt.help "PLT stubs to consider, in addition to those discovered via heuristics"
         )
-  simInitialPreconditions <-
-    Opt.optional $
-      Opt.strOption
-        ( Opt.long "initial-precondition"
-            <> Opt.metavar "FILE"
-            <> Opt.help "Initial precondition for use in refinement"
-        )
-  simTypeUnrollingBound <-
-    GO.TypeUnrollingBound
-      <$> Opt.option
-        Opt.auto
-        ( Opt.long "type-unrolling-bound"
-            <> Opt.help "Number of recursive pointers to visit during DWARF shape building"
-            <> Opt.showDefault
-            <> Opt.value GO.defaultTypeUnrollingBound
-        )
-  simEnableDebugInfoPreconditions <-
-    Opt.switch (Opt.long "use-debug-info-types" <> Opt.help "Use types in debug info to infer initial preconditions. Superseded by --initial-precondition.")
   simProfileTo <-
     Opt.optional $
       Opt.strOption
@@ -231,16 +274,17 @@ simOpts = do
     Opt.switch
       (Opt.long "raw-binary" <> Opt.help "load binary as a position dependent non-elf")
   simErrorSymbolicFunCalls <-
-    GO.ErrorSymbolicFunCalls
-      <$> Opt.switch
-        ( Opt.long "error-symbolic-fun-calls"
-            <> Opt.help
-              ( String.unlines
-                  [ "Throw an error if attempting to call a symbolic function handle or pointer"
-                  , "(by default, these calls will be skipped)"
-                  ]
-              )
-        )
+    fmap GO.ErrorSymbolicFunCalls $
+      Opt.parserOptionGroup callOptionsGroup $
+        Opt.switch
+          ( Opt.long "error-symbolic-fun-calls"
+              <> Opt.help
+                ( String.unlines
+                    [ "Throw an error if attempting to call a symbolic function handle or pointer"
+                    , "(by default, these calls will be skipped)"
+                    ]
+                )
+          )
   simRawBinaryOffset <-
     Opt.option
       Opt.auto
@@ -250,27 +294,29 @@ simOpts = do
           <> Opt.help "The load base for a raw binary"
       )
   simErrorSymbolicSyscalls <-
-    GO.ErrorSymbolicSyscalls
-      <$> Opt.switch
-        ( Opt.long "error-symbolic-syscalls"
-            <> Opt.help
-              ( String.unlines
-                  [ "Throw an error if attempting to make a syscall with a symbolic number"
-                  , "(by default, these calls will be skipped)"
-                  ]
-              )
-        )
+    fmap GO.ErrorSymbolicSyscalls $
+      Opt.parserOptionGroup callOptionsGroup $
+        Opt.switch
+          ( Opt.long "error-symbolic-syscalls"
+              <> Opt.help
+                ( String.unlines
+                    [ "Throw an error if attempting to make a syscall with a symbolic number"
+                    , "(by default, these calls will be skipped)"
+                    ]
+                )
+          )
   simSkipInvalidCallAddrs <-
-    GO.SkipInvalidCallAddrs
-      <$> Opt.switch
-        ( Opt.long "skip-invalid-call-addrs"
-            <> Opt.help
-              ( String.unlines
-                  [ "Skip calls to invalid addresses."
-                  , "(by default, these calls will result in an error)"
-                  ]
-              )
-        )
+    fmap GO.SkipInvalidCallAddrs $
+      Opt.parserOptionGroup callOptionsGroup $
+        Opt.switch
+          ( Opt.long "skip-invalid-call-addrs"
+              <> Opt.help
+                ( String.unlines
+                    [ "Skip calls to invalid addresses."
+                    , "(by default, these calls will result in an error)"
+                    ]
+                )
+          )
   simRust <-
     Opt.switch
       ( Opt.long "rust"
@@ -284,8 +330,11 @@ simOpts = do
               <> Opt.help "The path to the symbolic filesystem"
           )
       )
+  simInitPrecondOpts <- initPrecondOptsParser
   pure GO.SimOpts{..}
  where
+  callOptionsGroup = "Call options"
+
   allMutableGlobalStateStrs :: [String]
   allMutableGlobalStateStrs = List.map show GO.allMutableGlobalStates
 
@@ -334,8 +383,8 @@ processSimOpts sOpts =
 
 opts :: Opt.Parser GO.Opts
 opts = do
-  optsJSON <- Opt.switch (Opt.long "json" <> Opt.help "output JSON")
   optsSimOpts <- processSimOpts <$> simOpts
+  optsJSON <- Opt.switch (Opt.long "json" <> Opt.help "output JSON")
 
   let minSeverity = Sev.severityToNat Sev.Info
   -- count the `-v`s
