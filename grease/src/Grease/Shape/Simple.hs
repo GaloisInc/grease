@@ -44,6 +44,7 @@ data SimpleShape
     RegInt32 !(BV 32)
   | -- | A 64-bit integer
     RegInt64 !(BV 64)
+  deriving Show
 
 -- | Parse a symbol from 'TM.Tokens'.
 symbol :: TM.Tokens Text -> TM.Parsec Void Text Text

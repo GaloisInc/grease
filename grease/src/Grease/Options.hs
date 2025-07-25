@@ -20,11 +20,15 @@ module Grease.Options (
   Opts (..),
 ) where
 
+import Data.Map.Strict (Map)
+import Data.Text (Text)
 import Data.Word (Word64)
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint
 import Grease.Macaw.PLT
 import Grease.Requirement (Requirement)
+import Grease.Shape.Pointer (ExtraStackSlots (..))
+import Grease.Shape.Simple (SimpleShape)
 import Grease.Solver (Solver (..))
 
 newtype TypeUnrollingBound = TypeUnrollingBound Int
@@ -55,12 +59,6 @@ data MutableGlobalState
 
 allMutableGlobalStates :: [MutableGlobalState]
 allMutableGlobalStates = [minBound .. maxBound]
-
--- | Allocate this many pointer-sized stack slots beyond the return address,
--- which are reserved for stack-spilled arguments.
-newtype ExtraStackSlots = ExtraStackSlots {getExtraStackSlots :: Int}
-  -- See Note [Derive Read/Show instances with the newtype strategy]
-  deriving newtype (Enum, Eq, Integral, Num, Ord, Read, Real, Show)
 
 -- | If 'True', throw an error if attempting to call a symbolic function handle
 -- or pointer. If 'False', skip over such calls.
@@ -134,6 +132,8 @@ data SimOpts
   -- ^ Parse binary in raw binary mode (non-elf position dependent executable)
   , simRawBinaryOffset :: Word64
   -- ^ Load a raw binary at a given offset (will default to 0x0)
+  , simSimpleShapes :: Map Text SimpleShape
+  -- ^ Map from argument names to 'SimpleShape's for those arguments
   , simPltStubs :: [PltStub]
   -- ^ User-specified PLT stubs to consider in addition to the stubs that
   -- @grease@ discovers via heuristics.
