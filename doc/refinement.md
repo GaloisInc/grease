@@ -66,7 +66,7 @@ There are a few ways to influence the initial shapes held in registers:
 - Allow GREASE to use LLVM or DWARF debug info to fill them in by passing
   `--use-debug-info`.
 - Provide a [Shape DSL](shape-dsl.md) file to `--initial-precondition`.
-- Specify initial register values with flags such as `--arg-buf-unint`.
+- Specify initial register values with flags such as `--arg-buf-uninit`.
 - Provide a [startup override](overrides.md).
 
 The later methods override the earlier ones.
