@@ -524,6 +524,7 @@ initialLlvmFileSystem halloc sym simOpts = do
 -- 2. DWARF debug info (via 'loadDwarfPreconditions') if
 --    'simEnableDebugInfoPreconditions' is 'True'
 -- 3. A shape DSL file (via 'loadInitialPreconditions')
+-- 4. TODO(#228): Simple shapes
 --
 -- Later steps override earlier ones.
 macawInitArgShapes ::
@@ -1159,6 +1160,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
 -- 2. DWARF debug info (via 'GLD.diArgShapes') if
 --    'simEnableDebugInfoPreconditions' is 'True'
 -- 3. A shape DSL file (via 'loadInitialPreconditions')
+-- 4. TODO(#228): Simple shapes
 --
 -- Later steps override earlier ones.
 llvmInitArgShapes ::

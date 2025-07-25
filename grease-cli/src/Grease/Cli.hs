@@ -1,5 +1,6 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 -- |
@@ -13,6 +14,8 @@ module Grease.Cli (
 
 import Control.Applicative (optional, (<**>))
 import Data.List qualified as List
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Proxy (Proxy (..))
 import Data.String qualified as String
 import Data.Text (Text)
@@ -25,10 +28,13 @@ import Grease.Options (SimOpts (simEnableDebugInfoPreconditions))
 import Grease.Options qualified as GO
 import Grease.Panic (panic)
 import Grease.Requirement (displayReq, reqParser)
+import Grease.Shape.Simple (SimpleShape)
+import Grease.Shape.Simple qualified as Simple
 import Grease.Solver (Solver (..))
 import Grease.Version (verStr)
 import Options.Applicative qualified as Opt
 import Text.Megaparsec qualified as TM
+import Text.Megaparsec.Char qualified as TMP
 
 megaparsecReader :: TM.Parsec Void Text a -> Opt.ReadM a
 megaparsecReader p = Opt.eitherReader $ \rawStr ->
@@ -103,6 +109,16 @@ entrypointParser =
           <> Opt.metavar "SYMBOL:FILE"
           <> Opt.help "name of entrypoint symbol, and the path to its startup override (in Crucible S-expression syntax)"
       )
+
+simpleShapesParser :: Opt.Parser (Map Text SimpleShape)
+simpleShapesParser = fmap Map.fromList $ Opt.many $ do
+  let argName = Text.pack <$> TM.some TMP.alphaNumChar
+  Opt.option
+    (megaparsecReader ((,) <$> argName <*> (TM.chunk ":" *> Simple.parseUninit)))
+    ( Opt.long "arg-buf-uninit"
+        <> Opt.metavar "ARG:N"
+        <> Opt.help "initialize argument ARG to a pointer to an uninitialized buffer of N bytes"
+    )
 
 simOpts :: Opt.Parser GO.SimOpts
 simOpts = do
@@ -288,6 +304,7 @@ simOpts = do
               <> Opt.help "The path to the symbolic filesystem"
           )
       )
+  simSimpleShapes <- simpleShapesParser
   pure GO.SimOpts{..}
  where
   callOptionsGroup = "Call options"
