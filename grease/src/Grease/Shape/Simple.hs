@@ -12,17 +12,23 @@
 -- ("Grease.Shape.Parse"), via CLI flags like @--reg-int@.
 module Grease.Shape.Simple (
   SimpleShape (..),
-  parseUninit,
+  parseBufInit,
+  parseBufUninit,
+  parseArgU32,
+  parseArgU64,
   toShape,
 ) where
 
 import Control.Applicative (Alternative (empty), asum)
+import Control.Monad qualified as Monad
 import Data.BitVector.Sized (BV)
+import Data.BitVector.Sized qualified as BV
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some (Some (Some))
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Void (Void)
+import Data.Word (Word32, Word64)
 import Grease.Shape (Shape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
@@ -40,10 +46,10 @@ data SimpleShape
     BufUninit !Bytes
   | -- | A pointer to a buffer of @n@ initialized bytes
     BufInit !Bytes
-  | -- | A 32-bit integer
-    RegInt32 !(BV 32)
-  | -- | A 64-bit integer
-    RegInt64 !(BV 64)
+  | -- | A 32-bit unsigned integer
+    ArgU32 !(BV 32)
+  | -- | A 64-bit unsigned integer
+    ArgU64 !(BV 64)
   deriving Show
 
 -- | Parse a symbol from 'TM.Tokens'.
@@ -54,6 +60,7 @@ symbol = TMCL.symbol spaceConsumer
 spaceConsumer :: TM.Parsec Void Text ()
 spaceConsumer = TMCL.space TMC.space1 empty empty
 
+-- | Parse an (unsigned) integer
 parseInt :: TM.Parsec Void Text Integer
 parseInt =
   asum
@@ -64,8 +71,33 @@ parseInt =
 parseBytes :: TM.Parsec Void Text Bytes
 parseBytes = Bytes.toBytes <$> parseInt
 
-parseUninit :: TM.Parsec Void Text SimpleShape
-parseUninit = BufUninit <$> parseBytes
+parseBufInit :: TM.Parsec Void Text SimpleShape
+parseBufInit = BufInit <$> parseBytes
+
+parseBufUninit :: TM.Parsec Void Text SimpleShape
+parseBufUninit = BufUninit <$> parseBytes
+
+parseArgU32 :: TM.Parsec Void Text SimpleShape
+parseArgU32 = ArgU32 <$> parseBV32
+ where
+  parseBV32 :: TM.Parsec Void Text (BV 32)
+  parseBV32 = do
+    i <- parseInt
+    let maxInt32 = fromIntegral (maxBound @Word32)
+    Monad.when (i < 0 || i >= maxInt32) $
+      fail ("Integer outside of 32-bit range: " ++ show i)
+    pure (BV.mkBV (knownNat @32) i)
+
+parseArgU64 :: TM.Parsec Void Text SimpleShape
+parseArgU64 = ArgU64 <$> parseBV64
+ where
+  parseBV64 :: TM.Parsec Void Text (BV 64)
+  parseBV64 = do
+    i <- parseInt
+    let maxInt64 = fromIntegral (maxBound @Word64)
+    Monad.when (i < 0 || i >= maxInt64) $
+      fail ("Integer outside of 64-bit range: " ++ show i)
+    pure (BV.mkBV (knownNat @64) i)
 
 toShape ::
   Shape.ExtShape ext ~ PtrShape ext wptr =>
@@ -78,7 +110,7 @@ toShape =
     BufInit n ->
       let tgt = PtrShape.ptrTarget Nothing (Seq.singleton (PtrShape.Initialized NoTag n))
        in Some (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.Offset 0) tgt))
-    RegInt32 bv ->
+    ArgU32 bv ->
       Some (Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag (knownNat @32) bv))
-    RegInt64 bv ->
+    ArgU64 bv ->
       Some (Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag (knownNat @64) bv))
