@@ -1,0 +1,83 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+
+-- |
+-- Copyright        : (c) Galois, Inc. 2024
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+--
+-- This module contains a simple datatype that can be compiled to a subset of
+-- 'Shape's. The idea is to support a limited form of specifying shapes that
+-- is less powerful but also easier to write than the full-fledged shape syntax
+-- ("Grease.Shape.Parse"), via CLI flags like @--reg-int@.
+module Grease.Shape.Simple (
+  SimpleShape (..),
+  parseUninit,
+  toShape,
+) where
+
+import Control.Applicative (Alternative (empty), asum)
+import Data.BitVector.Sized (BV)
+import Data.Parameterized.NatRepr (knownNat)
+import Data.Parameterized.Some (Some (Some))
+import Data.Sequence qualified as Seq
+import Data.Text (Text)
+import Data.Void (Void)
+import Grease.Shape (Shape)
+import Grease.Shape qualified as Shape
+import Grease.Shape.NoTag (NoTag (NoTag))
+import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Pointer qualified as PtrShape
+import Lang.Crucible.LLVM.Bytes (Bytes (..))
+import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Text.Megaparsec qualified as TM
+import Text.Megaparsec.Char qualified as TMC
+import Text.Megaparsec.Char.Lexer qualified as TMCL
+
+-- | A simple datatype that can be compiled to a subset of 'Shape's.
+data SimpleShape
+  = -- | A pointer to a buffer of @n@ uninitialized bytes
+    BufUninit !Bytes
+  | -- | A pointer to a buffer of @n@ initialized bytes
+    BufInit !Bytes
+  | -- | A 32-bit integer
+    RegInt32 !(BV 32)
+  | -- | A 64-bit integer
+    RegInt64 !(BV 64)
+
+-- | Parse a symbol from 'TM.Tokens'.
+symbol :: TM.Tokens Text -> TM.Parsec Void Text Text
+symbol = TMCL.symbol spaceConsumer
+
+-- | A standard space consumer that does not support comments.
+spaceConsumer :: TM.Parsec Void Text ()
+spaceConsumer = TMCL.space TMC.space1 empty empty
+
+parseInt :: TM.Parsec Void Text Integer
+parseInt =
+  asum
+    [ symbol "0x" *> TMCL.hexadecimal
+    , TMCL.decimal
+    ]
+
+parseBytes :: TM.Parsec Void Text Bytes
+parseBytes = Bytes.toBytes <$> parseInt
+
+parseUninit :: TM.Parsec Void Text SimpleShape
+parseUninit = BufUninit <$> parseBytes
+
+toShape ::
+  Shape.ExtShape ext ~ PtrShape ext wptr =>
+  SimpleShape -> Some (Shape ext NoTag)
+toShape =
+  \case
+    BufUninit n ->
+      let tgt = PtrShape.ptrTarget Nothing (Seq.singleton (PtrShape.Uninitialized n))
+       in Some (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.Offset 0) tgt))
+    BufInit n ->
+      let tgt = PtrShape.ptrTarget Nothing (Seq.singleton (PtrShape.Initialized NoTag n))
+       in Some (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.Offset 0) tgt))
+    RegInt32 bv ->
+      Some (Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag (knownNat @32) bv))
+    RegInt64 bv ->
+      Some (Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag (knownNat @64) bv))

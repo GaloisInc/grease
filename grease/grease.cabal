@@ -246,6 +246,7 @@ library
     Grease.Shape.NoTag
     Grease.Shape.Pointer
     Grease.Shape.Selector
+    Grease.Shape.Simple
     Grease.Shape.Parse
     Grease.Shape.Print
     Grease.Skip
