@@ -146,6 +146,7 @@ import Grease.Shape.Concretize (concShape)
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Simple qualified as Simple
 import Grease.Solver (withSolverOnlineBackend)
 import Grease.Syntax (parseOverridesYaml, parseProgram, parsedProgramCfgMap, resolveOverridesYaml)
 import Grease.Syscall
@@ -305,6 +306,23 @@ loadInitialPreconditions la preconds names initArgs =
       let addrWidth = MC.addrWidthRepr ?ptrWidth
       doLog la (Diag.LoadedPrecondition path addrWidth names precond)
       pure precond
+
+-- | Override 'Shape.ArgShapes' using 'Simple.SimpleShape's from the CLI
+useSimpleShapes ::
+  ExtShape ext ~ PtrShape ext w =>
+  Mem.HasPtrWidth w =>
+  MM.MemWidth w =>
+  -- | Argument names
+  Ctx.Assignment (Const.Const String) tys ->
+  -- | Initial arguments
+  Shape.ArgShapes ext NoTag tys ->
+  Map Text.Text Simple.SimpleShape ->
+  IO (Shape.ArgShapes ext NoTag tys)
+useSimpleShapes argNames initArgs simpleShapes = do
+  let parsedShapes = Parse.ParsedShapes (fmap Simple.toShape simpleShapes)
+  case Shape.replaceShapes argNames initArgs parsedShapes of
+    Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
+    Right shapes -> pure shapes
 
 toBatchBug ::
   Mem.HasPtrWidth wptr =>
@@ -524,7 +542,7 @@ initialLlvmFileSystem halloc sym simOpts = do
 -- 2. DWARF debug info (via 'loadDwarfPreconditions') if
 --    'simEnableDebugInfoPreconditions' is 'True'
 -- 3. A shape DSL file (via 'loadInitialPreconditions')
--- 4. TODO(#228): Simple shapes
+-- 4. Simple shapes from the CLI (via 'useSimpleShapes')
 --
 -- Later steps override earlier ones.
 macawInitArgShapes ::
@@ -551,7 +569,7 @@ macawInitArgShapes ::
 macawInitArgShapes la bak archCtx simOpts macawCfgConfig argNames mbCfgAddr = do
   let memory = mcMemory macawCfgConfig
   let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
-  initArgs_ <- minimalArgShapes bak archCtx mdEntryAbsAddr
+  initArgs0 <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let shouldUseDwarf = simEnableDebugInfoPreconditions simOpts
   let getDwarfArgs = do
         -- Maybe
@@ -562,11 +580,13 @@ macawInitArgShapes la bak archCtx simOpts macawCfgConfig argNames mbCfgAddr = do
           memory
           (simTypeUnrollingBound simOpts)
           argNames
-          initArgs_
+          initArgs0
           elfHdr
           archCtx
-  let dwarfedArgs = if shouldUseDwarf then fromMaybe initArgs_ getDwarfArgs else initArgs_
-  loadInitialPreconditions la (simInitialPreconditions simOpts) argNames dwarfedArgs
+  let dwarfedArgs = if shouldUseDwarf then fromMaybe initArgs0 getDwarfArgs else initArgs0
+  initArgs1 <-
+    loadInitialPreconditions la (simInitialPreconditions simOpts) argNames dwarfedArgs
+  useSimpleShapes argNames initArgs1 (simSimpleShapes simOpts)
 
 simulateMacawCfg ::
   forall sym bak arch solver scope st fm.
@@ -1160,7 +1180,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
 -- 2. DWARF debug info (via 'GLD.diArgShapes') if
 --    'simEnableDebugInfoPreconditions' is 'True'
 -- 3. A shape DSL file (via 'loadInitialPreconditions')
--- 4. TODO(#228): Simple shapes
+-- 4. Simple shapes from the CLI (via 'useSimpleShapes')
 --
 -- Later steps override earlier ones.
 llvmInitArgShapes ::
@@ -1174,13 +1194,14 @@ llvmInitArgShapes ::
   IO (ArgShapes CLLVM.LLVM NoTag argTys)
 llvmInitArgShapes la simOpts llvmMod argNames cfg = do
   let argTys = C.cfgArgTypes cfg
-  initArgs_ <-
+  initArgs0 <-
     case llvmMod of
       Just m
         | simEnableDebugInfoPreconditions simOpts ->
             GLD.diArgShapes (C.handleName (C.cfgHandle cfg)) argTys m
       _ -> traverseFC (minimalShapeWithPtrs (pure . const NoTag)) argTys
-  loadInitialPreconditions la (simInitialPreconditions simOpts) argNames (ArgShapes initArgs_)
+  initArgs1 <- loadInitialPreconditions la (simInitialPreconditions simOpts) argNames (ArgShapes initArgs0)
+  useSimpleShapes argNames initArgs1 (simSimpleShapes simOpts)
 
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.

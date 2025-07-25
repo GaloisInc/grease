@@ -13,6 +13,7 @@ module Grease.Cli (
 ) where
 
 import Control.Applicative (optional, (<**>))
+import Data.Char qualified as Char
 import Data.List qualified as List
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -34,7 +35,6 @@ import Grease.Solver (Solver (..))
 import Grease.Version (verStr)
 import Options.Applicative qualified as Opt
 import Text.Megaparsec qualified as TM
-import Text.Megaparsec.Char qualified as TMP
 
 megaparsecReader :: TM.Parsec Void Text a -> Opt.ReadM a
 megaparsecReader p = Opt.eitherReader $ \rawStr ->
@@ -112,7 +112,7 @@ entrypointParser =
 
 simpleShapesParser :: Opt.Parser (Map Text SimpleShape)
 simpleShapesParser = fmap Map.fromList $ Opt.many $ do
-  let argName = Text.pack <$> TM.some TMP.alphaNumChar
+  let argName = TM.takeWhile1P Nothing (\c -> Char.isAscii c && c /= ':')
   Opt.option
     (megaparsecReader ((,) <$> argName <*> (TM.chunk ":" *> Simple.parseUninit)))
     ( Opt.long "arg-buf-uninit"
