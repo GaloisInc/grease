@@ -16,6 +16,7 @@ module Grease.Options (
   ErrorSymbolicFunCalls (..),
   ErrorSymbolicSyscalls (..),
   SkipInvalidCallAddrs (..),
+  InitialPreconditionOpts (..),
   SimOpts (..),
   Opts (..),
 ) where
@@ -93,6 +94,21 @@ Similar considerations apply for derived Show instances, which also have
 different behavior when `stock`-derived.
 -}
 
+-- | Options that affect the initial precondition used for simulation
+data InitialPreconditionOpts
+  = InitialPreconditionOpts
+  { initPrecondPath :: Maybe FilePath
+  -- ^ Path containing initial function preconditions in shapes DSL
+  , initPrecondUseDebugInfo :: Bool
+  -- ^ Enables parsing debug info to extract initial shape types. This option is
+  -- superseded by `initPrecondPath`.
+  , initPrecondTypeUnrollingBound :: TypeUnrollingBound
+  -- ^ Bounds the number of times a recursive pointer will be visited when building shapes from DWARF (bounded to 3 recursive pointers by default).
+  , initPrecondSimpleShapes :: Map Text SimpleShape
+  -- ^ Map from argument names to 'SimpleShape's for those arguments
+  }
+  deriving Show
+
 -- | Options that affect simulation
 data SimOpts
   = SimOpts
@@ -106,13 +122,6 @@ data SimOpts
   -- ^ Default: 'False'.
   , simSkipInvalidCallAddrs :: SkipInvalidCallAddrs
   -- ^ Default: 'False'.
-  , simInitialPreconditions :: Maybe FilePath
-  -- ^ Path containing initial function preconditions in shapes DSL
-  , simEnableDebugInfoPreconditions :: Bool
-  -- ^ Enables parsing debug info to extract initial shape types. This option is
-  -- superseded by `simInitialPreconditions`.
-  , simTypeUnrollingBound :: TypeUnrollingBound
-  -- ^ Bounds the number of times a recursive pointer will be visited when building shapes from DWARF (bounded to 3 recursive pointers by default).
   , simLoopBound :: LoopBound
   -- ^ Maximum number of iterations of each program loop/maximum number of
   -- recursive calls to the same function
@@ -132,8 +141,6 @@ data SimOpts
   -- ^ Parse binary in raw binary mode (non-elf position dependent executable)
   , simRawBinaryOffset :: Word64
   -- ^ Load a raw binary at a given offset (will default to 0x0)
-  , simSimpleShapes :: Map Text SimpleShape
-  -- ^ Map from argument names to 'SimpleShape's for those arguments
   , simPltStubs :: [PltStub]
   -- ^ User-specified PLT stubs to consider in addition to the stubs that
   -- @grease@ discovers via heuristics.
@@ -151,6 +158,7 @@ data SimOpts
   -- ^ Timeout (implemented using 'timeout')
   , simFsRoot :: Maybe FilePath
   -- ^ File system root
+  , simInitPrecondOpts :: InitialPreconditionOpts
   }
   deriving Show
 
