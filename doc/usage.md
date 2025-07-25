@@ -64,4 +64,11 @@ details.)
 
 Try `--help` to see additional options.
 
+## Running on a non-ELF image
+
+GREASE has some support for analyzing non-ELF (i.e., raw) position dependent executables (e.g. firmware images)
+by loading a file at a fixed offset. The `--raw-binary` flag enables this mode. By default the image
+is loaded at offset `0x0`, which is likely not ideal for many binaries so an offset can be set with `--load-base BASE_ADDR`.
+There are no symbols in a raw binary, so address entrypoints are the only valid entrypoints (i.e. `--address`).
+
 <!-- Copyright (c) Galois, Inc. 2024. -->
