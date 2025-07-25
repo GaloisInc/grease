@@ -540,7 +540,7 @@ initialLlvmFileSystem halloc sym simOpts = do
 --
 -- 1. A default initial shape for each register (via 'minimalArgShapes')
 -- 2. DWARF debug info (via 'loadDwarfPreconditions') if
---    'simEnableDebugInfoPreconditions' is 'True'
+--    'initPrecondUseDebugInfo' is 'True'
 -- 3. A shape DSL file (via 'loadInitialPreconditions')
 -- 4. Simple shapes from the CLI (via 'useSimpleShapes')
 --
@@ -559,18 +559,18 @@ macawInitArgShapes ::
   GreaseLogAction ->
   bak ->
   ArchContext arch ->
-  SimOpts ->
+  InitialPreconditionOpts ->
   MacawCfgConfig arch ->
   Ctx.Assignment (Const String) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   IO (ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)))
-macawInitArgShapes la bak archCtx simOpts macawCfgConfig argNames mbCfgAddr = do
+macawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr = do
   let memory = mcMemory macawCfgConfig
   let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
   initArgs0 <- minimalArgShapes bak archCtx mdEntryAbsAddr
-  let shouldUseDwarf = simEnableDebugInfoPreconditions simOpts
+  let shouldUseDwarf = initPrecondUseDebugInfo opts
   let getDwarfArgs = do
         -- Maybe
         elfHdr <- mcElf macawCfgConfig
@@ -578,15 +578,15 @@ macawInitArgShapes la bak archCtx simOpts macawCfgConfig argNames mbCfgAddr = do
         loadDwarfPreconditions
           addr
           memory
-          (simTypeUnrollingBound simOpts)
+          (initPrecondTypeUnrollingBound opts)
           argNames
           initArgs0
           elfHdr
           archCtx
   let dwarfedArgs = if shouldUseDwarf then fromMaybe initArgs0 getDwarfArgs else initArgs0
   initArgs1 <-
-    loadInitialPreconditions la (simInitialPreconditions simOpts) argNames dwarfedArgs
-  useSimpleShapes argNames initArgs1 (simSimpleShapes simOpts)
+    loadInitialPreconditions la (initPrecondPath opts) argNames dwarfedArgs
+  useSimpleShapes argNames initArgs1 (initPrecondSimpleShapes opts)
 
 simulateMacawCfg ::
   forall sym bak arch solver scope st fm.
@@ -683,7 +683,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let argNames = fmapFC (Const . getValueName) rNameAssign
 
   initArgShapes <-
-    macawInitArgShapes la bak archCtx simOpts macawCfgConfig argNames mbCfgAddr
+    let opts = simInitPrecondOpts simOpts
+     in macawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr
 
   EntrypointCfgs
     { entrypointStartupOv = mbStartupOvSsa
@@ -1178,7 +1179,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
 --
 -- 1. A default initial shape for each register (via 'minimalShapeWithPtrs')
 -- 2. DWARF debug info (via 'GLD.diArgShapes') if
---    'simEnableDebugInfoPreconditions' is 'True'
+--    'initPrecondUseDebugInfo' is 'True'
 -- 3. A shape DSL file (via 'loadInitialPreconditions')
 -- 4. Simple shapes from the CLI (via 'useSimpleShapes')
 --
@@ -1186,22 +1187,24 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
 llvmInitArgShapes ::
   Mem.HasPtrWidth 64 =>
   GreaseLogAction ->
-  SimOpts ->
+  InitialPreconditionOpts ->
   Maybe L.Module ->
   Ctx.Assignment (Const String) argTys ->
   -- | The CFG of the user-requested entrypoint function.
   C.CFG CLLVM.LLVM blocks argTys ret ->
   IO (ArgShapes CLLVM.LLVM NoTag argTys)
-llvmInitArgShapes la simOpts llvmMod argNames cfg = do
+llvmInitArgShapes la opts llvmMod argNames cfg = do
   let argTys = C.cfgArgTypes cfg
   initArgs0 <-
     case llvmMod of
       Just m
-        | simEnableDebugInfoPreconditions simOpts ->
+        | initPrecondUseDebugInfo opts ->
             GLD.diArgShapes (C.handleName (C.cfgHandle cfg)) argTys m
       _ -> traverseFC (minimalShapeWithPtrs (pure . const NoTag)) argTys
-  initArgs1 <- loadInitialPreconditions la (simInitialPreconditions simOpts) argNames (ArgShapes initArgs0)
-  useSimpleShapes argNames initArgs1 (simSimpleShapes simOpts)
+  initArgs1 <-
+    let path = initPrecondPath opts
+     in loadInitialPreconditions la path argNames (ArgShapes initArgs0)
+  useSimpleShapes argNames initArgs1 (initPrecondSimpleShapes opts)
 
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.
@@ -1241,7 +1244,9 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
   let argTys = C.cfgArgTypes cfg
       -- Display the arguments as though they are unnamed LLVM virtual registers.
       argNames = imapFC (\i _ -> Const ('%' : show i)) argTys
-  initArgShapes <- llvmInitArgShapes la simOpts llvmMod argNames cfg
+  initArgShapes <-
+    let opts = simInitPrecondOpts simOpts
+     in llvmInitArgShapes la opts llvmMod argNames cfg
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   result <- withMemOptions simOpts $

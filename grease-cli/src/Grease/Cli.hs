@@ -25,7 +25,6 @@ import Data.Void (Void)
 import Grease.Diagnostic.Severity qualified as Sev
 import Grease.Entrypoint
 import Grease.Macaw.PLT
-import Grease.Options (SimOpts (simEnableDebugInfoPreconditions))
 import Grease.Options qualified as GO
 import Grease.Panic (panic)
 import Grease.Requirement (displayReq, reqParser)
@@ -109,6 +108,29 @@ entrypointParser =
           <> Opt.metavar "SYMBOL:FILE"
           <> Opt.help "name of entrypoint symbol, and the path to its startup override (in Crucible S-expression syntax)"
       )
+
+initPrecondOptsParser :: Opt.Parser GO.InitialPreconditionOpts
+initPrecondOptsParser = Opt.parserOptionGroup "Initial precondition options" $ do
+  initPrecondPath <-
+    Opt.optional $
+      Opt.strOption
+        ( Opt.long "initial-precondition"
+            <> Opt.metavar "FILE"
+            <> Opt.help "Initial precondition for use in refinement"
+        )
+  initPrecondUseDebugInfo <-
+    Opt.switch (Opt.long "use-debug-info-types" <> Opt.help "Use types in debug info to infer initial preconditions. Superseded by --initial-precondition.")
+  initPrecondTypeUnrollingBound <-
+    GO.TypeUnrollingBound
+      <$> Opt.option
+        Opt.auto
+        ( Opt.long "type-unrolling-bound"
+            <> Opt.help "Number of recursive pointers to visit during DWARF shape building"
+            <> Opt.showDefault
+            <> Opt.value GO.defaultTypeUnrollingBound
+        )
+  initPrecondSimpleShapes <- simpleShapesParser
+  pure GO.InitialPreconditionOpts{..}
 
 simpleShapesParser :: Opt.Parser (Map Text SimpleShape)
 simpleShapesParser = fmap Map.fromList $ Opt.many $ do
@@ -218,24 +240,6 @@ simOpts = do
             <> Opt.metavar "ADDR:NAME"
             <> Opt.help "PLT stubs to consider, in addition to those discovered via heuristics"
         )
-  simInitialPreconditions <-
-    Opt.optional $
-      Opt.strOption
-        ( Opt.long "initial-precondition"
-            <> Opt.metavar "FILE"
-            <> Opt.help "Initial precondition for use in refinement"
-        )
-  simTypeUnrollingBound <-
-    GO.TypeUnrollingBound
-      <$> Opt.option
-        Opt.auto
-        ( Opt.long "type-unrolling-bound"
-            <> Opt.help "Number of recursive pointers to visit during DWARF shape building"
-            <> Opt.showDefault
-            <> Opt.value GO.defaultTypeUnrollingBound
-        )
-  simEnableDebugInfoPreconditions <-
-    Opt.switch (Opt.long "use-debug-info-types" <> Opt.help "Use types in debug info to infer initial preconditions. Superseded by --initial-precondition.")
   simProfileTo <-
     Opt.optional $
       Opt.strOption
@@ -325,7 +329,7 @@ simOpts = do
               <> Opt.help "The path to the symbolic filesystem"
           )
       )
-  simSimpleShapes <- simpleShapesParser
+  simInitPrecondOpts <- initPrecondOptsParser
   pure GO.SimOpts{..}
  where
   callOptionsGroup = "Call options"
