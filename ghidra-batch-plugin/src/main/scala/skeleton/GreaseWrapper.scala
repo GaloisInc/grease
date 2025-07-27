@@ -31,7 +31,8 @@ case class GreaseConfiguration(
   def commandLine(prog: Program): Seq[String] = {
     val modAddr = entrypoint.subtract(prog.getImageBase()) + ElfLoader
       .getElfOriginalImageBase(prog)
-    val baseline = Seq(targetBinary.toString(), "--address", f"0x$modAddr%x")
+    val baseline =
+      Seq(targetBinary.toString(), "--json", "--address", f"0x$modAddr%x")
     val rawline = if isRawBinary then Seq("--raw-binary") else Seq()
     val timeoutline =
       timeout.map(x => Seq("--timeout", x.toMillis.toString)).getOrElse(Seq())
