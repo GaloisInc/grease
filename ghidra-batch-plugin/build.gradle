@@ -69,4 +69,5 @@ dependencies {
 	// this extension is built.
 	implementation("org.scala-lang:scala3-library_3:3.7.0")
 	implementation("com.lihaoyi:os-lib_3:0.11.4")
+	implementation("com.lihaoyi:upickle_3:4.2.1")
 }
