@@ -1,0 +1,3 @@
+package skeleton
+
+class GreaseWrapper {}
