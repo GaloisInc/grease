@@ -49,7 +49,7 @@ object GreaseResult {
     if !hasBug then return None
 
     val contents = js("batchStatus")("contents")
-    val desc = contents("desc")
+    val desc = contents("bugDesc")
     val loc = Integer.parseInt(desc("bugLoc").str.drop(2), 16).toLong
     val addr = AddrConversions.greaseOffsetToAddr(loc, prog)
 
