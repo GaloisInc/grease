@@ -30,7 +30,7 @@
 // for the correction version of Gradle to use for the Ghidra installation you specify.
 
 plugins  {
-	id 'scala'
+	id("scala")
 }
 
 //----------------------START "DO NOT MODIFY" SECTION------------------------------
@@ -60,9 +60,13 @@ repositories {
 	mavenCentral()
 }
 
+scala {
+    scalaVersion = "3.7.0"
+}
+
 dependencies {
 	// Any external dependencies added here will automatically be copied to the lib/ directory when
-	// this extension is built.	
-//	implementation 'org.scala-lang:scala3-library:3.6.4'
-	implementation("org.scala-lang:scala3-library_3:3.6.3")
+	// this extension is built.
+	implementation("org.scala-lang:scala3-library_3:3.7.0")
+	implementation("com.lihaoyi:os-lib_3:0.11.4")
 }
