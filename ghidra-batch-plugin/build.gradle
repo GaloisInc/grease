@@ -30,7 +30,7 @@
 // for the correction version of Gradle to use for the Ghidra installation you specify.
 
 plugins  {
-	id("scala")
+	id "scala"
 }
 
 //----------------------START "DO NOT MODIFY" SECTION------------------------------
@@ -71,3 +71,34 @@ dependencies {
 	implementation("com.lihaoyi:os-lib_3:0.11.4")
 	implementation("com.lihaoyi:upickle_3:4.2.1")
 }
+
+task buildGrease(type: Exec) {
+	workingDir '../'
+	commandLine 'cabal', 'build', 'grease-cli'
+}
+
+task findGrease(type: Exec) {
+	workingDir '../'
+	commandLine 'cabal', 'list-bin', 'grease-cli'
+  	//store the output instead of printing to the console:
+  	standardOutput = new ByteArrayOutputStream()
+	ext.output = {
+		print("stdout: " + standardOutput.toString())
+    	return standardOutput.toString().replace("\n", "")
+  	}
+}
+
+
+task copyGrease(type: Copy) {
+	dependsOn buildGrease
+	dependsOn findGrease
+
+	from findGrease.output
+	into 'os/mac_arm_64/'
+}
+
+buildExtension {
+	dependsOn copyGrease
+}
+
+

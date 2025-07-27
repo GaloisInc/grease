@@ -23,6 +23,60 @@ import ghidra.program.model.address.AddressSetView;
 import ghidra.program.model.listing.Program;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
+import ghidra.framework.cmd.BackgroundCommand
+import ghidra.framework.model.DomainObject
+import ghidra.program.model.util.AcyclicCallGraphBuilder
+import generic.concurrent.{ConcurrentGraphQ, QRunnable}
+import ghidra.app.plugin.core.analysis.AutoAnalysisManager;
+import ghidra.program.model.address.Address
+import ghidra.framework.Application
+import scala.util.Failure
+import ghidra.program.model.listing.Listing
+import ghidra.program.model.listing.CodeUnit
+
+class GreaseBackgroundCmd(val entrypoints: AddressSetView)
+    extends BackgroundCommand[Program] {
+
+  override def applyTo(prog: Program, monitor: TaskMonitor): Boolean = {
+    val bldr = AcyclicCallGraphBuilder(prog, entrypoints, true)
+    val depgraph = bldr.getDependencyGraph(monitor)
+
+    if depgraph.isEmpty() then return true
+
+    val runnable: QRunnable[Address] = new QRunnable[Address]() {
+      def run(item: Address, monitor: TaskMonitor) = {
+        val targetBin = os.Path(prog.getExecutablePath())
+        val res = GreaseWrapper(
+          os.Path(Application.getOSFile("grease").getAbsoluteFile()),
+          prog
+        ).runGrease(GreaseConfiguration(targetBin, item, None, false))
+
+        res match
+          case Failure(exception) => throw exception
+          case scala.util.Success(bugs) => {
+            for bug <- bugs.possibleBugs do
+              val prevcom = prog
+                .getListing()
+                .getComment(CodeUnit.PRE_COMMENT, bug.appliedTo)
+              val nextCom =
+                prevcom + s"\n Possible BUG: ${bug.description.render()}"
+              prog
+                .getListing()
+                .setComment(bug.appliedTo, CodeUnit.PRE_COMMENT, nextCom)
+          }
+      }
+    }
+
+    val pool = AutoAnalysisManager.getSharedAnalsysThreadPool()
+    val queue = ConcurrentGraphQ(runnable, depgraph, pool, monitor)
+    monitor.setMessage("Running grease")
+    monitor.initialize(depgraph.size())
+    queue.execute()
+
+    true
+  }
+
+}
 
 /** TODO: Provide class-level documentation that describes what this analyzer
   * does.
@@ -73,6 +127,7 @@ class GreaseAnalyzer
     // TODO: Perform analysis when things get added to the 'program'.  Return true if the
     // analysis succeeded.
 
-    false
+    GreaseBackgroundCmd(set).applyTo(program, monitor)
+    true
   }
 }
