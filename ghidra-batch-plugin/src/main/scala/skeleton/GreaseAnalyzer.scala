@@ -129,7 +129,8 @@ class GreaseAnalyzer
 
   override def optionsChanged(x: Options, prog: Program): Unit = {
     timeoutDuration = GreaseAnalyzer
-      .getOption(x, GreaseAnalyzer.TIMEOUT_OPT)
+      .getOption[Long](x, GreaseAnalyzer.TIMEOUT_OPT)
+      .filter(l => l != 0)
       .map(FiniteDuration(_, MILLISECONDS))
     shouldLoadRaw = GreaseAnalyzer
       .getOption[Boolean](x, GreaseAnalyzer.RAW_MODE_OPT)
@@ -147,9 +148,9 @@ class GreaseAnalyzer
     );
 
     options.registerOption(
-      GreaseAnalyzer.RAW_MODE_OPT,
+      GreaseAnalyzer.LOAD_BASE_OPT,
       OptionType.LONG_TYPE,
-      null,
+      0L,
       null,
       "Load binary in GREASE at this load base in raw mode (defaults to image base)"
     );
@@ -157,7 +158,7 @@ class GreaseAnalyzer
     options.registerOption(
       GreaseAnalyzer.TIMEOUT_OPT,
       OptionType.LONG_TYPE,
-      null,
+      0L,
       null,
       "Timeout for GREASE on each function in milliseconds"
     );
