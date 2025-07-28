@@ -81,10 +81,10 @@ jobs:
 
     - name: Fetch Ghidra
       shell: bash
-      run: 
+      run: |
         curl --output ~/ghidra.zip https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.4_build/ghidra_11.4_PUBLIC_20250620.zip
         cd ~/ && unzip -x ghidra.zip
-        echo "GHIDRA_INSTALL_DIR=$(realpath ~/)/ghidra_11.4_PUBLIC >> $GITHUB_ENV
+        echo "GHIDRA_INSTALL_DIR=$(realpath ~/)/ghidra_11.4_PUBLIC" >> $GITHUB_ENV
       
 
     - name: Restore cabal store cache
