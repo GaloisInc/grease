@@ -51,6 +51,7 @@ else {
 }
 //----------------------END "DO NOT MODIFY" SECTION-------------------------------
 
+apply from: new File(ghidraInstallDir).getCanonicalPath() + "/GPL/nativePlatforms.gradle"
 
 repositories {
 	// Declare dependency repositories here.  This is not needed if dependencies are manually 
@@ -94,7 +95,7 @@ task copyGrease(type: Copy) {
 	dependsOn findGrease
 
 	from findGrease.output
-	into 'os/mac_arm_64/'
+	into layout.projectDirectory.dir("os/${currentPlatformName}")
 }
 
 buildExtension {
