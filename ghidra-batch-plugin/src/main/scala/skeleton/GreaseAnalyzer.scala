@@ -33,9 +33,15 @@ import ghidra.framework.Application
 import scala.util.Failure
 import ghidra.program.model.listing.Listing
 import ghidra.program.model.listing.CodeUnit
+import ghidra.framework.options.OptionType
+import scala.concurrent.duration._
 
-class GreaseBackgroundCmd(val entrypoints: AddressSetView)
-    extends BackgroundCommand[Program] {
+class GreaseBackgroundCmd(
+    val entrypoints: AddressSetView,
+    timeout: Option[FiniteDuration],
+    loadBase: Option[Long],
+    rawMode: Boolean
+) extends BackgroundCommand[Program] {
 
   override def applyTo(prog: Program, monitor: TaskMonitor): Boolean = {
     val bldr = AcyclicCallGraphBuilder(prog, entrypoints, true)
@@ -49,7 +55,9 @@ class GreaseBackgroundCmd(val entrypoints: AddressSetView)
         val res = GreaseWrapper(
           os.Path(Application.getOSFile("grease").getAbsoluteFile()),
           prog
-        ).runGrease(GreaseConfiguration(targetBin, item, None, false))
+        ).runGrease(
+          GreaseConfiguration(targetBin, item, timeout, loadBase, rawMode)
+        )
 
         res match
           case Failure(exception) => throw exception
@@ -78,8 +86,22 @@ class GreaseBackgroundCmd(val entrypoints: AddressSetView)
 
 }
 
-/** TODO: Provide class-level documentation that describes what this analyzer
-  * does.
+object GreaseAnalyzer {
+
+  val TIMEOUT_OPT: String = "Timeout"
+  val RAW_MODE_OPT: String = "Raw mode"
+  val LOAD_BASE_OPT: String = "Load base"
+
+  def getOption[T](options: Options, optName: String): Option[T] = {
+    Option(options.getObject(optName, null))
+      .map(x => {
+        x.asInstanceOf[T]
+      })
+  }
+}
+
+/** An analyzer that runs GREASE on all functions in the binary and annotates
+  * the database.
   */
 class GreaseAnalyzer
     extends AbstractAnalyzer(
@@ -88,13 +110,14 @@ class GreaseAnalyzer
       AnalyzerType.FUNCTION_ANALYZER
     ) {
 
+  var timeoutDuration: Option[FiniteDuration] = None
+  var loadBase: Option[Long] = None
+  var shouldLoadRaw = false
   val supportedProcs: Set[String] = Set("ARM")
+
   setSupportsOneTimeAnalysis()
 
   override def getDefaultEnablement(program: Program): Boolean = {
-
-    // TODO: Return true if analyzer should be enabled by default
-
     false
   }
 
@@ -104,16 +127,41 @@ class GreaseAnalyzer
     supportedProcs.contains(proc)
   }
 
+  override def optionsChanged(x: Options, prog: Program): Unit = {
+    timeoutDuration = GreaseAnalyzer
+      .getOption(x, GreaseAnalyzer.TIMEOUT_OPT)
+      .map(FiniteDuration(_, MILLISECONDS))
+    shouldLoadRaw = GreaseAnalyzer
+      .getOption[Boolean](x, GreaseAnalyzer.RAW_MODE_OPT)
+      .getOrElse(false)
+    loadBase = GreaseAnalyzer.getOption[Long](x, GreaseAnalyzer.LOAD_BASE_OPT)
+  }
+
   override def registerOptions(options: Options, program: Program): Unit = {
-
-    // TODO: If this analyzer has custom options, register them here
-
     options.registerOption(
-      "Option name goes here",
+      GreaseAnalyzer.RAW_MODE_OPT,
+      OptionType.BOOLEAN_TYPE,
       false,
       null,
-      "Option description goes here"
+      "Load binary in GREASE in raw mode"
     );
+
+    options.registerOption(
+      GreaseAnalyzer.RAW_MODE_OPT,
+      OptionType.LONG_TYPE,
+      null,
+      null,
+      "Load binary in GREASE at this load base in raw mode (defaults to image base)"
+    );
+
+    options.registerOption(
+      GreaseAnalyzer.TIMEOUT_OPT,
+      OptionType.LONG_TYPE,
+      null,
+      null,
+      "Timeout for GREASE on each function in milliseconds"
+    );
+
   }
 
   @throws(classOf[CancelledException])
@@ -123,11 +171,8 @@ class GreaseAnalyzer
       monitor: TaskMonitor,
       log: MessageLog
   ): Boolean = {
-
-    // TODO: Perform analysis when things get added to the 'program'.  Return true if the
-    // analysis succeeded.
-
-    GreaseBackgroundCmd(set).applyTo(program, monitor)
+    GreaseBackgroundCmd(set, timeoutDuration, loadBase, shouldLoadRaw)
+      .applyTo(program, monitor)
     true
   }
 }

@@ -21,29 +21,87 @@ object AddrConversions {
 
 }
 
+object GreaseConfiguration {
+  def renderAddress(x: Long): String = f"0x$x%x"
+}
+
+trait AddressingMode {
+  def ghidraAddressToGREASEOffset(addr: Address): Long
+  def GREASOffsettoGhidraAddress(greaseOff: Long): Address
+  val loadBase: Option[Long]
+}
+
+class ELFAddressing(val prog: Program) extends AddressingMode {
+
+  override def ghidraAddressToGREASEOffset(addr: Address): Long =
+    addr.subtract(prog.getImageBase()) + ElfLoader
+      .getElfOriginalImageBase(prog)
+
+  override def GREASOffsettoGhidraAddress(greaseOff: Long): Address =
+    AddrConversions.greaseOffsetToAddr(greaseOff, prog)
+
+  override val loadBase: Option[Long] = None
+
+}
+
+class RawBase(val loadBaseOption: Option[Long], prog: Program)
+    extends AddressingMode {
+
+  val loadBaseAddr = loadBaseOption
+    .map(
+      prog
+        .getAddressFactory()
+        .getAddress(
+          prog.getAddressFactory().getDefaultAddressSpace().getSpaceID(),
+          _
+        )
+    )
+    .getOrElse(prog.getImageBase())
+
+  override def ghidraAddressToGREASEOffset(addr: Address): Long =
+    addr.subtract(prog.getImageBase()) + loadBaseAddr.getOffset()
+
+  override def GREASOffsettoGhidraAddress(greaseOff: Long): Address =
+    prog.getImageBase().add(greaseOff - loadBaseAddr.getOffset())
+
+  override val loadBase: Option[Long] = Some(loadBaseAddr.getOffset())
+}
+
 case class GreaseConfiguration(
     val targetBinary: os.Path,
     entrypoint: Address,
     // None uses the default for grease
     timeout: Option[FiniteDuration],
+    loadBase: Option[Long],
     isRawBinary: Boolean
 ) {
+
+  def addressResolver(prog: Program): AddressingMode =
+    if isRawBinary then RawBase(loadBase, prog) else ELFAddressing(prog)
+
   def commandLine(prog: Program): Seq[String] = {
-    val modAddr = entrypoint.subtract(prog.getImageBase()) + ElfLoader
-      .getElfOriginalImageBase(prog)
+    val modAddr = addressResolver(prog).ghidraAddressToGREASEOffset(entrypoint)
     val baseline =
-      Seq(targetBinary.toString(), "--json", "--address", f"0x$modAddr%x")
+      Seq(
+        targetBinary.toString(),
+        "--json",
+        "--address",
+        GreaseConfiguration.renderAddress(modAddr)
+      )
     val rawline = if isRawBinary then Seq("--raw-binary") else Seq()
     val timeoutline =
       timeout.map(x => Seq("--timeout", x.toMillis.toString)).getOrElse(Seq())
-    baseline ++ rawline ++ timeoutline
+    val baseaddr: Seq[String] = loadBase
+      .map(x => Seq("--load-base", GreaseConfiguration.renderAddress(x)))
+      .getOrElse(Seq())
+    baseline ++ rawline ++ timeoutline ++ baseaddr
   }
 }
 
 case class GreaseException(val msg: String) extends Exception
 
 object GreaseResult {
-  def parseBatch(btch: String, prog: Program): Option[PossibleBug] = {
+  def parseBatch(btch: String, addrs: AddressingMode): Option[PossibleBug] = {
     val js = ujson.read(btch)
     val hasBug = js("batchStatus")("tag").str == "BatchBug"
     if !hasBug then return None
@@ -51,7 +109,7 @@ object GreaseResult {
     val contents = js("batchStatus")("contents")
     val desc = contents("bugDesc")
     val loc = Integer.parseInt(desc("bugLoc").str.drop(2), 16).toLong
-    val addr = AddrConversions.greaseOffsetToAddr(loc, prog)
+    val addr = addrs.GREASOffsettoGhidraAddress(loc)
 
     Some(
       PossibleBug(
@@ -63,11 +121,11 @@ object GreaseResult {
     )
   }
 
-  def parse(chnks: String, prog: Program): Try[GreaseResult] = {
+  def parse(chnks: String, addrs: AddressingMode): Try[GreaseResult] = {
     // each line should have a batch
     Success(
       GreaseResult(
-        chnks.lines().iterator().asScala.flatMap(parseBatch(_, prog)).toList
+        chnks.lines().iterator().asScala.flatMap(parseBatch(_, addrs)).toList
       )
     )
   }
@@ -94,7 +152,7 @@ class GreaseWrapper(val localRunner: os.Path, val prog: Program) {
       Msg.error(this, s"Grease failed to run with ${result.err}")
       return Failure(GreaseException("Grease process failed"))
 
-    GreaseResult.parse(result.out.text(), prog)
+    GreaseResult.parse(result.out.text(), conf.addressResolver(prog))
   }
 
 }
