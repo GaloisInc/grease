@@ -72,7 +72,12 @@ jobs:
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: ${{ matrix.cabal }}
-
+    
+    - name: Setup java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin' # See 'Supported distributions' for available options
+        java-version: '21'
     - name: Restore cabal store cache
       uses: actions/cache/restore@v4
       id: cache
@@ -121,6 +126,10 @@ jobs:
       shell: bash
       # TODO: Make sure there's no diff
       run: cabal run exe:grease-diagrams -- --output doc/mem.svg --width 400 --height 400
+
+    - name: Test ghidra plugin
+      shell: bash
+      run: cd ghidra-batch-plugin && ./gradlew test
 
     - name: Haddock
       if: ${{ matrix.haddock }}
