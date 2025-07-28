@@ -76,11 +76,27 @@ case class GreaseConfiguration(
     isRawBinary: Boolean
 ) {
 
+  val GHIDRA_THUMB_REG_NAME = "TMode"
+
+  def isThumbMode(prog: Program, addr: Address): Boolean = {
+    val ctx = prog.getProgramContext()
+    Option(ctx.getValue(ctx.getRegister(GHIDRA_THUMB_REG_NAME), addr, false))
+      .getOrElse(0) != 0
+  }
+
   def addressResolver(prog: Program): AddressingMode =
     if isRawBinary then RawBase(loadBase, prog) else ELFAddressing(prog)
 
   def commandLine(prog: Program): Seq[String] = {
-    val modAddr = addressResolver(prog).ghidraAddressToGREASEOffset(entrypoint)
+    var modAddr = addressResolver(prog).ghidraAddressToGREASEOffset(entrypoint)
+
+    // Unfortunately we need to special case here to handle setting up arm thumb mode:
+    if prog.getLanguage().getProcessor().toString() == "ARM" && isThumbMode(
+        prog,
+        entrypoint
+      )
+    then modAddr = modAddr | 1
+
     val baseline =
       Seq(
         targetBinary.toString(),
