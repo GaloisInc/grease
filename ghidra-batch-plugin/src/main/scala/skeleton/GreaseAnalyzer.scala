@@ -63,11 +63,14 @@ class GreaseBackgroundCmd(
           case Failure(exception) => throw exception
           case scala.util.Success(bugs) => {
             for bug <- bugs.possibleBugs do
-              val prevcom = prog
-                .getListing()
-                .getComment(CodeUnit.PRE_COMMENT, bug.appliedTo)
+              val prevcom = Option(
+                prog
+                  .getListing()
+                  .getComment(CodeUnit.PRE_COMMENT, bug.appliedTo)
+              )
               val nextCom =
-                prevcom + s"\n Possible BUG: ${bug.description.render()}"
+                prevcom
+                  .getOrElse("") + s"\n Possible BUG: ${bug.description.render()}"
               prog
                 .getListing()
                 .setComment(bug.appliedTo, CodeUnit.PRE_COMMENT, nextCom)
