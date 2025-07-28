@@ -34,7 +34,24 @@ import scala.util.Failure
 import ghidra.program.model.listing.Listing
 import ghidra.program.model.listing.CodeUnit
 import ghidra.framework.options.OptionType
+import ghidra.util.Msg
 import scala.concurrent.duration._
+
+object GreaseBackgroundCmd {
+  def addComment(comm: String, prog: Program, toAddr: Address): Unit = {
+    val prevcom = Option(
+      prog
+        .getListing()
+        .getComment(CodeUnit.PRE_COMMENT, toAddr)
+    )
+    val nextCom =
+      prevcom
+        .getOrElse("") + comm
+    prog
+      .getListing()
+      .setComment(toAddr, CodeUnit.PRE_COMMENT, nextCom)
+  }
+}
 
 class GreaseBackgroundCmd(
     val entrypoints: AddressSetView,
@@ -60,20 +77,21 @@ class GreaseBackgroundCmd(
         )
 
         res match
-          case Failure(exception) => throw exception
+          case Failure(exception) => {
+            Msg.warn(this, s"Grease could not analyze ${item}, ${exception}")
+            GreaseBackgroundCmd.addComment(
+              s"\n Failed to analyze function with GREASE",
+              prog,
+              item
+            )
+          }
           case scala.util.Success(bugs) => {
             for bug <- bugs.possibleBugs do
-              val prevcom = Option(
-                prog
-                  .getListing()
-                  .getComment(CodeUnit.PRE_COMMENT, bug.appliedTo)
+              GreaseBackgroundCmd.addComment(
+                s"\n Possible BUG: ${bug.description.render()}",
+                prog,
+                bug.appliedTo
               )
-              val nextCom =
-                prevcom
-                  .getOrElse("") + s"\n Possible BUG: ${bug.description.render()}"
-              prog
-                .getListing()
-                .setComment(bug.appliedTo, CodeUnit.PRE_COMMENT, nextCom)
           }
 
         monitor.increment()
