@@ -1,0 +1,35 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<HTML>
+
+<HEAD>
+  <META name="generator" content="HTML Tidy for Java (vers. 2009-12-01), see jtidy.sourceforge.net">
+  <META http-equiv="Content-Language" content="en-us">
+  <META http-equiv="Content-Type" content="text/html; charset=windows-1252">
+  <META name="GENERATOR" content="Microsoft FrontPage 4.0">
+  <META name="ProgId" content="FrontPage.Editor.Document">
+
+  <TITLE>GREASE Analysis Pass Help</TITLE>
+  <LINK rel="stylesheet" type="text/css" href="help/shared/DefaultStyle.css">
+</HEAD>
+
+<BODY>
+  <H1><a name="GreaseHelp"></a>GREASE Analysis Pass Help</H1>
+
+  <P>The GREASE annotation pass runs as a Ghidra function pass, running on all functions starting at callgraph leaves.
+    To run the analysis one can either use the <A href="help/topics/AutoAnalysisPlugin/AutoAnalysis.htm">auto-analysis
+      plugin</A> and enable the
+    Grease Analyzer. </P>
+
+  <P>The Grease analyzer has several options that can be configured:</P>
+  <UL>
+    <LI><B>Raw mode</B>: loads the binary at a fixed offset as a non-ELF, useful for firmware. By default loads at the
+      image base.</LI>
+    <LI><B>Load base</B>: Changes the base that the binary is loaded at in raw mode.</LI>
+    <LI><B>Timeout</B>: The timeout in milliseconds for a single function</LI>
+  </UL>
+</BODY>
+
+<P>The analysis can also be run as a one shot analysis via the one shot menu.</P>
+
+</HTML>
