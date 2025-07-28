@@ -127,4 +127,6 @@ test {
 		'--add-opens=java.desktop/javax.swing=ALL-UNNAMED',      
 		'--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED'
 	forkEvery 1
+
+	dependsOn copyGrease
 }

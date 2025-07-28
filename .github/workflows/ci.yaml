@@ -139,7 +139,7 @@ jobs:
 
     - name: Test ghidra plugin
       shell: bash
-      run: cd ghidra-batch-plugin && ./gradlew test
+      run: cd ghidra-batch-plugin && ./gradlew installExtension && ./gradlew test
 
     - name: Haddock
       if: ${{ matrix.haddock }}
