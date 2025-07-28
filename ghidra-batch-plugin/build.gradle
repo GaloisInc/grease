@@ -71,6 +71,8 @@ dependencies {
 	implementation("org.scala-lang:scala3-library_3:3.7.0")
 	implementation("com.lihaoyi:os-lib_3:0.11.4")
 	implementation("com.lihaoyi:upickle_3:4.2.1")
+    testImplementation('junit:junit:4.13.2')
+	testRuntimeOnly files("lib")
 }
 
 task buildGrease(type: Exec) {
@@ -118,4 +120,11 @@ task installExtension(type: Copy) {
 	dependsOn buildExtension
 }
 
-
+test {
+	useJUnit()
+	jvmArgs '--add-exports=java.desktop/sun.awt=ALL-UNNAMED',
+		'--add-opens=java.desktop/java.awt=ALL-UNNAMED',
+		'--add-opens=java.desktop/javax.swing=ALL-UNNAMED',      
+		'--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED'
+	forkEvery 1
+}

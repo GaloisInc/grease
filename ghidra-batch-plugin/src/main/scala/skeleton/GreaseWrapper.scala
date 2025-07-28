@@ -80,8 +80,12 @@ case class GreaseConfiguration(
 
   def isThumbMode(prog: Program, addr: Address): Boolean = {
     val ctx = prog.getProgramContext()
-    Option(ctx.getValue(ctx.getRegister(GHIDRA_THUMB_REG_NAME), addr, false))
-      .getOrElse(0) != 0
+    val tmodeVal =
+      ctx.getValue(ctx.getRegister(GHIDRA_THUMB_REG_NAME), addr, false)
+    Msg.info(this, s"Tmode val: $tmodeVal")
+    Option(tmodeVal)
+      .map(_.longValue())
+      .getOrElse(0L) != 0L
   }
 
   def addressResolver(prog: Program): AddressingMode =
@@ -95,7 +99,10 @@ case class GreaseConfiguration(
         prog,
         entrypoint
       )
-    then modAddr = modAddr | 1
+    then
+      Msg.info(this, "Thumb mode addressing")
+      modAddr = modAddr | 1
+    else Msg.info(this, "Non thumb mode addressing")
 
     val baseline =
       Seq(
