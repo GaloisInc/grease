@@ -75,6 +75,8 @@ class GreaseBackgroundCmd(
                 .getListing()
                 .setComment(bug.appliedTo, CodeUnit.PRE_COMMENT, nextCom)
           }
+
+        monitor.increment()
       }
     }
 
