@@ -81,6 +81,10 @@ class GreaseBackgroundCmd(
 
     val runnable: QRunnable[Address] = new QRunnable[Address]() {
       def run(item: Address, monitor: TaskMonitor) = {
+        if item.isExternalAddress() then
+          Msg.info(this, "Skipping EXTERNAL function")
+          return
+
         val targetBin = os.Path(prog.getExecutablePath())
         val res = GreaseWrapper(
           os.Path(Application.getOSFile("grease").getAbsoluteFile()),
