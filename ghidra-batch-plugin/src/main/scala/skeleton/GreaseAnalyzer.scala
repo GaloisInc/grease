@@ -38,6 +38,19 @@ import ghidra.util.Msg
 import scala.concurrent.duration._
 
 object GreaseBackgroundCmd {
+  val GREASE_BOOKMARK_TYPE = "GREASE"
+
+  def greaseBookmark(
+      prog: Program,
+      addr: Address,
+      category: String,
+      note: String
+  ): Unit = {
+    prog
+      .getBookmarkManager()
+      .setBookmark(addr, GREASE_BOOKMARK_TYPE, category, note)
+  }
+
   def addComment(comm: String, prog: Program, toAddr: Address): Unit = {
     val prevcom = Option(
       prog
@@ -92,6 +105,12 @@ class GreaseBackgroundCmd(
                 prog,
                 bug.appliedTo
               )
+              GreaseBackgroundCmd.greaseBookmark(
+                prog,
+                bug.appliedTo,
+                "Possible bug",
+                "GREASE detected a potential bug"
+              )
           }
 
         monitor.increment()
@@ -138,7 +157,7 @@ class GreaseAnalyzer
   var loadBase: Option[Long] = None
   var shouldLoadRaw = false
   var useImageBaseAsLoadBase = true
-  val supportedProcs: Set[String] = Set("ARM")
+  val supportedProcs: Set[String] = Set("ARM", "PowerPC", "x86")
 
   setSupportsOneTimeAnalysis()
 
