@@ -1,3 +1,16 @@
-# Simple Scala Skeleton for Ghidra Plugins
+# GREASE Ghidra Batch Plugin
 
-Just add you ghidra path to gradle.properties and you should be good to go.
+This plugin adds an analysis called "GREASE Analysis" which runs GREASE on all functions in a binary in reverse topological order. 
+
+Installing this plugin requires building native GREASE binary which requires cabal (can be installed from [ghcup](https://www.haskell.org/ghcup/)).
+
+Follow the GREASE README to build GREASE (should only require updating submodules via `git submodule update --init` then running `cabal build grease-cli`)
+
+After building GREASE one can use gradle to build the plugin zip file by:
+1. Adding the Ghidra install directory to `gradle.properties` and uncommenting the line
+2. Running `./gradlew buildExtension`
+3. Optionally the gradle file can install the extension directly with `./gradlew installExtension`
+
+After building the extension a zip file will be in `./dist/ghidra_<VERSION>_<DATE>_ghidra-batch-plugin.zip` which can be installed using Ghidra's menus.
+
+Please see the GREASE topic in the Ghidra help menu for usage information.
