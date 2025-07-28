@@ -91,7 +91,7 @@ case class GreaseConfiguration(
     val rawline = if isRawBinary then Seq("--raw-binary") else Seq()
     val timeoutline =
       timeout.map(x => Seq("--timeout", x.toMillis.toString)).getOrElse(Seq())
-    val baseaddr: Seq[String] = loadBase
+    val baseaddr: Seq[String] = addressResolver(prog).loadBase
       .filter(_ => isRawBinary)
       .map(x => Seq("--load-base", GreaseConfiguration.renderAddress(x)))
       .getOrElse(Seq())

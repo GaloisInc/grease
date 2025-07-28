@@ -91,6 +91,7 @@ object GreaseAnalyzer {
   val TIMEOUT_OPT: String = "Timeout"
   val RAW_MODE_OPT: String = "Raw mode"
   val LOAD_BASE_OPT: String = "Load base"
+  val USE_IMAGE_BASE_AS_LOAD_BASE_OPT: String = "Use image base as load base"
 
   def getOption[T](options: Options, optName: String): Option[T] = {
     Option(options.getObject(optName, null))
@@ -113,6 +114,7 @@ class GreaseAnalyzer
   var timeoutDuration: Option[FiniteDuration] = None
   var loadBase: Option[Long] = None
   var shouldLoadRaw = false
+  var useImageBaseAsLoadBase = true
   val supportedProcs: Set[String] = Set("ARM")
 
   setSupportsOneTimeAnalysis()
@@ -135,7 +137,12 @@ class GreaseAnalyzer
     shouldLoadRaw = GreaseAnalyzer
       .getOption[Boolean](x, GreaseAnalyzer.RAW_MODE_OPT)
       .getOrElse(false)
-    loadBase = GreaseAnalyzer.getOption[Long](x, GreaseAnalyzer.LOAD_BASE_OPT)
+    loadBase = GreaseAnalyzer
+      .getOption[Long](x, GreaseAnalyzer.LOAD_BASE_OPT)
+      .filter(_ => !useImageBaseAsLoadBase)
+    useImageBaseAsLoadBase = GreaseAnalyzer
+      .getOption[Boolean](x, GreaseAnalyzer.USE_IMAGE_BASE_AS_LOAD_BASE_OPT)
+      .getOrElse(true)
   }
 
   override def registerOptions(options: Options, program: Program): Unit = {
@@ -145,7 +152,7 @@ class GreaseAnalyzer
       false,
       null,
       "Load binary in GREASE in raw mode"
-    );
+    )
 
     options.registerOption(
       GreaseAnalyzer.LOAD_BASE_OPT,
@@ -153,7 +160,7 @@ class GreaseAnalyzer
       0L,
       null,
       "Load binary in GREASE at this load base in raw mode (defaults to image base)"
-    );
+    )
 
     options.registerOption(
       GreaseAnalyzer.TIMEOUT_OPT,
@@ -161,8 +168,15 @@ class GreaseAnalyzer
       0L,
       null,
       "Timeout for GREASE on each function in milliseconds"
-    );
+    )
 
+    options.registerOption(
+      GreaseAnalyzer.USE_IMAGE_BASE_AS_LOAD_BASE_OPT,
+      OptionType.BOOLEAN_TYPE,
+      true,
+      null,
+      "Uses the image base of this Ghidra binary as the load base when in raw mode (this is the default, disable to use custom image base)"
+    )
   }
 
   @throws(classOf[CancelledException])
