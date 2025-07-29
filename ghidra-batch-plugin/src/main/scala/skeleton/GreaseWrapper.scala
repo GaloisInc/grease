@@ -62,7 +62,7 @@ class RawBase(val loadBaseOption: Option[Long], prog: Program)
   // that the file is loaded such that offsets and addresses are
   // always equivalent.
   override def ghidraAddressToGREASEOffset(addr: Address): Long =
-    loadBaseAddr.getOffset()
+    addr.getOffset()
 
   override def GREASOffsettoGhidraAddress(greaseOff: Long): Address =
     prog
