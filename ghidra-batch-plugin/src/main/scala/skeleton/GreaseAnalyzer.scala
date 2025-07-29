@@ -36,6 +36,7 @@ import ghidra.program.model.listing.CodeUnit
 import ghidra.framework.options.OptionType
 import ghidra.util.Msg
 import scala.concurrent.duration._
+import ghidra.app.services.AnalysisPriority
 
 object GreaseBackgroundCmd {
   val GREASE_BOOKMARK_TYPE = "GREASE"
@@ -156,6 +157,8 @@ class GreaseAnalyzer
       "A grease one shot analyzer that runs accross the entire codebase and collects a report ",
       AnalyzerType.FUNCTION_ANALYZER
     ) {
+
+  setPriority(AnalysisPriority.DATA_TYPE_PROPOGATION.after())
 
   var timeoutDuration: Option[FiniteDuration] = None
   var loadBase: Option[Long] = None
