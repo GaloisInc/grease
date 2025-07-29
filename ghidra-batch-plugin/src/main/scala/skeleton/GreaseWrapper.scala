@@ -140,17 +140,22 @@ object GreaseResult {
 
     val contents = js("batchStatus")("contents")
     val desc = contents("bugDesc")
-    val loc = Integer.parseInt(desc("bugLoc").str.drop(2), 16).toLong
-    val addr = addrs.GREASOffsettoGhidraAddress(loc)
-
-    Some(
-      PossibleBug(
-        addr,
-        desc,
-        contents("bugArgs").arr,
-        contents("bugShapes").str
+    try {
+      val loc = Integer.parseInt(desc("bugLoc").str.drop(2), 16).toLong
+      val addr = addrs.GREASOffsettoGhidraAddress(loc)
+      Some(
+        PossibleBug(
+          addr,
+          desc,
+          contents("bugArgs").arr,
+          contents("bugShapes").str
+        )
       )
-    )
+    } catch {
+      // GREASE can dump "Multiple Locations:" from checkMustFail currently we dont handle this
+      case e: NumberFormatException => { None }
+    }
+
   }
 
   def parse(chnks: String, addrs: AddressingMode): Try[GreaseResult] = {
