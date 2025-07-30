@@ -13,6 +13,7 @@ import scala.util.Try
 import scala.util.{Failure, Success}
 import scala.Serializable
 import scala.jdk.CollectionConverters._
+import ghidra.framework.Application
 
 object AddrConversions {
   def greaseOffsetToAddr(greaseOffset: Long, prog: Program): Address =
@@ -181,6 +182,15 @@ case class PossibleBug(
 
 // Coarse grained results for now, grab potential bugs only
 case class GreaseResult(val possibleBugs: List[PossibleBug]) {}
+
+object GreaseWrapper {
+  def apply(prog: Program): GreaseWrapper = {
+    new GreaseWrapper(
+      os.Path(Application.getOSFile("grease").getAbsoluteFile()),
+      prog
+    )
+  }
+}
 
 class GreaseWrapper(val localRunner: os.Path, val prog: Program) {
   def runGrease(conf: GreaseConfiguration): Try[GreaseResult] = {

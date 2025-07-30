@@ -19,7 +19,6 @@ import ghidra.program.model.util.AcyclicCallGraphBuilder
 import generic.concurrent.{ConcurrentGraphQ, QRunnable}
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager;
 import ghidra.program.model.address.Address
-import ghidra.framework.Application
 import scala.util.Failure
 import ghidra.program.model.listing.Listing
 import ghidra.program.model.listing.CodeUnit
@@ -78,7 +77,6 @@ class GreaseBackgroundCmd(
 
         val targetBin = os.Path(prog.getExecutablePath())
         val res = GreaseWrapper(
-          os.Path(Application.getOSFile("grease").getAbsoluteFile()),
           prog
         ).runGrease(
           GreaseConfiguration(targetBin, item, timeout, loadBase, rawMode)
