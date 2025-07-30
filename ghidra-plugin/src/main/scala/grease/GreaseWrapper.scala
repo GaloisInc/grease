@@ -136,8 +136,8 @@ case class GreaseConfiguration(
 case class GreaseException(val msg: String) extends Exception
 
 object GreaseResult {
-  def parseBatch(btch: String, addrs: AddressingMode): Option[PossibleBug] = {
-    val js = ujson.read(btch)
+  def parseBatch(batch: String, addrs: AddressingMode): Option[PossibleBug] = {
+    val js = ujson.read(batch)
     val hasBug = js("batchStatus")("tag").str == "BatchBug"
     if !hasBug then return None
 
@@ -161,11 +161,11 @@ object GreaseResult {
 
   }
 
-  def parse(chnks: String, addrs: AddressingMode): Try[GreaseResult] = {
+  def parse(chunks: String, addrs: AddressingMode): Try[GreaseResult] = {
     // each line should have a batch
     Success(
       GreaseResult(
-        chnks.lines().iterator().asScala.flatMap(parseBatch(_, addrs)).toList
+        chunks.lines().iterator().asScala.flatMap(parseBatch(_, addrs)).toList
       )
     )
   }
