@@ -84,7 +84,7 @@ class GreaseBackgroundCmd(
 
         res match
           case Failure(exception) => {
-            Msg.warn(this, s"Grease could not analyze ${item}, ${exception}")
+            Msg.warn(this, s"GREASE could not analyze ${item}, ${exception}")
             GreaseBackgroundCmd.addComment(
               s"\n Failed to analyze function with GREASE",
               prog,
