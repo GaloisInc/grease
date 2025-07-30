@@ -94,7 +94,7 @@ class GreaseBackgroundCmd(
           case scala.util.Success(bugs) => {
             for bug <- bugs.possibleBugs do
               GreaseBackgroundCmd.addComment(
-                s"\n Possible BUG: ${bug.description.render()}",
+                s"\n Possible bug: ${bug.description.render()}",
                 prog,
                 bug.appliedTo
               )
