@@ -142,7 +142,7 @@ jobs:
         echo "GHIDRA_INSTALL_DIR=$(realpath ~/)/ghidra_11.4_PUBLIC"
         echo "GHIDRA_INSTALL_DIR=$(realpath ~/)/ghidra_11.4_PUBLIC" >> $GITHUB_ENV      
 
-    - name: Test ghidra plugin
+    - name: Test Ghidra plugin
       shell: bash
       run: cd ghidra-batch-plugin && ./gradlew installExtension && ./gradlew test
 
