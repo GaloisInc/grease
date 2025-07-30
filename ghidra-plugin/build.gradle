@@ -31,6 +31,7 @@
 
 plugins  {
 	id "scala"
+  	id("com.diffplug.spotless") version "7.2.1"
 }
 
 //----------------------START "DO NOT MODIFY" SECTION------------------------------
@@ -102,6 +103,16 @@ task copyGrease(type: Copy) {
 
 buildExtension {
 	dependsOn copyGrease
+}
+
+spotless {
+  // limit format enforcement to just the files changed by this feature branch
+  ratchetFrom 'origin/main'
+
+    scala {
+		// Unfortunately it seems this version duplciation is required
+		scalafmt("3.5.3").configFile(".scalafmt.conf") // has its own section below
+	}
 }
 
 task installExtension(type: Copy) {
