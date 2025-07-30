@@ -115,21 +115,21 @@ case class GreaseConfiguration(
       modAddr = modAddr | 1
     else Msg.info(this, "Non thumb mode addressing")
 
-    val baseline =
+    val baseLine =
       Seq(
         targetBinary.toString(),
         "--json",
         "--address",
         GreaseConfiguration.renderAddress(modAddr)
       )
-    val rawline = if isRawBinary then Seq("--raw-binary") else Seq()
-    val timeoutline =
+    val rawLine = if isRawBinary then Seq("--raw-binary") else Seq()
+    val timeoutLine =
       timeout.map(x => Seq("--timeout", x.toMillis.toString)).getOrElse(Seq())
-    val baseaddr: Seq[String] = addressResolver(prog).loadBase
+    val baseAddr: Seq[String] = addressResolver(prog).loadBase
       .filter(_ => isRawBinary)
       .map(x => Seq("--load-base", GreaseConfiguration.renderAddress(x)))
       .getOrElse(Seq())
-    baseline ++ rawline ++ timeoutline ++ baseaddr
+    baseLine ++ rawLine ++ timeoutLine ++ baseAddr
   }
 }
 
