@@ -16,14 +16,16 @@ import scala.jdk.CollectionConverters._
 import ghidra.framework.Application
 
 object AddrConversions {
-  def greaseOffsetToAddr(greaseOffset: Long, prog: Program): Address =
-    prog.getAddressFactory.getAddress(
-      prog.getAddressFactory().getDefaultAddressSpace().getSpaceID(),
-      (greaseOffset - ElfLoader
-        .getElfOriginalImageBase(prog))
-        + prog.getImageBase().getOffset()
-    )
 
+  def greaseOffsetToAddr(greaseOffset: Long, prog: Program): Address =
+    // Convert a greaseOffset in an ELF to a Ghidra address.
+    // This function assumes the greaseOffset is in memory in the default address space (where code will be)
+    // GREASE loads the binary at the elf base so the offset is relative to the ELF base.
+    // Then we add the raw offset to image base in Ghidra.
+    val addressOffset = (greaseOffset - ElfLoader
+      .getElfOriginalImageBase(prog))
+
+    prog.getImageBase().add(addressOffset)
 }
 
 object GreaseConfiguration {
@@ -52,15 +54,16 @@ class ELFAddressing(val prog: Program) extends AddressingMode {
 class RawBase(val loadBaseOption: Option[Long], prog: Program)
     extends AddressingMode {
 
+  def toRAMAddress(spaceOffset: Long): Address =
+    prog
+      .getAddressFactory()
+      .getAddress(
+        prog.getAddressFactory().getDefaultAddressSpace().getSpaceID(),
+        spaceOffset
+      )
+
   val loadBaseAddr = loadBaseOption
-    .map(
-      prog
-        .getAddressFactory()
-        .getAddress(
-          prog.getAddressFactory().getDefaultAddressSpace().getSpaceID(),
-          _
-        )
-    )
+    .map(toRAMAddress(_))
     .getOrElse(prog.getImageBase())
 
   // TODO(#297): We assume that the when we are in raw mode
@@ -70,12 +73,7 @@ class RawBase(val loadBaseOption: Option[Long], prog: Program)
     addr.getOffset()
 
   override def greaseOffsettoGhidraAddress(greaseOff: Long): Address =
-    prog
-      .getAddressFactory()
-      .getAddress(
-        prog.getAddressFactory().getDefaultAddressSpace().getSpaceID(),
-        greaseOff
-      )
+    toRAMAddress(greaseOff)
 
   override val loadBase: Option[Long] = Some(loadBaseAddr.getOffset())
 }
