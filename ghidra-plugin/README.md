@@ -18,3 +18,7 @@ After building the extension a zip file will be in `./dist/ghidra_<VERSION>_<DAT
 4. Restart Ghidra
 
 Please see the GREASE topic in the Ghidra help menu for usage information.
+
+## Formatting 
+
+The scala files can be formatted with scalafmt by running `./gradlew spotlessApply`
