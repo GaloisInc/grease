@@ -105,8 +105,11 @@ buildExtension {
 }
 
 task installExtension(type: Copy) {
-    // Define the path to the ZIP file
-    def zipFile = file("${buildExtension.destinationDirectory.get()}/${buildExtension.archiveBaseName.get()}.${buildExtension.archiveExtension.get()}")
+	def dirName = buildExtension.destinationDirectory.get()
+	def archiveName = buildExtension.archiveBaseName.get()
+	def archiveExt = buildExtension.archiveExtension.get()
+    
+	def zipFile = file("${dirName}/${archiveName}.${archiveExt}")
 
     // Define the output directory where the contents will be extracted
     def outputDir = file("${ghidraInstallDir}/Ghidra/Extensions/") 
