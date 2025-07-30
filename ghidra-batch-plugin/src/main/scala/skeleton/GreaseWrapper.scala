@@ -1,5 +1,9 @@
 package skeleton
 
+/*
+ * Copyright        : (c) Galois, Inc. 2025
+ * Maintainer       : GREASE Maintainers <grease@galois.com>
+ */
 import ghidra.program.model.address.{Address, AddressFactory}
 import ghidra.program.model.listing.Program
 import ghidra.app.util.opinion.ElfLoader
