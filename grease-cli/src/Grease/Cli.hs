@@ -57,14 +57,13 @@ boundedEnumMetavar _ = Opt.metavar $ varShowS ""
 
 entrypointParser :: Opt.Parser Entrypoint
 entrypointParser =
-  inGroup addressParser
-    Opt.<|> inGroup symbolParser
-    Opt.<|> inGroup coreDumpParser
-    Opt.<|> inGroup addressStartupOvParser
-    Opt.<|> inGroup symbolStartupOvParser
+  Opt.parserOptionGroup "Entrypoint options" $
+    addressParser
+      Opt.<|> symbolParser
+      Opt.<|> coreDumpParser
+      Opt.<|> addressStartupOvParser
+      Opt.<|> symbolStartupOvParser
  where
-  inGroup = Opt.parserOptionGroup "Entrypoint options"
-
   addressParser =
     entrypointNoStartupOv . EntrypointAddress
       <$> Opt.strOption
