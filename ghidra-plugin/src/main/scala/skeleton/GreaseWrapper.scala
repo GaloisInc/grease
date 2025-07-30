@@ -31,18 +31,18 @@ object GreaseConfiguration {
 }
 
 trait AddressingMode {
-  def ghidraAddressToGREASEOffset(addr: Address): Long
-  def GREASOffsettoGhidraAddress(greaseOff: Long): Address
+  def ghidraAddressToGreaseOffset(addr: Address): Long
+  def greaseOffsettoGhidraAddress(greaseOff: Long): Address
   val loadBase: Option[Long]
 }
 
 class ELFAddressing(val prog: Program) extends AddressingMode {
 
-  override def ghidraAddressToGREASEOffset(addr: Address): Long =
+  override def ghidraAddressToGreaseOffset(addr: Address): Long =
     addr.subtract(prog.getImageBase()) + ElfLoader
       .getElfOriginalImageBase(prog)
 
-  override def GREASOffsettoGhidraAddress(greaseOff: Long): Address =
+  override def greaseOffsettoGhidraAddress(greaseOff: Long): Address =
     AddrConversions.greaseOffsetToAddr(greaseOff, prog)
 
   override val loadBase: Option[Long] = None
@@ -66,10 +66,10 @@ class RawBase(val loadBaseOption: Option[Long], prog: Program)
   // TODO(#297): We assume that the when we are in raw mode
   // that the file is loaded such that offsets and addresses are
   // always equivalent.
-  override def ghidraAddressToGREASEOffset(addr: Address): Long =
+  override def ghidraAddressToGreaseOffset(addr: Address): Long =
     addr.getOffset()
 
-  override def GREASOffsettoGhidraAddress(greaseOff: Long): Address =
+  override def greaseOffsettoGhidraAddress(greaseOff: Long): Address =
     prog
       .getAddressFactory()
       .getAddress(
@@ -105,7 +105,7 @@ case class GreaseConfiguration(
     if isRawBinary then RawBase(loadBase, prog) else ELFAddressing(prog)
 
   def commandLine(prog: Program): Seq[String] = {
-    var modAddr = addressResolver(prog).ghidraAddressToGREASEOffset(entrypoint)
+    var modAddr = addressResolver(prog).ghidraAddressToGreaseOffset(entrypoint)
 
     // Unfortunately we need to special case here to handle setting up arm thumb mode:
     if prog.getLanguage().getProcessor().toString() == "ARM" && isThumbMode(
@@ -147,7 +147,7 @@ object GreaseResult {
     val desc = contents("bugDesc")
     try {
       val loc = Integer.parseInt(desc("bugLoc").str.drop(2), 16).toLong
-      val addr = addrs.GREASOffsettoGhidraAddress(loc)
+      val addr = addrs.greaseOffsettoGhidraAddress(loc)
       Some(
         PossibleBug(
           addr,
