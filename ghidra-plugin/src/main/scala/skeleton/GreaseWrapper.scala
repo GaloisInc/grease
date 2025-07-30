@@ -200,8 +200,8 @@ class GreaseWrapper(val localRunner: os.Path, val prog: Program) {
     // maybe enforce timeout here
     val result = proc.call(check = false)
     if result.exitCode != 0 then
-      Msg.error(this, s"Grease failed to run with ${result.err}")
-      return Failure(GreaseException("Grease process failed"))
+      Msg.error(this, s"GREASE failed to run with ${result.err}")
+      return Failure(GreaseException("GREASE process failed"))
 
     GreaseResult.parse(result.out.text(), conf.addressResolver(prog))
   }

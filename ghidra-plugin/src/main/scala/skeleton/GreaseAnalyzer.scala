@@ -141,7 +141,7 @@ object GreaseAnalyzer {
   */
 class GreaseAnalyzer
     extends AbstractAnalyzer(
-      "Grease Analyzer",
+      "GREASE Analyzer",
       "A grease one shot analyzer that runs accross the entire codebase and collects a report ",
       AnalyzerType.FUNCTION_ANALYZER
     ) {
