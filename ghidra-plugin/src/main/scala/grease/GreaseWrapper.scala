@@ -144,7 +144,9 @@ object GreaseResult {
     val contents = js("batchStatus")("contents")
     val desc = contents("bugDesc")
     try {
-      val loc = Integer.parseInt(desc("bugLoc").str.drop(2), 16).toLong
+      val base = 16
+      // drops 0x, I dont know of a java method that parses based on format
+      val loc = Integer.parseInt(desc("bugLoc").str.drop(2), base).toLong
       val addr = addrs.greaseOffsettoGhidraAddress(loc)
       Some(
         PossibleBug(
