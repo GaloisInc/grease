@@ -43,13 +43,13 @@ object GreaseBackgroundCmd {
   }
 
   def addComment(comm: String, prog: Program, toAddr: Address): Unit = {
-    val prevcom = Option(
+    val prevCom = Option(
       prog
         .getListing()
         .getComment(CodeUnit.PRE_COMMENT, toAddr)
     )
     val nextCom =
-      prevcom
+      prevCom
         .getOrElse("") + comm
     prog
       .getListing()
@@ -66,14 +66,14 @@ class GreaseBackgroundCmd(
 
   override def applyTo(prog: Program, monitor: TaskMonitor): Boolean = {
     val bldr = AcyclicCallGraphBuilder(prog, entrypoints, true)
-    val depgraph = bldr.getDependencyGraph(monitor)
+    val depGraph = bldr.getDependencyGraph(monitor)
 
-    if depgraph.isEmpty() then return true
+    if depGraph.isEmpty() then return true
 
     val runnable: QRunnable[Address] = new QRunnable[Address]() {
       def run(item: Address, monitor: TaskMonitor) = {
         if item.isExternalAddress() then
-          Msg.info(this, "Skipping EXTERNAL function")
+          Msg.info(this, s"Skipping EXTERNAL function $item")
           return
 
         val targetBin = os.Path(prog.getExecutablePath())
@@ -113,9 +113,9 @@ class GreaseBackgroundCmd(
     }
 
     val pool = AutoAnalysisManager.getSharedAnalsysThreadPool()
-    val queue = ConcurrentGraphQ(runnable, depgraph, pool, monitor)
+    val queue = ConcurrentGraphQ(runnable, depGraph, pool, monitor)
     monitor.setMessage("Running grease")
-    monitor.initialize(depgraph.size())
+    monitor.initialize(depGraph.size())
     queue.execute()
 
     true
