@@ -104,9 +104,9 @@ case class GreaseConfiguration(
 
   def commandLine(prog: Program): Seq[String] = {
     var modAddr = addressResolver(prog).ghidraAddressToGreaseOffset(entrypoint)
-
+    val isARM = prog.getLanguage().getProcessor().toString() == "ARM"
     // Unfortunately we need to special case here to handle setting up arm thumb mode:
-    if prog.getLanguage().getProcessor().toString() == "ARM" && isThumbMode(
+    if isARM && isThumbMode(
         prog,
         entrypoint
       )
