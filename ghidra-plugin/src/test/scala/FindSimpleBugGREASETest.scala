@@ -10,7 +10,7 @@ import ghidra.util.task.TaskMonitor
 import ghidra.util.task.TimeoutTaskMonitor
 import java.util.concurrent.TimeUnit
 import ghidra.program.model.listing.CodeUnit
-import skeleton.GreaseAnalyzer
+import grease.GreaseAnalyzer
 import org.junit.Before;
 import org.junit.After;
 import org.junit.Test;

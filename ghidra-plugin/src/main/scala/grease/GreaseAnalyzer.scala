@@ -1,4 +1,4 @@
-package skeleton;
+package grease;
 
 /*
  * Copyright        : (c) Galois, Inc. 2025
