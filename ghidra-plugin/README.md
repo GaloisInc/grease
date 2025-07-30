@@ -9,8 +9,12 @@ Follow the GREASE README to build GREASE (should only require updating submodule
 After building GREASE one can use gradle to build the plugin zip file by:
 1. Adding the Ghidra install directory to `gradle.properties` and uncommenting the line
 2. Running `./gradlew buildExtension`
-3. Optionally the gradle file can install the extension directly with `./gradlew installExtension`
+3. Optionally the [gradle](https://gradle.org/) file can install the extension directly with `./gradlew installExtension`
 
-After building the extension a zip file will be in `./dist/ghidra_<VERSION>_<DATE>_ghidra-batch-plugin.zip` which can be installed using Ghidra's menus.
+After building the extension a zip file will be in `./dist/ghidra_<VERSION>_<DATE>_ghidra-batch-plugin.zip` which can be installed using Ghidra Project menu:
+1. Open File->Install Extensions
+2. Press the + button and find the zip file in file selector 
+3. Click the checkbox next to ghidra-plugin to enable the plugin
+4. Restart Ghidra
 
 Please see the GREASE topic in the Ghidra help menu for usage information.
