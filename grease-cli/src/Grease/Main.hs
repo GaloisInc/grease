@@ -553,6 +553,7 @@ macawInitArgShapes la bak archCtx simOpts macawCfgConfig argNames mbCfgAddr = do
   initArgs_ <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let shouldUseDwarf = simEnableDebugInfoPreconditions simOpts
   let getDwarfArgs = do
+        -- Maybe
         elfHdr <- mcElf macawCfgConfig
         addr <- mbCfgAddr
         loadDwarfPreconditions
