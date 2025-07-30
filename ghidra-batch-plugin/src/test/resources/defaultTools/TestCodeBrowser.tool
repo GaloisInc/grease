@@ -1,3 +1,12 @@
+<!-- From https://github.com/NationalSecurityAgency/ghidra/blob/dbb9e7feeebe0ab68e05239b46a5ad3f12f02ab7/Ghidra/Features/Base/src/test/resources/defaultTools/TestCodeBrowser.tool#L1
+    
+    IP: Ghidra
+
+    The license for this file is provided by the accompanying LICENSE file within this directory.
+
+    This file defines the TestCodeBrowser tool which is required to run Ghidra tests through the Ghidra test abstract classes.
+    The tool is not exposed or distributed in releases so we must copy it.
+-->
 <?xml version="1.0" encoding="UTF-8"?>
 <TOOL_CONFIG CONFIG_NAME="NO_LONGER_USED">
     <SUPPORTED_DATA_TYPE CLASS_NAME="ghidra.program.model.listing.DataTypeArchive" />
