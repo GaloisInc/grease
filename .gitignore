@@ -1,2 +1,7 @@
 cabal.project.local
 dist-newstyle/
+
+
+# ghidra plugin files
+.metals
+.vscode
