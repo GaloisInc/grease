@@ -22,7 +22,7 @@ import utility.application.ApplicationLayout
 import ghidra.framework.GModule
 import java.{util => ju}
 import ghidra.program.model.listing.CommentType
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import java.nio.file.FileSystems
 import generic.jar.ResourceFile
 import ju.Collections
