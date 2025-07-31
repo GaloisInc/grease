@@ -2,7 +2,6 @@ package grease;
 
 /*
  * Copyright        : (c) Galois, Inc. 2025
- * Maintainer       : GREASE Maintainers <grease@galois.com>
  */
 
 import ghidra.app.services.AbstractAnalyzer;
