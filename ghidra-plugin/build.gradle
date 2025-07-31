@@ -106,9 +106,6 @@ buildExtension {
 }
 
 spotless {
-  // limit format enforcement to just the files changed by this feature branch
-  ratchetFrom 'origin/main'
-
     scala {
 		// Unfortunately it seems this version duplciation is required
 		scalafmt("3.5.3").configFile(".scalafmt.conf") // has its own section below
