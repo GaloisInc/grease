@@ -6,10 +6,10 @@ Installing this plugin requires building native GREASE binary which requires cab
 
 Follow the [GREASE install instructions for building GREASE](https://github.com/GaloisInc/grease/blob/main/doc/install.md#building-a-binary-from-source) (should only require updating submodules via `git submodule update --init` then running `cabal build grease-cli`)
 
-After building GREASE one can use gradle to build the plugin zip file by:
+After building GREASE one can use [gradle](https://gradle.org/) to build the plugin zip file by:
 1. Adding the Ghidra install directory to `gradle.properties` and uncommenting the line
 2. Running `./gradlew buildExtension`
-3. Optionally the [gradle](https://gradle.org/) file can install the extension directly with `./gradlew installExtension`
+3. Optionally the gradle file can install the extension directly with `./gradlew installExtension`
 
 After building the extension a zip file will be in `./dist/ghidra_<VERSION>_<DATE>_ghidra-batch-plugin.zip` which can be installed using Ghidra Project menu:
 1. Open File->Install Extensions
