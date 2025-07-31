@@ -25,11 +25,9 @@ jobs:
         with:
           version: "0.18.0.0"
        
-      - name: Setup java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
+      - name: Setup Ghidra
+        uses: ./.github/actions/ghidra-install.yaml
+
           
       - name: Lint Ghidra plugin Scala
         shell: bash

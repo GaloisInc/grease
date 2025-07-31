@@ -1,0 +1,25 @@
+name: "Install Ghidra"
+runs:
+  using: "composite"
+  steps:
+    - name: Setup java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '21'
+
+    - name: Fetch Ghidra
+      shell: bash
+      run: |
+        curl \
+                    --fail \
+                    --location \
+                    --proto '=https' \
+                    --show-error \
+                    --silent \
+                    --tlsv1.2 \
+                    --output ~/ghidra.zip \
+                    https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.4_build/ghidra_11.4_PUBLIC_20250620.zip
+        cd ~/ && unzip -x ghidra.zip
+        echo "GHIDRA_INSTALL_DIR=$(realpath ~/)/ghidra_11.4_PUBLIC"
+        echo "GHIDRA_INSTALL_DIR=$(realpath ~/)/ghidra_11.4_PUBLIC" >> $GITHUB_ENV      
