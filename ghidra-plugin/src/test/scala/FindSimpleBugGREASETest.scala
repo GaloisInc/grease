@@ -78,9 +78,8 @@ class FindSimpleBugGREASETest extends AbstractGhidraHeadlessIntegrationTest {
     val prog = loadProgram(proj, "testbins/buggy-armv7l")
     assert(Option(prog).isDefined)
     val analysisManager = AutoAnalysisManager.getAnalysisManager(prog)
-    val analyzer = GreaseAnalyzer()
     analysisManager.scheduleOneTimeAnalysis(
-      analysisManager.getAnalyzer("Grease Analyzer"),
+      analysisManager.getAnalyzer("GREASE Analyzer"),
       prog.getMemory()
     )
     analysisManager.waitForAnalysis(
