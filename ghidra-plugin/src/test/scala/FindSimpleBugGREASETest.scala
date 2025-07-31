@@ -95,7 +95,7 @@ class FindSimpleBugGREASETest extends AbstractGhidraHeadlessIntegrationTest {
       "The comment should exist at the address 0x00010088"
     )
     assert(
-      comm.contains("Possible BUG:"),
+      comm.contains("Possible bug:"),
       s"The comment $comm at 0x00010088 should contain Possible BUG"
     )
   }
