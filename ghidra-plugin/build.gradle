@@ -107,7 +107,7 @@ buildExtension {
 
 spotless {
     scala {
-		// Unfortunately it seems this version duplciation is required
+		// Unfortunately it seems this version duplication is required
 		scalafmt("3.5.3").configFile(".scalafmt.conf") // has its own section below
 	}
 }
