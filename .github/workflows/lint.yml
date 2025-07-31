@@ -24,7 +24,15 @@ jobs:
         name: Check formatting with fourmolu
         with:
           version: "0.18.0.0"
+       
+      - name: Setup Ghidra
+        uses: ./.github/actions/ghidra-install
           
+      - name: Lint Ghidra plugin Scala
+        shell: bash
+        run: cd ghidra-plugin && ./gradlew spotlessCheck
+
+
       - name: Check for trailing whitespace
         run: python3 scripts/lint/whitespace.py grease*/**/*.hs doc/**/*.md
 

@@ -8,6 +8,7 @@
 - [Installation](./install.md)
 - [Usage](./usage.md)
 - [Ghidra plugin](./ghidra-plugin.md)
+- [Ghidra batch plugin](./ghidra-batch-plugin.md) (For use cases that require complete analysis of a large program)
 - [Overrides](./overrides.md)
 - [The S-expression language](./sexp.md)
 

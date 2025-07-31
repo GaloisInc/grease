@@ -1,0 +1,143 @@
+/* ###
+ * IP: GHIDRA
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+// Builds a Ghidra Extension for a given Ghidra installation.
+//
+// An absolute path to the Ghidra installation directory must be supplied either by setting the 
+// GHIDRA_INSTALL_DIR environment variable or Gradle project property:
+//
+//     > export GHIDRA_INSTALL_DIR=<Absolute path to Ghidra> 
+//     > gradle
+//
+//         or
+//
+//     > gradle -PGHIDRA_INSTALL_DIR=<Absolute path to Ghidra>
+//
+// Gradle should be invoked from the directory of the project to build.  Please see the
+// application.gradle.version property in <GHIDRA_INSTALL_DIR>/Ghidra/application.properties
+// for the correction version of Gradle to use for the Ghidra installation you specify.
+
+plugins  {
+	id "scala"
+  	id("com.diffplug.spotless") version "7.2.1"
+}
+
+//----------------------START "DO NOT MODIFY" SECTION------------------------------
+def ghidraInstallDir
+
+if (System.env.GHIDRA_INSTALL_DIR) {
+	ghidraInstallDir = System.env.GHIDRA_INSTALL_DIR
+}
+else if (project.hasProperty("GHIDRA_INSTALL_DIR")) {
+	ghidraInstallDir = project.getProperty("GHIDRA_INSTALL_DIR")
+}
+
+if (ghidraInstallDir) {
+	apply from: new File(ghidraInstallDir).getCanonicalPath() + "/support/buildExtension.gradle"
+}
+else {
+	throw new GradleException("GHIDRA_INSTALL_DIR is not defined!")
+}
+//----------------------END "DO NOT MODIFY" SECTION-------------------------------
+
+apply from: new File(ghidraInstallDir).getCanonicalPath() + "/GPL/nativePlatforms.gradle"
+
+repositories {
+	// Declare dependency repositories here.  This is not needed if dependencies are manually 
+	// dropped into the lib/ directory.
+	// See https://docs.gradle.org/current/userguide/declaring_repositories.html for more info.
+	// Ex: mavenCentral()
+	mavenCentral()
+}
+
+scala {
+    scalaVersion = "3.7.0"
+}
+
+dependencies {
+	// Any external dependencies added here will automatically be copied to the lib/ directory when
+	// this extension is built.
+	implementation("org.scala-lang:scala3-library_3:3.7.0")
+	implementation("com.lihaoyi:os-lib_3:0.11.4")
+	implementation("com.lihaoyi:upickle_3:4.2.1")
+    testImplementation('junit:junit:4.13.2')
+	testRuntimeOnly files("lib")
+}
+
+task buildGrease(type: Exec) {
+	workingDir '../'
+	commandLine 'cabal', 'build', 'grease-cli'
+}
+
+task findGrease(type: Exec) {
+	workingDir '../'
+	commandLine 'cabal', 'list-bin', 'grease-cli'
+  	//store the output instead of printing to the console:
+  	standardOutput = new ByteArrayOutputStream()
+	ext.output = {
+		print("stdout: " + standardOutput.toString())
+    	return standardOutput.toString().replace("\n", "")
+  	}
+}
+
+
+task copyGrease(type: Copy) {
+	dependsOn buildGrease
+	dependsOn findGrease
+
+	from findGrease.output
+	into layout.projectDirectory.dir("os/${currentPlatformName}")
+}
+
+buildExtension {
+	dependsOn copyGrease
+}
+
+spotless {
+    scala {
+		// Unfortunately it seems this version duplication is required
+		scalafmt("3.5.3").configFile(".scalafmt.conf") // has its own section below
+	}
+}
+
+task installExtension(type: Copy) {
+	def dirName = buildExtension.destinationDirectory.get()
+	def archiveName = buildExtension.archiveBaseName.get()
+	def archiveExt = buildExtension.archiveExtension.get()
+    
+	def zipFile = file("${dirName}/${archiveName}.${archiveExt}")
+
+    // Define the output directory where the contents will be extracted
+    def outputDir = file("${ghidraInstallDir}/Ghidra/Extensions/") 
+
+    // Specify the source of the copy operation as the contents of the ZIP file
+    from zipTree(zipFile) 
+
+    // Specify the destination directory for the extracted contents
+    into outputDir
+
+	dependsOn buildExtension
+}
+
+test {
+	useJUnit()
+	jvmArgs '--add-exports=java.desktop/sun.awt=ALL-UNNAMED',
+		'--add-opens=java.desktop/java.awt=ALL-UNNAMED',
+		'--add-opens=java.desktop/javax.swing=ALL-UNNAMED',      
+		'--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED'
+	forkEvery 1
+
+	dependsOn copyGrease
+}
