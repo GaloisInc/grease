@@ -111,15 +111,8 @@ entrypointParser =
 
 initPrecondOptsParser :: Opt.Parser GO.InitialPreconditionOpts
 initPrecondOptsParser = Opt.parserOptionGroup "Initial precondition options" $ do
-  initPrecondPath <-
-    Opt.optional $
-      Opt.strOption
-        ( Opt.long "initial-precondition"
-            <> Opt.metavar "FILE"
-            <> Opt.help "Initial precondition for use in refinement"
-        )
   initPrecondUseDebugInfo <-
-    Opt.switch (Opt.long "use-debug-info-types" <> Opt.help "Use types in debug info to infer initial preconditions. Superseded by --initial-precondition.")
+    Opt.switch (Opt.long "use-debug-info-types" <> Opt.help "Use types in debug info to infer initial preconditions. Can be (partially) overridden --initial-precondition, --arg-*, and/or --*-startup-override.")
   initPrecondTypeUnrollingBound <-
     GO.TypeUnrollingBound
       <$> Opt.option
@@ -128,6 +121,13 @@ initPrecondOptsParser = Opt.parserOptionGroup "Initial precondition options" $ d
             <> Opt.help "Number of recursive pointers to visit during DWARF shape building"
             <> Opt.showDefault
             <> Opt.value GO.defaultTypeUnrollingBound
+        )
+  initPrecondPath <-
+    Opt.optional $
+      Opt.strOption
+        ( Opt.long "initial-precondition"
+            <> Opt.metavar "FILE"
+            <> Opt.help "Initial precondition for use in refinement. Can be (partially) overridden by --arg-* and/or --*-startup-override."
         )
   initPrecondSimpleShapes <- simpleShapesParser
   pure GO.InitialPreconditionOpts{..}
