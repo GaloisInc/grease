@@ -1,6 +1,6 @@
 # GREASE Ghidra Batch Plugin
 
-This [Ghidra](https://github.com/NationalSecurityAgency/ghidra) plugin adds an analysis called "GREASE Analysis" which runs GREASE on all functions in a binary The order the functions are analyzed in is given by a reverse topological sort of the callgraph.
+This [Ghidra](https://github.com/NationalSecurityAgency/ghidra) plugin adds an analysis called "GREASE Analysis" which runs GREASE on all functions in a binary. The order the functions are analyzed in is given by a reverse topological sort of the callgraph.
 
 Installing this plugin requires building native GREASE binary which requires cabal (can be installed from [ghcup](https://www.haskell.org/ghcup/)).
 
