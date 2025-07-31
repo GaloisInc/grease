@@ -123,7 +123,7 @@ jobs:
       run: cabal run exe:grease-diagrams -- --output doc/mem.svg --width 400 --height 400
 
     - name: Setup Ghidra
-      uses: ./.github/actions/ghidra-install.yaml
+      uses: ./.github/actions/ghidra-install
       
     - name: Test Ghidra plugin
       shell: bash

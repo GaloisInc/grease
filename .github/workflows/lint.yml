@@ -26,8 +26,7 @@ jobs:
           version: "0.18.0.0"
        
       - name: Setup Ghidra
-        uses: ./.github/actions/ghidra-install.yaml
-
+        uses: ./.github/actions/ghidra-install
           
       - name: Lint Ghidra plugin Scala
         shell: bash
