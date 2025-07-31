@@ -26,6 +26,7 @@ import ghidra.framework.options.OptionType
 import ghidra.util.Msg
 import scala.concurrent.duration._
 import ghidra.app.services.AnalysisPriority
+import ghidra.program.model.listing.CommentType
 
 object GreaseBackgroundCmd {
   val GREASE_BOOKMARK_TYPE = "GREASE"
@@ -45,14 +46,14 @@ object GreaseBackgroundCmd {
     val prevCom = Option(
       prog
         .getListing()
-        .getComment(CodeUnit.PRE_COMMENT, toAddr)
+        .getComment(CommentType.PRE, toAddr)
     )
     val nextCom =
       prevCom
         .getOrElse("") + comm
     prog
       .getListing()
-      .setComment(toAddr, CodeUnit.PRE_COMMENT, nextCom)
+      .setComment(toAddr, CommentType.PRE, nextCom)
   }
 }
 

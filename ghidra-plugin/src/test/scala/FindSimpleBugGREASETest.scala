@@ -21,6 +21,7 @@ import generic.test.AbstractGTest
 import utility.application.ApplicationLayout
 import ghidra.framework.GModule
 import java.{util => ju}
+import ghidra.program.model.listing.CommentType
 import scala.collection.JavaConverters._
 import java.nio.file.FileSystems
 import generic.jar.ResourceFile
@@ -88,7 +89,7 @@ class FindSimpleBugGREASETest extends AbstractGhidraHeadlessIntegrationTest {
     )
 
     val addr = prog.getAddressFactory().getAddress("0x00010088")
-    val comm = prog.getListing().getComment(CodeUnit.PRE_COMMENT, addr)
+    val comm = prog.getListing().getComment(CommentType.PRE, addr)
     assert(
       Option(comm).isDefined,
       "The comment should exist at the address 0x00010088"
