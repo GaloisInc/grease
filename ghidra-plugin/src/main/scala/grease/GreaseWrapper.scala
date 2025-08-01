@@ -12,7 +12,9 @@ import scala.util.Try
 import scala.util.{Failure, Success}
 import scala.Serializable
 import scala.jdk.CollectionConverters._
+import scala.collection.mutable as mutable
 import ghidra.framework.Application
+import ghidra.program.model.listing.Function as GFunction
 
 object AddrConversions {
 
@@ -77,16 +79,34 @@ class RawBase(val loadBaseOption: Option[Long], prog: Program)
   override val loadBase: Option[Long] = Some(loadBaseAddr.getOffset())
 }
 
+case class FlagSetter(val key: String, value: Any)
+
+trait FlagAnalysis {
+  def analyzeFunction(func: GFunction): Seq[FlagSetter]
+}
+
 case class GreaseConfiguration(
     val targetBinary: os.Path,
     entrypoint: Address,
     // None uses the default for grease
     timeout: Option[FiniteDuration],
     loadBase: Option[Long],
-    isRawBinary: Boolean
+    isRawBinary: Boolean,
+    analyses: Seq[FlagAnalysis]
 ) {
 
   val GHIDRA_THUMB_REG_NAME = "TMode"
+
+  def buildAdditionalFlags(
+      prog: Program,
+      addr: Address,
+      currFlags: Seq[String]
+  ) = {
+    val flagSet = mutable.Set(currFlags)
+    // We should only be called with a function
+    val func = prog.getFunctionManager().getFunctionAt(addr)
+
+  }
 
   def isThumbMode(prog: Program, addr: Address): Boolean = {
     val ctx = prog.getProgramContext()
