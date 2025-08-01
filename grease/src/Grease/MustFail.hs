@@ -17,7 +17,6 @@ import Data.Macaw.Symbolic.Memory (MacawError (UnmappedGlobalMemoryAccess))
 import Data.Maybe (fromMaybe)
 import Data.Traversable qualified as Traversable
 import Data.Tuple qualified as Tuple
-import Debug.Trace (trace)
 import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online (OnlineBackend, withSolverProcess)
