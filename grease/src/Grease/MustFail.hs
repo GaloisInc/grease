@@ -17,7 +17,6 @@ import Data.Macaw.Symbolic.Memory (MacawError (UnmappedGlobalMemoryAccess))
 import Data.Maybe (fromMaybe)
 import Data.Traversable qualified as Traversable
 import Data.Tuple qualified as Tuple
-import Debug.Trace (trace)
 import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online (OnlineBackend, withSolverProcess)
@@ -62,34 +61,28 @@ excludeMustFail ::
   Bool
 excludeMustFail bldr obligation minfo =
   let reason = C.simErrorReason (obligation ^. Lens.to C.proofGoal ^. W4.labeledPredMsg)
-   in trace
-        "Ran exclude must fail?"
-        ( List.or @[]
-            [ case minfo of
-                -- Symbolic function pointers may arise from calling function pointers that
-                -- appear in function arguments. This is not a bug, just something GREASE
-                -- can't handle.
-                Just (CrucibleLLVMError (Mem.BBMemoryError (Mem.MemoryError _ (Mem.BadFunctionPointer Mem.SymbolicPointer))) _) ->
-                  trace "Using cllvm err" True
-                Just (MacawMemError (UnmappedGlobalMemoryAccess ptrVal)) ->
-                  -- macaw-symbolic does not make it straightforward to track which terms
-                  -- give rise to out-of-bounds global writes, so we catch these errors
-                  -- here in a very hacky way. See
-                  -- https://github.com/GaloisInc/macaw/issues/429 for a proposal to
-                  -- improve macaw-symbolic's assertion tracking so that we can intercept
-                  -- this properly.
-                  let res = not (isConcreteNullPointer bldr ptrVal)
-                   in trace ("Res of concrete null pointer: " ++ show res) res
-                Nothing ->
-                  trace "using nothing case" False
-                Just (CrucibleLLVMError _ _) ->
-                  trace "missed llvm error" False
-            , -- Hitting a loop/recursion bound does not indicate a bug in the program
-              case reason of
-                C.ResourceExhausted{} -> True
-                _ -> False
-            ]
-        )
+   in List.or @[]
+        [ case minfo of
+            -- Symbolic function pointers may arise from calling function pointers that
+            -- appear in function arguments. This is not a bug, just something GREASE
+            -- can't handle.
+            Just (CrucibleLLVMError (Mem.BBMemoryError (Mem.MemoryError _ (Mem.BadFunctionPointer Mem.SymbolicPointer))) _) ->
+              True
+            Just (MacawMemError (UnmappedGlobalMemoryAccess ptrVal)) ->
+              -- macaw-symbolic does not make it straightforward to track which terms
+              -- give rise to out-of-bounds global writes, so we catch these errors
+              -- here in a very hacky way. See
+              -- https://github.com/GaloisInc/macaw/issues/429 for a proposal to
+              -- improve macaw-symbolic's assertion tracking so that we can intercept
+              -- this properly.
+              isConcreteNullPointer bldr ptrVal
+            Nothing -> False
+            Just (CrucibleLLVMError _ _) -> False
+        , -- Hitting a loop/recursion bound does not indicate a bug in the program
+          case reason of
+            C.ResourceExhausted{} -> True
+            _ -> False
+        ]
 
 -- | Given a 'C.ProofObligation', produce a 'W4.Pred' that is unsatisfiable when
 -- the obligation \"must fail\", i.e., it is satisfiable when either the goal
