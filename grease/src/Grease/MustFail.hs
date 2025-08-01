@@ -68,19 +68,13 @@ excludeMustFail bldr obligation minfo =
             -- appear in function arguments. This is not a bug, just something GREASE
             -- can't handle.
             Just (CrucibleLLVMError (Mem.BBMemoryError (Mem.MemoryError _ (Mem.BadFunctionPointer Mem.SymbolicPointer))) _) ->
-              trace "Using cllvm err" True
+              True
             Just (MacawMemError (UnmappedGlobalMemoryAccess ptrVal)) ->
-              -- macaw-symbolic does not make it straightforward to track which terms
-              -- give rise to out-of-bounds global writes, so we catch these errors
-              -- here in a very hacky way. See
-              -- https://github.com/GaloisInc/macaw/issues/429 for a proposal to
-              -- improve macaw-symbolic's assertion tracking so that we can intercept
-              -- this properly.
               not (isConcreteNullPointer bldr ptrVal)
             Nothing ->
-              trace "using nothing case" False
+              False
             Just (CrucibleLLVMError _ _) ->
-              trace "missed llvm error" False
+              False
         , -- Hitting a loop/recursion bound does not indicate a bug in the program
           case reason of
             C.ResourceExhausted{} -> True
