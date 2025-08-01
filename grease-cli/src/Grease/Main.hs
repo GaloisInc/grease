@@ -98,7 +98,6 @@ import Data.Traversable (for, traverse)
 import Data.Tuple (fst, snd)
 import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
-import Debug.Trace (trace)
 import GHC.TypeNats (KnownNat)
 import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
@@ -196,7 +195,7 @@ import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
-import Prelude (Integer, Integral, Num (..), fromIntegral, undefined)
+import Prelude (Integer, Integral, Num (..), fromIntegral)
 
 -- | Results of analysis, one per given 'Entrypoint'
 newtype Results = Results {getResults :: Map Entrypoint Batch}
@@ -744,8 +743,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
     (args, setupMem, setupAnns) <- setup la bak dl rNameAssign regTypes argShapes initMem
     regs' <- liftIO (overrideRegs (argVals args))
     (bbMapRef, recordLLVMAnnotation, processMacawAssert) <- liftIO buildErrMaps
-    let ?recordLLVMAnnotation = \x y z -> trace "axsadkjadjl" (recordLLVMAnnotation x y z)
-    let ?processMacawAssert = \x y -> trace "annotating y" (processMacawAssert x y)
+    let ?recordLLVMAnnotation = recordLLVMAnnotation
+    let ?processMacawAssert = processMacawAssert
     (fs0, st) <- mkInitState regs' setupMem ssa
     -- The order of the heuristics is significant, the 'macawHeuristics'
     -- find a sensible initial memory layout, which is necessary before
