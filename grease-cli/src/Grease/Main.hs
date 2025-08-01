@@ -98,8 +98,8 @@ import Data.Traversable (for, traverse)
 import Data.Tuple (fst, snd)
 import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
-import GHC.TypeNats (KnownNat)
 import Debug.Trace (trace)
+import GHC.TypeNats (KnownNat)
 import Grease.AssertProperty
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Bug qualified as Bug
@@ -604,7 +604,6 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let sym = C.backendGetSym bak
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
-  let ?processMacawAssert = \_ p _ -> trace "My top level process callback" (pure p)
   (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory (simMutGlobs simOpts) relocs
 
   let (tyCtxErrs, tyCtx) = TCtx.mkTypeContext dl IntMap.empty []
@@ -659,7 +658,6 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
           , debuggerFeat
           , Just (greaseBranchTracerFeature la)
           ]
-  let memCfg0 = memConfigInitial bak archCtx memPtrTable relocs
   let rNameAssign =
         Ctx.generate
           (Ctx.size regTypes)
@@ -681,6 +679,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         ( MonadIO m
         , MonadThrow m
         , Mem.HasLLVMAnn sym
+        , MSM.MacawProcessAssertion sym
         ) =>
         ArchRegs sym arch ->
         SetupMem sym ->
@@ -692,6 +691,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
       mkInitState regs' mem' ssa'@(C.SomeCFG ssaCfg') = do
         mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
         (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
+        let memCfg0 = memConfigInitial bak archCtx memPtrTable relocs
         let builtinOvs = builtinStubsOverrides bak mvar memCfg0 fs
         let userOvPaths = simOverrides simOpts
         fnOvsMap <- liftIO $ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
