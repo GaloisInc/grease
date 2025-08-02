@@ -85,6 +85,12 @@ import What4.ProgramLoc qualified as W4
 doLog :: GreaseLogAction -> Diag.Diagnostic -> IO ()
 doLog la diag = LJ.writeLog la (HeuristicDiagnostic diag)
 
+data AnyMemError sym
+  = AnyMemErrorLLVM
+      (Mem.MemoryError sym)
+  | AnyMemErrorMacaw
+      (MSM.MacawError sym)
+
 type RefineHeuristic sym bak ext tys =
   bak ->
   Anns.Annotations sym ext tys ->
@@ -110,7 +116,7 @@ newtype MemoryErrorHeuristic sym ext w argTys
         -- Argument names
         Ctx.Assignment (Const String) argTys ->
         ArgShapes ext NoTag argTys ->
-        Mem.MemoryError sym ->
+        AnyMemError sym ->
         ArgSelector ext argTys ts t ->
         IO (HeuristicResult ext argTys)
       )
@@ -171,11 +177,11 @@ handleMemErr ::
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
-  Mem.MemoryError sym ->
+  AnyMemError sym ->
   ArgSelector ext argTys ts regTy ->
   IO (HeuristicResult ext argTys)
-handleMemErr la argNames args (Mem.MemoryError _op reason) sel =
-  case reason of
+handleMemErr la argNames args err sel =
+  case err of
     -- Most of the time, expanding an allocation backing a function won't help
     -- with calling the function. The one exception to this rule is when the
     -- function pointer value is a raw bitvector: crucible-llvm will always fail
@@ -184,9 +190,10 @@ handleMemErr la argNames args (Mem.MemoryError _op reason) sel =
     -- Note [Initializing empty pointer shapes] in Grease.Setup, this scenario
     -- can actually happen when refining a function pointer argument to a
     -- function.)
-    Mem.BadFunctionPointer fle
+    (AnyMemErrorLLVM (Mem.MemoryError _op (Mem.BadFunctionPointer fle)))
       | fle /= Mem.RawBitvector ->
           pure Unknown
+    (AnyMemErrorMacaw _) -> pure Unknown -- Macaw unmapped errors should not be resolved by growing an allocation, we just promote
     _ -> do
       let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
       doLog la $ Diag.DefaultHeuristicsGrowAndInitMem argName sel
@@ -321,7 +328,7 @@ applyMemoryHeuristics ::
   MemoryErrorHeuristic sym ext 8 argTys ->
   W4.ProgramLoc ->
   InitialMem sym ->
-  Mem.MemoryError sym ->
+  AnyMemError sym ->
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
@@ -331,7 +338,6 @@ applyMemoryHeuristics _la anns sym ptrHeuristic byteHeuristic loc (InitialMem me
   Refl <- assertPtrWidth ptr
   let msel = Anns.lookupPtrAnnotation anns sym ?ptrWidth ptr
   let msel' = Anns.lookupPtrAnnotation anns sym (C.knownNat @8) ptr
-  Mem.MemoryError op reason <- pure memErr
   case (msel, msel') of
     (_, Just (Anns.SomePtrSelector (SelectRet{}))) ->
       pure Unknown
@@ -345,30 +351,35 @@ applyMemoryHeuristics _la anns sym ptrHeuristic byteHeuristic loc (InitialMem me
        in h sym loc argNames args memErr sel
     -- No matching selector, so this was a pointer to an allocation made by the
     -- program, not by GREASE.
-    (Nothing, Nothing) -> do
-      let mem = Mem.memOpMem op
-      let ptrAllocType = do
-            Mem.AllocInfo aTy _sz _mut _align _loc <-
-              allocInfoFromPtr sym mem ptr
-            Just aTy
-      case reason of
-        Mem.NoSatisfyingWrite{}
-          | ptrAllocType == Just Mem.StackAlloc ->
-              let bug =
-                    Bug.BugInstance
-                      { Bug.bugType = Bug.UninitStackRead
-                      , Bug.bugLoc = ppProgramLoc loc
-                      , Bug.bugDetails = allocInfoLoc sym (Mem.memOpMem op) ptr
-                      , Bug.bugUb = Nothing
-                      }
-               in pure (PossibleBug bug)
-        Mem.NoSatisfyingWrite{}
-          | Just name <- globalPtrName sym memImpl Mem.Mutable ptr ->
-              pure (CantRefine (MutableGlobal name))
-        Mem.BadFunctionPointer Mem.NoOverride ->
-          let maybeName = globalPtrName sym memImpl Mem.Immutable ptr
-           in pure (CantRefine (MissingFunc maybeName))
-        _ -> pure Unknown
+    (Nothing, Nothing) ->
+      case memErr of
+        AnyMemErrorLLVM llMemErr ->
+          do
+            Mem.MemoryError op reason <- pure llMemErr
+            let mem = Mem.memOpMem op
+            let ptrAllocType = do
+                  Mem.AllocInfo aTy _sz _mut _align _loc <-
+                    allocInfoFromPtr sym mem ptr
+                  Just aTy
+            case reason of
+              Mem.NoSatisfyingWrite{}
+                | ptrAllocType == Just Mem.StackAlloc ->
+                    let bug =
+                          Bug.BugInstance
+                            { Bug.bugType = Bug.UninitStackRead
+                            , Bug.bugLoc = ppProgramLoc loc
+                            , Bug.bugDetails = allocInfoLoc sym (Mem.memOpMem op) ptr
+                            , Bug.bugUb = Nothing
+                            }
+                     in pure (PossibleBug bug)
+              Mem.NoSatisfyingWrite{}
+                | Just name <- globalPtrName sym memImpl Mem.Mutable ptr ->
+                    pure (CantRefine (MutableGlobal name))
+              Mem.BadFunctionPointer Mem.NoOverride ->
+                let maybeName = globalPtrName sym memImpl Mem.Immutable ptr
+                 in pure (CantRefine (MissingFunc maybeName))
+              _ -> pure Unknown
+        AnyMemErrorMacaw _ -> pure Unknown
 
 -- | Must-fail heuristic (see UC-KLEE paper)
 --
@@ -442,7 +453,7 @@ pointerHeuristics la ptrHeuristic byteHeuristic =
           handleUB la anns sym loc args ub
         Just (CrucibleLLVMError (Mem.BBMemoryError memErr@(Mem.MemoryError op reason)) _cs) -> do
           let onePtrHeuristics =
-                applyMemoryHeuristics la anns sym ptrHeuristic byteHeuristic loc initMem memErr argNames args
+                applyMemoryHeuristics la anns sym ptrHeuristic byteHeuristic loc initMem (AnyMemErrorLLVM memErr) argNames args
           case op of
             Mem.MemLoadOp _ _ ptr _ -> onePtrHeuristics ptr
             Mem.MemStoreOp _ _ ptr _ -> onePtrHeuristics ptr
@@ -457,7 +468,8 @@ pointerHeuristics la ptrHeuristic byteHeuristic =
                   r1 <- onePtrHeuristics dst
                   r2 <- onePtrHeuristics src
                   pure (mergeResultsOptimistic r1 r2)
-        Just (MacawMemError (UnmappedGlobalMemoryAccess _)) -> pure Unknown
+        Just (MacawMemError mmErr@(UnmappedGlobalMemoryAccess ptr)) ->
+          applyMemoryHeuristics la anns sym ptrHeuristic byteHeuristic loc initMem (AnyMemErrorMacaw mmErr) argNames args ptr
         Nothing -> pure Unknown
   ]
 
@@ -543,10 +555,10 @@ macawHeuristics la rNames =
     -- Argument names
     Ctx.Assignment (Const String) (Symbolic.MacawCrucibleRegTypes arch) ->
     ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.MacawCrucibleRegTypes arch) ->
-    Mem.MemoryError sym ->
+    AnyMemError sym ->
     ArgSelector (Symbolic.MacawExt arch) (Symbolic.MacawCrucibleRegTypes arch) ts regTy ->
     IO (HeuristicResult (Symbolic.MacawExt arch) (Symbolic.MacawCrucibleRegTypes arch))
-  handleMemErr' sym loc argNames args e@(Mem.MemoryError op reason) sel =
+  handleMemErr' sym loc argNames args e@(AnyMemErrorLLVM (Mem.MemoryError op reason)) sel =
     if getRegName rNames (sel ^. argSelectorIndex) == mkRegName @arch MC.sp_reg
       then case reason of
         Mem.NoSatisfyingWrite _ ->
@@ -571,3 +583,4 @@ macawHeuristics la rNames =
           -- See !218 for details.
           pure Unknown
       else handleMemErr la argNames args e sel
+  handleMemErr' _ _ argNames args e@(AnyMemErrorMacaw _) sel = handleMemErr la argNames args e sel
