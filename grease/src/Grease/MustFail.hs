@@ -68,8 +68,8 @@ excludeMustFail bldr obligation minfo =
             -- can't handle.
             Just (CrucibleLLVMError (Mem.BBMemoryError (Mem.MemoryError _ (Mem.BadFunctionPointer Mem.SymbolicPointer))) _) ->
               True
-            Just (MacawMemError (UnmappedGlobalMemoryAccess ptrVal)) ->
-              not (isConcreteNullPointer bldr ptrVal)
+            Just (MacawMemError (UnmappedGlobalMemoryAccess _)) ->
+              False
             Nothing ->
               False
             Just (CrucibleLLVMError _ _) ->

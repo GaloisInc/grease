@@ -193,7 +193,6 @@ handleMemErr la argNames args err sel =
     (AnyMemErrorLLVM (Mem.MemoryError _op (Mem.BadFunctionPointer fle)))
       | fle /= Mem.RawBitvector ->
           pure Unknown
-    (AnyMemErrorMacaw _) -> pure Unknown -- Macaw unmapped errors should not be resolved by growing an allocation, we just promote
     _ -> do
       let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
       doLog la $ Diag.DefaultHeuristicsGrowAndInitMem argName sel
