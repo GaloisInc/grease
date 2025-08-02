@@ -1,6 +1,6 @@
 ; Copyright (c) Galois, Inc. 2025
 
-; A test case that writes to a pointer stored in %rax.
+; A test case that writes to a fixed unmapped address we should not try to refine.
 
 ;; flags {"--symbol", "test", "--initial-precondition", "tests/x86/extra/make-rax-deadbeef.txt"}
 ;; go(prog)
@@ -12,4 +12,4 @@
     (pointer-write (Bitvector 64) le rax-ptr zero64)
     (return regs)))
     
-;; no_heuristic()
+;; must_fail()
