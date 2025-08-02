@@ -39,6 +39,7 @@ import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as Symbolic
 import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Macaw.Symbolic.Memory as SymbolicMemory
 import Data.Macaw.Types (BVType)
 import Data.Map (Map)
 import Data.Parameterized.Context qualified as Ctx
@@ -216,7 +217,9 @@ data ArchContext arch = ArchContext
     -- See Note [Coping with stack protection] for how this is used.
     _archInitGlobals ::
       forall sym.
-      Mem.HasLLVMAnn sym =>
+      ( Mem.HasLLVMAnn sym
+      , SymbolicMemory.MacawProcessAssertion sym
+      ) =>
       Stubs.Sym sym ->
       Mem.MemImpl sym ->
       C.SymGlobalState sym ->

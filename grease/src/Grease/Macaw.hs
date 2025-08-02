@@ -33,6 +33,7 @@ import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader qualified as EL
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Backend qualified as Symbolic
+import Data.Macaw.Symbolic.Memory qualified as MSM
 import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
 import Data.Macaw.Types qualified as MT
 import Data.Map.Strict qualified as Map
@@ -351,6 +352,7 @@ memConfigInitial ::
   , Show (ArchReloc arch)
   , ?memOpts :: Mem.MemOptions
   , Mem.HasLLVMAnn sym
+  , MSM.MacawProcessAssertion sym
   , Symbolic.HasMacawLazySimulatorState p sym (MC.ArchAddrWidth arch)
   ) =>
   bak ->
@@ -492,6 +494,7 @@ initState ::
   , Symbolic.SymArchConstraints arch
   , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
   , Mem.HasLLVMAnn sym
+  , MSM.MacawProcessAssertion sym
   , ?memOpts :: Mem.MemOptions
   , HasGreaseSimulatorState p sym arch
   , HasToConcretize p

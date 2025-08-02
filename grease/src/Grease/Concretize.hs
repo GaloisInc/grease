@@ -28,6 +28,7 @@ import Data.Foldable (toList)
 import Data.Functor.Const (Const)
 import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Symbolic.Memory (MacawError (UnmappedGlobalMemoryAccess))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
@@ -37,6 +38,7 @@ import Data.Text (Text)
 import Data.Type.Equality (testEquality)
 import Data.Word (Word8)
 import Grease.Concretize.ToConcretize (ToConcretizeType)
+import Grease.ErrorDescription (ErrorDescription (..))
 import Grease.Setup (Args (Args), InitialMem (..))
 import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
@@ -133,8 +135,20 @@ data ConcretizedData sym ext argTys
   -- ^ Concretized values from the @GlobalVar 'ToConcretizeType'@
   , concFs :: ConcFs
   , concMem :: ConcMem sym
-  , concErr :: Maybe (Mem.BadBehavior sym)
+  , concErr :: Maybe (ErrorDescription sym)
   }
+
+class Concretize e where
+  concretize :: forall sym t st fs. (WI.IsExprBuilder sym, sym ~ W4.ExprBuilder t st fs) => sym -> W4.GroundEvalFn t -> e sym -> IO (e sym)
+
+instance Concretize ErrorDescription where
+  concretize sym (W4.GroundEvalFn gFn) (CrucibleLLVMError bb cs) = do
+    bb' <- Mem.concBadBehavior sym gFn bb
+    pure (CrucibleLLVMError bb' cs)
+  concretize sym (W4.GroundEvalFn gFn) (MacawMemError memerr) = do
+    (UnmappedGlobalMemoryAccess ptrVal) <- pure memerr
+    cptr <- Mem.concPtr sym gFn ptrVal
+    pure $ MacawMemError (UnmappedGlobalMemoryAccess cptr)
 
 makeConcretizedData ::
   forall solver sym ext wptr bak t st argTys fm.
@@ -143,7 +157,7 @@ makeConcretizedData ::
   (ExtShape ext ~ PtrShape ext wptr) =>
   bak ->
   W4.GroundEvalFn t ->
-  Maybe (Mem.CallStack, Mem.BadBehavior sym) ->
+  Maybe (ErrorDescription sym) ->
   InitialState sym ext argTys ->
   C.RegValue sym ToConcretizeType ->
   IO (ConcretizedData sym ext argTys)
@@ -176,7 +190,7 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   cExtra <- List.reverse . toList <$> liftIO (C.concretizeSymSequence gFn concStruct extra)
   cFs <- traverse (traverse (fmap toWord8 . gFn)) (SymIO.symbolicFiles initFs)
   cMem <- Mem.concMemImpl sym gFn initMem
-  cErr <- traverse (\(_, bb) -> Mem.concBadBehavior sym gFn bb) minfo
+  cErr <- traverse (\eds -> concretize sym groundEvalFn eds) minfo
   pure $
     ConcretizedData
       { concArgs = ConcArgs cArgs
