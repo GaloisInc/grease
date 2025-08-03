@@ -415,7 +415,6 @@ mustFailHeuristic bak _anns _initMem obligation minfo _argNames _args =
                                 if Mem.null callStack
                                   then txt'
                                   else txt' <> "\nin context:\n" <> tshow (Mem.ppCallStack callStack)
-                        -- Ok for now since we exclude macaw errors
                         Just (MacawMemError (UnmappedGlobalMemoryAccess _)) -> Just txt
                         Nothing -> Just txt
                   , Bug.bugUb = do
