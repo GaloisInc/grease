@@ -2,7 +2,7 @@
 
 ; A test case that writes to a fixed unmapped address we should not try to refine.
 
-;; flags {"--symbol", "test", "--initial-precondition", "tests/x86/extra/make-rax-deadbeef.txt"}
+;; flags {"--symbol", "test", "--arg-u64 rax:0x0bad1deadeadbeef"}
 ;; go(prog)
 
 (defun @test ((regs X86Regs)) X86Regs
