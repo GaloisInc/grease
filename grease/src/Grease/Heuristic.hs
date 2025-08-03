@@ -394,37 +394,36 @@ mustFailHeuristic ::
   ) =>
   RefineHeuristic sym bak ext argTys
 mustFailHeuristic bak _anns _initMem obligation minfo _argNames _args =
-  let sym = C.backendGetSym bak
-   in if MustFail.excludeMustFail sym obligation minfo
+  if MustFail.excludeMustFail obligation minfo
+    then pure Unknown
+    else do
+      mustFail <- MustFail.oneMustFail bak [obligation]
+      let lp = C.proofGoal obligation
+      let simError = lp ^. W4.labeledPredMsg
+      let loc = C.simErrorLoc simError
+      let bug =
+            Bug.BugInstance
+              { Bug.bugType = Bug.MustFail
+              , Bug.bugLoc = ppProgramLoc loc
+              , Bug.bugDetails = do
+                  let txt = tshow (C.ppSimError simError)
+                  case minfo of
+                    Just (CrucibleLLVMError badBehavior callStack) ->
+                      let txt' = tshow (Mem.ppBB badBehavior)
+                       in Just $
+                            if Mem.null callStack
+                              then txt'
+                              else txt' <> "\nin context:\n" <> tshow (Mem.ppCallStack callStack)
+                    Just (MacawMemError (UnmappedGlobalMemoryAccess _)) -> Just txt
+                    Nothing -> Just txt
+              , Bug.bugUb = do
+                  -- Maybe
+                  (CrucibleLLVMError (Mem.BBUndefinedBehavior ub) _) <- minfo
+                  Just (UB.makeUb ub)
+              }
+      if Bool.not mustFail
         then pure Unknown
-        else do
-          mustFail <- MustFail.oneMustFail bak [obligation]
-          let lp = C.proofGoal obligation
-          let simError = lp ^. W4.labeledPredMsg
-          let loc = C.simErrorLoc simError
-          let bug =
-                Bug.BugInstance
-                  { Bug.bugType = Bug.MustFail
-                  , Bug.bugLoc = ppProgramLoc loc
-                  , Bug.bugDetails = do
-                      let txt = tshow (C.ppSimError simError)
-                      case minfo of
-                        Just (CrucibleLLVMError badBehavior callStack) ->
-                          let txt' = tshow (Mem.ppBB badBehavior)
-                           in Just $
-                                if Mem.null callStack
-                                  then txt'
-                                  else txt' <> "\nin context:\n" <> tshow (Mem.ppCallStack callStack)
-                        Just (MacawMemError (UnmappedGlobalMemoryAccess _)) -> Just txt
-                        Nothing -> Just txt
-                  , Bug.bugUb = do
-                      -- Maybe
-                      (CrucibleLLVMError (Mem.BBUndefinedBehavior ub) _) <- minfo
-                      Just (UB.makeUb ub)
-                  }
-          if Bool.not mustFail
-            then pure Unknown
-            else pure (PossibleBug bug)
+        else pure (PossibleBug bug)
 
 pointerHeuristics ::
   forall wptr solver sym bak t st fs ext argTys.
