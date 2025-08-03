@@ -43,7 +43,6 @@ import Data.Function (const, id, ($), (&), (.))
 import Data.Functor (fmap, (<$>), (<&>))
 import Data.Functor.Const (Const (..))
 import Data.Functor.Const qualified as Const
-import Data.IORef (IORef, modifyIORef, newIORef)
 import Data.IntMap qualified as IntMap
 import Data.LLVM.BitCode (parseBitCodeFromFile)
 import Data.List qualified as List
@@ -67,7 +66,7 @@ import Data.Macaw.PPC.Symbolic qualified as PPCSymbolic
 import Data.Macaw.PPC.Symbolic.Syntax qualified as PPCSyn
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Debug qualified as MDebug
-import Data.Macaw.Symbolic.Memory qualified as MSM (MacawError, MacawProcessAssertion, defaultProcessMacawAssertion)
+import Data.Macaw.Symbolic.Memory qualified as MSM (MacawProcessAssertion)
 import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
 import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
 import Data.Macaw.X86 qualified as X86
@@ -165,12 +164,9 @@ import Lang.Crucible.LLVM qualified as CLLVM
 import Lang.Crucible.LLVM.DataLayout (DataLayout)
 import Lang.Crucible.LLVM.DataLayout qualified as DataLayout
 import Lang.Crucible.LLVM.Debug qualified as Debug
-import Lang.Crucible.LLVM.Errors qualified as CLLVM
 import Lang.Crucible.LLVM.Extension qualified as CLLVM
 import Lang.Crucible.LLVM.Globals qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.MemModel.CallStack as LLCS
-import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.LLVM.SymIO qualified as CLLVM.SymIO
 import Lang.Crucible.LLVM.Syntax (emptyParserHooks, llvmParserHooks)
 import Lang.Crucible.LLVM.Translation qualified as Trans
