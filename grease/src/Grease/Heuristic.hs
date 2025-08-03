@@ -40,7 +40,6 @@ import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Tuple qualified as Tuple
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Grease.Bug qualified as Bug
 import Grease.Bug.UndefinedBehavior qualified as UB
@@ -63,13 +62,11 @@ import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
-import Lang.Crucible.LLVM.Errors qualified as CLLVM
 import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.Errors.MemoryError qualified as Mem
 import Lang.Crucible.LLVM.Errors.UndefinedBehavior qualified as Mem
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel qualified as Mem hiding (Mem)
-import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Generic qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
