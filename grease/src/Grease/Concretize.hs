@@ -52,7 +52,6 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Concretize qualified as Conc
 import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.SymSequence qualified as C
