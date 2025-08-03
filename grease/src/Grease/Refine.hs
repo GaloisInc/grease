@@ -83,7 +83,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bool (Bool (..))
 import Data.Either (Either (..))
 import Data.Function (($), (.))
-import Data.Functor (fmap, (<$>))
+import Data.Functor ((<$>))
 import Data.Functor.Const (Const)
 import Data.IORef (IORef, modifyIORef, readIORef)
 import Data.Int (Int)
@@ -101,7 +101,6 @@ import Data.Parameterized.Nonce (Nonce)
 import Data.Proxy (Proxy (..))
 import Data.Semigroup ((<>))
 import Data.String (String)
-import Data.Tuple qualified as Tuple
 import Data.Type.Equality (type (~))
 import GHC.IORef (newIORef)
 import Grease.Bug qualified as Bug
@@ -123,10 +122,8 @@ import Lang.Crucible.Backend.Prove qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.LLVM.Errors qualified as CLLVM
-import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
-import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.BoundedExec qualified as C
@@ -144,7 +141,7 @@ import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as W4
 import What4.LabeledPred qualified as W4
 import What4.Solver qualified as W4
-import Prelude (Num (..), undefined, (=<<))
+import Prelude (Num (..))
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (RefineDiagnostic diag)
@@ -224,10 +221,6 @@ combiner = C.Combiner $ \mr1 mr2 -> do
         ProveSuccess -> pure (failed (ProveNoHeuristic errs1))
         ProveNoHeuristic errs2 ->
           pure (failed (ProveNoHeuristic (errs1 <> errs2)))
-
-extractCLLVMError :: ErrorDescription sym -> Maybe (LLCS.CallStack, CLLVM.BadBehavior sym)
-extractCLLVMError (CrucibleLLVMError behavior cs) = Just (cs, behavior)
-extractCLLVMError _ = Nothing
 
 type MacawAssertionCallback sym = sym -> W4.Pred sym -> MSM.MacawError sym -> IO (W4.Pred sym)
 type LLVMMemModelCallback sym = LLCS.CallStack -> Mem.BoolAnn sym -> CLLVM.BadBehavior sym -> IO ()
