@@ -3,12 +3,14 @@
 
 module Grease.ErrorDescription (ErrorDescription (..), concretizeErrorDescription, ppMacawError, ppErrorDesc) where
 
+import Data.List qualified as List
 import Data.Macaw.Symbolic.Memory (MacawError (UnmappedGlobalMemoryAccess))
 import Data.Macaw.Symbolic.Memory qualified as MSM
 import Lang.Crucible.LLVM.Errors qualified as CLLVM
 import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.MemModel qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
+import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Prettyprinter qualified as PP
 import What4.Expr qualified as W4
@@ -39,7 +41,15 @@ ppMacawError (MSM.UnmappedGlobalMemoryAccess ptrVal) = PP.sep ["(", "UnmappedGlo
 
 ppErrorDesc :: W4.IsExpr (W4.SymExpr sym) => ErrorDescription sym -> PP.Doc a
 ppErrorDesc (MacawMemError mmErr) = ppDelimitedObj ["MacawMemErr", ppMacawError mmErr]
-ppErrorDesc (CrucibleLLVMError badBehavior cs) = ppDelimitedObj ["CrucibleLLVMError", CLLVM.ppBB badBehavior, LLCS.ppCallStack cs]
+ppErrorDesc (CrucibleLLVMError bb callStack) =
+  let ppCs = Mem.ppCallStack callStack
+   in PP.vcat $
+        [PP.indent 4 (Mem.ppBB bb)]
+          List.++
+          -- HACK(crucible#1112): No Eq on Doc, no access to cs
+          if Mem.null callStack
+            then []
+            else ["in context:", PP.indent 2 ppCs]
 
 instance W4.IsExpr (W4.SymExpr sym) => Show (ErrorDescription sym) where
   show :: WI.IsExpr (WI.SymExpr sym) => ErrorDescription sym -> String

@@ -127,17 +127,8 @@ instance PP.Pretty Diagnostic where
           , PP.indent 4 (C.ppSimError $ lp ^. W4.labeledPredMsg)
           , -- , PP.indent 4 (W4.ppExpr $ lp ^. W4.labeledPred)
             case minfo of
-              Just (MacawMemError macawErr@(UnmappedGlobalMemoryAccess _)) -> Err.ppMacawError macawErr
               Nothing -> "<no details available>"
-              Just (CrucibleLLVMError bb callStack) ->
-                let ppCs = Mem.ppCallStack callStack
-                 in PP.vcat $
-                      [PP.indent 4 (Mem.ppBB bb)]
-                        List.++
-                        -- HACK(crucible#1112): No Eq on Doc, no access to cs
-                        if Mem.null callStack
-                          then []
-                          else ["in context:", PP.indent 2 ppCs]
+              Just err -> PP.pretty err
           ]
    where
     printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w
