@@ -71,6 +71,7 @@ module Grease.Refine (
   RefinementSummary (..),
   refinementLoop,
   buildErrMaps,
+  ErrorCallbacks (..),
 ) where
 
 import Control.Applicative (pure)
@@ -87,6 +88,7 @@ import Data.Functor ((<$>))
 import Data.Functor.Const (Const)
 import Data.IORef (IORef, modifyIORef, readIORef)
 import Data.Int (Int)
+import Data.Kind (Type)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.CFG qualified as MC
@@ -222,10 +224,19 @@ combiner = C.Combiner $ \mr1 mr2 -> do
         ProveNoHeuristic errs2 ->
           pure (failed (ProveNoHeuristic (errs1 <> errs2)))
 
-type MacawAssertionCallback sym = sym -> W4.Pred sym -> MSM.MacawError sym -> IO (W4.Pred sym)
-type LLVMMemModelCallback sym = LLCS.CallStack -> Mem.BoolAnn sym -> CLLVM.BadBehavior sym -> IO ()
+data ErrorCallbacks sym t
+  = ErrorCallbacks
+  { llvmErrCallback :: LLCS.CallStack -> Mem.BoolAnn sym -> CLLVM.BadBehavior sym -> IO ()
+  , macawAssertionCallback :: sym -> W4.Pred sym -> MSM.MacawError sym -> IO (W4.Pred sym)
+  , errorMap :: IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym))
+  }
 
-buildErrMaps :: forall t st fs bldr. (bldr ~ (W4.ExprBuilder t st fs)) => IO (IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription bldr)), LLVMMemModelCallback bldr, MacawAssertionCallback bldr)
+-- | Builds a mapping from assertions to errors if those assertions are unprovable
+-- there are two types of errors 'CLLVM.BadBehavior' which describes errors emitted from the llvm memory model/semantics
+-- and 'MSM.MacawError' which is emitted from Macaw specific errors. The LLVM callback is intended to be passed to 'recordLLVMAnnotation'
+-- and the Macaw callback is intended to be passed to 'processMacawAssert'. In this configuration, Macaw and Crucible-LLVM will record errors
+-- to the 'errorMap' as an 'ErrorDescription'
+buildErrMaps :: sym ~ W4.ExprBuilder t st fs => IO (ErrorCallbacks sym t)
 buildErrMaps = do
   bbMapRef <- newIORef Map.empty
   let recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
@@ -234,7 +245,7 @@ buildErrMaps = do
         (ann, p') <- W4.annotateTerm sym p
         _ <- modifyIORef bbMapRef $ Map.insert ann (MacawMemError err)
         pure p'
-  pure (bbMapRef, recordLLVMAnnotation, processMacawAssert)
+  pure ErrorCallbacks{errorMap = bbMapRef, llvmErrCallback = recordLLVMAnnotation, macawAssertionCallback = processMacawAssert}
 
 -- | How to consume the results of trying to prove a goal. Not exported.
 consumer ::
