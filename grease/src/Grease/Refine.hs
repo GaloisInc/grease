@@ -317,8 +317,7 @@ consumer bak anns execResult la heuristics argNames argShapes bbMap initState =
               RefinedPrecondition fc' -> pure $ ProveRefine fc'
               Unknown -> runHeuristics hs fc
           runHeuristics [] _ =
-            let err = minfo
-             in pure (ProveNoHeuristic (NE.singleton (NoHeuristic goal cData err)))
+            pure (ProveNoHeuristic (NE.singleton (NoHeuristic goal cData minfo)))
         runHeuristics heuristics argShapes
       C.Unknown{} ->
         throw . GreaseException . tshow $
