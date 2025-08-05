@@ -231,9 +231,13 @@ data ErrorCallbacks sym t
   }
 
 -- | Builds a mapping from assertions to errors if those assertions are unprovable
--- there are two types of errors 'CLLVM.BadBehavior' which describes errors emitted from the llvm memory model/semantics
--- and 'MSM.MacawError' which is emitted from Macaw specific errors. The LLVM callback is intended to be passed to 'recordLLVMAnnotation'
--- and the Macaw callback is intended to be passed to 'processMacawAssert'. In this configuration, Macaw and Crucible-LLVM will record errors
+--
+-- There are two types of errors 'CLLVM.BadBehavior' which
+-- describes errors emitted from the llvm memory model/semantics
+-- and 'MSM.MacawError' which is emitted from Macaw specific errors.
+-- The LLVM callback is intended to be passed to 'recordLLVMAnnotation'
+-- and the Macaw callback is intended to be passed to 'processMacawAssert'.
+-- In this configuration, Macaw and Crucible-LLVM will record errors
 -- to the 'errorMap' as an 'ErrorDescription'
 buildErrMaps :: sym ~ W4.ExprBuilder t st fs => IO (ErrorCallbacks sym t)
 buildErrMaps = do
