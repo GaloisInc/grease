@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -45,16 +46,18 @@ ppMacawError :: W4.IsExpr (W4.SymExpr sym) => MSM.MacawError sym -> PP.Doc a
 ppMacawError (MSM.UnmappedGlobalMemoryAccess ptrVal) = PP.sep ["(", "UnmappedGlobalMemoryAccess", CLLVM.ppPtr ptrVal, ")"]
 
 ppErrorDesc :: W4.IsExpr (W4.SymExpr sym) => ErrorDescription sym -> PP.Doc a
-ppErrorDesc (MacawMemError mmErr) = ppDelimitedObj ["MacawMemErr", ppMacawError mmErr]
-ppErrorDesc (CrucibleLLVMError bb callStack) =
-  let ppCs = Mem.ppCallStack callStack
-   in PP.vcat $
-        [PP.indent 4 (Mem.ppBB bb)]
-          List.++
-          -- HACK(crucible#1112): No Eq on Doc, no access to cs
-          if Mem.null callStack
-            then []
-            else ["in context:", PP.indent 2 ppCs]
+ppErrorDesc =
+  \case
+    (MacawMemError mmErr) -> ppDelimitedObj ["MacawMemErr", ppMacawError mmErr]
+    (CrucibleLLVMError bb callStack) ->
+      let ppCs = Mem.ppCallStack callStack
+       in PP.vcat $
+            [PP.indent 4 (Mem.ppBB bb)]
+              List.++
+              -- HACK(crucible#1112): No Eq on Doc, no access to cs
+              if Mem.null callStack
+                then []
+                else ["in context:", PP.indent 2 ppCs]
 
 instance W4.IsExpr (W4.SymExpr sym) => Show (ErrorDescription sym) where
   show :: WI.IsExpr (WI.SymExpr sym) => ErrorDescription sym -> String
