@@ -88,7 +88,6 @@ import Data.Functor ((<$>))
 import Data.Functor.Const (Const)
 import Data.IORef (IORef, modifyIORef, readIORef)
 import Data.Int (Int)
-import Data.Kind (Type)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.CFG qualified as MC
