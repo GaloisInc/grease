@@ -17,7 +17,12 @@ import What4.Expr qualified as W4
 import What4.Interface qualified as W4
 import What4.Interface qualified as WI
 
-concretizeErrorDescription :: (WI.IsExprBuilder sym, sym ~ W4.ExprBuilder t st fs) => sym -> W4.GroundEvalFn t -> ErrorDescription sym -> IO (ErrorDescription sym)
+concretizeErrorDescription ::
+  (WI.IsExprBuilder sym, sym ~ W4.ExprBuilder t st fs) =>
+  sym ->
+  W4.GroundEvalFn t ->
+  ErrorDescription sym ->
+  IO (ErrorDescription sym)
 concretizeErrorDescription sym (W4.GroundEvalFn gFn) (CrucibleLLVMError bb cs) = do
   bb' <- Mem.concBadBehavior sym gFn bb
   pure (CrucibleLLVMError bb' cs)
