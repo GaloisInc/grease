@@ -738,7 +738,12 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   result <- refinementLoop la (simMaxIters simOpts) (simTimeout simOpts) rNamesAssign' initArgShapes $ \argShapes -> do
     (args, setupMem, setupAnns) <- setup la bak dl rNameAssign regTypes argShapes initMem
     regs' <- liftIO (overrideRegs (argVals args))
-    ErrorCallbacks{errorMap = bbMapRef, llvmErrCallback = recordLLVMAnnotation, macawAssertionCallback = processMacawAssert} <- liftIO buildErrMaps
+    ErrorCallbacks
+      { errorMap = bbMapRef
+      , llvmErrCallback = recordLLVMAnnotation
+      , macawAssertionCallback = processMacawAssert
+      } <-
+      liftIO buildErrMaps
     let ?recordLLVMAnnotation = recordLLVMAnnotation
     let ?processMacawAssert = processMacawAssert
     (fs0, st) <- mkInitState regs' setupMem ssa
@@ -806,7 +811,12 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         C.resetAssumptionState bak
         (args, setupMem, setupAnns) <- setup la bak dl rNameAssign regTypes argShapes initMem
         regs' <- liftIO (overrideRegs (argVals args))
-        ErrorCallbacks{errorMap = bbMapRef, llvmErrCallback = recordLLVMAnnotation, macawAssertionCallback = processMacawAssert} <- liftIO buildErrMaps
+        ErrorCallbacks
+          { errorMap = bbMapRef
+          , llvmErrCallback = recordLLVMAnnotation
+          , macawAssertionCallback = processMacawAssert
+          } <-
+          liftIO buildErrMaps
         let ?recordLLVMAnnotation = recordLLVMAnnotation
         let ?processMacawAssert = processMacawAssert
         let assertingSsa = C.toSSA assertingCfg
@@ -1253,7 +1263,12 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
       let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
       let dl = TCtx.llvmDataLayout typeCtx
       (args, setupMem, setupAnns) <- setup la bak dl valueNames argTys argShapes initMem
-      ErrorCallbacks{errorMap = bbMapRef, llvmErrCallback = recordLLVMAnnotation, macawAssertionCallback = processMacawAssert} <- liftIO buildErrMaps
+      ErrorCallbacks
+        { errorMap = bbMapRef
+        , llvmErrCallback = recordLLVMAnnotation
+        , macawAssertionCallback = processMacawAssert
+        } <-
+        liftIO buildErrMaps
       let ?recordLLVMAnnotation = recordLLVMAnnotation
       let ?processMacawAssert = processMacawAssert
       let llvmExtImpl = CLLVM.llvmExtensionImpl ?memOpts
