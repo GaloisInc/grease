@@ -12,19 +12,14 @@ module Grease.Refine.Diagnostic (
 
 import Control.Lens ((^.))
 import Data.Functor.Const (Const (..))
-import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
-import Data.Macaw.Symbolic.Memory (MacawError (..))
 import Data.Parameterized.Context qualified as Ctx
 import Grease.Diagnostic.Severity (Severity (Debug, Info))
-import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
-import Grease.ErrorDescription qualified as Err
+import Grease.ErrorDescription (ErrorDescription)
 import Grease.Heuristic.Result qualified as Heuristic
 import Grease.Shape (ArgShapes (..), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Print qualified as ShapePP
-import Lang.Crucible.LLVM.Errors qualified as Mem
-import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Prettyprinter qualified as PP
 import What4.Interface qualified as W4
@@ -79,7 +74,7 @@ data Diagnostic where
     -- | Goal that failed (the negation of this predicate was satisfiable)
     W4.LabeledPred (W4.Pred sym) C.SimError ->
     -- | Description of the problem, if available
-    Maybe (ErrorDescription sym) ->
+    Maybe (Grease.ErrorDescription.ErrorDescription sym) ->
     Diagnostic
 
 instance PP.Pretty Diagnostic where
