@@ -115,6 +115,6 @@ checkOneMustFail ::
   [(C.ProofObligation sym, Maybe (ErrorDescription sym))] ->
   IO Bool
 checkOneMustFail bak failed =
-  if List.any (Tuple.uncurry $ excludeMustFail) failed
+  if List.any (Tuple.uncurry excludeMustFail) failed
     then pure False
     else oneMustFail bak (List.map Tuple.fst failed)
