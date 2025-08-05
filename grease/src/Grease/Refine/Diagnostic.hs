@@ -18,6 +18,7 @@ import Data.Macaw.Symbolic.Memory (MacawError (..))
 import Data.Parameterized.Context qualified as Ctx
 import Grease.Diagnostic.Severity (Severity (Debug, Info))
 import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
+import Grease.ErrorDescription qualified as Err
 import Grease.Heuristic.Result qualified as Heuristic
 import Grease.Shape (ArgShapes (..), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrShape)
@@ -126,7 +127,7 @@ instance PP.Pretty Diagnostic where
           , PP.indent 4 (C.ppSimError $ lp ^. W4.labeledPredMsg)
           , -- , PP.indent 4 (W4.ppExpr $ lp ^. W4.labeledPred)
             case minfo of
-              Just (MacawMemError (UnmappedGlobalMemoryAccess _)) -> "<Unmapped memory>"
+              Just (MacawMemError macawErr@(UnmappedGlobalMemoryAccess _)) -> Err.ppMacawError macawErr
               Nothing -> "<no details available>"
               Just (CrucibleLLVMError bb callStack) ->
                 let ppCs = Mem.ppCallStack callStack
