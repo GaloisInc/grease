@@ -24,13 +24,20 @@ concretizeErrorDescription ::
   W4.GroundEvalFn t ->
   ErrorDescription sym ->
   IO (ErrorDescription sym)
-concretizeErrorDescription sym (W4.GroundEvalFn gFn) (CrucibleLLVMError bb cs) = do
-  bb' <- Mem.concBadBehavior sym gFn bb
-  pure (CrucibleLLVMError bb' cs)
-concretizeErrorDescription sym (W4.GroundEvalFn gFn) (MacawMemError memerr) = do
-  (UnmappedGlobalMemoryAccess ptrVal) <- pure memerr
-  cptr <- Mem.concPtr sym gFn ptrVal
-  pure $ MacawMemError (UnmappedGlobalMemoryAccess cptr)
+concretizeErrorDescription
+  sym
+  (W4.GroundEvalFn gFn) =
+    \case
+      (CrucibleLLVMError bb cs) ->
+        ( do
+            bb' <- Mem.concBadBehavior sym gFn bb
+            pure (CrucibleLLVMError bb' cs)
+        )
+      (MacawMemError (UnmappedGlobalMemoryAccess ptrVal)) ->
+        ( do
+            cptr <- Mem.concPtr sym gFn ptrVal
+            pure $ MacawMemError (UnmappedGlobalMemoryAccess cptr)
+        )
 
 -- | An error either from the underlying LLVM memory model or
 -- from Macaw.
