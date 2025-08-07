@@ -248,7 +248,12 @@ buildErrMaps = do
         (ann, p') <- W4.annotateTerm sym p
         _ <- modifyIORef bbMapRef $ Map.insert ann (MacawMemError err)
         pure p'
-  pure ErrorCallbacks{errorMap = bbMapRef, llvmErrCallback = recordLLVMAnnotation, macawAssertionCallback = processMacawAssert}
+  pure
+    ErrorCallbacks
+      { errorMap = bbMapRef
+      , llvmErrCallback = recordLLVMAnnotation
+      , macawAssertionCallback = processMacawAssert
+      }
 
 -- | How to consume the results of trying to prove a goal. Not exported.
 consumer ::
