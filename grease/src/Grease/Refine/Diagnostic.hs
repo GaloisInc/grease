@@ -74,7 +74,7 @@ data Diagnostic where
     -- | Goal that failed (the negation of this predicate was satisfiable)
     W4.LabeledPred (W4.Pred sym) C.SimError ->
     -- | Description of the problem, if available
-    Maybe (Grease.ErrorDescription.ErrorDescription sym) ->
+    Maybe (ErrorDescription sym) ->
     Diagnostic
 
 instance PP.Pretty Diagnostic where
