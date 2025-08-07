@@ -53,6 +53,7 @@ data ErrorDescription sym
 ppDelimitedObj :: [PP.Doc a] -> PP.Doc a
 ppDelimitedObj lst = PP.sep $ "(" : lst ++ [")"]
 
+-- | Pretty print a 'MSM.MacawError'
 -- TODO(#310) Pretty print macaw error using a macaw implementation
 ppMacawError :: W4.IsExpr (W4.SymExpr sym) => MSM.MacawError sym -> PP.Doc a
 ppMacawError (MSM.UnmappedGlobalMemoryAccess ptrVal) = PP.sep ["(", "UnmappedGlobalMemoryAccess", CLLVM.ppPtr ptrVal, ")"]
