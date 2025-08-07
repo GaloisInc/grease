@@ -33,16 +33,12 @@ concretizeErrorDescription
   sym
   (W4.GroundEvalFn gFn) =
     \case
-      (CrucibleLLVMError bb cs) ->
-        ( do
-            bb' <- Mem.concBadBehavior sym gFn bb
-            pure (CrucibleLLVMError bb' cs)
-        )
-      (MacawMemError (UnmappedGlobalMemoryAccess ptrVal)) ->
-        ( do
-            cptr <- Mem.concPtr sym gFn ptrVal
-            pure $ MacawMemError (UnmappedGlobalMemoryAccess cptr)
-        )
+      CrucibleLLVMError bb cs -> do
+        bb' <- Mem.concBadBehavior sym gFn bb
+        pure (CrucibleLLVMError bb' cs)
+      (MacawMemError (UnmappedGlobalMemoryAccess ptrVal)) -> do
+        cptr <- Mem.concPtr sym gFn ptrVal
+        pure $ MacawMemError (UnmappedGlobalMemoryAccess cptr)
 
 -- | An error either from the underlying LLVM memory model or
 -- from Macaw.
@@ -61,8 +57,8 @@ ppMacawError (MSM.UnmappedGlobalMemoryAccess ptrVal) = PP.sep ["(", "UnmappedGlo
 ppErrorDesc :: W4.IsExpr (W4.SymExpr sym) => ErrorDescription sym -> PP.Doc a
 ppErrorDesc =
   \case
-    (MacawMemError mmErr) -> ppDelimitedObj ["MacawMemErr", ppMacawError mmErr]
-    (CrucibleLLVMError bb callStack) ->
+    MacawMemError mmErr -> ppDelimitedObj ["MacawMemErr", ppMacawError mmErr]
+    CrucibleLLVMError bb callStack ->
       let ppCs = Mem.ppCallStack callStack
        in PP.vcat $
             [PP.indent 4 (Mem.ppBB bb)]
