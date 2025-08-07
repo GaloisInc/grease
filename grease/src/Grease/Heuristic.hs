@@ -425,6 +425,52 @@ mustFailHeuristic bak _anns _initMem obligation minfo _argNames _args =
         then pure Unknown
         else pure (PossibleBug bug)
 
+pointerHeuristic ::
+  forall wptr solver sym bak t st fs ext argTys.
+  ( C.IsSyntaxExtension ext
+  , ExtShape ext ~ PtrShape ext wptr
+  , Cursor.CursorExt ext ~ Dereference ext wptr
+  , OnlineSolverAndBackend solver sym bak t st fs
+  , 16 C.<= wptr
+  , Mem.HasPtrWidth wptr
+  , Mem.HasLLVMAnn sym
+  , ?memOpts :: Mem.MemOptions
+  ) =>
+  GreaseLogAction ->
+  MemoryErrorHeuristic sym ext wptr argTys ->
+  MemoryErrorHeuristic sym ext 8 argTys ->
+  RefineHeuristic sym bak ext argTys
+pointerHeuristic la ptrHeuristic byteHeuristic bak anns initMem obligation minfo argNames args =
+  case minfo of
+    Just (CrucibleLLVMError (Mem.BBUndefinedBehavior ub) _cs) ->
+      handleUB la anns sym loc args ub
+    Just (CrucibleLLVMError (Mem.BBMemoryError memErr@(Mem.MemoryError op reason)) _cs) -> do
+      let onePtrHeuristics =
+            applyToErr (AnyMemErrorLLVM memErr)
+      case op of
+        Mem.MemLoadOp _ _ ptr _ -> onePtrHeuristics ptr
+        Mem.MemStoreOp _ _ ptr _ -> onePtrHeuristics ptr
+        Mem.MemStoreBytesOp _ ptr _ _ -> onePtrHeuristics ptr
+        Mem.MemLoadHandleOp _ _ ptr _ -> onePtrHeuristics ptr
+        Mem.MemInvalidateOp _ _ ptr _ _ -> onePtrHeuristics ptr
+        Mem.MemCopyOp (_, dst) (_, src) _len _ -> do
+          case reason of
+            Mem.UnreadableRegion -> onePtrHeuristics src
+            Mem.UnwritableRegion -> onePtrHeuristics dst
+            _ -> do
+              r1 <- onePtrHeuristics dst
+              r2 <- onePtrHeuristics src
+              pure (mergeResultsOptimistic r1 r2)
+    Just (MacawMemError mmErr@(UnmappedGlobalMemoryAccess ptr)) ->
+      applyToErr (AnyMemErrorMacaw mmErr) ptr
+    Nothing -> pure Unknown
+ where
+  sym = C.backendGetSym bak
+  labeledPred = C.proofGoal obligation
+  loc = C.simErrorLoc (labeledPred ^. W4.labeledPredMsg)
+  applyToErr :: AnyMemError sym -> Mem.LLVMPtr sym w -> IO (HeuristicResult ext argTys)
+  applyToErr e ptr = applyMemoryHeuristics la anns sym ptrHeuristic byteHeuristic loc initMem e argNames args ptr
+
 pointerHeuristics ::
   forall wptr solver sym bak t st fs ext argTys.
   ( C.IsSyntaxExtension ext
@@ -441,39 +487,9 @@ pointerHeuristics ::
   MemoryErrorHeuristic sym ext 8 argTys ->
   [RefineHeuristic sym bak ext argTys]
 pointerHeuristics la ptrHeuristic byteHeuristic =
-  [ f
+  [ pointerHeuristic la ptrHeuristic byteHeuristic
   ]
  where
-  f bak anns initMem obligation minfo argNames args =
-    case minfo of
-      Just (CrucibleLLVMError (Mem.BBUndefinedBehavior ub) _cs) ->
-        handleUB la anns sym loc args ub
-      Just (CrucibleLLVMError (Mem.BBMemoryError memErr@(Mem.MemoryError op reason)) _cs) -> do
-        let onePtrHeuristics =
-              applyToErr (AnyMemErrorLLVM memErr)
-        case op of
-          Mem.MemLoadOp _ _ ptr _ -> onePtrHeuristics ptr
-          Mem.MemStoreOp _ _ ptr _ -> onePtrHeuristics ptr
-          Mem.MemStoreBytesOp _ ptr _ _ -> onePtrHeuristics ptr
-          Mem.MemLoadHandleOp _ _ ptr _ -> onePtrHeuristics ptr
-          Mem.MemInvalidateOp _ _ ptr _ _ -> onePtrHeuristics ptr
-          Mem.MemCopyOp (_, dst) (_, src) _len _ -> do
-            case reason of
-              Mem.UnreadableRegion -> onePtrHeuristics src
-              Mem.UnwritableRegion -> onePtrHeuristics dst
-              _ -> do
-                r1 <- onePtrHeuristics dst
-                r2 <- onePtrHeuristics src
-                pure (mergeResultsOptimistic r1 r2)
-      Just (MacawMemError mmErr@(UnmappedGlobalMemoryAccess ptr)) ->
-        applyToErr (AnyMemErrorMacaw mmErr) ptr
-      Nothing -> pure Unknown
-   where
-    sym = C.backendGetSym bak
-    labeledPred = C.proofGoal obligation
-    loc = C.simErrorLoc (labeledPred ^. W4.labeledPredMsg)
-    applyToErr :: AnyMemError sym -> Mem.LLVMPtr sym w -> IO (HeuristicResult ext argTys)
-    applyToErr e ptr = applyMemoryHeuristics la anns sym ptrHeuristic byteHeuristic loc initMem e argNames args ptr
 
 getConcretePointerBlock :: W4.IsExprBuilder sym => sym -> Mem.LLVMPtr sym w -> Maybe Natural
 getConcretePointerBlock sym ptr = tryAnnotated <|> tryUnannotated
