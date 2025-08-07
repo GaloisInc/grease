@@ -84,6 +84,14 @@ jobs:
         restore-keys: |
           ${{ matrix.cache-key-prefix }}-${{ env.CACHE_VERSION }}-cabal-${{ matrix.os }}-${{ matrix.ghc }}-
 
+    - name: Configure build
+      shell: bash
+      run: cabal configure --enable-tests --semaphore
+
+    - name: Build grease-cli
+      shell: bash
+      run: cabal build pkg:grease-cli pkg:grease-diagrams
+
     - name: Install solvers
       shell: bash
       run: .github/ci.sh install_system_deps
@@ -93,25 +101,6 @@ jobs:
         # also update it in the Dockerfile. Also make sure to update the version
         # of Yices mentioned in the installation instructions.
         SOLVER_PKG_VERSION: "snapshot-20241119"
-
-    - name: Check .cabal files
-      shell: bash
-      run: |
-        (cd grease && cabal check)
-        (cd grease-aarch32 && cabal check)
-        (cd grease-ppc && cabal check)
-        (cd grease-x86 && cabal check)
-        (cd grease-cli && cabal check)
-        (cd doc/diagrams && cabal check)
-        (cd elf-edit-core-dump && cabal check)
-
-    - name: Configure build
-      shell: bash
-      run: cabal configure --enable-tests --semaphore
-
-    - name: Build grease-cli
-      shell: bash
-      run: cabal build pkg:grease-cli pkg:grease-diagrams
 
     - name: Test grease-cli
       shell: bash
@@ -143,6 +132,17 @@ jobs:
       # Haddocks to ensure well-formedness, we consider this an acceptable
       # tradeoff.
       run: cabal haddock --disable-documentation pkg:grease pkg:grease-cli pkg:elf-edit-core-dump
+
+    - name: Check .cabal files
+      shell: bash
+      run: |
+        (cd grease && cabal check)
+        (cd grease-aarch32 && cabal check)
+        (cd grease-ppc && cabal check)
+        (cd grease-x86 && cabal check)
+        (cd grease-cli && cabal check)
+        (cd doc/diagrams && cabal check)
+        (cd elf-edit-core-dump && cabal check)
 
     - name: Save cache store cache
       uses: actions/cache/save@v4
