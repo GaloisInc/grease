@@ -2,7 +2,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Grease.ErrorDescription (ErrorDescription (..), concretizeErrorDescription, ppMacawError, ppErrorDesc) where
+module Grease.ErrorDescription (
+  ErrorDescription (..),
+  concretizeErrorDescription,
+  ppMacawError,
+  ppErrorDesc,
+) where
 
 import Data.List qualified as List
 import Data.Macaw.Symbolic.Memory (MacawError (UnmappedGlobalMemoryAccess))
