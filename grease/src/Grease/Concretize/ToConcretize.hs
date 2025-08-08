@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |
@@ -69,26 +68,7 @@ newToConcretize halloc globals = do
   g <- LCCG.freshGlobalVar halloc "to-concretize" knownRepr
   pure (g, LCSG.insertGlobal g LCSS.SymSequenceNil globals)
 
--- | Like 'Lang.Crucible.Simulator.ExecutionTree.abortedGlobals', but
--- grounded to a single branch.
-abortedGroundGlobals ::
-  (sym ~ WEB.ExprBuilder t st fs) =>
-  WEG.GroundEvalFn t ->
-  LCS.IntrinsicTypes sym ->
-  LCS.AbortedResult sym ext ->
-  IO (LCSG.SymGlobalState sym)
-abortedGroundGlobals groundFn iTypes =
-  \case
-    LCSE.AbortedExec _ gp -> pure (gp Lens.^. LCSE.gpGlobals)
-    LCSE.AbortedExit _ gp -> pure (gp Lens.^. LCSE.gpGlobals)
-    LCSE.AbortedBranch _loc p rl rr -> do
-      b <- WEG.groundEval groundFn p
-      if b
-        then abortedGroundGlobals groundFn iTypes rl
-        else abortedGroundGlobals groundFn iTypes rr
-
--- | Like 'Lang.Crucible.Simulator.ExecutionTree.execResultGlobals', but
--- grounded to a single branch.
+-- | Extract the 'LCSG.SymGlobalState' from an 'LCSE.ExecResult'.
 execResultGroundGlobals ::
   LCB.IsSymInterface sym =>
   (sym ~ WEB.ExprBuilder t st fs) =>
@@ -96,11 +76,9 @@ execResultGroundGlobals ::
   LCSE.ExecResult p sym ext rtp ->
   IO (LCSG.SymGlobalState sym)
 execResultGroundGlobals groundFn =
-  \case
-    LCSE.FinishedResult _ctx partial -> pure (partial Lens.^. LCSE.partialValue . LCSE.gpGlobals)
-    LCSE.TimeoutResult st -> LCSE.execStateGlobals st
-    LCSE.AbortedResult simCtx aborted ->
-      abortedGroundGlobals groundFn (LCS.ctxIntrinsicTypes simCtx) aborted
+  LCSE.execResultGlobals $ \_simCtx _loc p l r -> do
+    b <- WEG.groundEval groundFn p
+    pure $ if b then l else r
 
 -- | Read the value of the global variable of type 'ToConcretizeType' from
 -- a 'C.ExecResult'.

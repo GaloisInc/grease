@@ -32,6 +32,7 @@ import Control.Concurrent.Async (cancel)
 import Control.Exception.Safe (Handler (..), MonadThrow, catches, throw)
 import Control.Lens (to, (.~), (^.))
 import Control.Monad (forM, forM_, mapM_, when, (>>=))
+import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bool (Bool (..), not, otherwise, (&&), (||))
 import Data.ByteString qualified as BS
@@ -44,7 +45,7 @@ import Data.Functor (fmap, (<$>), (<&>))
 import Data.Functor.Const (Const (..))
 import Data.Functor.Const qualified as Const
 import Data.IntMap qualified as IntMap
-import Data.LLVM.BitCode (parseBitCodeFromFile)
+import Data.LLVM.BitCode (parseBitCodeFromFileWithWarnings)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.AArch32.Symbolic qualified as AArch32Symbolic
@@ -87,6 +88,7 @@ import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Parameterized.TraversableFC.WithIndex (imapFC)
 import Data.Proxy (Proxy (..))
 import Data.Semigroup ((<>))
+import Data.Sequence qualified as Seq
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.String (String)
@@ -1424,17 +1426,26 @@ simulateLlvmSyntax simOpts la = do
       setupHook = LLVM.syntaxSetupHook la (simOverrides simOpts) prog cfgs
   simulateLlvmCfgs la simOpts halloc llvmCtx llvmMod mkMem setupHook cfgs
 
+-- | Helper, not exported
+--
+-- Parse bitcode from a 'FilePath', logging any parse warnings and throwing
+-- 'GreaseException' on error.
+parseBitcode :: GreaseLogAction -> FilePath -> IO L.Module
+parseBitcode la path =
+  parseBitCodeFromFileWithWarnings path >>= \case
+    Left _err -> throw $ GreaseException "Could not parse LLVM module"
+    Right (m, warns) -> do
+      Monad.unless (Seq.null warns) $
+        doLog la (Diag.BitcodeParseWarnings warns)
+      pure m
+
 simulateLlvm ::
   Trans.TranslationOptions ->
   SimOpts ->
   GreaseLogAction ->
   IO Results
 simulateLlvm transOpts simOpts la = do
-  llvmMod <-
-    parseBitCodeFromFile (simProgPath simOpts)
-      >>= \case
-        Left _err -> throw $ GreaseException "Could not parse LLVM module"
-        Right m -> pure m
+  llvmMod <- parseBitcode la (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
   C.Some @_ @_ @arch trans <- do
