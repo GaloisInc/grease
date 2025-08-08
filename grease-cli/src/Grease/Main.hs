@@ -32,6 +32,7 @@ import Control.Concurrent.Async (cancel)
 import Control.Exception.Safe (Handler (..), MonadThrow, catches, throw)
 import Control.Lens (to, (.~), (^.))
 import Control.Monad (forM, forM_, mapM_, when, (>>=))
+import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bool (Bool (..), not, otherwise, (&&), (||))
 import Data.ByteString qualified as BS
@@ -45,7 +46,7 @@ import Data.Functor.Const (Const (..))
 import Data.Functor.Const qualified as Const
 import Data.IORef (modifyIORef, newIORef)
 import Data.IntMap qualified as IntMap
-import Data.LLVM.BitCode (parseBitCodeFromFile)
+import Data.LLVM.BitCode (parseBitCodeFromFileWithWarnings)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.AArch32.Symbolic qualified as AArch32Symbolic
@@ -1419,10 +1420,13 @@ simulateLlvm ::
   IO Results
 simulateLlvm transOpts simOpts la = do
   llvmMod <-
-    parseBitCodeFromFile (simProgPath simOpts)
+    parseBitCodeFromFileWithWarnings (simProgPath simOpts)
       >>= \case
         Left _err -> throw $ GreaseException "Could not parse LLVM module"
-        Right m -> pure m
+        Right (m, warns) -> do
+          Monad.unless (List.null warns) $
+            doLog la (Diag.BitcodeParseWarnings warns)
+          pure m
   halloc <- C.newHandleAllocator
   mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
   C.Some @_ @_ @arch trans <- do

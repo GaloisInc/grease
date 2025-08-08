@@ -11,9 +11,11 @@ module Grease.Main.Diagnostic (
 ) where
 
 import Data.Functor.Const (Const)
+import Data.LLVM.BitCode (ParseWarning, ppParseWarnings)
 import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
 import Data.Parameterized.Context qualified as Ctx
+import Data.Sequence (Seq)
 import Data.Text qualified as Text
 import Data.Void (Void, absurd)
 import Grease.Diagnostic.Severity (Severity (Debug, Info, Warn))
@@ -34,6 +36,8 @@ data Diagnostic where
     EntrypointLocation -> BatchStatus -> Diagnostic
   AnalyzingEntrypoint ::
     Entrypoint -> Diagnostic
+  BitcodeParseWarnings ::
+    Seq ParseWarning -> Diagnostic
   LoadedPrecondition ::
     forall w ext tag tys.
     ( ExtShape ext ~ PtrShape ext w
@@ -71,6 +75,7 @@ instance PP.Pretty Diagnostic where
           ]
       AnalyzingEntrypoint entry ->
         "Analyzing from entrypoint" PP.<+> PP.pretty entry
+      BitcodeParseWarnings warns -> PP.viaShow (ppParseWarnings warns)
       FinishedAnalyzingEntrypoint entry duration ->
         PP.hsep
           [ "Analysis of"
@@ -115,6 +120,7 @@ severity =
   \case
     AnalyzedEntrypoint{} -> Info
     AnalyzingEntrypoint{} -> Info
+    BitcodeParseWarnings{} -> Warn
     FinishedAnalyzingEntrypoint{} -> Debug
     LoadedPrecondition{} -> Debug
     NoEntrypoints -> Warn
