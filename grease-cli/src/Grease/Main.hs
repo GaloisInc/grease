@@ -1413,20 +1413,26 @@ simulateLlvmSyntax simOpts la = do
       setupHook = LLVM.syntaxSetupHook la (simOverrides simOpts) prog cfgs
   simulateLlvmCfgs la simOpts halloc llvmCtx llvmMod mkMem setupHook cfgs
 
+-- | Helper, not exported
+--
+-- Parse bitcode from a 'FilePath', logging any parse warnings and throwing
+-- 'GreaseException' on error.
+parseBitcode :: GreaseLogAction -> FilePath -> IO L.Module
+parseBitcode la path =
+  parseBitCodeFromFileWithWarnings path >>= \case
+    Left _err -> throw $ GreaseException "Could not parse LLVM module"
+    Right (m, warns) -> do
+      Monad.unless (List.null warns) $
+        doLog la (Diag.BitcodeParseWarnings warns)
+      pure m
+
 simulateLlvm ::
   Trans.TranslationOptions ->
   SimOpts ->
   GreaseLogAction ->
   IO Results
 simulateLlvm transOpts simOpts la = do
-  llvmMod <-
-    parseBitCodeFromFileWithWarnings (simProgPath simOpts)
-      >>= \case
-        Left _err -> throw $ GreaseException "Could not parse LLVM module"
-        Right (m, warns) -> do
-          Monad.unless (List.null warns) $
-            doLog la (Diag.BitcodeParseWarnings warns)
-          pure m
+  llvmMod <- parseBitcode la (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
   C.Some @_ @_ @arch trans <- do
