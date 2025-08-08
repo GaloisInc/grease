@@ -12,16 +12,14 @@ module Grease.Refine.Diagnostic (
 
 import Control.Lens ((^.))
 import Data.Functor.Const (Const (..))
-import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
 import Data.Parameterized.Context qualified as Ctx
 import Grease.Diagnostic.Severity (Severity (Debug, Info))
+import Grease.ErrorDescription (ErrorDescription)
 import Grease.Heuristic.Result qualified as Heuristic
 import Grease.Shape (ArgShapes (..), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Print qualified as ShapePP
-import Lang.Crucible.LLVM.Errors qualified as Mem
-import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Prettyprinter qualified as PP
 import What4.Interface qualified as W4
@@ -76,7 +74,7 @@ data Diagnostic where
     -- | Goal that failed (the negation of this predicate was satisfiable)
     W4.LabeledPred (W4.Pred sym) C.SimError ->
     -- | Description of the problem, if available
-    Maybe (Mem.CallStack, Mem.BadBehavior sym) ->
+    Maybe (ErrorDescription sym) ->
     Diagnostic
 
 instance PP.Pretty Diagnostic where
@@ -125,15 +123,7 @@ instance PP.Pretty Diagnostic where
           , -- , PP.indent 4 (W4.ppExpr $ lp ^. W4.labeledPred)
             case minfo of
               Nothing -> "<no details available>"
-              Just (callStack, bb) ->
-                let ppCs = Mem.ppCallStack callStack
-                 in PP.vcat $
-                      [PP.indent 4 (Mem.ppBB bb)]
-                        List.++
-                        -- HACK(crucible#1112): No Eq on Doc, no access to cs
-                        if Mem.null callStack
-                          then []
-                          else ["in context:", PP.indent 2 ppCs]
+              Just err -> PP.pretty err
           ]
    where
     printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w

@@ -43,7 +43,6 @@ import Data.Function (const, id, ($), (&), (.))
 import Data.Functor (fmap, (<$>), (<&>))
 import Data.Functor.Const (Const (..))
 import Data.Functor.Const qualified as Const
-import Data.IORef (modifyIORef, newIORef)
 import Data.IntMap qualified as IntMap
 import Data.LLVM.BitCode (parseBitCodeFromFile)
 import Data.List qualified as List
@@ -67,7 +66,7 @@ import Data.Macaw.PPC.Symbolic qualified as PPCSymbolic
 import Data.Macaw.PPC.Symbolic.Syntax qualified as PPCSyn
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Debug qualified as MDebug
-import Data.Macaw.Symbolic.Memory qualified as MSM
+import Data.Macaw.Symbolic.Memory qualified as MSM (MacawProcessAssertion)
 import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
 import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
 import Data.Macaw.X86 qualified as X86
@@ -168,7 +167,6 @@ import Lang.Crucible.LLVM.Debug qualified as Debug
 import Lang.Crucible.LLVM.Extension qualified as CLLVM
 import Lang.Crucible.LLVM.Globals qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.LLVM.SymIO qualified as CLLVM.SymIO
 import Lang.Crucible.LLVM.Syntax (emptyParserHooks, llvmParserHooks)
 import Lang.Crucible.LLVM.Translation qualified as Trans
@@ -622,7 +620,6 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let sym = C.backendGetSym bak
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
-  let ?processMacawAssert = MSM.defaultProcessMacawAssertion
   (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory (simMutGlobs simOpts) relocs
 
   let (tyCtxErrs, tyCtx) = TCtx.mkTypeContext dl IntMap.empty []
@@ -677,7 +674,6 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
           , debuggerFeat
           , Just (greaseBranchTracerFeature la)
           ]
-  let memCfg0 = memConfigInitial bak archCtx memPtrTable relocs
   let rNameAssign =
         Ctx.generate
           (Ctx.size regTypes)
@@ -700,6 +696,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         ( MonadIO m
         , MonadThrow m
         , Mem.HasLLVMAnn sym
+        , MSM.MacawProcessAssertion sym
         ) =>
         ArchRegs sym arch ->
         SetupMem sym ->
@@ -711,6 +708,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
       mkInitState regs' mem' ssa'@(C.SomeCFG ssaCfg') = do
         mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
         (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
+        let memCfg0 = memConfigInitial bak archCtx memPtrTable relocs
         let builtinOvs = builtinStubsOverrides bak mvar memCfg0 fs
         let userOvPaths = simOverrides simOpts
         fnOvsMap <- liftIO $ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
@@ -740,10 +738,14 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   result <- refinementLoop la (simMaxIters simOpts) (simTimeout simOpts) rNamesAssign' initArgShapes $ \argShapes -> do
     (args, setupMem, setupAnns) <- setup la bak dl rNameAssign regTypes argShapes initMem
     regs' <- liftIO (overrideRegs (argVals args))
-    bbMapRef <- liftIO (newIORef Map.empty)
-    let ?recordLLVMAnnotation =
-          \callStack (Mem.BoolAnn ann) bb ->
-            modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
+    ErrorCallbacks
+      { errorMap = bbMapRef
+      , llvmErrCallback = recordLLVMAnnotation
+      , macawAssertionCallback = processMacawAssert
+      } <-
+      liftIO buildErrMaps
+    let ?recordLLVMAnnotation = recordLLVMAnnotation
+    let ?processMacawAssert = processMacawAssert
     (fs0, st) <- mkInitState regs' setupMem ssa
     -- The order of the heuristics is significant, the 'macawHeuristics'
     -- find a sensible initial memory layout, which is necessary before
@@ -809,10 +811,14 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         C.resetAssumptionState bak
         (args, setupMem, setupAnns) <- setup la bak dl rNameAssign regTypes argShapes initMem
         regs' <- liftIO (overrideRegs (argVals args))
-        bbMapRef <- liftIO (newIORef Map.empty)
-        let ?recordLLVMAnnotation =
-              \callStack (Mem.BoolAnn ann) bb ->
-                modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
+        ErrorCallbacks
+          { errorMap = bbMapRef
+          , llvmErrCallback = recordLLVMAnnotation
+          , macawAssertionCallback = processMacawAssert
+          } <-
+          liftIO buildErrMaps
+        let ?recordLLVMAnnotation = recordLLVMAnnotation
+        let ?processMacawAssert = processMacawAssert
         let assertingSsa = C.toSSA assertingCfg
         (fs0, st) <- mkInitState regs' setupMem assertingSsa
         let concInitState =
@@ -1257,10 +1263,14 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
       let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
       let dl = TCtx.llvmDataLayout typeCtx
       (args, setupMem, setupAnns) <- setup la bak dl valueNames argTys argShapes initMem
-      bbMapRef <- liftIO (newIORef Map.empty)
-      let ?recordLLVMAnnotation =
-            \callStack (Mem.BoolAnn ann) bb ->
-              modifyIORef bbMapRef $ Map.insert ann (callStack, bb)
+      ErrorCallbacks
+        { errorMap = bbMapRef
+        , llvmErrCallback = recordLLVMAnnotation
+        , macawAssertionCallback = processMacawAssert
+        } <-
+        liftIO buildErrMaps
+      let ?recordLLVMAnnotation = recordLLVMAnnotation
+      let ?processMacawAssert = processMacawAssert
       let llvmExtImpl = CLLVM.llvmExtensionImpl ?memOpts
       (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
       (p, globals1) <- liftIO $ ToConc.newToConcretize halloc globals0

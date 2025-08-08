@@ -11,8 +11,10 @@ import Control.Lens qualified as Lens
 import Control.Monad qualified as Monad
 import Data.Function qualified as Function
 import Data.List qualified as List
+import Data.Macaw.Symbolic.Memory (MacawError (UnmappedGlobalMemoryAccess))
 import Data.Traversable qualified as Traversable
 import Data.Tuple qualified as Tuple
+import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online (OnlineBackend, withSolverProcess)
 import Lang.Crucible.Backend.Simple (Flags)
@@ -28,38 +30,30 @@ import What4.SatResult qualified as W4
 -- | Should this proof obligation be excluded from consideration by the must-
 -- fail heuristic?
 excludeMustFail ::
+  W4.IsExprBuilder sym =>
   C.ProofObligation sym ->
-  Maybe (Mem.BadBehavior sym) ->
+  Maybe (ErrorDescription sym) ->
   Bool
 excludeMustFail obligation minfo =
   let reason = C.simErrorReason (obligation ^. Lens.to C.proofGoal ^. W4.labeledPredMsg)
-   in let msg = C.simErrorReasonMsg reason
-       in List.or @[]
-            [ case minfo of
-                -- Symbolic function pointers may arise from calling function pointers that
-                -- appear in function arguments. This is not a bug, just something GREASE
-                -- can't handle.
-                Just (Mem.BBMemoryError (Mem.MemoryError _ (Mem.BadFunctionPointer Mem.SymbolicPointer))) ->
-                  True
-                _
-                  | -- macaw-symbolic does not make it straightforward to track which terms
-                    -- give rise to out-of-bounds global writes, so we catch these errors
-                    -- here in a very hacky way. See
-                    -- https://github.com/GaloisInc/macaw/issues/429 for a proposal to
-                    -- improve macaw-symbolic's assertion tracking so that we can intercept
-                    -- this properly.
-                    "PointerWrite outside of static memory range" `List.isPrefixOf` msg
-                      &&
-                      -- Make an exception for the concretely-null pointer
-                      not ("PointerWrite outside of static memory range (known BlockID 0): 0x0" `List.isPrefixOf` msg) ->
-                      True
-                  | otherwise ->
-                      False
-            , -- Hitting a loop/recursion bound does not indicate a bug in the program
-              case reason of
-                C.ResourceExhausted{} -> True
-                _ -> False
-            ]
+   in List.or @[]
+        [ case minfo of
+            -- Symbolic function pointers may arise from calling function pointers that
+            -- appear in function arguments. This is not a bug, just something GREASE
+            -- can't handle.
+            Just (CrucibleLLVMError (Mem.BBMemoryError (Mem.MemoryError _ (Mem.BadFunctionPointer Mem.SymbolicPointer))) _) ->
+              True
+            Just (MacawMemError (UnmappedGlobalMemoryAccess _)) ->
+              False
+            Nothing ->
+              False
+            Just (CrucibleLLVMError _ _) ->
+              False
+        , -- Hitting a loop/recursion bound does not indicate a bug in the program
+          case reason of
+            C.ResourceExhausted{} -> True
+            _ -> False
+        ]
 
 -- | Given a 'C.ProofObligation', produce a 'W4.Pred' that is unsatisfiable when
 -- the obligation \"must fail\", i.e., it is satisfiable when either the goal
@@ -118,7 +112,7 @@ checkOneMustFail ::
   ) =>
   bak ->
   -- | Predicates for which no heuristic succeeded
-  [(C.ProofObligation sym, Maybe (Mem.BadBehavior sym))] ->
+  [(C.ProofObligation sym, Maybe (ErrorDescription sym))] ->
   IO Bool
 checkOneMustFail bak failed =
   if List.any (Tuple.uncurry excludeMustFail) failed

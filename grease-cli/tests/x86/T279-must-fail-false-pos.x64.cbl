@@ -14,6 +14,4 @@
     (let _ (pointer-read (Bitvector 8) le ptr1))
     (return regs)))
 
-; TODO(#279): Heuristics should be able to account for this load by expanding
-; *rdi.
-;; must_fail()
+;; ok()

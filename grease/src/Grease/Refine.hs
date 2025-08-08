@@ -70,6 +70,8 @@ module Grease.Refine (
   execAndRefine,
   RefinementSummary (..),
   refinementLoop,
+  buildErrMaps,
+  ErrorCallbacks (..),
 ) where
 
 import Control.Applicative (pure)
@@ -82,13 +84,14 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bool (Bool (..))
 import Data.Either (Either (..))
 import Data.Function (($), (.))
-import Data.Functor (fmap, (<$>))
+import Data.Functor ((<$>))
 import Data.Functor.Const (Const)
-import Data.IORef (IORef, readIORef)
+import Data.IORef (IORef, modifyIORef, readIORef)
 import Data.Int (Int)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Symbolic.Memory qualified as MSM
 import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe (..), maybeToList)
 import Data.Maybe qualified as Maybe
@@ -99,8 +102,8 @@ import Data.Parameterized.Nonce (Nonce)
 import Data.Proxy (Proxy (..))
 import Data.Semigroup ((<>))
 import Data.String (String)
-import Data.Tuple qualified as Tuple
 import Data.Type.Equality (type (~))
+import GHC.IORef (newIORef)
 import Grease.Bug qualified as Bug
 import Grease.Concretize (ConcretizedData)
 import Grease.Concretize qualified as Conc
@@ -119,9 +122,10 @@ import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Prove qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
-import Lang.Crucible.LLVM.Errors qualified as Mem
+import Lang.Crucible.LLVM.Errors qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
+import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
+import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.BoundedExec qualified as C
 import Lang.Crucible.Simulator.BoundedRecursion qualified as C
@@ -178,7 +182,7 @@ data NoHeuristic sym ext tys
   = NoHeuristic
   { noHeuristicGoal :: C.ProofObligation sym
   , noHeuristicConcretizedData :: ConcretizedData sym ext tys
-  , noHeuristicError :: Maybe (Mem.BadBehavior sym)
+  , noHeuristicError :: Maybe (ErrorDescription sym)
   }
 
 data ProveRefineResult sym ext tys
@@ -219,6 +223,38 @@ combiner = C.Combiner $ \mr1 mr2 -> do
         ProveNoHeuristic errs2 ->
           pure (failed (ProveNoHeuristic (errs1 <> errs2)))
 
+data ErrorCallbacks sym t
+  = ErrorCallbacks
+  { llvmErrCallback :: LLCS.CallStack -> Mem.BoolAnn sym -> CLLVM.BadBehavior sym -> IO ()
+  , macawAssertionCallback :: sym -> W4.Pred sym -> MSM.MacawError sym -> IO (W4.Pred sym)
+  , errorMap :: IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym))
+  }
+
+-- | Builds a mapping from assertions to errors if those assertions are unprovable
+--
+-- There are two types of errors 'CLLVM.BadBehavior' which
+-- describes errors emitted from the llvm memory model/semantics
+-- and 'MSM.MacawError' which is emitted from Macaw specific errors.
+-- The LLVM callback is intended to be passed to 'recordLLVMAnnotation'
+-- and the Macaw callback is intended to be passed to 'processMacawAssert'.
+-- In this configuration, Macaw and Crucible-LLVM will record errors
+-- to the 'errorMap' as an 'ErrorDescription'
+buildErrMaps :: sym ~ W4.ExprBuilder t st fs => IO (ErrorCallbacks sym t)
+buildErrMaps = do
+  bbMapRef <- newIORef Map.empty
+  let recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
+        modifyIORef bbMapRef $ Map.insert ann (CrucibleLLVMError bb callStack)
+  let processMacawAssert = \sym p err -> do
+        (ann, p') <- W4.annotateTerm sym p
+        _ <- modifyIORef bbMapRef $ Map.insert ann (MacawMemError err)
+        pure p'
+  pure
+    ErrorCallbacks
+      { errorMap = bbMapRef
+      , llvmErrCallback = recordLLVMAnnotation
+      , macawAssertionCallback = processMacawAssert
+      }
+
 -- | How to consume the results of trying to prove a goal. Not exported.
 consumer ::
   forall p ext r solver sym bak t st argTys w fm.
@@ -239,7 +275,7 @@ consumer ::
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
-  Map.Map (Nonce t C.BaseBoolType) (Mem.CallStack, Mem.BadBehavior sym) ->
+  Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
   Conc.InitialState sym ext argTys ->
   C.ProofConsumer sym t (ProveRefineResult sym ext argTys)
 consumer bak anns execResult la heuristics argNames argShapes bbMap initState =
@@ -289,8 +325,7 @@ consumer bak anns execResult la heuristics argNames argShapes bbMap initState =
               RefinedPrecondition fc' -> pure $ ProveRefine fc'
               Unknown -> runHeuristics hs fc
           runHeuristics [] _ =
-            let err = fmap Tuple.snd minfo
-             in pure (ProveNoHeuristic (NE.singleton (NoHeuristic goal cData err)))
+            pure (ProveNoHeuristic (NE.singleton (NoHeuristic goal cData minfo)))
         runHeuristics heuristics argShapes
       C.Unknown{} ->
         throw . GreaseException . tshow $
@@ -352,7 +387,7 @@ proveAndRefine ::
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
   Conc.InitialState sym ext argTys ->
-  Map.Map (Nonce t C.BaseBoolType) (Mem.CallStack, Mem.BadBehavior sym) ->
+  Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
   C.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
 proveAndRefine bak solver anns execResult la heuristics argNames argShapes initState bbMap goals = do
@@ -394,7 +429,7 @@ execAndRefine ::
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
   Conc.InitialState sym ext argTys ->
-  IORef (Map.Map (Nonce t C.BaseBoolType) (Mem.CallStack, Mem.BadBehavior sym)) ->
+  IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
   LoopBound ->
   [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
   C.ExecState p sym ext (C.RegEntry sym ret) ->

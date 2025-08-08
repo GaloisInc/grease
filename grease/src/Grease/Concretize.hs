@@ -37,6 +37,8 @@ import Data.Text (Text)
 import Data.Type.Equality (testEquality)
 import Data.Word (Word8)
 import Grease.Concretize.ToConcretize (ToConcretizeType)
+import Grease.ErrorDescription (ErrorDescription (..))
+import Grease.ErrorDescription qualified as Err
 import Grease.Setup (Args (Args), InitialMem (..))
 import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
@@ -48,9 +50,7 @@ import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Concretize qualified as Conc
-import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.SymSequence qualified as C
@@ -133,7 +133,7 @@ data ConcretizedData sym ext argTys
   -- ^ Concretized values from the @GlobalVar 'ToConcretizeType'@
   , concFs :: ConcFs
   , concMem :: ConcMem sym
-  , concErr :: Maybe (Mem.BadBehavior sym)
+  , concErr :: Maybe (ErrorDescription sym)
   }
 
 makeConcretizedData ::
@@ -143,7 +143,7 @@ makeConcretizedData ::
   (ExtShape ext ~ PtrShape ext wptr) =>
   bak ->
   W4.GroundEvalFn t ->
-  Maybe (Mem.CallStack, Mem.BadBehavior sym) ->
+  Maybe (ErrorDescription sym) ->
   InitialState sym ext argTys ->
   C.RegValue sym ToConcretizeType ->
   IO (ConcretizedData sym ext argTys)
@@ -176,7 +176,7 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   cExtra <- List.reverse . toList <$> liftIO (C.concretizeSymSequence gFn concStruct extra)
   cFs <- traverse (traverse (fmap toWord8 . gFn)) (SymIO.symbolicFiles initFs)
   cMem <- Mem.concMemImpl sym gFn initMem
-  cErr <- traverse (\(_, bb) -> Mem.concBadBehavior sym gFn bb) minfo
+  cErr <- traverse (\eds -> Err.concretizeErrorDescription sym groundEvalFn eds) minfo
   pure $
     ConcretizedData
       { concArgs = ConcArgs cArgs
