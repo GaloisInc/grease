@@ -88,6 +88,7 @@ import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Parameterized.TraversableFC.WithIndex (imapFC)
 import Data.Proxy (Proxy (..))
 import Data.Semigroup ((<>))
+import Data.Sequence qualified as Seq
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.String (String)
@@ -1434,7 +1435,7 @@ parseBitcode la path =
   parseBitCodeFromFileWithWarnings path >>= \case
     Left _err -> throw $ GreaseException "Could not parse LLVM module"
     Right (m, warns) -> do
-      Monad.unless (List.null warns) $
+      Monad.unless (Seq.null warns) $
         doLog la (Diag.BitcodeParseWarnings warns)
       pure m
 
