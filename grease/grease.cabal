@@ -170,6 +170,7 @@ library
     , elf-edit
     , elf-edit-core-dump
     , llvm-pretty
+    , llvm-pretty-bc-parser
     , macaw-base
     , macaw-loader
     , macaw-symbolic
