@@ -129,6 +129,7 @@ import Grease.Macaw.Load (LoadedProgram (..), load)
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
+import Grease.Macaw.Overrides.Target (loadTargetOverrides)
 import Grease.Macaw.PLT
 import Grease.Macaw.RegName (RegName (..), RegNames (..), getRegName, mkRegName, regNameToString, regNames)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
@@ -760,6 +761,7 @@ macawInitState ::
   ArchContext arch ->
   SimOpts ->
   Macaw.SetupHook sym arch ->
+  MM.Memory (MC.ArchAddrWidth arch) ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   C.GlobalVar Mem.Mem ->
   ArchRegs sym arch ->
@@ -773,7 +775,7 @@ macawInitState ::
     ( SymIO.InitialFileSystemContents sym
     , C.ExecState (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch)))
     )
-macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable mvar regs' mem' mbCfgAddr entrypointCfgs = do
+macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook macawMem memPtrTable mvar regs' mem' mbCfgAddr entrypointCfgs = do
   EntrypointCfgs
     { entrypointStartupOv = mbStartupOvSsa
     , entrypointCfg = ssa@(C.SomeCFG ssaCfg)
@@ -797,7 +799,8 @@ macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTabl
   let personality =
         emptyGreaseSimulatorState toConcVar
           & discoveredFnHandles .~ discoveredHdls
-  st <- initState bak la macawExtImpl halloc mvar mem' globals1 initFsOv archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa
+  tgtOvs <- loadTargetOverrides (regStructRepr archCtx) halloc macawMem (simTargetOverrides simOpts)
+  st <- initState bak la macawExtImpl halloc mvar mem' globals1 initFsOv archCtx setupHook tgtOvs personality regs' fnOvsMap mbStartupOvSsaCfg ssa
   pure (fs0, st)
 
 simulateMacawCfg ::
@@ -871,7 +874,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
     let ?recordLLVMAnnotation = recordLLVMAnnotation
     let ?processMacawAssert = processMacawAssert
     memVar <- Mem.mkMemVar "grease:memmodel" halloc
-    (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable memVar regs' setupMem mbCfgAddr entrypointCfgsSsa
+    (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memory memPtrTable memVar regs' setupMem mbCfgAddr entrypointCfgsSsa
     -- The order of the heuristics is significant, the 'macawHeuristics'
     -- find a sensible initial memory layout, which is necessary before
     -- applying the 'mustFailHeuristic' (which would otherwise report many
@@ -1023,7 +1026,7 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook m
         let ?recordLLVMAnnotation = recordLLVMAnnotation
         let ?processMacawAssert = processMacawAssert
         memVar <- Mem.mkMemVar "grease:memmodel" halloc
-        (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable memVar regs' setupMem mbCfgAddr entrypointCfgsSsa'
+        (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memory memPtrTable memVar regs' setupMem mbCfgAddr entrypointCfgsSsa'
         let concInitState =
               Conc.InitialState
                 { Conc.initStateArgs = args

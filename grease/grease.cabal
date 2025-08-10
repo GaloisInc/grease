@@ -227,6 +227,7 @@ library
     Grease.Macaw.Overrides
     Grease.Macaw.Overrides.Builtin
     Grease.Macaw.Overrides.SExp
+    Grease.Macaw.Overrides.Target
     Grease.Macaw.PLT
     Grease.Macaw.SetupHook
     Grease.Macaw.SimulatorHooks

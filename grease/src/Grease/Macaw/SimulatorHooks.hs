@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -16,6 +17,8 @@ import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Backend qualified as Symbolic
 import Grease.Diagnostic (Diagnostic (SimulatorHooksDiagnostic), GreaseLogAction)
+import Grease.Macaw.Arch (ArchContext)
+import Grease.Macaw.Overrides.Target (TargetOverrides, maybeRunTargetOverride)
 import Grease.Macaw.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Panic (panic)
 import Lang.Crucible.Backend qualified as C
@@ -58,15 +61,16 @@ greaseMacawExtImpl ::
   , Symbolic.SymArchConstraints arch
   , 16 C.<= MC.ArchAddrWidth arch
   ) =>
+  ArchContext arch ->
   bak ->
   GreaseLogAction ->
-  Symbolic.GlobalMap sym Mem.Mem (MC.ArchAddrWidth arch) ->
+  TargetOverrides arch ->
   C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   C.ExtensionImpl p sym (Symbolic.MacawExt arch)
-greaseMacawExtImpl bak la globMap macawExtImpl =
+greaseMacawExtImpl archCtx bak la tgtOvs macawExtImpl =
   macawExtImpl
     { C.extensionEval = extensionEval macawExtImpl
-    , C.extensionExec = extensionExec bak la globMap macawExtImpl
+    , C.extensionExec = extensionExec archCtx bak la tgtOvs macawExtImpl
     }
 
 -- | This evaluates a Macaw statement extension in the simulator.
@@ -124,12 +128,13 @@ extensionExec ::
   , Symbolic.SymArchConstraints arch
   , 16 C.<= MC.ArchAddrWidth arch
   ) =>
+  ArchContext arch ->
   bak ->
   GreaseLogAction ->
-  Symbolic.GlobalMap sym Mem.Mem (MC.ArchAddrWidth arch) ->
+  TargetOverrides arch ->
   C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   Symbolic.MacawEvalStmtFunc (C.StmtExtension (Symbolic.MacawExt arch)) p sym (Symbolic.MacawExt arch)
-extensionExec bak la _globs baseExt stmt crucState = do
+extensionExec archCtx bak la tgtOvs baseExt stmt crucState = do
   let sym = C.backendGetSym bak
   case stmt of
     Symbolic.PtrAnd _w (C.RegEntry _ x) (C.RegEntry _ y) -> do
@@ -157,7 +162,8 @@ extensionExec bak la _globs baseExt stmt crucState = do
       case MM.incSegmentOff baddr (MM.memWordToUnsigned iaddr) of
         Just segOff -> do
           doLog la (Diag.ExecutingInstruction (PP.pretty segOff) dis)
-          defaultExec
+          maybeRunTargetOverride archCtx crucState segOff tgtOvs
+          pure ((), crucState)
         Nothing ->
           panic
             "extensionExec"

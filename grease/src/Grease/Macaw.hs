@@ -52,6 +52,7 @@ import Grease.Diagnostic
 import Grease.Macaw.Arch
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
+import Grease.Macaw.Overrides.Target (TargetOverrides)
 import Grease.Macaw.ResolveCall qualified as ResolveCall
 import Grease.Macaw.SetupHook (SetupHook (SetupHook))
 import Grease.Macaw.SimulatorHooks
@@ -512,8 +513,8 @@ initState ::
   C.SymGlobalState sym ->
   SymIO.SomeOverrideSim sym () ->
   ArchContext arch ->
-  Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   SetupHook sym arch ->
+  TargetOverrides arch ->
   -- | The initial personality, see
   -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'
   p ->
@@ -526,12 +527,11 @@ initState ::
   -- | The 'C.CFG' of the user-requested entrypoint function.
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch) ->
   m (C.ExecState p sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch))))
-initState bak la macawExtImpl halloc mvar mem0 globs0 (SymIO.SomeOverrideSim initFsOv) arch ptrTable setupHook initialPersonality initialRegs funOvs mbStartupOvCfg (C.SomeCFG cfg) = do
+initState bak la macawExtImpl halloc mvar mem0 globs0 (SymIO.SomeOverrideSim initFsOv) arch setupHook tgtOvs initialPersonality initialRegs funOvs mbStartupOvCfg (C.SomeCFG cfg) = do
   let sym = C.backendGetSym bak
   (mem1, globs1) <- liftIO $ (arch ^. archInitGlobals) (Stubs.Sym sym bak) (getSetupMem mem0) globs0
   let globs2 = C.insertGlobal mvar mem1 globs1
-  let globMap = Symbolic.mapRegionPointers ptrTable
-  let extImpl = greaseMacawExtImpl bak la globMap macawExtImpl
+  let extImpl = greaseMacawExtImpl arch bak la tgtOvs macawExtImpl
   let cfgHdl = C.cfgHandle cfg
   let bindings =
         C.FnBindings $
