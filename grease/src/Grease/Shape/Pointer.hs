@@ -212,12 +212,12 @@ merge ::
   MemShape wptr tag ->
   MemShape wptr tag ->
   Maybe (MemShape wptr tag)
-merge s1 s2 =
-  case (s1, s2) of
-    (Uninitialized i, Uninitialized j) -> Just (Uninitialized (i + j))
-    (Initialized tagi i, Initialized tagj j) -> Just (Initialized (tagi <> tagj) (i + j))
-    (Exactly i, Exactly j) -> Just (Exactly (i List.++ j))
-    _ -> Nothing
+merge =
+  \cases
+    (Uninitialized i) (Uninitialized j) -> Just (Uninitialized (i + j))
+    (Initialized tagi i) (Initialized tagj j) -> Just (Initialized (tagi <> tagj) (i + j))
+    (Exactly i) (Exactly j) -> Just (Exactly (i List.++ j))
+    _ _ -> Nothing
 
 -- | Number of bytes required to store this 'MemShape'
 memShapeSize ::
