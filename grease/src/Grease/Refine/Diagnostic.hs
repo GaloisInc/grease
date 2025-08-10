@@ -20,7 +20,10 @@ import Grease.Heuristic.Result qualified as Heuristic
 import Grease.Shape (ArgShapes (..), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Print qualified as ShapePP
+import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator.ExecutionTree qualified as ET
+import Lang.Crucible.Simulator.GlobalState qualified as GS
 import Prettyprinter qualified as PP
 import What4.Interface qualified as W4
 import What4.LabeledPred qualified as W4
@@ -30,7 +33,10 @@ data Diagnostic where
   CantRefine ::
     Heuristic.CantRefine -> Diagnostic
   ExecutionResult ::
-    C.ExecResult p sym ext (C.RegEntry sym ret) -> Diagnostic
+    W4.IsExpr (W4.SymExpr sym) =>
+    C.GlobalVar Mem.Mem ->
+    C.ExecResult p sym ext (C.RegEntry sym ret) ->
+    Diagnostic
   GoalNoMatchingHeuristic ::
     Diagnostic
   GoalMatchingHeuristic ::
@@ -82,14 +88,22 @@ instance PP.Pretty Diagnostic where
     \case
       CantRefine reason ->
         PP.pretty reason
-      ExecutionResult r ->
-        case r of
-          C.FinishedResult _ partRes ->
-            case partRes of
-              C.TotalRes{} -> "All execution paths returned a result"
-              C.PartialRes{} -> "At least one execution path returned a result"
-          C.AbortedResult{} -> "All execution paths aborted"
-          C.TimeoutResult{} -> "Symbolic execution timed out!"
+      ExecutionResult memVar execRes ->
+        let memDoc = do
+              globs <- ET.execResultGlobals (\_ctx _loc _p _l _r -> Nothing) execRes
+              memImpl <- GS.lookupGlobal memVar globs
+              pure (Mem.ppMem (Mem.memImplHeap memImpl))
+         in case execRes of
+              C.FinishedResult _ partRes ->
+                let base =
+                      case partRes of
+                        C.TotalRes{} -> "All execution paths returned a result"
+                        C.PartialRes{} -> "At least one execution path returned a result"
+                 in maybe base (\d -> PP.vcat [base, "Post-simulation memory", d]) memDoc
+              C.AbortedResult{} ->
+                let base = "All execution paths aborted"
+                 in maybe base (\d -> PP.vcat [base, "Post-simulation memory", d]) memDoc
+              C.TimeoutResult{} -> "Symbolic execution timed out!"
       GoalNoMatchingHeuristic ->
         "Could not identify heuristic for goal, skipping"
       GoalMatchingHeuristic ->

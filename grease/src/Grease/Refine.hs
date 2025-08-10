@@ -423,6 +423,7 @@ execAndRefine ::
   Solver ->
   W4FM.FloatModeRepr fm ->
   GreaseLogAction ->
+  C.GlobalVar Mem.Mem ->
   Anns.Annotations sym ext argTys ->
   [RefineHeuristic sym bak ext argTys] ->
   -- | Argument names
@@ -434,9 +435,9 @@ execAndRefine ::
   [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
   C.ExecState p sym ext (C.RegEntry sym ret) ->
   m (ProveRefineResult sym ext argTys)
-execAndRefine bak solver _fm la anns heuristics argNames argShapes initState bbMapRef (LoopBound bound) execFeats initialState = do
+execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initState bbMapRef (LoopBound bound) execFeats initialState = do
   (result, goals) <- liftIO (execCfg bak (LoopBound bound) execFeats initialState)
-  doLog la (Diag.ExecutionResult result)
+  doLog la (Diag.ExecutionResult memVar result)
   bbMap <- liftIO (readIORef bbMapRef)
   liftIO (proveAndRefine bak solver anns result la heuristics argNames argShapes initState bbMap goals)
 
