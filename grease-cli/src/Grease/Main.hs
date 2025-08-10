@@ -129,6 +129,7 @@ import Grease.Macaw.Load (LoadedProgram (..), load)
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMap)
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
+import Grease.Macaw.Overrides.Target (loadTargetOverrides)
 import Grease.Macaw.PLT
 import Grease.Macaw.RegName (RegName (..), RegNames (..), getRegName, mkRegName, regNameToString, regNames)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
@@ -730,10 +731,11 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
         -- use an empty map instead. (See gitlab#118 for more discussion on this point.)
         let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` ssaCfgHdl) mbCfgAddr
         (toConcVar, globals1) <- liftIO $ ToConc.newToConcretize halloc globals0
+        tgtOvs <- liftIO (loadTargetOverrides (regStructRepr archCtx) halloc memory (simTargetOverrides simOpts))
         let personality =
               emptyGreaseSimulatorState toConcVar
                 & discoveredFnHandles .~ discoveredHdls
-        st <- initState bak la macawExtImpl halloc mvar mem' globals1 initFsOv archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa'
+        st <- initState bak la macawExtImpl halloc mvar mem' globals1 initFsOv archCtx setupHook tgtOvs personality regs' fnOvsMap mbStartupOvSsaCfg ssa'
         pure (fs0, st)
 
   doLog la (Diag.TargetCFG ssaCfg)

@@ -133,6 +133,8 @@ data SimOpts
   -- ^ Disable heuristics
   , simOverrides :: [FilePath]
   -- ^ User-specified overrides in Crucible S-expression syntax
+  , simTargetOverrides :: [(Integer, FilePath)]
+  -- ^ Target overrides in Crucible S-expression syntax
   , simOverridesYaml :: [FilePath]
   -- ^ Overrides in YAML format
   , simProgPath :: FilePath
