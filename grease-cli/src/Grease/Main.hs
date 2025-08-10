@@ -760,6 +760,7 @@ macawInitState ::
   SimOpts ->
   Macaw.SetupHook sym arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
+  C.GlobalVar Mem.Mem ->
   ArchRegs sym arch ->
   SetupMem sym ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
@@ -771,7 +772,7 @@ macawInitState ::
     ( SymIO.InitialFileSystemContents sym
     , C.ExecState (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch)))
     )
-macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable regs' mem' mbCfgAddr entrypointCfgs = do
+macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable mvar regs' mem' mbCfgAddr entrypointCfgs = do
   EntrypointCfgs
     { entrypointStartupOv = mbStartupOvSsa
     , entrypointCfg = ssa@(C.SomeCFG ssaCfg)
@@ -780,7 +781,6 @@ macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTabl
   let mbStartupOvSsaCfg = startupOvCfg <$> mbStartupOvSsa
 
   let sym = C.backendGetSym bak
-  mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
   (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
   (memCfg, fnOvsMap) <- macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable
   evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @arch (archCtx ^. archVals) sym pure
@@ -868,7 +868,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
       liftIO buildErrMaps
     let ?recordLLVMAnnotation = recordLLVMAnnotation
     let ?processMacawAssert = processMacawAssert
-    (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable regs' setupMem mbCfgAddr entrypointCfgsSsa
+    memVar <- Mem.mkMemVar "grease:memmodel" halloc
+    (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable memVar regs' setupMem mbCfgAddr entrypointCfgsSsa
     -- The order of the heuristics is significant, the 'macawHeuristics'
     -- find a sensible initial memory layout, which is necessary before
     -- applying the 'mustFailHeuristic' (which would otherwise report many
@@ -884,7 +885,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
             , Conc.initStateFs = fs0
             , Conc.initStateMem = initMem
             }
-    execAndRefine bak (simSolver simOpts) fm la setupAnns heuristics argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
+    execAndRefine bak (simSolver simOpts) fm la memVar setupAnns heuristics argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
       `catches` [ Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
                     pure $ ProveCantRefine $ MissingSemantics $ pshow ex
                 , Handler
@@ -1017,14 +1018,15 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook m
           liftIO buildErrMaps
         let ?recordLLVMAnnotation = recordLLVMAnnotation
         let ?processMacawAssert = processMacawAssert
-        (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable regs' setupMem mbCfgAddr entrypointCfgsSsa'
+        memVar <- Mem.mkMemVar "grease:memmodel" halloc
+        (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable memVar regs' setupMem mbCfgAddr entrypointCfgsSsa'
         let concInitState =
               Conc.InitialState
                 { Conc.initStateArgs = args
                 , Conc.initStateFs = fs0
                 , Conc.initStateMem = initMem
                 }
-        new <- execAndRefine bak (simSolver simOpts) fm la setupAnns (macawHeuristics la rNames) argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
+        new <- execAndRefine bak (simSolver simOpts) fm la memVar setupAnns (macawHeuristics la rNames) argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
         case new of
           ProveBug{} ->
             throw (GreaseException "CFG rewriting introduced a bug!")
@@ -1499,7 +1501,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
               , Conc.initStateFs = fs0
               , Conc.initStateMem = initMem
               }
-      execAndRefine bak (simSolver simOpts) fm la setupAnns heuristics argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
+      let memVar = Trans.llvmMemVar llvmCtx
+      execAndRefine bak (simSolver simOpts) fm la memVar setupAnns heuristics argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
 
   res <- case result of
     RefinementBug b cData ->
