@@ -145,16 +145,16 @@ instance
   ) =>
   TestEquality (Shape ext tag)
   where
-  testEquality s s' =
-    case (s, s') of
-      (ShapeUnit tag, ShapeUnit tag') -> testEquality tag tag'
-      (ShapeBool tag, ShapeBool tag') -> testEquality tag tag'
-      (ShapeStruct tag fields, ShapeStruct tag' fields') ->
+  testEquality =
+    \cases
+      (ShapeUnit tag) (ShapeUnit tag') -> testEquality tag tag'
+      (ShapeBool tag) (ShapeBool tag') -> testEquality tag tag'
+      (ShapeStruct tag fields) (ShapeStruct tag' fields') ->
         case (testEquality tag tag', testEquality fields fields') of
           (Just Refl, Just Refl) -> Just Refl
           _ -> Nothing
-      (ShapeExt ext, ShapeExt ext') -> testEquality ext ext'
-      (_, _) -> Nothing
+      (ShapeExt ext) (ShapeExt ext') -> testEquality ext ext'
+      _ _ -> Nothing
 
 -- | Helper, not exported
 showTag :: ShowF tag => tag x -> String
