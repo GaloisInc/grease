@@ -603,26 +603,26 @@ overrideRegs ::
   IO (Ctx.Assignment (C.RegValue' sym) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)))
 overrideRegs archCtx sym =
   let rNames = regNames (archCtx ^. archVals)
-   in let regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
-       in Ctx.traverseWithIndex
-            ( \idx reg -> do
-                let regName = getRegName rNames idx
-                let isStackPointer = regName == mkRegName @arch MC.sp_reg
-                case Map.lookup regName (archCtx ^. archRegOverrides) of
-                  Just i
-                    | isStackPointer ->
-                        throw $ GreaseException "Can't override stack pointer"
-                    | Mem.LLVMPointerRepr w <- regTypes ^. ixF' idx
-                    , Just C.Refl <- C.testEquality w ?ptrWidth -> do
-                        let macawGlobalMemBlock = 1 -- TODO: don't hardcode this
-                        blk <- liftIO $ W4.natLit sym macawGlobalMemBlock
-                        off <- liftIO (W4.bvLit sym ?ptrWidth i)
-                        let ptr = Mem.LLVMPointer blk off
-                        pure $ C.RV $ ptr
-                    | otherwise ->
-                        throw $ GreaseException "Can't override non-pointer register"
-                  Nothing -> pure reg
-            )
+      regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
+   in Ctx.traverseWithIndex
+        ( \idx reg -> do
+            let regName = getRegName rNames idx
+            let isStackPointer = regName == mkRegName @arch MC.sp_reg
+            case Map.lookup regName (archCtx ^. archRegOverrides) of
+              Just i
+                | isStackPointer ->
+                    throw $ GreaseException "Can't override stack pointer"
+                | Mem.LLVMPointerRepr w <- regTypes ^. ixF' idx
+                , Just C.Refl <- C.testEquality w ?ptrWidth -> do
+                    let macawGlobalMemBlock = 1 -- TODO: don't hardcode this
+                    blk <- liftIO $ W4.natLit sym macawGlobalMemBlock
+                    off <- liftIO (W4.bvLit sym ?ptrWidth i)
+                    let ptr = Mem.LLVMPointer blk off
+                    pure $ C.RV $ ptr
+                | otherwise ->
+                    throw $ GreaseException "Can't override non-pointer register"
+              Nothing -> pure reg
+        )
 
 macawExecFeats ::
   ( Symbolic.SymArchConstraints arch
