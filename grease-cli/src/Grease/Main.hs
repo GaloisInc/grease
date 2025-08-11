@@ -624,7 +624,7 @@ overrideRegs archCtx sym =
                   Nothing -> pure reg
             )
 
-mkInitState ::
+macawInitState ::
   forall sym bak arch solver scope st fm m.
   ( MonadIO m
   , MonadThrow m
@@ -663,7 +663,7 @@ mkInitState ::
     ( SymIO.InitialFileSystemContents sym
     , C.ExecState (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch)))
     )
-mkInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable regs' mem' mbCfgAddr entrypointCfgs = do
+macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable regs' mem' mbCfgAddr entrypointCfgs = do
   EntrypointCfgs
     { entrypointStartupOv = mbStartupOvSsa
     , entrypointCfg = ssa@(C.SomeCFG ssaCfg)
@@ -801,7 +801,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
       liftIO buildErrMaps
     let ?recordLLVMAnnotation = recordLLVMAnnotation
     let ?processMacawAssert = processMacawAssert
-    (fs0, st) <- mkInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable regs' setupMem mbCfgAddr entrypointCfgs
+    (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable regs' setupMem mbCfgAddr entrypointCfgs
     -- The order of the heuristics is significant, the 'macawHeuristics'
     -- find a sensible initial memory layout, which is necessary before
     -- applying the 'mustFailHeuristic' (which would otherwise report many
@@ -950,7 +950,7 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook m
         let ?recordLLVMAnnotation = recordLLVMAnnotation
         let ?processMacawAssert = processMacawAssert
         let entrypointCfgs' = entrypointCfgs{entrypointCfg = assertingCfg}
-        (fs0, st) <- mkInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable regs' setupMem mbCfgAddr entrypointCfgs'
+        (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable regs' setupMem mbCfgAddr entrypointCfgs'
         let concInitState =
               Conc.InitialState
                 { Conc.initStateArgs = args
