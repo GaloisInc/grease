@@ -14,6 +14,7 @@ module Grease.Macaw.Overrides (
   MacawOverride,
   macawOverride,
   mkMacawOverrideMap,
+  mkMacawOverrideMapWithBuiltins,
   registerMacawSexpProgForwardDeclarations,
   registerMacawOvForwardDeclarations,
   lookupMacawForwardDeclarationOverride,
@@ -32,6 +33,7 @@ import Data.Sequence qualified as Seq
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch
+import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (..), loadOverrides)
 import Grease.Macaw.SimulatorState (MacawFnHandle, MacawOverride)
 import Grease.Skip (registerSkipOverride)
@@ -43,6 +45,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.SymIO (LLVMFileSystem)
 import Lang.Crucible.LLVM.TypeContext (TypeContext)
 import Lang.Crucible.Simulator qualified as C
 import Stubs.FunctionOverride qualified as Stubs
@@ -192,6 +195,31 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
       Symbolic.crucArchRegTypes $
         Symbolic.archFunctions $
           archCtx ^. archVals
+
+-- | Like 'mkMacawOverrideMap', with 'builtinStubsOverrides'.
+mkMacawOverrideMapWithBuiltins ::
+  ( C.IsSymInterface sym
+  , W4.OnlineSolver solver
+  , ?memOpts :: Mem.MemOptions
+  , ?lc :: TypeContext
+  , Mem.HasLLVMAnn sym
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , Symbolic.SymArchConstraints arch
+  , sym ~ W4.ExprBuilder scope st fs
+  , bak ~ C.OnlineBackend solver scope st fs
+  ) =>
+  bak ->
+  -- | The paths of each user-supplied override file.
+  [FilePath] ->
+  C.HandleAllocator ->
+  C.GlobalVar Mem.Mem ->
+  ArchContext arch ->
+  Symbolic.MemModelConfig p sym arch Mem.Mem ->
+  LLVMFileSystem (MC.ArchAddrWidth arch) ->
+  IO (Map.Map W4.FunctionName (MacawSExpOverride p sym arch))
+mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg fs = do
+  let builtinOvs = builtinStubsOverrides bak mvar memCfg fs
+  mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
 
 -- | Redirect handles for forward declarations in an S-expression file to
 -- actually call the corresponding Macaw overrides. Treat any calls to unresolved
