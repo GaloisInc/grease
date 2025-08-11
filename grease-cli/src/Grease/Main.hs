@@ -662,10 +662,8 @@ macawExecFeats la archCtx macawCfgConfig simOpts = do
   pure (execFeats, snd <$> profFeatLog)
 
 macawInitState ::
-  forall sym bak arch solver scope st fm m.
-  ( MonadIO m
-  , MonadThrow m
-  , Mem.HasLLVMAnn sym
+  forall sym bak arch solver scope st fm.
+  ( Mem.HasLLVMAnn sym
   , MSM.MacawProcessAssertion sym
   , C.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
@@ -696,7 +694,7 @@ macawInitState ::
   Maybe (MC.ArchSegmentOff arch) ->
   -- | The entrypoint-related CFGs.
   EntrypointCfgs (C.Reg.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
-  m
+  IO
     ( SymIO.InitialFileSystemContents sym
     , C.ExecState (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch)))
     )
