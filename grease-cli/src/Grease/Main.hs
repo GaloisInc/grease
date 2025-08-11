@@ -127,8 +127,7 @@ import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.Dwarf (loadDwarfPreconditions)
 import Grease.Macaw.Load (LoadedProgram (..), load)
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
-import Grease.Macaw.Overrides (mkMacawOverrideMap)
-import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
+import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.PLT
 import Grease.Macaw.RegName (RegName (..), RegNames (..), getRegName, mkRegName, regNameToString, regNames)
@@ -700,11 +699,10 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
         , mcMemory = memory
         } = macawCfgConfig
   let memCfg_ = memConfigInitial bak archCtx memPtrTable relocs
-  let builtinOvs = builtinStubsOverrides bak mvar memCfg_ fs
   let userOvPaths = simOverrides simOpts
-  fnOvsMap <- liftIO $ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
-  fnAddrOvsRaw <- liftIO $ mconcat <$> traverse parseOverridesYaml (simOverridesYaml simOpts)
-  fnAddrOvs <- liftIO $ resolveOverridesYaml loadOpts memory (Map.keysSet fnOvsMap) fnAddrOvsRaw
+  fnOvsMap <- mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg_ fs
+  fnAddrOvsRaw <- mconcat <$> traverse parseOverridesYaml (simOverridesYaml simOpts)
+  fnAddrOvs <- resolveOverridesYaml loadOpts memory (Map.keysSet fnOvsMap) fnAddrOvsRaw
   let errorSymbolicFunCalls = simErrorSymbolicFunCalls simOpts
   let errorSymbolicSyscalls = simErrorSymbolicSyscalls simOpts
   let skipInvalidCallAddrs = simSkipInvalidCallAddrs simOpts
