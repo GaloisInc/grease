@@ -28,7 +28,7 @@ module Grease.Main (
 ) where
 
 import Control.Applicative (pure)
-import Control.Concurrent.Async (cancel)
+import Control.Concurrent.Async (Async, cancel)
 import Control.Exception.Safe (Handler (..), MonadThrow, catches, throw)
 import Control.Lens (to, (.~), (^.))
 import Control.Monad (forM, forM_, mapM_, when, (>>=))
@@ -624,6 +624,43 @@ overrideRegs archCtx sym =
                   Nothing -> pure reg
             )
 
+macawExecFeats ::
+  ( Symbolic.SymArchConstraints arch
+  , C.IsSymInterface sym
+  , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
+  , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
+  ) =>
+  GreaseLogAction ->
+  ArchContext arch ->
+  MacawCfgConfig arch ->
+  SimOpts ->
+  IO ([C.ExecutionFeature p sym (Symbolic.MacawExt arch) (C.RegEntry sym (Symbolic.ArchRegStruct arch))], Maybe (Async ()))
+macawExecFeats la archCtx macawCfgConfig simOpts = do
+  profFeatLog <- traverse greaseProfilerFeature (simProfileTo simOpts)
+  let cmdExt = MDebug.macawCommandExt (archCtx ^. archVals)
+  debuggerFeat <-
+    liftIO $
+      if simDebug simOpts
+        then do
+          dbgInputs <- Dbg.defaultDebuggerInputs cmdExt
+          let mbElf = snd . Elf.getElf <$> mcElf macawCfgConfig
+          Just
+            <$> Dbg.debugger
+              cmdExt
+              (MDebug.macawExtImpl prettyPtrFnMap (archCtx ^. archVals) mbElf)
+              prettyPtrFnMap
+              dbgInputs
+              Dbg.defaultDebuggerOutputs
+              (regStructRepr archCtx)
+        else pure Nothing
+  let execFeats =
+        catMaybes
+          [ fmap fst profFeatLog
+          , debuggerFeat
+          , Just (greaseBranchTracerFeature la)
+          ]
+  pure (execFeats, snd <$> profFeatLog)
+
 macawInitState ::
   forall sym bak arch solver scope st fm m.
   ( MonadIO m
@@ -752,30 +789,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
   let rNames@(RegNames rNamesAssign) = regNames (archCtx ^. archVals)
       rNamesAssign' = fmapFC (\(Const (RegName n)) -> Const n) rNamesAssign
 
-  profFeatLog <- traverse greaseProfilerFeature (simProfileTo simOpts)
-
-  let cmdExt = MDebug.macawCommandExt (archCtx ^. archVals)
-  debuggerFeat <-
-    liftIO $
-      if simDebug simOpts
-        then do
-          dbgInputs <- Dbg.defaultDebuggerInputs cmdExt
-          let mbElf = snd . Elf.getElf <$> mcElf macawCfgConfig
-          Just
-            <$> Dbg.debugger
-              cmdExt
-              (MDebug.macawExtImpl prettyPtrFnMap (archCtx ^. archVals) mbElf)
-              prettyPtrFnMap
-              dbgInputs
-              Dbg.defaultDebuggerOutputs
-              (regStructRepr archCtx)
-        else pure Nothing
-  let execFeats =
-        catMaybes
-          [ fmap fst profFeatLog
-          , debuggerFeat
-          , Just (greaseBranchTracerFeature la)
-          ]
+  (execFeats, profLogTask) <- macawExecFeats la archCtx macawCfgConfig simOpts
   let rNameAssign =
         Ctx.generate
           (Ctx.size regTypes)
@@ -829,6 +843,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
                         pure (ProveCantRefine (MissingSemantics (tshow ex)))
                     )
                 ]
+  traverse_ cancel profLogTask
   simulateRewrittenCfg
     la
     bak
@@ -897,13 +912,7 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook m
   let argNames = fmapFC (Const . getValueName) rNameAssign
   let sym = C.backendGetSym bak
 
-  -- TODO: Lift this into a function
-  profFeatLog <- traverse greaseProfilerFeature (simProfileTo simOpts)
-  let execFeats =
-        catMaybes
-          [ fmap fst profFeatLog
-          , Just (greaseBranchTracerFeature la)
-          ]
+  (execFeats, profLogTask) <- macawExecFeats la archCtx macawCfgConfig simOpts
 
   res <- case result of
     RefinementBug b cData ->
@@ -976,7 +985,7 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook m
           ProveRefine _ -> do
             doLog la Diag.SimulationGoalsFailed
             pure $ CheckAssertionFailure []
-  traverse_ cancel (fmap snd profFeatLog)
+  traverse_ cancel profLogTask
   pure res
  where
   MacawCfgConfig
