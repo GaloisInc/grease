@@ -841,23 +841,26 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
                         pure (ProveCantRefine (MissingSemantics (tshow ex)))
                     )
                 ]
+  finalResult <-
+    simulateRewrittenCfg
+      la
+      bak
+      fm
+      halloc
+      macawCfgConfig
+      archCtx
+      simOpts
+      setupHook
+      memPtrTable
+      initMem
+      initArgShapes
+      result
+      execFeats
+      mbCfgAddr
+      entrypointCfgs
+      entrypointCfgsSsa
   traverse_ cancel profLogTask
-  simulateRewrittenCfg
-    la
-    bak
-    fm
-    halloc
-    macawCfgConfig
-    archCtx
-    simOpts
-    setupHook
-    memPtrTable
-    initMem
-    initArgShapes
-    result
-    mbCfgAddr
-    entrypointCfgs
-    entrypointCfgsSsa
+  pure finalResult
  where
   MacawCfgConfig
     { mcDataLayout = dl
@@ -895,6 +898,7 @@ simulateRewrittenCfg ::
   InitialMem sym ->
   ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
   RefinementSummary sym (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
+  [C.ExecutionFeature (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (C.RegEntry sym (Symbolic.ArchRegStruct arch))] ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
@@ -903,7 +907,7 @@ simulateRewrittenCfg ::
   -- | The entrypoint-related CFGs.
   EntrypointCfgs (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   IO BatchStatus
-simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook memPtrTable initMem initArgShapes result mbCfgAddr entrypointCfgs entrypointCfgsSsa = do
+simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook memPtrTable initMem initArgShapes result execFeats mbCfgAddr entrypointCfgs entrypointCfgsSsa = do
   let regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
   let rNames@(RegNames _rNamesAssign) = regNames (archCtx ^. archVals)
   let rNameAssign =
@@ -912,8 +916,6 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook m
           (\idx -> ValueName (regNameToString (getRegName rNames idx)))
   let argNames = fmapFC (Const . getValueName) rNameAssign
   let sym = C.backendGetSym bak
-
-  (execFeats, profLogTask) <- macawExecFeats la archCtx macawCfgConfig simOpts
 
   res <- case result of
     RefinementBug b cData ->
@@ -986,7 +988,6 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook m
           ProveRefine _ -> do
             doLog la Diag.SimulationGoalsFailed
             pure $ CheckAssertionFailure []
-  traverse_ cancel profLogTask
   pure res
  where
   MacawCfgConfig
