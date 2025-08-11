@@ -693,7 +693,7 @@ macawInitState ::
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   -- | The entrypoint-related CFGs.
-  EntrypointCfgs (C.Reg.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
+  EntrypointCfgs (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   IO
     ( SymIO.InitialFileSystemContents sym
     , C.ExecState (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch)))
@@ -703,7 +703,7 @@ macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTabl
     { entrypointStartupOv = mbStartupOvSsa
     , entrypointCfg = ssa@(C.SomeCFG ssaCfg)
     } <-
-    pure (toSsaSomeCfg <$> entrypointCfgs)
+    pure entrypointCfgs
   let mbStartupOvSsaCfg = startupOvCfg <$> mbStartupOvSsa
 
   let sym = C.backendGetSym bak
@@ -798,7 +798,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
     let opts = simInitPrecondOpts simOpts
      in macawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr
 
-  EntrypointCfgs{entrypointCfg = (C.SomeCFG ssaCfg)} <-
+  entrypointCfgsSsa@EntrypointCfgs{entrypointCfg = C.SomeCFG ssaCfg} <-
     pure (toSsaSomeCfg <$> entrypointCfgs)
   doLog la (Diag.TargetCFG ssaCfg)
 
@@ -813,7 +813,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
       liftIO buildErrMaps
     let ?recordLLVMAnnotation = recordLLVMAnnotation
     let ?processMacawAssert = processMacawAssert
-    (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable regs' setupMem mbCfgAddr entrypointCfgs
+    (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable regs' setupMem mbCfgAddr entrypointCfgsSsa
     -- The order of the heuristics is significant, the 'macawHeuristics'
     -- find a sensible initial memory layout, which is necessary before
     -- applying the 'mustFailHeuristic' (which would otherwise report many
@@ -857,6 +857,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
     result
     mbCfgAddr
     entrypointCfgs
+    entrypointCfgsSsa
  where
   MacawCfgConfig
     { mcDataLayout = dl
@@ -899,8 +900,10 @@ simulateRewrittenCfg ::
   Maybe (MC.ArchSegmentOff arch) ->
   -- | The entrypoint-related CFGs.
   EntrypointCfgs (C.Reg.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
+  -- | The entrypoint-related CFGs.
+  EntrypointCfgs (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   IO BatchStatus
-simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook memPtrTable initMem initArgShapes result mbCfgAddr entrypointCfgs = do
+simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook memPtrTable initMem initArgShapes result mbCfgAddr entrypointCfgs entrypointCfgsSsa = do
   let regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
   let rNames@(RegNames _rNamesAssign) = regNames (archCtx ^. archVals)
   let rNameAssign =
@@ -945,6 +948,7 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook m
       doLog la $ Diag.SimulationTestingRequirements rs
       fmap BatchChecks . forM asserts $ \assert -> do
         assertingCfg <- pure $ assert $ entrypointCfg entrypointCfgs
+        let entrypointCfgsSsa' = entrypointCfgsSsa{entrypointCfg = toSsaSomeCfg assertingCfg}
         C.resetAssumptionState bak
         (args, setupMem, setupAnns) <- setup la bak dl rNameAssign regTypes argShapes initMem
         regs' <- liftIO (overrideRegs archCtx sym (argVals args))
@@ -956,8 +960,7 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook m
           liftIO buildErrMaps
         let ?recordLLVMAnnotation = recordLLVMAnnotation
         let ?processMacawAssert = processMacawAssert
-        let entrypointCfgs' = entrypointCfgs{entrypointCfg = assertingCfg}
-        (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable regs' setupMem mbCfgAddr entrypointCfgs'
+        (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable regs' setupMem mbCfgAddr entrypointCfgsSsa'
         let concInitState =
               Conc.InitialState
                 { Conc.initStateArgs = args
