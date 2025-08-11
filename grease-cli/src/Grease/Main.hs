@@ -129,6 +129,7 @@ import Grease.Macaw.Load (LoadedProgram (..), load)
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMap)
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
+import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.PLT
 import Grease.Macaw.RegName (RegName (..), RegNames (..), getRegName, mkRegName, regNameToString, regNames)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
@@ -661,6 +662,71 @@ macawExecFeats la archCtx macawCfgConfig simOpts = do
           ]
   pure (execFeats, snd <$> profFeatLog)
 
+macawMemConfig ::
+  ( Symbolic.SymArchConstraints arch
+  , C.IsSyntaxExtension (Symbolic.MacawExt arch)
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , C.IsSymBackend sym bak
+  , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
+  , bak ~ C.OnlineBackend solver scope st (W4.Flags fm)
+  , W4.OnlineSolver solver
+  , Show (ArchReloc arch)
+  , Mem.HasLLVMAnn sym
+  , MSM.MacawProcessAssertion sym
+  , ?memOpts :: Mem.MemOptions
+  , ?lc :: TCtx.TypeContext
+  , p ~ GreaseSimulatorState sym arch
+  ) =>
+  GreaseLogAction ->
+  C.GlobalVar Mem.Mem ->
+  CLLVM.SymIO.LLVMFileSystem (MC.ArchAddrWidth arch) ->
+  bak ->
+  C.HandleAllocator ->
+  MacawCfgConfig arch ->
+  ArchContext arch ->
+  SimOpts ->
+  Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
+  IO
+    ( Symbolic.MemModelConfig p sym arch Mem.Mem
+    , Map W4.FunctionName (MacawSExpOverride p sym arch)
+    )
+macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable = do
+  let MacawCfgConfig
+        { mcLoadOptions = loadOpts
+        , mcSymMap = symMap
+        , mcPltStubs = pltStubs
+        , mcDynFunMap = dynFunMap
+        , mcRelocs = relocs
+        , mcMemory = memory
+        } = macawCfgConfig
+  let memCfg_ = memConfigInitial bak archCtx memPtrTable relocs
+  let builtinOvs = builtinStubsOverrides bak mvar memCfg_ fs
+  let userOvPaths = simOverrides simOpts
+  fnOvsMap <- liftIO $ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
+  fnAddrOvsRaw <- liftIO $ mconcat <$> traverse parseOverridesYaml (simOverridesYaml simOpts)
+  fnAddrOvs <- liftIO $ resolveOverridesYaml loadOpts memory (Map.keysSet fnOvsMap) fnAddrOvsRaw
+  let errorSymbolicFunCalls = simErrorSymbolicFunCalls simOpts
+  let errorSymbolicSyscalls = simErrorSymbolicSyscalls simOpts
+  let skipInvalidCallAddrs = simSkipInvalidCallAddrs simOpts
+  let memCfg =
+        memConfigWithHandles
+          bak
+          la
+          halloc
+          archCtx
+          memory
+          symMap
+          pltStubs
+          dynFunMap
+          fnOvsMap
+          fnAddrOvs
+          builtinGenericSyscalls
+          errorSymbolicFunCalls
+          errorSymbolicSyscalls
+          skipInvalidCallAddrs
+          memCfg_
+  pure (memCfg, fnOvsMap)
+
 macawInitState ::
   forall sym bak arch solver scope st fm.
   ( Mem.HasLLVMAnn sym
@@ -709,18 +775,9 @@ macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTabl
   let sym = C.backendGetSym bak
   mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
   (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
-  let memCfg0 = memConfigInitial bak archCtx memPtrTable relocs
-  let builtinOvs = builtinStubsOverrides bak mvar memCfg0 fs
-  let userOvPaths = simOverrides simOpts
-  fnOvsMap <- liftIO $ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
-  fnAddrOvsRaw <- liftIO $ mconcat <$> traverse parseOverridesYaml (simOverridesYaml simOpts)
-  fnAddrOvs <- liftIO $ resolveOverridesYaml loadOpts memory (Map.keysSet fnOvsMap) fnAddrOvsRaw
-  let errorSymbolicFunCalls = simErrorSymbolicFunCalls simOpts
-  let errorSymbolicSyscalls = simErrorSymbolicSyscalls simOpts
-  let skipInvalidCallAddrs = simSkipInvalidCallAddrs simOpts
-  let memCfg1 = memConfigWithHandles bak la halloc archCtx memory symMap pltStubs dynFunMap fnOvsMap fnAddrOvs builtinGenericSyscalls errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddrs memCfg0
+  (memCfg, fnOvsMap) <- macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable
   evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @arch (archCtx ^. archVals) sym pure
-  let macawExtImpl = Symbolic.macawExtensions evalFn mvar memCfg1
+  let macawExtImpl = Symbolic.macawExtensions evalFn mvar memCfg
   let ssaCfgHdl = C.cfgHandle ssaCfg
   -- At this point, the only function we have discovered is the user-requested
   -- entrypoint function. If we are simulating a binary, add it to the
@@ -734,15 +791,6 @@ macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTabl
           & discoveredFnHandles .~ discoveredHdls
   st <- initState bak la macawExtImpl halloc mvar mem' globals1 initFsOv archCtx memPtrTable setupHook personality regs' fnOvsMap mbStartupOvSsaCfg ssa
   pure (fs0, st)
- where
-  MacawCfgConfig
-    { mcLoadOptions = loadOpts
-    , mcSymMap = symMap
-    , mcPltStubs = pltStubs
-    , mcDynFunMap = dynFunMap
-    , mcRelocs = relocs
-    , mcMemory = memory
-    } = macawCfgConfig
 
 simulateMacawCfg ::
   forall sym bak arch solver scope st fm.
