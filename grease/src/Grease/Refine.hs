@@ -131,7 +131,6 @@ import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.BoundedExec qualified as C
 import Lang.Crucible.Simulator.BoundedRecursion qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
-import Lang.Crucible.Utils.Seconds qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
@@ -380,6 +379,8 @@ proveAndRefine ::
   ) =>
   bak ->
   Solver ->
+  -- | Solver timeout
+  C.Timeout ->
   Anns.Annotations sym ext argTys ->
   C.ExecResult p sym ext r ->
   GreaseLogAction ->
@@ -391,9 +392,7 @@ proveAndRefine ::
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
   C.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
-proveAndRefine bak solver anns execResult la heuristics argNames argShapes initState bbMap goals = do
-  -- TODO: Make the timeout configurable at the CLI
-  let tout = C.Timeout (C.secondsFromInt 5)
+proveAndRefine bak solver tout anns execResult la heuristics argNames argShapes initState bbMap goals = do
   let sym = C.backendGetSym bak
   let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
   let strat = C.ProofStrategy prover combiner
@@ -432,15 +431,17 @@ execAndRefine ::
   ArgShapes ext NoTag argTys ->
   Conc.InitialState sym ext argTys ->
   IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
-  LoopBound ->
+  BoundsOpts ->
   [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
   C.ExecState p sym ext (C.RegEntry sym ret) ->
   m (ProveRefineResult sym ext argTys)
-execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initState bbMapRef (LoopBound bound) execFeats initialState = do
-  (result, goals) <- liftIO (execCfg bak (LoopBound bound) execFeats initialState)
+execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initState bbMapRef boundsOpts execFeats initialState = do
+  let loopBound = Opts.simLoopBound boundsOpts
+  (result, goals) <- liftIO (execCfg bak loopBound execFeats initialState)
   doLog la (Diag.ExecutionResult memVar result)
   bbMap <- liftIO (readIORef bbMapRef)
-  liftIO (proveAndRefine bak solver anns result la heuristics argNames argShapes initState bbMap goals)
+  let solverTimeout = Opts.simSolverTimeout boundsOpts
+  liftIO (proveAndRefine bak solver solverTimeout anns result la heuristics argNames argShapes initState bbMap goals)
 
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)
