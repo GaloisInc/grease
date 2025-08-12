@@ -857,7 +857,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
     pure (toSsaSomeCfg <$> entrypointCfgs)
   doLog la (Diag.TargetCFG ssaCfg)
 
-  result <- refinementLoop la (simMaxIters simOpts) (simTimeout simOpts) rNamesAssign' initArgShapes $ \argShapes -> do
+  let bounds = simBoundsOpts simOpts
+  result <- refinementLoop la bounds rNamesAssign' initArgShapes $ \argShapes -> do
     (args, setupMem, setupAnns) <- setup la bak dl rNameAssign regTypes argShapes initMem
     regs' <- liftIO (overrideRegs archCtx sym (argVals args))
     ErrorCallbacks
@@ -885,7 +886,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
             , Conc.initStateFs = fs0
             , Conc.initStateMem = initMem
             }
-    execAndRefine bak (simSolver simOpts) fm la memVar setupAnns heuristics argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
+    let loopBound = simLoopBound (simBoundsOpts simOpts)
+    execAndRefine bak (simSolver simOpts) fm la memVar setupAnns heuristics argNames argShapes concInitState bbMapRef loopBound execFeats st
       `catches` [ Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
                     pure $ ProveCantRefine $ MissingSemantics $ pshow ex
                 , Handler
@@ -1026,7 +1028,8 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook m
                 , Conc.initStateFs = fs0
                 , Conc.initStateMem = initMem
                 }
-        new <- execAndRefine bak (simSolver simOpts) fm la memVar setupAnns (macawHeuristics la rNames) argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
+        let loopBound = simLoopBound (simBoundsOpts simOpts)
+        new <- execAndRefine bak (simSolver simOpts) fm la memVar setupAnns (macawHeuristics la rNames) argNames argShapes concInitState bbMapRef loopBound execFeats st
         case new of
           ProveBug{} ->
             throw (GreaseException "CFG rewriting introduced a bug!")
@@ -1451,8 +1454,9 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
      in llvmInitArgShapes la opts llvmMod argNames cfg
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
+  let bounds = simBoundsOpts simOpts
   result <- withMemOptions simOpts $
-    refinementLoop la (simMaxIters simOpts) (simTimeout simOpts) argNames initArgShapes $ \argShapes -> do
+    refinementLoop la bounds argNames initArgShapes $ \argShapes -> do
       let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
       let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
       let dl = TCtx.llvmDataLayout typeCtx
@@ -1502,7 +1506,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
               , Conc.initStateMem = initMem
               }
       let memVar = Trans.llvmMemVar llvmCtx
-      execAndRefine bak (simSolver simOpts) fm la memVar setupAnns heuristics argNames argShapes concInitState bbMapRef (simLoopBound simOpts) execFeats st
+      let loopBound = simLoopBound (simBoundsOpts simOpts)
+      execAndRefine bak (simSolver simOpts) fm la memVar setupAnns heuristics argNames argShapes concInitState bbMapRef loopBound execFeats st
 
   res <- case result of
     RefinementBug b cData ->

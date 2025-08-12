@@ -16,6 +16,7 @@ module Grease.Options (
   ErrorSymbolicFunCalls (..),
   ErrorSymbolicSyscalls (..),
   SkipInvalidCallAddrs (..),
+  BoundsOpts (..),
   InitialPreconditionOpts (..),
   SimOpts (..),
   Opts (..),
@@ -94,6 +95,19 @@ Similar considerations apply for derived Show instances, which also have
 different behavior when `stock`-derived.
 -}
 
+-- | Bounds, limits, and timeouts.
+data BoundsOpts
+  = BoundsOpts
+  { simLoopBound :: LoopBound
+  -- ^ Maximum number of iterations of each program loop/maximum number of
+  -- recursive calls to the same function
+  , simMaxIters :: Maybe Int
+  -- ^ Maximum number of iterations of the refinement loop
+  , simTimeout :: Milliseconds
+  -- ^ Timeout (implemented using 'timeout')
+  }
+  deriving Show
+
 -- | Options that affect the initial precondition used for simulation
 data InitialPreconditionOpts
   = InitialPreconditionOpts
@@ -122,11 +136,6 @@ data SimOpts
   -- ^ Default: 'False'.
   , simSkipInvalidCallAddrs :: SkipInvalidCallAddrs
   -- ^ Default: 'False'.
-  , simLoopBound :: LoopBound
-  -- ^ Maximum number of iterations of each program loop/maximum number of
-  -- recursive calls to the same function
-  , simMaxIters :: Maybe Int
-  -- ^ Maximum number of iterations of the refinement loop
   , simMutGlobs :: MutableGlobalState
   -- ^ How to initialize mutable globals
   , simNoHeuristics :: Bool
@@ -154,12 +163,11 @@ data SimOpts
   -- ^ Default: 0.
   , simSolver :: Solver
   -- ^ Default: 'Yices'.
-  , simTimeout :: Milliseconds
-  -- ^ Timeout (implemented using 'timeout')
   , simFsRoot :: Maybe FilePath
   -- ^ File system root
   , simFsStdin :: Word64
   -- ^ Symbolic bytes of stdin
+  , simBoundsOpts :: BoundsOpts
   , simInitPrecondOpts :: InitialPreconditionOpts
   }
   deriving Show

@@ -110,7 +110,8 @@ import Grease.Concretize qualified as Conc
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic
 import Grease.Heuristic
-import Grease.Options (LoopBound (..), Milliseconds (..))
+import Grease.Options (BoundsOpts, LoopBound (..), Milliseconds (..))
+import Grease.Options qualified as Opts
 import Grease.Refine.Diagnostic qualified as Diag
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
@@ -459,22 +460,19 @@ refinementLoop ::
   , PrettyExt ext NoTag
   ) =>
   GreaseLogAction ->
-  -- | Maximum iterations
-  Maybe Int ->
-  -- | Timeout
-  Milliseconds ->
+  BoundsOpts ->
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
   (ArgShapes ext NoTag argTys -> IO (ProveRefineResult sym ext argTys)) ->
   IO (RefinementSummary sym ext argTys)
-refinementLoop la maxIters to argNames initArgShapes go = do
+refinementLoop la boundsOpts argNames initArgShapes go = do
   let
     loop ::
       Int ->
       ArgShapes ext NoTag argTys ->
       IO (RefinementSummary sym ext argTys)
     loop iters argShapes = do
-      if Maybe.maybe False (iters >=) maxIters
+      if Maybe.maybe False (iters >=) (Opts.simMaxIters boundsOpts)
         then do
           doLog la Diag.RefinementLoopMaximumIterationsExceeded
           pure RefinementItersExceeded
@@ -496,6 +494,6 @@ refinementLoop la maxIters to argNames initArgShapes go = do
               doLog la Diag.RefinementLoopNoHeuristic
               pure $ RefinementNoHeuristic errs
   let millisToMicros (Milliseconds millis) = 1000 * millis
-  let microTimeout = millisToMicros to
+  let microTimeout = millisToMicros (Opts.simTimeout boundsOpts)
   Maybe.fromMaybe RefinementTimeout
     <$> timeout microTimeout (loop 0 initArgShapes)
