@@ -330,14 +330,15 @@ simOpts = do
           )
       )
   simFsStdin <-
-    Opt.optional
-      ( Opt.option
-          Opt.auto
-          ( Opt.long "sym-stdin"
-              <> Opt.metavar "N"
-              <> Opt.help "populate stdin witht this many symbolic bytes"
-          )
+    Opt.option
+      Opt.auto
+      ( Opt.long "sym-stdin"
+          <> Opt.value 0
+          <> Opt.showDefault
+          <> Opt.metavar "N"
+          <> Opt.help "populate stdin with this many symbolic bytes"
       )
+
   simInitPrecondOpts <- initPrecondOptsParser
   pure GO.SimOpts{..}
  where
