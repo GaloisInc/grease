@@ -241,13 +241,7 @@ The following overrides merit a bit of discussion:
 
 - `open`, `close`, `read`, and `write`
 
-  These overrides leverage Crucible's experimental symbolic I/O capabilities.
-  In particular, these overrides require the use of a symbolic filesystem,
-  which must be specified with `--fs-root <path-to-filesystem-root>` when
-  invoking `grease`. See [symbolic I/O] for a more detailed description of what
-  the contents of the symbolic filesystem should look like.
-
-  [symbolic I/O]: https://github.com/GaloisInc/crucible/tree/master/crux-llvm#symbolic-io-experimental
+  See [I/O](io.md).
 
 ## Crucible types for overrides
 

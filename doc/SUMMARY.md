@@ -17,6 +17,7 @@
 - [Built-in overrides](./builtins.md)
 - [Comparison with other tools](./comparison.md)
 - [Function calls](./function-calls.md)
+- [I/O](./io.md)
 - [Limitations](./limitations.md)
 - [Memory model](./memory-model.md)
 - [Refinement](./refinement.md)
