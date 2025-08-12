@@ -32,6 +32,8 @@ import Grease.Shape.Simple (SimpleShape)
 import Grease.Shape.Simple qualified as Simple
 import Grease.Solver (Solver (..))
 import Grease.Version (verStr)
+import Lang.Crucible.Utils.Seconds (secondsFromInt)
+import Lang.Crucible.Utils.Timeout (Timeout (Timeout))
 import Options.Applicative qualified as Opt
 import Text.Megaparsec qualified as TM
 
@@ -138,6 +140,16 @@ boundsOptsParser = Opt.parserOptionGroup "Bounds, limits, and timeouts" $ do
             <> Opt.metavar "MILLIS"
             <> Opt.showDefault
             <> Opt.value GO.defaultTimeout
+        )
+  simSolverTimeout <-
+    Timeout . secondsFromInt
+      <$> Opt.option
+        Opt.auto
+        ( Opt.long "timeout"
+            <> Opt.help "solver timeout (in seconds)"
+            <> Opt.metavar "SECS"
+            <> Opt.showDefault
+            <> Opt.value GO.defaultSolverTimeout
         )
   pure GO.BoundsOpts{..}
 

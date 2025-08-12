@@ -8,6 +8,7 @@ module Grease.Options (
   defaultLoopBound,
   Milliseconds (..),
   defaultTimeout,
+  defaultSolverTimeout,
   defaultTypeUnrollingBound,
   TypeUnrollingBound (..),
   MutableGlobalState (..),
@@ -32,6 +33,7 @@ import Grease.Requirement (Requirement)
 import Grease.Shape.Pointer (ExtraStackSlots (..))
 import Grease.Shape.Simple (SimpleShape)
 import Grease.Solver (Solver (..))
+import Lang.Crucible.Utils.Timeout (Timeout)
 
 newtype TypeUnrollingBound = TypeUnrollingBound Int
   deriving Show
@@ -52,6 +54,10 @@ newtype Milliseconds = Milliseconds Int
 -- | 30 seconds in milliseconds
 defaultTimeout :: Int
 defaultTimeout = 30000
+
+-- | 5 seconds
+defaultSolverTimeout :: Int
+defaultSolverTimeout = 5
 
 data MutableGlobalState
   = Initialized
@@ -105,6 +111,8 @@ data BoundsOpts
   -- ^ Maximum number of iterations of the refinement loop
   , simTimeout :: Milliseconds
   -- ^ Timeout (implemented using 'timeout')
+  , simSolverTimeout :: Timeout
+  -- ^ Solver timeout (in seconds)
   }
   deriving Show
 
