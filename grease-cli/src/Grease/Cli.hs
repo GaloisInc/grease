@@ -109,6 +109,38 @@ entrypointParser =
           <> Opt.help "name of entrypoint symbol, and the path to its startup override (in Crucible S-expression syntax)"
       )
 
+boundsOptsParser :: Opt.Parser GO.BoundsOpts
+boundsOptsParser = Opt.parserOptionGroup "Bounds, limits, and timeouts" $ do
+  simLoopBound <-
+    GO.LoopBound
+      <$> Opt.option
+        Opt.auto
+        ( Opt.long "loop-bound"
+            <> Opt.help "maximum number of executions of each loop in the program"
+            <> Opt.metavar "N"
+            <> Opt.showDefault
+            <> Opt.value GO.defaultLoopBound
+        )
+  simMaxIters <-
+    optional $
+      Opt.option
+        Opt.auto
+        ( Opt.long "iters"
+            <> Opt.help "limit maximum number of iterations of the refinement loop"
+            <> Opt.metavar "N"
+        )
+  simTimeout <-
+    GO.Milliseconds
+      <$> Opt.option
+        Opt.auto
+        ( Opt.long "timeout"
+            <> Opt.help "timeout (in milliseconds)"
+            <> Opt.metavar "MILLIS"
+            <> Opt.showDefault
+            <> Opt.value GO.defaultTimeout
+        )
+  pure GO.BoundsOpts{..}
+
 initPrecondOptsParser :: Opt.Parser GO.InitialPreconditionOpts
 initPrecondOptsParser = Opt.parserOptionGroup "Initial precondition options" $ do
   initPrecondUseDebugInfo <-
@@ -187,24 +219,6 @@ simOpts = do
               <> Opt.completeWith allRequirementStrs
           )
       )
-  simMaxIters <-
-    optional $
-      Opt.option
-        Opt.auto
-        ( Opt.long "iters"
-            <> Opt.help "limit maximum number of iterations of the refinement loop"
-            <> Opt.metavar "N"
-        )
-  simLoopBound <-
-    GO.LoopBound
-      <$> Opt.option
-        Opt.auto
-        ( Opt.long "loop-bound"
-            <> Opt.help "maximum number of executions of each loop in the program"
-            <> Opt.metavar "N"
-            <> Opt.showDefault
-            <> Opt.value GO.defaultLoopBound
-        )
   simNoHeuristics <- Opt.switch (Opt.long "no-heuristics" <> Opt.help "disable heuristics")
   simOverrides <-
     Opt.many
@@ -222,16 +236,6 @@ simOpts = do
               <> Opt.help "overrides, in YAML format"
           )
       )
-  simTimeout <-
-    GO.Milliseconds
-      <$> Opt.option
-        Opt.auto
-        ( Opt.long "timeout"
-            <> Opt.help "timeout (in milliseconds)"
-            <> Opt.metavar "MILLIS"
-            <> Opt.showDefault
-            <> Opt.value GO.defaultTimeout
-        )
   simPltStubs <-
     Opt.many $
       Opt.option
@@ -340,6 +344,7 @@ simOpts = do
       )
 
   simInitPrecondOpts <- initPrecondOptsParser
+  simBoundsOpts <- boundsOptsParser
   pure GO.SimOpts{..}
  where
   callOptionsGroup = "Call options"
@@ -383,11 +388,14 @@ simOpts = do
 processSimOpts :: GO.SimOpts -> GO.SimOpts
 processSimOpts sOpts =
   sOpts
-    { GO.simTimeout =
-        -- TODO(#37): Fully disable timeout if --debug is passed
-        if GO.simDebug sOpts
-          then GO.Milliseconds maxBound
-          else GO.simTimeout sOpts
+    { GO.simBoundsOpts =
+        (GO.simBoundsOpts sOpts)
+          { GO.simTimeout =
+              -- TODO(#37): Fully disable timeout if --debug is passed
+              if GO.simDebug sOpts
+                then GO.Milliseconds maxBound
+                else GO.simTimeout (GO.simBoundsOpts sOpts)
+          }
     }
 
 opts :: Opt.Parser GO.Opts
