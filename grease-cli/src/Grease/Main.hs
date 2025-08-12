@@ -530,10 +530,7 @@ initialLlvmFileSystem halloc sym simOpts = do
     case simFsRoot simOpts of
       Nothing -> pure SymIO.emptyInitialFileSystemContents
       Just fsRoot -> SymIO.Loader.loadInitialFiles sym fsRoot
-  fileContents <-
-    case simFsStdin simOpts of
-      Nothing -> pure fileContents_
-      Just nBytes -> withSymStdin nBytes fileContents_
+  fileContents <- withSymStdin (simFsStdin simOpts) fileContents_
   -- We currently don't mirror stdout or stderr
   let mirroredOutputs = []
   (fs, gs, ov) <- CLLVM.SymIO.initialLLVMFileSystem halloc sym ?ptrWidth fileContents mirroredOutputs C.emptyGlobals
