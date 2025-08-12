@@ -329,6 +329,15 @@ simOpts = do
               <> Opt.help "The path to the symbolic filesystem"
           )
       )
+  simFsStdin <-
+    Opt.optional
+      ( Opt.option
+          Opt.auto
+          ( Opt.long "sym-stdin"
+              <> Opt.metavar "N"
+              <> Opt.help "populate stdin witht this many symbolic bytes"
+          )
+      )
   simInitPrecondOpts <- initPrecondOptsParser
   pure GO.SimOpts{..}
  where

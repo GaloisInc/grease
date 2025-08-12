@@ -526,14 +526,26 @@ initialLlvmFileSystem ::
     , CLLVM.SymIO.SomeOverrideSim sym ()
     )
 initialLlvmFileSystem halloc sym simOpts = do
-  fileContents <-
+  fileContents_ <-
     case simFsRoot simOpts of
       Nothing -> pure SymIO.emptyInitialFileSystemContents
       Just fsRoot -> SymIO.Loader.loadInitialFiles sym fsRoot
+  fileContents <-
+    case simFsStdin simOpts of
+      Nothing -> pure fileContents_
+      Just nBytes -> withSymStdin nBytes fileContents_
   -- We currently don't mirror stdout or stderr
   let mirroredOutputs = []
   (fs, gs, ov) <- CLLVM.SymIO.initialLLVMFileSystem halloc sym ?ptrWidth fileContents mirroredOutputs C.emptyGlobals
   pure (fileContents, fs, gs, ov)
+ where
+  withSymStdin nBytes fs = do
+    symStdin <-
+      let mkByte = W4.freshConstant sym (W4.safeSymbol "stdin") (W4.BaseBVRepr (knownNat @8))
+       in Monad.replicateM (fromIntegral nBytes) mkByte
+    let symFiles_ = SymIO.symbolicFiles fs
+    let symFiles = Map.insert SymIO.StdinTarget symStdin symFiles_
+    pure (fs{SymIO.symbolicFiles = symFiles})
 
 -- | Compute the initial 'ArgShapes' for a Macaw CFG.
 --

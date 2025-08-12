@@ -158,6 +158,8 @@ data SimOpts
   -- ^ Timeout (implemented using 'timeout')
   , simFsRoot :: Maybe FilePath
   -- ^ File system root
+  , simFsStdin :: Maybe Word64
+  -- ^ Symbolic bytes of stdin
   , simInitPrecondOpts :: InitialPreconditionOpts
   }
   deriving Show
