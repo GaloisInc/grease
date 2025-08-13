@@ -4,7 +4,7 @@
 
 To build and install from source, you'll need to install:
 
-- GHC 9.4, 9.6, or 9.8
+- GHC 9.6, 9.8, or 9.10
 - `cabal-install` 3.6 or later
 
 Follow the instructions on the [Haskell installation page][install-haskell].

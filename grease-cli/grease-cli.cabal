@@ -24,7 +24,7 @@ source-repository head
 
 common shared
   default-language: GHC2021
-  build-depends: base >= 4.17 && < 4.20
+  build-depends: base >= 4.17 && < 4.21
 
   -- See doc/style.md
   --
@@ -47,7 +47,7 @@ common shared
   -- available here:
   -- https://ghc.gitlab.haskell.org/ghc/doc/users_guide/using-warnings.html
 
-  -- Since GHC 9.4 or earlier:
+  -- Since GHC 9.6 or earlier:
   ghc-options:
     -Wall
     -Werror=ambiguous-fields
@@ -116,17 +116,22 @@ common shared
     ghc-options:
       -Werror=incomplete-export-warnings
       -Werror=inconsistent-flags
-      -Werror=missing-poly-kind-signatures
+
+  if impl(ghc >= 9.10)
+    ghc-options:
+      -Werror=badly-staged-types
+      -Werror=data-kinds-tc
+      -Werror=incomplete-record-selectors
+
+  -- -XTypeAbstractions was added in GHC 9.8, so we can't fix this warning until
+  -- we support GHC 9.12 and drop GHC 9.6.
+  if impl(ghc == 9.10)
+    ghc-options:
+      -Wno=deprecated-type-abstractions
 
   -- TODO(#44): Enable these warnings when supporting these GHC versions.
-  --
-  -- if impl(ghc >= 9.10)
-  --   -Werror=badly-staged-types
-  --   -Werror=data-kinds-tc
-  --   -Werror=deprecated-type-abstractions
-  --   -Werror=incomplete-record-selectors
-
   -- if impl(ghc >= 9.12)
+  --   -Werror=deprecated-type-abstractions
   --   -Werror=view-pattern-signatures
 
 library
@@ -142,10 +147,10 @@ library
     , aeson ^>= 2.2
     , async ^>= 2.2.5
     , bytestring ^>= { 0.11.5, 0.12.1 }
-    , containers ^>= 0.6.7
+    , containers ^>= { 0.6.7, 0.7 }
     , directory ^>= 1.3.7.1
     , file-embed ^>= 0.0.16
-    , filepath ^>= 1.4.2.2
+    , filepath ^>= { 1.4.2.2, 1.5.4.0 }
     , lens ^>= 5.3
     , lumberjack ^>= 1.0
     , megaparsec ^>= 9.6
@@ -218,10 +223,10 @@ test-suite grease-tests
     -- Hackage dependencies
     , bv-sized ^>= 1.0.6
     , bytestring ^>= { 0.11.5, 0.12.1 }
-    , containers ^>= 0.6.7
+    , containers ^>= { 0.6.7, 0.7 }
     , directory ^>= 1.3.7.1
     , file-embed ^>= 0.0.16
-    , filepath ^>= 1.4.2.2
+    , filepath ^>= { 1.4.2.2, 1.5.4.0 }
     , hedgehog ^>= 1.5
     , hslua ^>= 2.3.1
     , lumberjack ^>= 1.0
