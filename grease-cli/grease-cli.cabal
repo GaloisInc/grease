@@ -129,7 +129,7 @@ common shared
     ghc-options:
       -Wno=deprecated-type-abstractions
 
-  -- TODO(#44): Enable these warnings when supporting these GHC versions.
+  -- TODO(#334): Enable these warnings when supporting these GHC versions.
   -- if impl(ghc >= 9.12)
   --   -Werror=deprecated-type-abstractions
   --   -Werror=view-pattern-signatures
