@@ -23,7 +23,7 @@ jobs:
       # complete all jobs
       fail-fast: false
       matrix:
-        cabal: ["3.14.1.1"]
+        cabal: ["3.14.2.0"]
         cache-key-prefix: [""]  # see `include` below
         ghc: ["9.6.6", "9.8.4", "9.10.2"]
         haddock: [true]  # see `include` below
