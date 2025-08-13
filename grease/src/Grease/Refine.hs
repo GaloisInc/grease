@@ -87,6 +87,7 @@ import Data.Function (($), (.))
 import Data.Functor ((<$>))
 import Data.Functor.Const (Const)
 import Data.IORef (IORef, modifyIORef, readIORef)
+import Data.IORef qualified as IORef
 import Data.Int (Int)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
@@ -101,6 +102,8 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Nonce (Nonce)
 import Data.Proxy (Proxy (..))
 import Data.Semigroup ((<>))
+import Data.Sequence (Seq)
+import Data.Sequence qualified as Seq
 import Data.String (String)
 import Data.Type.Equality (type (~))
 import GHC.IORef (newIORef)
@@ -112,6 +115,7 @@ import Grease.Diagnostic
 import Grease.Heuristic
 import Grease.Options (BoundsOpts, LoopBound (..), Milliseconds (..))
 import Grease.Options qualified as Opts
+import Grease.Panic (panic)
 import Grease.Refine.Diagnostic qualified as Diag
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
@@ -130,6 +134,7 @@ import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.BoundedExec qualified as C
 import Lang.Crucible.Simulator.BoundedRecursion qualified as C
+import Lang.Crucible.Simulator.PathSplitting qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
@@ -347,23 +352,39 @@ execCfg ::
   ) =>
   bak ->
   LoopBound ->
+  Opts.PathStrategy ->
   [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
   C.ExecState p sym ext (C.RegEntry sym ret) ->
-  IO (C.ExecResult p sym ext (C.RegEntry sym ret), C.ProofObligations sym)
-execCfg bak (LoopBound bound) execFeats initialState = do
+  IO
+    ( C.ExecResult p sym ext (C.RegEntry sym ret)
+    , C.ProofObligations sym
+    , Seq (C.WorkItem p sym ext (C.RegEntry sym ret))
+    )
+execCfg bak (LoopBound bound) strat execFeats initialState = do
   boundExecFeat <- C.boundedExecFeature (\_ -> pure (Just bound)) True
   boundRecFeat <- C.boundedRecursionFeature (\_ -> pure (Just bound)) True
-  let execFeats' = List.map C.genericToExecutionFeature [boundExecFeat, boundRecFeat] List.++ execFeats
-  X.finally
-    ( do
-        r <- C.executeCrucible execFeats' initialState
-        o <- C.getProofObligations bak
-        pure (r, o)
-    )
-    ( do
+  let boundsExecFeats = List.map C.genericToExecutionFeature [boundExecFeat, boundRecFeat]
+  let execFeats' = boundsExecFeats List.++ execFeats
+  let withCleanup action = X.finally action $ do
         C.resetAssumptionState bak
         C.clearProofObligations bak
-    )
+  withCleanup $
+    case strat of
+      Opts.Dfs -> do
+        resultRef <- IORef.newIORef Nothing
+        (_n, rest) <- C.executeCrucibleDFSPaths execFeats' initialState $ \r -> do
+          IORef.writeIORef resultRef (Just r)
+          pure False -- don't continue exploring other paths
+        mbResult <- IORef.readIORef resultRef
+        case mbResult of
+          Nothing -> panic "execCfg" ["executeCrucibleDFSPaths didn't return a result"]
+          Just r -> do
+            o <- C.getProofObligations bak
+            pure (r, o, rest)
+      Opts.Sse -> do
+        r <- C.executeCrucible execFeats' initialState
+        o <- C.getProofObligations bak
+        pure (r, o, Seq.empty)
 
 -- | Helper, not exported
 proveAndRefine ::
@@ -432,16 +453,50 @@ execAndRefine ::
   Conc.InitialState sym ext argTys ->
   IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
   BoundsOpts ->
+  Opts.PathStrategy ->
   [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
   C.ExecState p sym ext (C.RegEntry sym ret) ->
   m (ProveRefineResult sym ext argTys)
-execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initState bbMapRef boundsOpts execFeats initialState = do
+execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initState bbMapRef boundsOpts strat execFeats initialState = do
   let loopBound = Opts.simLoopBound boundsOpts
-  (result, goals) <- liftIO (execCfg bak loopBound execFeats initialState)
-  doLog la (Diag.ExecutionResult memVar result)
-  bbMap <- liftIO (readIORef bbMapRef)
   let solverTimeout = Opts.simSolverTimeout boundsOpts
-  liftIO (proveAndRefine bak solver solverTimeout anns result la heuristics argNames argShapes initState bbMap goals)
+  let refineOne initSt = do
+        (execResult, goals, remaining) <- execCfg bak loopBound strat execFeats initSt
+        doLog la (Diag.ExecutionResult memVar execResult)
+        bbMap <- readIORef bbMapRef
+        refineResult <- proveAndRefine bak solver solverTimeout anns execResult la heuristics argNames argShapes initState bbMap goals
+        pure (refineResult, remaining)
+
+  -- Process the state that was passed in
+  (refineResult, remainingPaths) <- liftIO (refineOne initialState)
+  remainingRef <- liftIO (IORef.newIORef remainingPaths)
+
+  -- Process new states that may have been generated during execution. Defer to
+  -- `combiner` on how to combine the results from multiple states.
+  let go ::
+        ProveRefineResult sym ext argTys ->
+        IO (ProveRefineResult sym ext argTys)
+      go r = do
+        remaining <- IORef.readIORef remainingRef
+        case remaining of
+          Seq.Empty -> pure r
+          -- Note that we use `SubgoalResult True` because `combiner` doesn't
+          -- actually examine the `Bool`, so it doesn't matter what it is.
+          (next Seq.:<| _) -> do
+            let firstResult = C.SubgoalResult True r
+            let computeNextResult = do
+                  initSt <- C.restoreWorkItem next
+                  (nextRes, additionalPaths) <- refineOne initSt
+                  IORef.modifyIORef remainingRef (<> additionalPaths)
+                  C.SubgoalResult True <$> go nextRes
+            let combine r1 r2 = runExceptT (C.getCombiner combiner r1 r2)
+            mbRefineResult <-
+              combine (pure firstResult) (liftIO computeNextResult)
+            case mbRefineResult of
+              Left C.TimedOut ->
+                throw (GreaseException "Timeout when solving goal!")
+              Right combinedResult -> pure (C.subgoalResult combinedResult)
+  liftIO (go refineResult)
 
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)

@@ -4,6 +4,7 @@
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Options (
+  PathStrategy (..),
   LoopBound (..),
   defaultLoopBound,
   Milliseconds (..),
@@ -34,6 +35,11 @@ import Grease.Shape.Pointer (ExtraStackSlots (..))
 import Grease.Shape.Simple (SimpleShape)
 import Grease.Solver (Solver (..))
 import Lang.Crucible.Utils.Timeout (Timeout)
+
+data PathStrategy
+  = Dfs
+  | Sse
+  deriving (Bounded, Enum, Read, Show)
 
 newtype TypeUnrollingBound = TypeUnrollingBound Int
   deriving Show
@@ -158,6 +164,8 @@ data SimOpts
   -- ^ Parse binary in raw binary mode (non-elf position dependent executable)
   , simRawBinaryOffset :: Word64
   -- ^ Load a raw binary at a given offset (will default to 0x0)
+  , simPathStrategy :: PathStrategy
+  -- ^ Path exploration strategy
   , simPltStubs :: [PltStub]
   -- ^ User-specified PLT stubs to consider in addition to the stubs that
   -- @grease@ discovers via heuristics.
