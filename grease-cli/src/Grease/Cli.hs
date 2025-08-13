@@ -248,6 +248,14 @@ simOpts = do
               <> Opt.help "overrides, in YAML format"
           )
       )
+  simPathStrategy <-
+    Opt.option
+      Opt.auto
+      ( Opt.long "path-strategy"
+          <> boundedEnumMetavar (Proxy @GO.PathStrategy)
+          <> Opt.value GO.Sse
+          <> Opt.help "path exploration strategy"
+      )
   simPltStubs <-
     Opt.many $
       Opt.option
