@@ -13,6 +13,7 @@ import scala.util.{Failure, Success}
 import scala.Serializable
 import scala.jdk.CollectionConverters._
 import ghidra.framework.Application
+import java.io.File
 
 object AddrConversions {
 
@@ -83,7 +84,8 @@ case class GreaseConfiguration(
     // None uses the default for grease
     timeout: Option[FiniteDuration],
     loadBase: Option[Long],
-    isRawBinary: Boolean
+    isRawBinary: Boolean,
+    overridesFile: Option[File]
 ) {
 
   val GHIDRA_THUMB_REG_NAME = "TMode"
@@ -128,7 +130,10 @@ case class GreaseConfiguration(
       .filter(_ => isRawBinary)
       .map(x => Seq("--load-base", GreaseConfiguration.renderAddress(x)))
       .getOrElse(Seq())
-    baseLine ++ rawLine ++ timeoutLine ++ baseAddr
+    val overrideLine =
+      overridesFile.map(x => Seq("--overrides", x.getPath())).getOrElse(Seq())
+
+    baseLine ++ rawLine ++ timeoutLine ++ baseAddr ++ overrideLine
   }
 }
 

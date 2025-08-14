@@ -26,6 +26,7 @@ import ghidra.util.Msg
 import scala.concurrent.duration._
 import ghidra.app.services.AnalysisPriority
 import ghidra.program.model.listing.CommentType
+import java.io.File
 
 object GreaseBackgroundCmd {
   val GREASE_BOOKMARK_TYPE = "GREASE"
@@ -60,7 +61,8 @@ class GreaseBackgroundCmd(
     val entrypoints: AddressSetView,
     timeout: Option[FiniteDuration],
     loadBase: Option[Long],
-    rawMode: Boolean
+    rawMode: Boolean,
+    overridesFile: Option[File]
 ) extends BackgroundCommand[Program] {
 
   override def applyTo(prog: Program, monitor: TaskMonitor): Boolean = {
@@ -79,7 +81,14 @@ class GreaseBackgroundCmd(
         val res = GreaseWrapper(
           prog
         ).runGrease(
-          GreaseConfiguration(targetBin, item, timeout, loadBase, rawMode)
+          GreaseConfiguration(
+            targetBin,
+            item,
+            timeout,
+            loadBase,
+            rawMode,
+            overridesFile
+          )
         )
 
         res match
@@ -127,6 +136,7 @@ object GreaseAnalyzer {
   val RAW_MODE_OPT: String = "Raw mode"
   val LOAD_BASE_OPT: String = "Load base"
   val USE_IMAGE_BASE_AS_LOAD_BASE_OPT: String = "Use image base as load base"
+  val OVERRIDE_FILE: String = "Override file"
 
   def getOption[T](options: Options, optName: String): Option[T] = {
     Option(options.getObject(optName, null))
@@ -152,6 +162,7 @@ class GreaseAnalyzer
   var loadBase: Option[Long] = None
   var shouldLoadRaw = false
   var useImageBaseAsLoadBase = true
+  var overridesFile: Option[File] = None
   val supportedProcs: Set[String] = Set("ARM", "PowerPC", "x86")
 
   setSupportsOneTimeAnalysis()
@@ -180,6 +191,8 @@ class GreaseAnalyzer
     useImageBaseAsLoadBase = GreaseAnalyzer
       .getOption[Boolean](x, GreaseAnalyzer.USE_IMAGE_BASE_AS_LOAD_BASE_OPT)
       .getOrElse(true)
+    overridesFile =
+      GreaseAnalyzer.getOption[File](x, GreaseAnalyzer.OVERRIDE_FILE)
   }
 
   override def registerOptions(options: Options, program: Program): Unit = {
@@ -214,6 +227,14 @@ class GreaseAnalyzer
       null,
       "Uses the image base of this Ghidra binary as the load base when in raw mode (this is the default, disable to use custom image base)"
     )
+
+    options.registerOption(
+      GreaseAnalyzer.OVERRIDE_FILE,
+      OptionType.FILE_TYPE,
+      null,
+      null,
+      "Override file to use in GREASE"
+    )
   }
 
   @throws(classOf[CancelledException])
@@ -223,7 +244,13 @@ class GreaseAnalyzer
       monitor: TaskMonitor,
       log: MessageLog
   ): Boolean = {
-    GreaseBackgroundCmd(set, timeoutDuration, loadBase, shouldLoadRaw)
+    GreaseBackgroundCmd(
+      set,
+      timeoutDuration,
+      loadBase,
+      shouldLoadRaw,
+      overridesFile
+    )
       .applyTo(program, monitor)
     true
   }
