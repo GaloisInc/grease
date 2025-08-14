@@ -20,6 +20,7 @@ module Grease.Macaw (
 
 import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens (to, (^.))
+import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.BitVector.Sized qualified as BV
 import Data.ByteString.Builder qualified as Builder
@@ -358,10 +359,11 @@ memConfigInitial ::
   bak ->
   ArchContext arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
+  Opts.SkipUnsupportedRelocs ->
   -- | Map of relocation addresses and types
   Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (ArchReloc arch) ->
   Symbolic.MemModelConfig p sym arch Mem.Mem
-memConfigInitial bak arch ptrTable relocs =
+memConfigInitial bak arch ptrTable skipUnsupportedRelocs relocs =
   lazyMemModelConfig
     { -- We deviate from the lazy macaw-symbolic memory model's settings and opt
       -- \*not* to concretize pointers before reads or writes. See gitlab#143 for
@@ -373,7 +375,8 @@ memConfigInitial bak arch ptrTable relocs =
       -- way to hook each read without needing to re-implement all of the logic
       -- for MacawReadMem/MacawCondReadMem, which is quite involved.
       Symbolic.concreteImmutableGlobalRead = \memRep ptr -> do
-        assertRelocSupported arch ptr relocs
+        Monad.unless (Opts.getSkipUnsupportedRelocs skipUnsupportedRelocs) $
+          assertRelocSupported arch ptr relocs
         Symbolic.concreteImmutableGlobalRead lazyMemModelConfig memRep ptr
     }
  where

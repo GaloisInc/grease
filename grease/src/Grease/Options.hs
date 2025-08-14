@@ -18,6 +18,7 @@ module Grease.Options (
   ErrorSymbolicFunCalls (..),
   ErrorSymbolicSyscalls (..),
   SkipInvalidCallAddrs (..),
+  SkipUnsupportedRelocs (..),
   BoundsOpts (..),
   InitialPreconditionOpts (..),
   SimOpts (..),
@@ -87,6 +88,12 @@ newtype SkipInvalidCallAddrs
   -- See Note [Derive Read/Show instances the with newtype strategy]
   deriving newtype (Enum, Eq, Ord, Read, Show)
 
+-- | If 'True', populate unsupported relocations with symbolic data.
+newtype SkipUnsupportedRelocs
+  = SkipUnsupportedRelocs {getSkipUnsupportedRelocs :: Bool}
+  -- See Note [Derive Read/Show instances the with newtype strategy]
+  deriving newtype (Enum, Eq, Ord, Read, Show)
+
 -- | If 'True', throw an error if attempting a system call with a symbolic
 -- number. If 'False', skip over such calls.
 newtype ErrorSymbolicSyscalls
@@ -149,6 +156,8 @@ data SimOpts
   , simErrorSymbolicSyscalls :: ErrorSymbolicSyscalls
   -- ^ Default: 'False'.
   , simSkipInvalidCallAddrs :: SkipInvalidCallAddrs
+  -- ^ Default: 'False'.
+  , simSkipUnsupportedRelocs :: SkipUnsupportedRelocs
   -- ^ Default: 'False'.
   , simMutGlobs :: MutableGlobalState
   -- ^ How to initialize mutable globals

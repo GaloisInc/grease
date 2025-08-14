@@ -340,6 +340,12 @@ simOpts = do
                     ]
                 )
           )
+  simSkipUnsupportedRelocs <-
+    fmap GO.SkipUnsupportedRelocs $
+      Opt.switch
+        ( Opt.long "skip-unsupported-relocs"
+            <> Opt.help "Populate unsupported relocations with symbolic data"
+        )
   simRust <-
     Opt.switch
       ( Opt.long "rust"
