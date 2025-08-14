@@ -256,6 +256,7 @@ constructPtrTarget gla tyUnrollBound sprog visitCount tyApp isConservative =
               constructPtrMemShapeFromRef gla tyUnrollBound sprog visitCount (UseConservativeDebugShapes shouldBeConservative)
                 =<< (except $ Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Pointer missing pointee") Right maybeRef)
          in Seq.singleton <$> mshape
+  shapeSeq (MDwarf.TypedefType (MDwarf.Typedef _ _ _ tyRef)) = shapeSeq =<< extractType sprog tyRef
   shapeSeq ty = except $ Left $ DwarfDiagnostic.UnsupportedType ty
 
 type VisitCount = Map.Map MDwarf.TypeRef Int
