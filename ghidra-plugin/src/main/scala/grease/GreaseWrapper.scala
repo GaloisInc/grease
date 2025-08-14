@@ -135,7 +135,11 @@ case class GreaseConfiguration(
 case class GreaseException(val msg: String) extends Exception
 
 object GreaseResult {
-  def parseBatch(batch: String, addrs: AddressingMode): Option[PossibleBug] = {
+  def parseBatch(
+      ent: Address,
+      batch: String,
+      addrs: AddressingMode
+  ): Option[PossibleBug] = {
     val js = ujson.read(batch)
     val hasBug = js("batchStatus")("tag").str == "BatchBug"
     if !hasBug then return None
@@ -156,17 +160,35 @@ object GreaseResult {
         )
       )
     } catch {
-      // GREASE can dump "Multiple Locations:" from checkMustFail currently we dont handle this
-      case e: NumberFormatException => { None }
+      // GREASE can dump "Multiple Locations:" from checkMustFail currently we use the original addr
+      case e: NumberFormatException => {
+        Some(
+          PossibleBug(
+            ent,
+            desc,
+            contents("bugArgs").arr,
+            contents("bugShapes").str
+          )
+        )
+      }
     }
 
   }
 
-  def parse(chunks: String, addrs: AddressingMode): Try[GreaseResult] = {
+  def parse(
+      ent: Address,
+      chunks: String,
+      addrs: AddressingMode
+  ): Try[GreaseResult] = {
     // each line should have a batch
     Success(
       GreaseResult(
-        chunks.lines().iterator().asScala.flatMap(parseBatch(_, addrs)).toList
+        chunks
+          .lines()
+          .iterator()
+          .asScala
+          .flatMap(parseBatch(ent, _, addrs))
+          .toList
       )
     )
   }
@@ -201,8 +223,9 @@ class GreaseWrapper(val localRunner: os.Path, val prog: Program) {
     if result.exitCode != 0 then
       Msg.error(this, s"GREASE failed to run with ${result.err}")
       return Failure(GreaseException("GREASE process failed"))
-
-    GreaseResult.parse(result.out.text(), conf.addressResolver(prog))
+    val res = result.out.text()
+    Msg.info(this, s"Received: $res")
+    GreaseResult.parse(conf.entrypoint, res, conf.addressResolver(prog))
   }
 
 }
