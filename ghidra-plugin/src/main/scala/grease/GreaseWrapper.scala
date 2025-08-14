@@ -14,6 +14,7 @@ import scala.Serializable
 import scala.jdk.CollectionConverters._
 import ghidra.framework.Application
 import java.io.File
+import ghidra.program.model.listing.CommentType
 
 object AddrConversions {
 
@@ -140,22 +141,21 @@ case class GreaseConfiguration(
 case class GreaseException(val msg: String) extends Exception
 
 object GreaseResult {
-  def parseBatch(
-      ent: Address,
-      batch: String,
-      addrs: AddressingMode
-  ): Option[PossibleBug] = {
-    val js = ujson.read(batch)
-    val hasBug = js("batchStatus")("tag").str == "BatchBug"
-    if !hasBug then return None
+  def parseLoc(locStr: String, addrs: AddressingMode) = {
+    // drops 0x, I dont know of a java method that parses based on format
+    val loc = Integer.parseInt(locStr.drop(2), 16).toLong
+    addrs.greaseOffsettoGhidraAddress(loc)
+  }
 
-    val contents = js("batchStatus")("contents")
+  def parseBug(
+      ent: Address,
+      addrs: AddressingMode,
+      contents: ujson.Value
+  ): Option[PossibleBug] = {
     val desc = contents("bugDesc")
+
     try {
-      val base = 16
-      // drops 0x, I dont know of a java method that parses based on format
-      val loc = Integer.parseInt(desc("bugLoc").str.drop(2), base).toLong
-      val addr = addrs.greaseOffsettoGhidraAddress(loc)
+      val addr = GreaseResult.parseLoc(desc("bugLoc").str, addrs)
       Some(
         PossibleBug(
           addr,
@@ -177,7 +177,35 @@ object GreaseResult {
         )
       }
     }
+  }
 
+  def parseCouldNotInfer(
+      ent: Address,
+      addrs: AddressingMode,
+      contents: ujson.Value
+  ): Option[FailedToRefine] = {
+    def parsePred(x: ujson.Value): FailedPredicate =
+      FailedPredicate(
+        parseLoc(x("_failedPredicateLocation").str, addrs),
+        x("_failedPredicateMessage").str,
+        x("_failedPredicateConcShapes").str
+      )
+
+    Some(FailedToRefine(ent, contents.arr.toSeq.map(parsePred)))
+  }
+
+  def parseBatch(
+      ent: Address,
+      batch: String,
+      addrs: AddressingMode
+  ): Option[ParsedBatch] = {
+    val js = ujson.read(batch)
+
+    js("batchStatus")("tag").str match
+      case "BatchBug" => parseBug(ent, addrs, js("batchStatus")("contents"))
+      case "BatchCouldNotInfer" =>
+        parseCouldNotInfer(ent, addrs, js("batchStatus")("contents"))
+      case _ => None
   }
 
   def parse(
@@ -204,10 +232,83 @@ case class PossibleBug(
     description: ujson.Value,
     args: ujson.Arr,
     shapes: String
-)
+) extends ParsedBatch {
+  def printToProg(prog: Program): Unit =
+    ParsedBatch.addComment(
+      s"\n Possible bug: ${description.render()}",
+      prog,
+      appliedTo
+    )
+    ParsedBatch.greaseBookmark(
+      prog,
+      appliedTo,
+      "Possible bug",
+      "GREASE detected a potential bug"
+    )
+}
+
+case class FailedPredicate(loc: Address, message: String, concShapes: String) {}
+
+case class FailedToRefine(inFunc: Address, preds: Seq[FailedPredicate])
+    extends ParsedBatch {
+
+  override def printToProg(prog: Program): Unit = {
+    for (pred <- preds)
+      ParsedBatch.addComment(
+        s"Safety predicate failed: ${pred.message}",
+        prog,
+        pred.loc
+      )
+      ParsedBatch.addComment(
+        s"Concretized invalidating shape ${pred.concShapes}",
+        prog,
+        pred.loc
+      )
+
+    ParsedBatch.greaseBookmark(
+      prog,
+      inFunc,
+      "Failed to Refine",
+      "could not refine to satisfy a safety condition"
+    )
+  }
+}
+
+object ParsedBatch {
+  val GREASE_BOOKMARK_TYPE = "GREASE"
+
+  def greaseBookmark(
+      prog: Program,
+      addr: Address,
+      category: String,
+      note: String
+  ): Unit = {
+    prog
+      .getBookmarkManager()
+      .setBookmark(addr, GREASE_BOOKMARK_TYPE, category, note)
+  }
+
+  def addComment(comm: String, prog: Program, toAddr: Address): Unit = {
+    val prevCom = Option(
+      prog
+        .getListing()
+        .getComment(CommentType.PRE, toAddr)
+    )
+    val nextCom =
+      prevCom
+        .getOrElse("") + comm
+    prog
+      .getListing()
+      .setComment(toAddr, CommentType.PRE, nextCom)
+  }
+}
+
+sealed abstract class ParsedBatch {
+  def printToProg(prog: Program): Unit
+}
 
 // Coarse grained results for now, grab potential bugs only
-case class GreaseResult(val possibleBugs: List[PossibleBug]) {}
+case class GreaseResult(val possibleBugs: List[ParsedBatch]) {}
 
 object GreaseWrapper {
   def apply(prog: Program): GreaseWrapper = {

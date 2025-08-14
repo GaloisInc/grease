@@ -28,35 +28,6 @@ import ghidra.app.services.AnalysisPriority
 import ghidra.program.model.listing.CommentType
 import java.io.File
 
-object GreaseBackgroundCmd {
-  val GREASE_BOOKMARK_TYPE = "GREASE"
-
-  def greaseBookmark(
-      prog: Program,
-      addr: Address,
-      category: String,
-      note: String
-  ): Unit = {
-    prog
-      .getBookmarkManager()
-      .setBookmark(addr, GREASE_BOOKMARK_TYPE, category, note)
-  }
-
-  def addComment(comm: String, prog: Program, toAddr: Address): Unit = {
-    val prevCom = Option(
-      prog
-        .getListing()
-        .getComment(CommentType.PRE, toAddr)
-    )
-    val nextCom =
-      prevCom
-        .getOrElse("") + comm
-    prog
-      .getListing()
-      .setComment(toAddr, CommentType.PRE, nextCom)
-  }
-}
-
 class GreaseBackgroundCmd(
     val entrypoints: AddressSetView,
     timeout: Option[FiniteDuration],
@@ -94,25 +65,14 @@ class GreaseBackgroundCmd(
         res match
           case Failure(exception) => {
             Msg.warn(this, s"GREASE could not analyze ${item}, ${exception}")
-            GreaseBackgroundCmd.addComment(
+            ParsedBatch.addComment(
               s"\n Failed to analyze function with GREASE",
               prog,
               item
             )
           }
-          case scala.util.Success(bugs) => {
-            for bug <- bugs.possibleBugs do
-              GreaseBackgroundCmd.addComment(
-                s"\n Possible bug: ${bug.description.render()}",
-                prog,
-                bug.appliedTo
-              )
-              GreaseBackgroundCmd.greaseBookmark(
-                prog,
-                bug.appliedTo,
-                "Possible bug",
-                "GREASE detected a potential bug"
-              )
+          case scala.util.Success(items) => {
+            for bug <- items.possibleBugs do bug.printToProg(prog)
           }
 
         monitor.increment()
