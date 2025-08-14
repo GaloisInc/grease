@@ -105,6 +105,7 @@ import Data.Semigroup ((<>))
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.String (String)
+import Data.Text qualified as Text
 import Data.Type.Equality (type (~))
 import GHC.IORef (newIORef)
 import Grease.Bug qualified as Bug
@@ -465,6 +466,11 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
         doLog la (Diag.ExecutionResult memVar execResult)
         bbMap <- readIORef bbMapRef
         refineResult <- proveAndRefine bak solver solverTimeout anns execResult la heuristics argNames argShapes initState bbMap goals
+        case strat of
+          Opts.Dfs -> do
+            loc <- W4.getCurrentProgramLoc (C.backendGetSym bak)
+            doLog la (Diag.RefinementFinishedPath loc (shortResult refineResult))
+          _ -> pure ()
         pure (refineResult, remaining)
 
   -- Process the state that was passed in
@@ -497,6 +503,18 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
                 throw (GreaseException "Timeout when solving goal!")
               Right combinedResult -> pure (C.subgoalResult combinedResult)
   liftIO (go refineResult)
+ where
+  -- Very short summary for single-line log message
+  shortResult =
+    \case
+      ProveSuccess -> "success"
+      ProveBug{} -> "likely bug"
+      ProveNoHeuristic{} -> "possible bug"
+      ProveRefine{} -> "refined precondition"
+      ProveCantRefine (MissingFunc (Just nm)) -> "missing function " <> Text.pack nm
+      ProveCantRefine (MissingFunc{}) -> "missing function"
+      ProveCantRefine (MissingSemantics{}) -> "missing semantics"
+      ProveCantRefine (MutableGlobal{}) -> "load from mut global"
 
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)

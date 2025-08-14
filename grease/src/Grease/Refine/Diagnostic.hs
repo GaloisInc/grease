@@ -14,6 +14,7 @@ import Control.Lens ((^.))
 import Data.Functor.Const (Const (..))
 import Data.Macaw.Memory qualified as MM
 import Data.Parameterized.Context qualified as Ctx
+import Data.Text (Text)
 import Grease.Diagnostic.Severity (Severity (Debug, Info))
 import Grease.ErrorDescription (ErrorDescription)
 import Grease.Heuristic.Result qualified as Heuristic
@@ -42,6 +43,10 @@ data Diagnostic where
   GoalMatchingHeuristic ::
     Diagnostic
   NoAnnotationOnPredicate ::
+    Diagnostic
+  RefinementFinishedPath ::
+    W4.ProgramLoc ->
+    Text ->
     Diagnostic
   RefinementFinalPrecondition ::
     forall w ext tag tys.
@@ -115,6 +120,13 @@ instance PP.Pretty Diagnostic where
           [ "Final refined precondition:"
           , ShapePP.evalPrinter (printCfg w) (ShapePP.printNamedShapes argNames argShapes)
           ]
+      RefinementFinishedPath loc result ->
+        PP.hsep
+          [ "Path ended at"
+          , PP.pretty (W4.plSourceLoc loc)
+          , "with result"
+          , PP.pretty result
+          ]
       RefinementLoopMaximumIterationsExceeded ->
         "Exceeded the maximum number of iterations"
       RefinementLoopRetrying ->
@@ -156,6 +168,7 @@ severity =
     GoalMatchingHeuristic{} -> Debug
     NoAnnotationOnPredicate{} -> Info
     RefinementFinalPrecondition{} -> Debug
+    RefinementFinishedPath{} -> Info
     RefinementLoopMaximumIterationsExceeded{} -> Info
     RefinementLoopRetrying{} -> Debug
     RefinementLoopAllGoalsPassed{} -> Info
