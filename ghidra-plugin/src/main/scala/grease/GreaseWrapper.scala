@@ -302,7 +302,7 @@ object ParsedBatch {
     )
     val nextCom =
       prevCom
-        .getOrElse("") + comm
+        .getOrElse("") + comm + "\n"
     prog
       .getListing()
       .setComment(toAddr, CommentType.PRE, nextCom)
