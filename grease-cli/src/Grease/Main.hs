@@ -707,7 +707,8 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
         , mcRelocs = relocs
         , mcMemory = memory
         } = macawCfgConfig
-  let memCfg_ = memConfigInitial bak archCtx memPtrTable relocs
+  let skipUnsupportedRelocs = simSkipUnsupportedRelocs simOpts
+  let memCfg_ = memConfigInitial bak archCtx memPtrTable skipUnsupportedRelocs relocs
   let userOvPaths = simOverrides simOpts
   fnOvsMap <- mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg_ fs
   fnAddrOvsRaw <- mconcat <$> traverse parseOverridesYaml (simOverridesYaml simOpts)

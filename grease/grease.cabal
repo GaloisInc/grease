@@ -270,5 +270,6 @@ library
     Paths_grease
   other-modules:
     Grease.GitRev
+    Grease.LLVM.Overrides.Defs
     Grease.Macaw.Overrides.Defs
     Paths_grease
