@@ -352,7 +352,6 @@ execCfg ::
   , ?memOpts :: Mem.MemOptions
   ) =>
   bak ->
-  LoopBound ->
   Opts.PathStrategy ->
   [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
   C.ExecState p sym ext (C.RegEntry sym ret) ->
@@ -361,11 +360,7 @@ execCfg ::
     , C.ProofObligations sym
     , Seq (C.WorkItem p sym ext (C.RegEntry sym ret))
     )
-execCfg bak (LoopBound bound) strat execFeats initialState = do
-  boundExecFeat <- C.boundedExecFeature (\_ -> pure (Just bound)) True
-  boundRecFeat <- C.boundedRecursionFeature (\_ -> pure (Just bound)) True
-  let boundsExecFeats = List.map C.genericToExecutionFeature [boundExecFeat, boundRecFeat]
-  let execFeats' = boundsExecFeats List.++ execFeats
+execCfg bak strat execFeats initialState = do
   let withCleanup action = X.finally action $ do
         C.resetAssumptionState bak
         C.clearProofObligations bak
@@ -373,7 +368,7 @@ execCfg bak (LoopBound bound) strat execFeats initialState = do
     case strat of
       Opts.Dfs -> do
         resultRef <- IORef.newIORef Nothing
-        (_n, rest) <- C.executeCrucibleDFSPaths execFeats' initialState $ \r -> do
+        (_n, rest) <- C.executeCrucibleDFSPaths execFeats initialState $ \r -> do
           IORef.writeIORef resultRef (Just r)
           pure False -- don't continue exploring other paths
         mbResult <- IORef.readIORef resultRef
@@ -383,7 +378,7 @@ execCfg bak (LoopBound bound) strat execFeats initialState = do
             o <- C.getProofObligations bak
             pure (r, o, rest)
       Opts.Sse -> do
-        r <- C.executeCrucible execFeats' initialState
+        r <- C.executeCrucible execFeats initialState
         o <- C.getProofObligations bak
         pure (r, o, Seq.empty)
 
@@ -459,10 +454,18 @@ execAndRefine ::
   C.ExecState p sym ext (C.RegEntry sym ret) ->
   m (ProveRefineResult sym ext argTys)
 execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initState bbMapRef boundsOpts strat execFeats initialState = do
-  let loopBound = Opts.simLoopBound boundsOpts
   let solverTimeout = Opts.simSolverTimeout boundsOpts
+
+  -- Due to the way these execution features manage their internal data, they
+  -- must be initialized once and shared across executions of different paths.
+  let LoopBound loopBound = Opts.simLoopBound boundsOpts
+  boundExecFeat <- liftIO (C.boundedExecFeature (\_ -> pure (Just loopBound)) True)
+  boundRecFeat <- liftIO (C.boundedRecursionFeature (\_ -> pure (Just loopBound)) True)
+  let boundsExecFeats = List.map C.genericToExecutionFeature [boundExecFeat, boundRecFeat]
+  let execFeats' = boundsExecFeats List.++ execFeats
+
   let refineOne initSt = do
-        (execResult, goals, remaining) <- execCfg bak loopBound strat execFeats initSt
+        (execResult, goals, remaining) <- execCfg bak strat execFeats' initSt
         doLog la (Diag.ExecutionResult memVar execResult)
         bbMap <- readIORef bbMapRef
         refineResult <- proveAndRefine bak solver solverTimeout anns execResult la heuristics argNames argShapes initState bbMap goals
@@ -491,6 +494,7 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
           (next Seq.:<| _) -> do
             let firstResult = C.SubgoalResult True r
             let computeNextResult = do
+                  doLog la (Diag.ResumingFromBranch (C.workItemLoc next))
                   initSt <- C.restoreWorkItem next
                   (nextRes, additionalPaths) <- refineOne initSt
                   IORef.modifyIORef remainingRef (<> additionalPaths)

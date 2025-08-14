@@ -76,6 +76,8 @@ data Diagnostic where
     Ctx.Assignment (Const String) tys ->
     ArgShapes ext tag tys ->
     Diagnostic
+  ResumingFromBranch ::
+    W4.ProgramLoc -> Diagnostic
   SolverGoalPassed ::
     W4.ProgramLoc -> Diagnostic
   SolverGoalFailed ::
@@ -140,6 +142,8 @@ instance PP.Pretty Diagnostic where
           [ "Using precondition:"
           , ShapePP.evalPrinter (printCfg w) (ShapePP.printNamedShapes argNames argShapes)
           ]
+      ResumingFromBranch loc ->
+        PP.hsep ["Resuming execution from branch at", PP.pretty (W4.plSourceLoc loc)]
       SolverGoalPassed loc ->
         PP.hsep ["Goal from", PP.pretty (W4.plSourceLoc loc), "passed"]
       SolverGoalFailed _sym lp minfo ->
@@ -174,5 +178,6 @@ severity =
     RefinementLoopAllGoalsPassed{} -> Info
     RefinementLoopNoHeuristic{} -> Info
     RefinementUsingPrecondition{} -> Debug
+    ResumingFromBranch{} -> Debug
     SolverGoalPassed{} -> Debug
     SolverGoalFailed{} -> Debug
