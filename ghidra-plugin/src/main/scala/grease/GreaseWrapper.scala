@@ -18,12 +18,12 @@ import ghidra.program.model.listing.CommentType
 
 object AddrConversions {
 
-  def greaseOffsetToAddr(greaseOffset: Long, prog: Program): Address =
+  def greaseOffsetToAddr(greaseOffset: Long, prog: Program, loadOffset: Long): Address =
     // Convert a greaseOffset in an ELF to a Ghidra address.
     // This function assumes the greaseOffset is in memory in the default address space (where code will be)
     // GREASE loads the binary at the elf base so the offset is relative to the ELF base.
     // Then we add the raw offset to image base in Ghidra.
-    val addressOffset = (greaseOffset - ElfLoader
+    val addressOffset = (greaseOffset - loadOffset - ElfLoader
       .getElfOriginalImageBase(prog))
 
     prog.getImageBase().add(addressOffset)
@@ -35,7 +35,7 @@ object GreaseConfiguration {
 
 trait AddressingMode {
   def ghidraAddressToGreaseOffset(addr: Address): Long
-  def greaseOffsettoGhidraAddress(greaseOff: Long): Address
+  def greaseOffsettoGhidraAddress(greaseOff: Long, loadOffset: Long): Address
   val loadBase: Option[Long]
 }
 
@@ -45,8 +45,8 @@ class ELFAddressing(val prog: Program) extends AddressingMode {
     addr.subtract(prog.getImageBase()) + ElfLoader
       .getElfOriginalImageBase(prog)
 
-  override def greaseOffsettoGhidraAddress(greaseOff: Long): Address =
-    AddrConversions.greaseOffsetToAddr(greaseOff, prog)
+  override def greaseOffsettoGhidraAddress(greaseOff: Long, loadOffset: Long): Address =
+    AddrConversions.greaseOffsetToAddr(greaseOff, prog, loadOffset)
 
   override val loadBase: Option[Long] = None
 
@@ -73,7 +73,7 @@ class RawBase(val loadBaseOption: Option[Long], prog: Program)
   override def ghidraAddressToGreaseOffset(addr: Address): Long =
     addr.getOffset()
 
-  override def greaseOffsettoGhidraAddress(greaseOff: Long): Address =
+  override def greaseOffsettoGhidraAddress(greaseOff: Long, loadOffset: Long): Address =
     toRAMAddress(greaseOff)
 
   override val loadBase: Option[Long] = Some(loadBaseAddr.getOffset())
@@ -141,21 +141,22 @@ case class GreaseConfiguration(
 case class GreaseException(val msg: String) extends Exception
 
 object GreaseResult {
-  def parseLoc(locStr: String, addrs: AddressingMode) = {
+  def parseLoc(locStr: String, addrs: AddressingMode, loadOffset: Long) = {
     // drops 0x, I dont know of a java method that parses based on format
     val loc = Integer.parseInt(locStr.drop(2), 16).toLong
-    addrs.greaseOffsettoGhidraAddress(loc)
+    addrs.greaseOffsettoGhidraAddress(loc, loadOffset)
   }
 
   def parseBug(
       ent: Address,
       addrs: AddressingMode,
-      contents: ujson.Value
+      contents: ujson.Value,
+      loadOffset: Long
   ): Option[PossibleBug] = {
     val desc = contents("bugDesc")
 
     try {
-      val addr = GreaseResult.parseLoc(desc("bugLoc").str, addrs)
+      val addr = GreaseResult.parseLoc(desc("bugLoc").str, addrs, loadOffset)
       Some(
         PossibleBug(
           addr,
@@ -182,11 +183,12 @@ object GreaseResult {
   def parseCouldNotInfer(
       ent: Address,
       addrs: AddressingMode,
-      contents: ujson.Value
+      contents: ujson.Value,
+      loadOffset: Long
   ): Option[FailedToRefine] = {
     def parsePred(x: ujson.Value): FailedPredicate =
       FailedPredicate(
-        parseLoc(x("_failedPredicateLocation").str, addrs),
+        parseLoc(x("_failedPredicateLocation").str, addrs, loadOffset),
         x("_failedPredicateMessage").str,
         x("_failedPredicateConcShapes").str
       )
@@ -201,10 +203,13 @@ object GreaseResult {
   ): Option[ParsedBatch] = {
     val js = ujson.read(batch)
 
+    def getLoadOffset(): Long =
+        js("batchLoadOffset").num.toLong
+
     js("batchStatus")("tag").str match
-      case "BatchBug" => parseBug(ent, addrs, js("batchStatus")("contents"))
+      case "BatchBug" => parseBug(ent, addrs, js("batchStatus")("contents"), getLoadOffset())
       case "BatchCouldNotInfer" =>
-        parseCouldNotInfer(ent, addrs, js("batchStatus")("contents"))
+        parseCouldNotInfer(ent, addrs, js("batchStatus")("contents"), getLoadOffset())
       case _ => None
   }
 
@@ -254,6 +259,7 @@ case class FailedToRefine(inFunc: Address, preds: Seq[FailedPredicate])
 
   override def printToProg(prog: Program): Unit = {
     for (pred <- preds)
+      Msg.info(this, s"Adding safety pred comment for $inFunc")
       ParsedBatch.addComment(
         s"Safety predicate failed: ${pred.message}",
         prog,
