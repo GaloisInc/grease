@@ -18,7 +18,11 @@ import ghidra.program.model.listing.CommentType
 
 object AddrConversions {
 
-  def greaseOffsetToAddr(greaseOffset: Long, prog: Program, loadOffset: Long): Address =
+  def greaseOffsetToAddr(
+      greaseOffset: Long,
+      prog: Program,
+      loadOffset: Long
+  ): Address =
     // Convert a greaseOffset in an ELF to a Ghidra address.
     // This function assumes the greaseOffset is in memory in the default address space (where code will be)
     // GREASE loads the binary at the elf base so the offset is relative to the ELF base.
@@ -45,7 +49,10 @@ class ELFAddressing(val prog: Program) extends AddressingMode {
     addr.subtract(prog.getImageBase()) + ElfLoader
       .getElfOriginalImageBase(prog)
 
-  override def greaseOffsettoGhidraAddress(greaseOff: Long, loadOffset: Long): Address =
+  override def greaseOffsettoGhidraAddress(
+      greaseOff: Long,
+      loadOffset: Long
+  ): Address =
     AddrConversions.greaseOffsetToAddr(greaseOff, prog, loadOffset)
 
   override val loadBase: Option[Long] = None
@@ -73,7 +80,10 @@ class RawBase(val loadBaseOption: Option[Long], prog: Program)
   override def ghidraAddressToGreaseOffset(addr: Address): Long =
     addr.getOffset()
 
-  override def greaseOffsettoGhidraAddress(greaseOff: Long, loadOffset: Long): Address =
+  override def greaseOffsettoGhidraAddress(
+      greaseOff: Long,
+      loadOffset: Long
+  ): Address =
     toRAMAddress(greaseOff)
 
   override val loadBase: Option[Long] = Some(loadBaseAddr.getOffset())
@@ -86,7 +96,9 @@ case class GreaseConfiguration(
     timeout: Option[FiniteDuration],
     loadBase: Option[Long],
     isRawBinary: Boolean,
-    overridesFile: Option[File]
+    overridesFile: Option[File],
+    loopBound: Option[Int],
+    useDebugInfo: Boolean
 ) {
 
   val GHIDRA_THUMB_REG_NAME = "TMode"
@@ -124,6 +136,14 @@ case class GreaseConfiguration(
         "--address",
         GreaseConfiguration.renderAddress(modAddr)
       )
+
+    def optionalCommandLine[A](
+        name: String,
+        value: Option[A],
+        f: A => String
+    ): Seq[String] =
+      value.map(x => Seq(name, f(x))).getOrElse(Seq())
+
     val rawLine = if isRawBinary then Seq("--raw-binary") else Seq()
     val timeoutLine =
       timeout.map(x => Seq("--timeout", x.toMillis.toString)).getOrElse(Seq())
@@ -134,7 +154,15 @@ case class GreaseConfiguration(
     val overrideLine =
       overridesFile.map(x => Seq("--overrides", x.getPath())).getOrElse(Seq())
 
-    baseLine ++ rawLine ++ timeoutLine ++ baseAddr ++ overrideLine
+    val useDebugLine =
+      if useDebugInfo then Seq("--use-debug-info-types") else Seq()
+
+    baseLine ++ rawLine ++ timeoutLine ++ baseAddr
+      ++ overrideLine ++ optionalCommandLine(
+        "--loop-bound",
+        loopBound,
+        x => x.toString
+      ) ++ useDebugLine
   }
 }
 
@@ -204,12 +232,18 @@ object GreaseResult {
     val js = ujson.read(batch)
 
     def getLoadOffset(): Long =
-        js("batchLoadOffset").num.toLong
+      js("batchLoadOffset").num.toLong
 
     js("batchStatus")("tag").str match
-      case "BatchBug" => parseBug(ent, addrs, js("batchStatus")("contents"), getLoadOffset())
+      case "BatchBug" =>
+        parseBug(ent, addrs, js("batchStatus")("contents"), getLoadOffset())
       case "BatchCouldNotInfer" =>
-        parseCouldNotInfer(ent, addrs, js("batchStatus")("contents"), getLoadOffset())
+        parseCouldNotInfer(
+          ent,
+          addrs,
+          js("batchStatus")("contents"),
+          getLoadOffset()
+        )
       case _ => None
   }
 

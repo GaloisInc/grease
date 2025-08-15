@@ -33,7 +33,9 @@ class GreaseBackgroundCmd(
     timeout: Option[FiniteDuration],
     loadBase: Option[Long],
     rawMode: Boolean,
-    overridesFile: Option[File]
+    overridesFile: Option[File],
+    loopBound: Option[Int],
+    useDebug: Boolean
 ) extends BackgroundCommand[Program] {
 
   override def applyTo(prog: Program, monitor: TaskMonitor): Boolean = {
@@ -58,7 +60,9 @@ class GreaseBackgroundCmd(
             timeout,
             loadBase,
             rawMode,
-            overridesFile
+            overridesFile,
+            loopBound,
+            useDebug
           )
         )
 
@@ -97,6 +101,8 @@ object GreaseAnalyzer {
   val LOAD_BASE_OPT: String = "Load base"
   val USE_IMAGE_BASE_AS_LOAD_BASE_OPT: String = "Use image base as load base"
   val OVERRIDE_FILE: String = "Override file"
+  val LOOP_BOUND_OPT: String = "Loop bound"
+  val SHOULD_USE_DEBUG_OPT: String = "Use debug info for shapes"
 
   def getOption[T](options: Options, optName: String): Option[T] = {
     Option(options.getObject(optName, null))
@@ -120,10 +126,12 @@ class GreaseAnalyzer
 
   var timeoutDuration: Option[FiniteDuration] = None
   var loadBase: Option[Long] = None
+  var loopBound: Option[Int] = None
   var shouldLoadRaw = false
   var useImageBaseAsLoadBase = true
   var overridesFile: Option[File] = None
   val supportedProcs: Set[String] = Set("ARM", "PowerPC", "x86")
+  var shouldUseDebug = false
 
   setSupportsOneTimeAnalysis()
 
@@ -153,6 +161,11 @@ class GreaseAnalyzer
       .getOrElse(true)
     overridesFile =
       GreaseAnalyzer.getOption[File](x, GreaseAnalyzer.OVERRIDE_FILE)
+    loopBound = GreaseAnalyzer
+      .getOption[Int](x, GreaseAnalyzer.LOOP_BOUND_OPT)
+    shouldUseDebug = GreaseAnalyzer
+      .getOption[Boolean](x, GreaseAnalyzer.SHOULD_USE_DEBUG_OPT)
+      .getOrElse(false)
   }
 
   override def registerOptions(options: Options, program: Program): Unit = {
@@ -195,6 +208,22 @@ class GreaseAnalyzer
       null,
       "Override file to use in GREASE"
     )
+
+    options.registerOption(
+      GreaseAnalyzer.LOOP_BOUND_OPT,
+      OptionType.INT_TYPE,
+      0,
+      null,
+      "Loop bound limit for analysis"
+    )
+
+    options.registerOption(
+      GreaseAnalyzer.SHOULD_USE_DEBUG_OPT,
+      OptionType.BOOLEAN_TYPE,
+      true,
+      null,
+      "Uses any available DWARF information to populate shapes with type signatures"
+    )
   }
 
   @throws(classOf[CancelledException])
@@ -209,7 +238,9 @@ class GreaseAnalyzer
       timeoutDuration,
       loadBase,
       shouldLoadRaw,
-      overridesFile
+      overridesFile,
+      loopBound,
+      shouldUseDebug
     )
       .applyTo(program, monitor)
     true
