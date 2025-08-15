@@ -31,6 +31,7 @@
 
 # Developer documentation
 
+- [Binary analysis](dev/binary-analysis.md)
 - [Development](dev/dev.md)
 - [Fancy Haskell idioms](dev/haskell-idioms.md)
 - [On-boarding](dev/on-boarding.md)
