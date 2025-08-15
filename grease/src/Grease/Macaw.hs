@@ -129,13 +129,14 @@ globalMemoryHooks arch relocs =
     { Symbolic.populateRelocation = \bak relocMem relocSeg relocBaseAddr reloc -> do
         -- This function populates relocation types we support as appropriate.
         --
-        -- If grease encounters a relocation type that it doesn't support, then
-        -- the `assertRelocSupported` function should throw an exception before
-        -- we ever have a chance to simulate it. Still, we need to fill in
-        -- _something_ here for the address spaces of unsupported relocations,
-        -- so we fill them in with symbolic bytes. We choose to use symbolic bytes
-        -- instead of a constant value so that if we ever read from the middle of
-        -- a relocation by mistake, we are more likely to trigger assertion
+        -- If grease encounters a relocation type that it doesn't support, it
+        -- fills it in with symbolic bytes. Most of the time, these bytes will
+        -- never be read, because `assertRelocSupported` will throw an exception
+        -- before we ever have a chance to simulate the code reading from the
+        -- relocation. However, if `--skip-unsupported-relocs` is used, then the
+        -- program can in fact read these bytes. We choose to use symbolic bytes
+        -- instead of a constant value so that if we ever read from the middle
+        -- of a relocation by mistake, we are more likely to trigger assertion
         -- failures elsewhere.
         let sym = C.backendGetSym bak
         let relocAbsBaseAddr = relocAddrToAbsAddr relocMem relocSeg relocBaseAddr reloc
