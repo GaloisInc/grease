@@ -125,6 +125,7 @@ import Grease.Shape.Pointer (PtrShape)
 import Grease.Solver (Solver, solverAdapter)
 import Grease.Utility
 import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.Backend.Prove qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
@@ -135,6 +136,7 @@ import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.BoundedExec qualified as C
 import Lang.Crucible.Simulator.BoundedRecursion qualified as C
+import Lang.Crucible.Simulator.PathSatisfiability qualified as C
 import Lang.Crucible.Simulator.PathSplitting qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
@@ -465,7 +467,11 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
   boundExecFeat <- liftIO (C.boundedExecFeature (\_ -> pure (Just loopBound)) True)
   boundRecFeat <- liftIO (C.boundedRecursionFeature (\_ -> pure (Just loopBound)) True)
   let boundsExecFeats = List.map C.genericToExecutionFeature [boundExecFeat, boundRecFeat]
-  let execFeats' = boundsExecFeats List.++ execFeats
+
+  let sym = C.backendGetSym bak
+  pathSat <- liftIO (C.pathSatisfiabilityFeature sym (C.considerSatisfiability bak))
+  let pathSatFeat = C.genericToExecutionFeature pathSat
+  let execFeats' = pathSatFeat : (boundsExecFeats List.++ execFeats)
 
   let refineOne initSt = do
         (execResult, goals, remaining) <- execCfg bak strat execFeats' initSt
