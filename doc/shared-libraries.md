@@ -49,4 +49,10 @@ name of the PLT stub, it is fine to leave `<NAME>` empty.) Reverse engineering
 suites such as [Ghidra](https://ghidra-sre.org/) can be effective at
 determining PLT stub information.
 
+## Skipping unsupported relocations
+
+The flag `--skip-unsupported-relocs` induces GREASE to populate unsupported
+relocations with fresh, symbolic data rather than throwing an exception and
+halting analysis.
+
 <!-- Copyright (c) Galois, Inc. 2024. -->
