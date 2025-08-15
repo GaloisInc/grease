@@ -144,6 +144,7 @@ import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import System.IO (IO)
 import System.Timeout (timeout)
+import What4.Config qualified as W4C
 import What4.Expr qualified as W4
 import What4.Expr.App qualified as W4
 import What4.FloatMode qualified as W4FM
@@ -468,9 +469,7 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
   boundRecFeat <- liftIO (C.boundedRecursionFeature (\_ -> pure (Just loopBound)) True)
   let boundsExecFeats = List.map C.genericToExecutionFeature [boundExecFeat, boundRecFeat]
 
-  let sym = C.backendGetSym bak
-  pathSat <- liftIO (C.pathSatisfiabilityFeature sym (C.considerSatisfiability bak))
-  let pathSatFeat = C.genericToExecutionFeature pathSat
+  pathSatFeat <- liftIO configurePathSatFeature
   let execFeats' = pathSatFeat : (boundsExecFeats List.++ execFeats)
 
   let refineOne initSt = do
@@ -518,6 +517,17 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
               Right combinedResult -> pure (C.subgoalResult combinedResult)
   liftIO (go refineResult)
  where
+  configurePathSatFeature = do
+    let sym = C.backendGetSym bak
+    pathSat <- C.pathSatisfiabilityFeature sym (C.considerSatisfiability bak)
+    let cfg = W4.getConfiguration sym
+    assertThenAssume <- W4C.getOptionSetting C.assertThenAssumeConfigOption cfg
+    -- This can technically return warnings/errors, but seems unlikely in this
+    -- case...
+    _ <- W4C.setOpt assertThenAssume True
+    let pathSatFeat = C.genericToExecutionFeature pathSat
+    pure pathSatFeat
+
   -- Very short summary for single-line log message
   shortResult =
     \case
