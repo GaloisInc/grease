@@ -151,7 +151,7 @@ import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as W4
 import What4.LabeledPred qualified as W4
 import What4.Solver qualified as W4
-import Prelude (Num (..))
+import Prelude (Num (..), show)
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (RefineDiagnostic diag)
@@ -524,7 +524,10 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
     assertThenAssume <- W4C.getOptionSetting C.assertThenAssumeConfigOption cfg
     -- This can technically return warnings/errors, but seems unlikely in this
     -- case...
-    _ <- W4C.setOpt assertThenAssume True
+    warns <- W4C.setOpt assertThenAssume True
+    case warns of
+      [] -> pure ()
+      _ -> panic "configurePathSatFeature" (List.map show warns)
     let pathSatFeat = C.genericToExecutionFeature pathSat
     pure pathSatFeat
 
