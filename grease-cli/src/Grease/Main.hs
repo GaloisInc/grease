@@ -879,7 +879,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
     -- preconditions.)
     let heuristics =
           if simNoHeuristics simOpts
-            then []
+            then [mustFailHeuristic]
             else macawHeuristics la rNames List.++ [mustFailHeuristic]
     let concInitState =
           Conc.InitialState
@@ -1500,7 +1500,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
       -- See comment above on heuristics in 'simulateMacawCfg'
       let heuristics =
             if simNoHeuristics simOpts
-              then []
+              then [mustFailHeuristic]
               else llvmHeuristics la List.++ [mustFailHeuristic]
       let concInitState =
             Conc.InitialState
