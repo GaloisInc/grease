@@ -11,6 +11,7 @@ module Grease.Options (
   defaultLoopBound,
   Milliseconds (..),
   defaultTimeout,
+  defaultPathTimeout,
   defaultSolverTimeout,
   defaultTypeUnrollingBound,
   TypeUnrollingBound (..),
@@ -78,6 +79,10 @@ defaultTimeout :: Int
 defaultTimeout = 30000
 
 -- | 5 seconds
+defaultPathTimeout :: Int
+defaultPathTimeout = 5
+
+-- | 5 seconds
 defaultSolverTimeout :: Int
 defaultSolverTimeout = 5
 
@@ -139,6 +144,8 @@ data BoundsOpts
   -- ^ Maximum number of iterations of the refinement loop
   , simTimeout :: Milliseconds
   -- ^ Timeout (implemented using 'timeout')
+  , simPathTimeout :: Timeout
+  -- ^ Timeout for symbolically executing an individual path (in seconds)
   , simSolverTimeout :: Timeout
   -- ^ Solver timeout (in seconds)
   }

@@ -141,6 +141,16 @@ boundsOptsParser = Opt.parserOptionGroup "Bounds, limits, and timeouts" $ do
             <> Opt.showDefault
             <> Opt.value GO.defaultTimeout
         )
+  simPathTimeout <-
+    Timeout . secondsFromInt
+      <$> Opt.option
+        Opt.auto
+        ( Opt.long "path-timeout"
+            <> Opt.help "timeout for executing a single path (in seconds)"
+            <> Opt.metavar "SECS"
+            <> Opt.showDefault
+            <> Opt.value GO.defaultPathTimeout
+        )
   simSolverTimeout <-
     Timeout . secondsFromInt
       <$> Opt.option

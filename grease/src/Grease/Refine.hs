@@ -139,6 +139,7 @@ import Lang.Crucible.Simulator.BoundedRecursion qualified as C
 import Lang.Crucible.Simulator.PathSatisfiability qualified as C
 import Lang.Crucible.Simulator.PathSplitting qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
+import Lang.Crucible.Utils.Seconds qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
@@ -151,7 +152,7 @@ import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as W4
 import What4.LabeledPred qualified as W4
 import What4.Solver qualified as W4
-import Prelude (Num (..), show)
+import Prelude (Num (..), fromIntegral, show)
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (RefineDiagnostic diag)
@@ -473,7 +474,10 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
   let execFeats' = pathSatFeat : (boundsExecFeats List.++ execFeats)
 
   let refineOne initSt = do
-        (execResult, goals, remaining) <- execCfg bak strat execFeats' initSt
+        let pathTimeout = C.secondsToInt (C.getTimeout (Opts.simPathTimeout boundsOpts))
+        timeoutFeat <- C.timeoutFeature (fromIntegral pathTimeout)
+        let execFeats'' = C.genericToExecutionFeature timeoutFeat : execFeats'
+        (execResult, goals, remaining) <- execCfg bak strat execFeats'' initSt
         doLog la (Diag.ExecutionResult memVar execResult)
         bbMap <- readIORef bbMapRef
         refineResult <- proveAndRefine bak solver solverTimeout anns execResult la heuristics argNames argShapes initState bbMap goals
