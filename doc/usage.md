@@ -77,7 +77,7 @@ GREASE supports a few different *path strategies*, which indicate how to handle
 branching. A strategy can be specified using `--path-strategy`.
 
 - `sse` stands for *static symbolic execution*. In this mode, GREASE always
-  merges paths at control-flow join points.
+  merges paths at control-flow join points. This is the default.
 - `dfs` stands for *depth-first search*. In this mode, GREASE never merges
   paths, and explores paths in a depth-first traversal.
 
