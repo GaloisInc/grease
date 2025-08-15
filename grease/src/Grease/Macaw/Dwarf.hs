@@ -171,6 +171,7 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
   shapeSeq (MDwarf.PointerType _ maybeRef) =
     let mshape = constructPtrMemShapeFromRef tyUnrollBound sprog visitCount =<< maybeRef
      in Seq.singleton <$> mshape
+  shapeSeq (MDwarf.TypedefType (MDwarf.Typedef _ _ _ tyRef)) = shapeSeq =<< extractType sprog tyRef
   shapeSeq _ = Nothing
 
 type VisitCount = Map.Map MDwarf.TypeRef Int
