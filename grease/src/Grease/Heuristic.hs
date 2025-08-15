@@ -302,6 +302,8 @@ handleUB ::
   IO (HeuristicResult ext argTys)
 handleUB la anns sym _loc args =
   \case
+    Mem.FreeBadOffset (C.RV ptr) ->
+      makeIntoPointer ptr
     Mem.FreeUnallocated (C.RV ptr) ->
       modPtr la anns sym args (growPtrTargetUpTo ptrBytes) ptr
     Mem.MemsetInvalidRegion (C.RV ptr) _val (C.RV len) ->
@@ -309,6 +311,25 @@ handleUB la anns sym _loc args =
     Mem.PtrAddOffsetOutOfBounds (C.RV ptr) (C.RV offset) ->
       modPtr la anns sym args (growPtrTargetUpToBv sym offset) ptr
     _ -> pure Unknown
+ where
+  -- Turn an argument that was not previous a pointer into one
+  makeIntoPointer ::
+    forall w'.
+    Mem.LLVMPtr sym w' ->
+    IO (HeuristicResult ext argTys)
+  makeIntoPointer ptr = do
+    Refl <- assertPtrWidth ptr
+    case Anns.lookupPtrAnnotation anns sym ?ptrWidth ptr of
+      Just (Anns.SomePtrSelector (SelectArg sel)) -> do
+        case args ^. selectArg sel of
+          ShapeExt (ShapePtrBV _tag w) | Just Refl <- testEquality w ?ptrWidth -> do
+            let pt = ptrTarget Nothing (Seq.singleton (Uninitialized 1))
+            doLog la $ Diag.HeuristicPtrTarget pt
+            let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (Offset 0) pt)
+            pure $ RefinedPrecondition args'
+          _ -> pure Unknown
+      Just (Anns.SomePtrSelector (SelectRet{})) -> pure Unknown
+      Nothing -> pure Unknown
 
 -- | Apply some heuristics to a single pointer.
 applyMemoryHeuristics ::
