@@ -473,7 +473,7 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
           Opts.Dfs -> do
             loc <- W4.getCurrentProgramLoc (C.backendGetSym bak)
             doLog la (Diag.RefinementFinishedPath loc (shortResult refineResult))
-          _ -> pure ()
+          Opts.Sse -> pure ()
         pure (refineResult, remaining)
 
   -- Process the state that was passed in
