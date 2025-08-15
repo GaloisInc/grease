@@ -250,7 +250,7 @@ simOpts = do
       )
   simPathStrategy <-
     Opt.option
-      Opt.auto
+      (Opt.maybeReader GO.parsePathStrategy)
       ( Opt.long "path-strategy"
           <> boundedEnumMetavar (Proxy @GO.PathStrategy)
           <> Opt.value GO.Sse

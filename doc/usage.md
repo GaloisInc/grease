@@ -76,9 +76,9 @@ There are no symbols in a raw binary, so address entrypoints are the only valid 
 GREASE supports a few different *path strategies*, which indicate how to handle
 branching. A strategy can be specified using `--path-strategy`.
 
-- SSE stands for *static symbolic execution*. In this mode, GREASE always
+- `sse` stands for *static symbolic execution*. In this mode, GREASE always
   merges paths at control-flow join points.
-- DFS stands for *depth-first search*. In this mode, GREASE never merges paths,
-  and explores paths in a depth-first traversal.
+- `dfs` stands for *depth-first search*. In this mode, GREASE never merges
+  paths, and explores paths in a depth-first traversal.
 
 <!-- Copyright (c) Galois, Inc. 2024. -->

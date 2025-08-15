@@ -1,10 +1,12 @@
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE LambdaCase #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Options (
   PathStrategy (..),
+  parsePathStrategy,
   LoopBound (..),
   defaultLoopBound,
   Milliseconds (..),
@@ -38,9 +40,22 @@ import Grease.Solver (Solver (..))
 import Lang.Crucible.Utils.Timeout (Timeout)
 
 data PathStrategy
-  = Dfs
-  | Sse
-  deriving (Bounded, Enum, Read, Show)
+  = -- | Depth-first search.
+    --
+    -- Never merge paths, and explore paths in a depth-first traversal.
+    Dfs
+  | -- | Static symbolic execution.
+    --
+    -- Always merge paths at control-flow join points.
+    Sse
+  deriving (Bounded, Enum, Show)
+
+parsePathStrategy :: String -> Maybe PathStrategy
+parsePathStrategy =
+  \case
+    "dfs" -> Just Dfs
+    "sse" -> Just Sse
+    _ -> Nothing
 
 newtype TypeUnrollingBound = TypeUnrollingBound Int
   deriving Show
