@@ -355,6 +355,9 @@ execCfg ::
   Opts.PathStrategy ->
   [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
   C.ExecState p sym ext (C.RegEntry sym ret) ->
+  -- | The result of a single execution (in 'Opts.Dfs' mode, of a single path),
+  -- the proof obligations resulting from that execution, and any suspended
+  -- paths.
   IO
     ( C.ExecResult p sym ext (C.RegEntry sym ret)
     , C.ProofObligations sym
