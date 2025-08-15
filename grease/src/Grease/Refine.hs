@@ -491,10 +491,11 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
           Seq.Empty -> pure r
           -- Note that we use `SubgoalResult True` because `combiner` doesn't
           -- actually examine the `Bool`, so it doesn't matter what it is.
-          (next Seq.:<| _) -> do
+          (next Seq.:<| rest) -> do
             let firstResult = C.SubgoalResult True r
             let computeNextResult = do
                   doLog la (Diag.ResumingFromBranch (C.workItemLoc next))
+                  IORef.writeIORef remainingRef rest
                   initSt <- C.restoreWorkItem next
                   (nextRes, additionalPaths) <- refineOne initSt
                   IORef.modifyIORef remainingRef (<> additionalPaths)
