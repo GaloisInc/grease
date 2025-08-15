@@ -145,7 +145,7 @@ boundsOptsParser = Opt.parserOptionGroup "Bounds, limits, and timeouts" $ do
     Timeout . secondsFromInt
       <$> Opt.option
         Opt.auto
-        ( Opt.long "timeout"
+        ( Opt.long "solver-timeout"
             <> Opt.help "solver timeout (in seconds)"
             <> Opt.metavar "SECS"
             <> Opt.showDefault
