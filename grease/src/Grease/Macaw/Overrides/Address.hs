@@ -33,7 +33,6 @@ import Grease.Panic (panic)
 import Grease.Syntax (parseProgram)
 import Grease.Utility (GreaseException (GreaseException), tshow)
 import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.Backend.Simple qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as LCCR
 import Lang.Crucible.CFG.SSAConversion (toSSA)
@@ -47,7 +46,6 @@ import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
 import Text.Megaparsec.Char.Lexer qualified as TMCL
 import What4.Expr qualified as W4
-import What4.Interface qualified as W4
 
 -- | Parse a symbol from 'TM.Tokens'.
 symbol :: TM.Tokens Text -> TM.Parsec Void Text Text
@@ -113,18 +111,6 @@ loadAddressOverrides archRegsType halloc memory paths =
 
 ---------------------------------------------------------------------
 
-withFreshBackend ::
-  ( C.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder t st fs
-  ) =>
-  bak ->
-  (C.SomeBackend sym -> IO r) ->
-  IO r
-withFreshBackend bak k = do
-  let sym = C.backendGetSym bak
-  bak' <- C.newSimpleBackend sym
-  k (C.SomeBackend bak')
-
 toInitialState ::
   sym ~ W4.ExprBuilder t st fs =>
   C.CrucibleState p sym ext rtp blocks r args ->
@@ -133,16 +119,14 @@ toInitialState ::
   IO (C.ExecState p sym ext (C.RegEntry sym ret))
 toInitialState crucState retTy action = do
   let ctx = crucState Lens.^. C.stateContext
-  C.withBackend ctx $ \bak ->
-    withFreshBackend bak $ \bak' -> do
-      let ctx' = ctx{C._ctxBackend = bak'}
-      pure $
-        C.InitialState
-          ctx'
-          (crucState Lens.^. C.stateGlobals)
-          C.defaultAbortHandler -- (crucState Lens.^. C.abortHandler)
-          retTy
-          action
+  C.withBackend ctx $ \_bak ->
+    pure $
+      C.InitialState
+        ctx
+        (crucState Lens.^. C.stateGlobals)
+        C.defaultAbortHandler -- (crucState Lens.^. C.abortHandler)
+        retTy
+        action
 
 -- When invoked, address overrides don't run in the current symbolic simulator.
 -- Instead, they construct a new backend and simulator, and run there. This is
@@ -161,24 +145,12 @@ runAddressOverride crucState someCfg = do
     toInitialState crucState C.UnitRepr $
       C.runOverrideSim C.UnitRepr $
         C.regValue <$> C.callCFG cfg regs
-  (execResult, mbGoals) <-
-    C.withBackend (C.execStateContext initState) $ \bak -> do
-      execResult <- C.executeCrucible [] initState
-      mbGoals <- C.getProofObligations bak
-      pure (execResult, mbGoals)
-
-  let ctx = crucState Lens.^. C.stateContext
-  C.withBackend ctx $ \bak -> do
-    let sym = C.backendGetSym bak
-    Monad.forM_ mbGoals $ \gls ->
-      Monad.forM_ (C.goalsToList gls) $ \(C.ProofGoal asmps gl) -> do
-        asmp <- C.assumptionsPred sym asmps
-        notGl <- W4.notPred sym (gl Lens.^. C.labeledPred)
-        newGl <- W4.notPred sym =<< W4.andPred sym asmp notGl
-        C.addAssertion bak (gl Lens.& C.labeledPred Lens..~ newGl)
-
+  C.withBackend (C.execStateContext initState) $ \bak -> do
+    execResult <- C.executeCrucible [] initState
     case execResult of
       C.FinishedResult _ (C.TotalRes{}) -> pure ()
+      C.AbortedResult _ (C.AbortedExec (C.AssertionFailure simErr) _) ->
+        C.addFailedAssertion bak (C.simErrorReason simErr)
       _ -> X.throw (GreaseException "Address override did not terminate successfully")
 
 tryRunAddressOverride ::
