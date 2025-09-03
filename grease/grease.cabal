@@ -225,9 +225,9 @@ library
     Grease.Macaw.Load.Relocation
     Grease.Macaw.Memory
     Grease.Macaw.Overrides
+    Grease.Macaw.Overrides.Address
     Grease.Macaw.Overrides.Builtin
     Grease.Macaw.Overrides.SExp
-    Grease.Macaw.Overrides.Target
     Grease.Macaw.PLT
     Grease.Macaw.SetupHook
     Grease.Macaw.SimulatorHooks
