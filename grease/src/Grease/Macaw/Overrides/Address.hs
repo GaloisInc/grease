@@ -175,6 +175,8 @@ tryRunAddressOverride archCtx crucState cfg = do
             ]
     _ -> panic "extensionExec" ["Inside Macaw CFG with bad arity"]
 
+-- | See if there is an address override corresponding to the current
+-- instruction pointer value, and if so, run it.
 maybeRunAddressOverride ::
   ( sym ~ W4.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
