@@ -22,10 +22,8 @@ import Control.Monad qualified as Monad
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
-import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
-import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (testEquality, (:~:) (Refl))
@@ -40,7 +38,6 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as LCCR
 import Lang.Crucible.CFG.SSAConversion (toSSA)
 import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.LLVM.Syntax (emptyParserHooks)
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
@@ -79,7 +76,9 @@ newtype AddressOverrides arch
 -- Address overrides cannot use @extern@.
 loadAddressOverrides ::
   forall arch.
-  Symbolic.SymArchConstraints arch =>
+  ( Symbolic.SymArchConstraints arch
+  , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
+  ) =>
   C.TypeRepr (Symbolic.ArchRegStruct arch) ->
   C.HandleAllocator ->
   MC.Memory (MC.ArchAddrWidth arch) ->
@@ -90,9 +89,8 @@ loadAddressOverrides archRegsType halloc memory paths =
     segOff <-
       case MM.resolveAbsoluteAddr memory (fromIntegral intAddr) of
         -- TODO improve error
-        Nothing -> X.throw (GreaseException ("Bad addresss: " <> tshow intAddr))
+        Nothing -> X.throw (GreaseException ("Bad address: " <> tshow intAddr))
         Just segOff -> pure segOff
-    let ?parserHooks = machineCodeParserHooks (Proxy @arch) emptyParserHooks
     prog <- parseProgram halloc path
     CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
     let userErr :: Text.Text -> IO a
@@ -128,7 +126,6 @@ withFreshBackend bak k = do
   C.restoreAssumptionState bak st
   k (C.SomeBackend bak')
 
--- TODO: Upstream to Crucible?
 toInitialState ::
   sym ~ W4.ExprBuilder t st fs =>
   C.CrucibleState p sym ext rtp blocks r args ->
@@ -213,9 +210,7 @@ maybeRunAddressOverride ::
 maybeRunAddressOverride archCtx crucState segOff (AddressOverrides tgtOvs) =
   case Map.lookup segOff tgtOvs of
     Nothing -> pure ()
-    Just tgtOv ->
-      C.withBackend (crucState Lens.^. C.stateContext) $ \bak ->
-        tryRunAddressOverride archCtx crucState tgtOv
+    Just tgtOv -> tryRunAddressOverride archCtx crucState tgtOv
 
 regStructRepr :: ArchContext arch -> C.TypeRepr (Symbolic.ArchRegStruct arch)
 regStructRepr arch =
