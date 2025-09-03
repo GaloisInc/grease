@@ -128,8 +128,8 @@ import Grease.Macaw.Dwarf (loadDwarfPreconditions)
 import Grease.Macaw.Load (LoadedProgram (..), load)
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
+import Grease.Macaw.Overrides.Address (loadAddressOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
-import Grease.Macaw.Overrides.Target (loadTargetOverrides)
 import Grease.Macaw.PLT
 import Grease.Macaw.RegName (RegName (..), RegNames (..), getRegName, mkRegName, regNameToString, regNames)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
@@ -799,8 +799,8 @@ macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook macawMem m
   let personality =
         emptyGreaseSimulatorState toConcVar
           & discoveredFnHandles .~ discoveredHdls
-  tgtOvs <- loadTargetOverrides (regStructRepr archCtx) halloc macawMem (simTargetOverrides simOpts)
-  st <- initState bak la macawExtImpl halloc mvar mem' globals1 initFsOv archCtx setupHook tgtOvs personality regs' fnOvsMap mbStartupOvSsaCfg ssa
+  addrOvs <- loadAddressOverrides (regStructRepr archCtx) halloc macawMem (simAddressOverrides simOpts)
+  st <- initState bak la macawExtImpl halloc mvar mem' globals1 initFsOv archCtx setupHook addrOvs personality regs' fnOvsMap mbStartupOvSsaCfg ssa
   pure (fs0, st)
 
 simulateMacawCfg ::

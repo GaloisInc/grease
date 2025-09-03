@@ -24,7 +24,7 @@ import Data.Text qualified as Text
 import Data.Void (Void)
 import Grease.Diagnostic.Severity qualified as Sev
 import Grease.Entrypoint
-import Grease.Macaw.Overrides.Target (targetOverrideParser)
+import Grease.Macaw.Overrides.Address (addressOverrideParser)
 import Grease.Macaw.PLT
 import Grease.Options qualified as GO
 import Grease.Panic (panic)
@@ -241,13 +241,13 @@ simOpts = do
               <> Opt.help "overrides, in Crucible S-expression syntax"
           )
       )
-  simTargetOverrides <-
+  simAddressOverrides <-
     Opt.many $
       Opt.option
-        (megaparsecReader targetOverrideParser)
-        ( Opt.long "target-override"
+        (megaparsecReader addressOverrideParser)
+        ( Opt.long "addr-override"
             <> Opt.metavar "ADDR:FILE"
-            <> Opt.help "target overrides, in Crucible S-expression syntax"
+            <> Opt.help "address overrides, in Crucible S-expression syntax"
         )
   simOverridesYaml <-
     Opt.many

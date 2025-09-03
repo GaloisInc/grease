@@ -51,8 +51,8 @@ import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic
 import Grease.Macaw.Arch
 import Grease.Macaw.Load.Relocation (RelocType (..))
+import Grease.Macaw.Overrides.Address (AddressOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
-import Grease.Macaw.Overrides.Target (TargetOverrides)
 import Grease.Macaw.ResolveCall qualified as ResolveCall
 import Grease.Macaw.SetupHook (SetupHook (SetupHook))
 import Grease.Macaw.SimulatorHooks
@@ -514,7 +514,7 @@ initState ::
   SymIO.SomeOverrideSim sym () ->
   ArchContext arch ->
   SetupHook sym arch ->
-  TargetOverrides arch ->
+  AddressOverrides arch ->
   -- | The initial personality, see
   -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'
   p ->

@@ -284,23 +284,21 @@ Note that:
   startup override to be supplied _different_ arguments each time it is is
   invoked during refinement.
 
-## Target overrides
+## Address overrides
 
-GREASE automatically flags certain conditions as potential bugs, mostly
-[various undefined behaviors](undefined-behavior.md) (UBs). To induce GREASE
-to flag specific, non-UB states as bugs, users may supply a *target override*
-via `--target-override`. Target overrides are only available when executing
+Users may supply *address overrides* via `--address-override`, which are
+overrides that run when symbolic execution reaches a particular address (i.e.,
+instruction pointer value). Address overrides are only available when executing
 binaries.
 
-A target override is associated with a specific address. A target override takes
-the register struct (e.g., `X86Regs`) as an input and returns a `Bool`. When
-control reaches the address in question, the override will be passed the current
-contents of the registers. If the returned `Bool` is satisfiable in the current
-context, then GREASE will report it as a bug.
+An address override takes the register struct (e.g., `X86Regs`) as an input
+and returns `Unit`. When control reaches the address in question, the override
+will be passed the current contents of the registers.
 
-Target overrides are subject to a few limitations:
+Address overrides are subject to a few limitations:
 
 - They must terminate and return a total result.
 - They should not generate proof obligations (e.g., via assertions).
+- They may not modify memory.
 
 <!-- Copyright (c) Galois, Inc. 2024. -->

@@ -18,7 +18,7 @@ import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Backend qualified as Symbolic
 import Grease.Diagnostic (Diagnostic (SimulatorHooksDiagnostic), GreaseLogAction)
 import Grease.Macaw.Arch (ArchContext)
-import Grease.Macaw.Overrides.Target (TargetOverrides, maybeRunTargetOverride)
+import Grease.Macaw.Overrides.Address (AddressOverrides, maybeRunAddressOverride)
 import Grease.Macaw.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Panic (panic)
 import Lang.Crucible.Backend qualified as C
@@ -64,7 +64,7 @@ greaseMacawExtImpl ::
   ArchContext arch ->
   bak ->
   GreaseLogAction ->
-  TargetOverrides arch ->
+  AddressOverrides arch ->
   C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   C.ExtensionImpl p sym (Symbolic.MacawExt arch)
 greaseMacawExtImpl archCtx bak la tgtOvs macawExtImpl =
@@ -131,7 +131,7 @@ extensionExec ::
   ArchContext arch ->
   bak ->
   GreaseLogAction ->
-  TargetOverrides arch ->
+  AddressOverrides arch ->
   C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   Symbolic.MacawEvalStmtFunc (C.StmtExtension (Symbolic.MacawExt arch)) p sym (Symbolic.MacawExt arch)
 extensionExec archCtx bak la tgtOvs baseExt stmt crucState = do
@@ -162,7 +162,7 @@ extensionExec archCtx bak la tgtOvs baseExt stmt crucState = do
       case MM.incSegmentOff baddr (MM.memWordToUnsigned iaddr) of
         Just segOff -> do
           doLog la (Diag.ExecutingInstruction (PP.pretty segOff) dis)
-          maybeRunTargetOverride archCtx crucState segOff tgtOvs
+          maybeRunAddressOverride archCtx crucState segOff tgtOvs
           pure ((), crucState)
         Nothing ->
           panic
