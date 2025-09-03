@@ -121,10 +121,8 @@ withFreshBackend ::
   (C.SomeBackend sym -> IO r) ->
   IO r
 withFreshBackend bak k = do
-  st <- C.saveAssumptionState bak
   let sym = C.backendGetSym bak
   bak' <- C.newSimpleBackend sym
-  C.restoreAssumptionState bak st
   k (C.SomeBackend bak')
 
 toInitialState ::
