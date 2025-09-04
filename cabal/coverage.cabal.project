@@ -1,0 +1,13 @@
+-- A `cabal.project` file for gathering coverage statistics for the test suite.
+--
+-- See `doc/dev/tests.md` for usage instructions.
+--
+-- See also `scripts/coverage.sh`.
+
+coverage: False
+package *
+  coverage: False
+package grease
+  coverage: True
+package grease-cli
+  coverage: True
