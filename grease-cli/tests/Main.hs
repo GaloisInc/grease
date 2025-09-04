@@ -220,6 +220,20 @@ oughtaBc dir fileName =
         let prog = Oughta.fromLineComments c "/// " content
         oughta (dir </> fileName) prog
 
+-- | Run an "Oughta"-based test written in a standalone Lua file
+oughtaLua ::
+  -- | Directory
+  FilePath ->
+  -- | File
+  FilePath ->
+  T.TestTree
+oughtaLua dir fileName =
+  let dropped = FilePath.dropExtension fileName
+   in T.U.testCase dropped $ do
+        content <- Text.IO.readFile (dir </> fileName)
+        let prog = Oughta.plainLuaProgram fileName content
+        oughta (dir </> fileName) prog
+
 -- | Create a test from a file, depending on the extension
 fileTest :: FilePath -> FilePath -> [T.TestTree]
 fileTest d f =
@@ -227,6 +241,7 @@ fileTest d f =
     ".bc" -> [oughtaBc d f]
     ".cbl" -> [oughtaSexp d f]
     ".elf" -> [oughtaBin d f]
+    ".lua" -> [oughtaLua d f]
     _ -> []
 
 -- | Recursively walk a directory tree, discovering tests
