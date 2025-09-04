@@ -12,7 +12,7 @@ env:
   # when (for example) the OS version is changed but older .so files are
   # cached, which can have various effects (e.g. cabal complains it can't find
   # a valid version of the "happy" tool).
-  CACHE_VERSION: 1
+  CACHE_VERSION: 2
 
 
 jobs:
@@ -88,6 +88,10 @@ jobs:
       shell: bash
       run: cabal configure --enable-tests --semaphore
 
+    - name: Configure coverage collection
+      shell: bash
+      run: cat cabal/coverage.cabal.project >> cabal.project.local
+
     - name: Build grease-cli
       shell: bash
       run: cabal build pkg:grease-cli pkg:grease-diagrams
@@ -105,6 +109,10 @@ jobs:
     - name: Test grease-cli
       shell: bash
       run: cabal test pkg:grease-cli
+
+    - name: Report coverage
+      shell: bash
+      run: ./scripts/coverage.sh
 
     - name: Test grease-diagrams
       shell: bash

@@ -1,6 +1,9 @@
 cabal.project.local
 dist-newstyle/
 
+# hpc files
+*.tix
+*.html
 
 # ghidra plugin files
 .metals
