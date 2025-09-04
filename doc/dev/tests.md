@@ -124,3 +124,55 @@ structure to that of rustc, so almost all of the advice there applies *mutatis
 mutandis*.
 
 [helpful guidance]: (https://github.com/rust-lang/rust/blob/3350c1eb3fd8fe1bee1ed4c76944d707bd256876/src/doc/rustc-dev-guide/src/tests/best-practices.md)
+
+## Coverage
+
+To enable collection of coverage information, add the following to
+`cabal.project.local`. This will collect coverage information for the `grease`
+and `grease-cli` packages, but *not* for any of their dependencies.
+
+```cabal
+coverage: False
+package *
+  coverage: False
+package grease
+  coverage: True
+package grease-cli
+  coverage: True
+```
+
+Unfortunately, you'll have to force Cabal to recompile GREASE and all of its
+dependencies for these changes to take effect.
+
+```sh
+cabal clean
+cabal build
+```
+
+Now, run the test suite:
+
+```sh
+cd grease-cli
+cabal run test:grease-tests
+```
+
+You should see `grease-tests.tix` in your working directory. If not, you may
+have forgotten to run `cabal clean`.
+
+Finally, run a report. Note that the following paths may change depending
+on your development platform. Also note the presence of `${PWD}`: this is
+important, using relative paths doesn't seem to work.
+
+```sh
+# Move back up to the root of the GREASE source tree
+cd ..
+export GHCVER=$(ghc --numeric-version)
+hpc markup \
+  grease-cli/grease-tests.tix \
+  --hpcdir=${PWD}/dist-newstyle/build/aarch64-osx/ghc-${GHCVER}/grease-0.1.0.0/build/extra-compilation-artifacts/hpc/dyn/mix \
+  --hpcdir=${PWD}/dist-newstyle/build/aarch64-osx/ghc-${GHCVER}/grease-cli-0.1.0.0/build/extra-compilation-artifacts/hpc/dyn/mix \
+  --hpcdir=${PWD}/dist-newstyle/build/aarch64-osx/ghc-${GHCVER}/grease-cli-0.1.0.0/x/grease/build/grease/grease-tmp/extra-compilation-artifacts/hpc/vanilla/mix \
+  --hpcdir=${PWD}/dist-newstyle/build/aarch64-osx/ghc-${GHCVER}/grease-cli-0.1.0.0/t/grease-tests/build/grease-tests/grease-tests-tmp/extra-compilation-artifacts/hpc/vanilla/mix \
+  --srcdir=grease \
+  --srcdir=grease-cli
+```
