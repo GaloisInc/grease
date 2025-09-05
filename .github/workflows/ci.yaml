@@ -118,6 +118,7 @@ jobs:
       shell: bash
       run: |
         ./scripts/coverage.sh markup
+        echo '## HPC coverage results' >> "${GITHUB_STEP_SUMMARY}"
         echo '```' >> "${GITHUB_STEP_SUMMARY}"
         ./scripts/coverage.sh | tee -a "${GITHUB_STEP_SUMMARY}"
         echo '```' >> "${GITHUB_STEP_SUMMARY}"
