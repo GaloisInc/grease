@@ -14,6 +14,9 @@ env:
   # a valid version of the "happy" tool).
   CACHE_VERSION: 2
 
+defaults:
+  run:
+    shell: bash
 
 jobs:
   build:
@@ -63,7 +66,6 @@ jobs:
         submodules: true
 
     - name: Run pre-hook
-      shell: bash
       run: ${{ matrix.pre-hook }}
 
     - name: Setup Haskell
@@ -85,19 +87,15 @@ jobs:
           ${{ matrix.cache-key-prefix }}-${{ env.CACHE_VERSION }}-cabal-${{ matrix.os }}-${{ matrix.ghc }}-
 
     - name: Configure build
-      shell: bash
       run: cabal configure --enable-tests --semaphore
 
     - name: Configure coverage collection
-      shell: bash
       run: cat cabal/coverage.cabal.project >> cabal.project.local
 
     - name: Build grease-cli
-      shell: bash
       run: cabal build pkg:grease-cli pkg:grease-diagrams
 
     - name: Install solvers
-      shell: bash
       run: .github/ci.sh install_system_deps
       env:
         BIN_ZIP_FILE: ${{ matrix.os }}-${{ runner.arch }}-bin.zip
@@ -107,7 +105,6 @@ jobs:
         SOLVER_PKG_VERSION: "snapshot-20241119"
 
     - name: Test grease-cli
-      shell: bash
       run: cabal test pkg:grease-cli
 
     # This step will produce a Github-flavored Markdown report on the "job
@@ -115,7 +112,6 @@ jobs:
     # in a code block, followed by a collapsible "spoiler" containing the more
     # detailed per-module information.
     - name: Report coverage
-      shell: bash
       run: |
         ./scripts/coverage.sh markup
         echo '## HPC coverage results' >> "${GITHUB_STEP_SUMMARY}"
@@ -128,7 +124,6 @@ jobs:
         echo '</details>' >> "${GITHUB_STEP_SUMMARY}"
 
     - name: Test grease-diagrams
-      shell: bash
       # TODO: Make sure there's no diff
       run: cabal run exe:grease-diagrams -- --output doc/mem.svg --width 400 --height 400
 
@@ -136,12 +131,10 @@ jobs:
       uses: ./.github/actions/ghidra-install
       
     - name: Test Ghidra plugin
-      shell: bash
       run: cd ghidra-plugin && ./gradlew installExtension && ./gradlew test
 
     - name: Haddock
       if: ${{ matrix.haddock }}
-      shell: bash
       # Build the Haddocks to ensure that they are well formed. Somewhat
       # counterintuitively, we run this with the --disable-documentation flag.
       # This does not mean "do not build the Haddocks", but rather, "build the
@@ -155,7 +148,6 @@ jobs:
       run: cabal haddock --disable-documentation pkg:grease pkg:grease-cli pkg:elf-edit-core-dump
 
     - name: Check .cabal files
-      shell: bash
       run: |
         (cd grease && cabal check)
         (cd grease-aarch32 && cabal check)
