@@ -112,7 +112,10 @@ jobs:
 
     - name: Report coverage
       shell: bash
-      run: ./scripts/coverage.sh
+      run: |
+        ./scripts/coverage.sh markup
+        cat hpc_index.html >> "${GITHUB_STEP_SUMMARY}"
+        ./scripts/coverage.sh
 
     - name: Test grease-diagrams
       shell: bash
