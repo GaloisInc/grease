@@ -110,13 +110,21 @@ jobs:
       shell: bash
       run: cabal test pkg:grease-cli
 
+    # This step will produce a Github-flavored Markdown report on the "job
+    # summary" page. The report will first contain the output of `hpc report`
+    # in a code block, followed by a collapsible "spoiler" containing the more
+    # detailed per-module information.
     - name: Report coverage
       shell: bash
       run: |
         ./scripts/coverage.sh markup
+        echo '```' >> "${GITHUB_STEP_SUMMARY}"
+        ./scripts/coverage.sh | tee -a "${GITHUB_STEP_SUMMARY}"
+        echo '```' >> "${GITHUB_STEP_SUMMARY}"
+        echo '<details><summary>Module-level summary</summary>' >> "${GITHUB_STEP_SUMMARY}"
         pip install beautifulsoup4==4.13.5
         ./scripts/coverage-scrape.py hpc_index.html >> "${GITHUB_STEP_SUMMARY}"
-        ./scripts/coverage.sh
+        echo '</details>' >> "${GITHUB_STEP_SUMMARY}"
 
     - name: Test grease-diagrams
       shell: bash
