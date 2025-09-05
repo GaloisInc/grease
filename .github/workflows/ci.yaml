@@ -114,7 +114,8 @@ jobs:
       shell: bash
       run: |
         ./scripts/coverage.sh markup
-        cat hpc_index.html >> "${GITHUB_STEP_SUMMARY}"
+        pip install beautifulsoup4==4.13.5
+        ./scripts/coverage-scrape.py hpc_index.html >> "${GITHUB_STEP_SUMMARY}"
         ./scripts/coverage.sh
 
     - name: Test grease-diagrams
