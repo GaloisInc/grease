@@ -214,14 +214,18 @@ object GreaseResult {
       contents: ujson.Value,
       loadOffset: Long
   ): Option[FailedToRefine] = {
-    def parsePred(x: ujson.Value): FailedPredicate =
-      FailedPredicate(
-        parseLoc(x("_failedPredicateLocation").str, addrs, loadOffset),
-        x("_failedPredicateMessage").str,
-        x("_failedPredicateConcShapes").str
-      )
+    def parsePred(x: ujson.Value): Option[FailedPredicate] =
+      try {
+        Some(FailedPredicate(
+          parseLoc(x("_failedPredicateLocation").str, addrs, loadOffset),
+          x("_failedPredicateMessage").str,
+          x("_failedPredicateConcShapes").str
+        ))
+      } catch {
+        case e: NumberFormatException => None
+      }
 
-    Some(FailedToRefine(ent, contents.arr.toSeq.map(parsePred)))
+    Some(FailedToRefine(ent, contents.arr.toSeq.flatMap(parsePred)))
   }
 
   def parseBatch(

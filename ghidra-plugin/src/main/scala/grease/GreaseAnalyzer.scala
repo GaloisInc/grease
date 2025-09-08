@@ -162,7 +162,7 @@ class GreaseAnalyzer
     overridesFile =
       GreaseAnalyzer.getOption[File](x, GreaseAnalyzer.OVERRIDE_FILE)
     loopBound = GreaseAnalyzer
-      .getOption[Int](x, GreaseAnalyzer.LOOP_BOUND_OPT)
+      .getOption[Int](x, GreaseAnalyzer.LOOP_BOUND_OPT).filter(l => l != 0)
     shouldUseDebug = GreaseAnalyzer
       .getOption[Boolean](x, GreaseAnalyzer.SHOULD_USE_DEBUG_OPT)
       .getOrElse(false)
