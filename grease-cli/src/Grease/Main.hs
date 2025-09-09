@@ -84,7 +84,6 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Nonce (globalNonceGenerator)
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
-import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Parameterized.TraversableFC.WithIndex (imapFC)
 import Data.Proxy (Proxy (..))
 import Data.Semigroup ((<>))
@@ -125,6 +124,7 @@ import Grease.Macaw.Arch.PPC64 (ppc64Ctx)
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.Dwarf (loadDwarfPreconditions)
+import Grease.Macaw.Entrypoint (checkMacawEntrypointCfgsSignatures)
 import Grease.Macaw.Load (LoadedProgram (..), load)
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
@@ -1088,33 +1088,8 @@ simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs = do
     results <-
       forM (Map.toList cfgs) $ \(entry, MacawEntrypointCfgs entrypointCfgs mbCfgAddr) ->
         analyzeEntrypoint la entry $ do
-          EntrypointCfgs
-            { entrypointStartupOv = mbStartupOv
-            , entrypointCfg = C.Reg.AnyCFG entrypointCfg0
-            } <-
-            pure entrypointCfgs
-          let entryName = W4.functionName (C.handleName (C.Reg.cfgHandle entrypointCfg0))
-          let name = Text.concat ["CFG `", entryName, "`"]
-          C.Reg.SomeCFG entrypointCfg' <- checkCfgSignature name entrypointCfg0
-          mbStartupOvSome <- for mbStartupOv $ \startupOv -> do
-            StartupOv
-              { startupOvCfg = C.Reg.AnyCFG startupOvCfg0
-              , startupOvForwardDecs = fwdDecs
-              } <-
-              pure startupOv
-            let entryName' = W4.functionName (C.handleName (C.Reg.cfgHandle startupOvCfg0))
-            let name' = Text.concat ["startup override for `", entryName', "`"]
-            C.Reg.SomeCFG startupOvCfg' <- checkCfgSignature name' startupOvCfg0
-            pure $
-              StartupOv
-                { startupOvCfg = C.Reg.SomeCFG startupOvCfg'
-                , startupOvForwardDecs = fwdDecs
-                }
-          let entrypointCfgsSome =
-                EntrypointCfgs
-                  { entrypointStartupOv = mbStartupOvSome
-                  , entrypointCfg = C.Reg.SomeCFG entrypointCfg'
-                  }
+          entrypointCfgsSome <-
+            checkMacawEntrypointCfgsSignatures archCtx entrypointCfgs
           status <- simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfgAddr entrypointCfgsSome
           let result =
                 Batch
@@ -1127,47 +1102,6 @@ simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs = do
           pure (entry, result)
 
     pure (Results (Map.fromList results))
- where
-  -- Ensure that this CFG is a well-formed Macaw CFG, i.e., it takes the
-  -- register struct as its only argument and returns it.
-  checkCfgSignature ::
-    Text.Text ->
-    C.Reg.CFG (Symbolic.MacawExt arch) s init ret ->
-    IO
-      ( C.Reg.SomeCFG
-          (Symbolic.MacawExt arch)
-          (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
-          (Symbolic.ArchRegStruct arch)
-      )
-  checkCfgSignature name regCfg = do
-    let expectedArgTys = Ctx.singleton (regStructRepr archCtx)
-    let expectedRet = regStructRepr archCtx
-    let argTys = C.Reg.cfgArgTypes regCfg
-    let ret = C.Reg.cfgReturnType regCfg
-    let url = "https://galoisinc.github.io/grease/sexp-progs.html"
-    let doThrow :: Text.Text -> IO a
-        doThrow msg =
-          throw (GreaseException (msg <> "\n" <> "For more information, see " <> url))
-    Refl <-
-      case testEquality argTys expectedArgTys of
-        Just r -> pure r
-        Nothing ->
-          let prettyArgs = TFC.toListFC PP.pretty argTys
-           in doThrow $
-                Text.unlines
-                  [ Text.unwords ["Bad argument types for", name <> ":", tshow prettyArgs]
-                  , "Expected a single argument, the struct of register values"
-                  ]
-    Refl <-
-      case testEquality ret expectedRet of
-        Just r -> pure r
-        Nothing ->
-          doThrow $
-            Text.unlines
-              [ Text.unwords ["Bad return type for", name <> ":", pshow ret]
-              , "Expected the struct of register values"
-              ]
-    pure (C.Reg.SomeCFG regCfg)
 
 -- | Convert a register-based CFG ('C.Reg.AnyCFG') to an SSA-based CFG
 -- ('C.AnyCFG').
