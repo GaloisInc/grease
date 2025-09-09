@@ -289,7 +289,8 @@ Note that:
 Users may supply *address overrides* via `--addr-override`. Address overrides
 are overrides that run when symbolic execution reaches a particular address
 (i.e., instruction pointer value). Address overrides are only available when
-executing binaries.
+executing binaries. Address overrides follow the file and function naming
+conventions described above.
 
 An address override takes the register struct (e.g., `X86Regs`) as an input
 and returns `Unit`. When control reaches the address in question, the override
