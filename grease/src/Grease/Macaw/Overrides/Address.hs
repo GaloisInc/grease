@@ -19,6 +19,7 @@ import Control.Applicative (empty)
 import Control.Exception qualified as X
 import Control.Lens qualified as Lens
 import Control.Monad qualified as Monad
+import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
@@ -42,10 +43,12 @@ import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
+import System.FilePath qualified as FilePath
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
 import Text.Megaparsec.Char.Lexer qualified as TMCL
 import What4.Expr qualified as W4
+import What4.FunctionName qualified as W4
 
 -- | Parse a symbol from 'TM.Tokens'.
 symbol :: TM.Tokens Text -> TM.Parsec Void Text Text
@@ -67,8 +70,82 @@ addressOverrideParser = do
 
 ---------------------------------------------------------------------
 
+-- | An address override, corresponding to a single S-expression file.
+data AddressOverride arch
+  = AddressOverride
+  { aoCfg ::
+      C.SomeCFG
+        (Symbolic.MacawExt arch)
+        (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
+        C.UnitType
+  -- ^ The override for the public function, whose name matches that of the
+  -- S-expression file.
+  , aoAuxiliaryOverrides :: [LCCR.AnyCFG (Symbolic.MacawExt arch)]
+  -- ^ Overrides for the auxiliary functions in the S-expression file.
+  , aoForwardDeclarations :: Map.Map W4.FunctionName C.SomeHandle
+  -- ^ The map of names of forward declarations in the S-expression file to
+  -- their handles.
+  }
+
 newtype AddressOverrides arch
-  = AddressOverrides (Map.Map (MC.ArchSegmentOff arch) (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) C.UnitType))
+  = AddressOverrides (Map.Map (MC.ArchSegmentOff arch) (AddressOverride arch))
+
+loadAddressOverride ::
+  ( Symbolic.SymArchConstraints arch
+  , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
+  ) =>
+  C.TypeRepr (Symbolic.ArchRegStruct arch) ->
+  C.HandleAllocator ->
+  MC.Memory (MC.ArchAddrWidth arch) ->
+  -- | Absolute address to be overridden
+  MM.MemWord (MC.ArchAddrWidth arch) ->
+  FilePath ->
+  IO (MC.ArchSegmentOff arch, AddressOverride arch)
+loadAddressOverride archRegsType halloc memory addr path = do
+  segOff <-
+    case MM.resolveAbsoluteAddr memory addr of
+      -- TODO improve error
+      Nothing -> X.throw (GreaseException ("Bad address: " <> tshow addr))
+      Just segOff -> pure segOff
+  prog <- parseProgram halloc path
+  CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
+
+  let fnNameText =
+        Text.pack $ FilePath.dropExtensions $ FilePath.takeBaseName path
+  let fnName = W4.functionNameFromText fnNameText
+  let (publicCfgs, auxCfgs) =
+        List.partition (isPublicCblFun fnName) (CSyn.parsedProgCFGs prog)
+  let userErr :: Text.Text -> IO a
+      userErr msg = X.throw (GreaseException (msg <> " at " <> Text.pack path))
+  case publicCfgs of
+    [LCCR.AnyCFG defCfg] -> do
+      Refl <-
+        case testEquality (LCCR.cfgArgTypes defCfg) (Ctx.Empty Ctx.:> archRegsType) of
+          Nothing -> userErr "Bad address override args"
+          Just r -> pure r
+      Refl <-
+        case testEquality (LCCR.cfgReturnType defCfg) C.UnitRepr of
+          Nothing -> userErr "Bad address override return value"
+          Just r -> pure r
+      let fwdDecs = CSyn.parsedProgForwardDecs prog
+      pure
+        ( segOff
+        , AddressOverride
+            { aoCfg = toSSA defCfg
+            , aoAuxiliaryOverrides = auxCfgs
+            , aoForwardDeclarations = fwdDecs
+            }
+        )
+    [] ->
+      userErr ("Expected to find a function named `" <> fnNameText <> "`")
+    _ : _ ->
+      userErr ("Override contains multiple `" <> fnNameText <> "` functions")
+
+-- | Does a function have the same name as the @.cbl@ file in which it is
+-- defined? That is, is a function publicly visible from the @.cbl@ file?
+isPublicCblFun :: W4.FunctionName -> LCCR.AnyCFG ext -> Bool
+isPublicCblFun fnName (LCCR.AnyCFG cfg) =
+  C.handleName (LCCR.cfgHandle cfg) == fnName
 
 -- | Parse and register address overrides in the Macaw S-expression syntax.
 --
@@ -85,29 +162,8 @@ loadAddressOverrides ::
   IO (AddressOverrides arch)
 loadAddressOverrides archRegsType halloc memory paths =
   fmap (AddressOverrides . Map.fromList) $ Monad.forM paths $ \(intAddr, path) -> do
-    segOff <-
-      case MM.resolveAbsoluteAddr memory (fromIntegral intAddr) of
-        -- TODO improve error
-        Nothing -> X.throw (GreaseException ("Bad address: " <> tshow intAddr))
-        Just segOff -> pure segOff
-    prog <- parseProgram halloc path
-    CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
-    let userErr :: Text.Text -> IO a
-        userErr msg = X.throw (GreaseException (msg <> " at " <> Text.pack path))
-    case CSyn.parsedProgCFGs prog of
-      [] -> userErr "No CFGs in address override"
-      (LCCR.AnyCFG defCfg : []) -> do
-        Refl <-
-          case testEquality (LCCR.cfgArgTypes defCfg) (Ctx.Empty Ctx.:> archRegsType) of
-            Nothing -> userErr "Bad address override args"
-            Just r -> pure r
-        Refl <-
-          case testEquality (LCCR.cfgReturnType defCfg) C.UnitRepr of
-            Nothing -> userErr "Bad address override return value"
-            Just r -> pure r
-        pure (segOff, toSSA defCfg)
-      -- TODO(lb): Why does GHC 9.8.4 reject `userErr` here?
-      (_ : _) -> X.throw (GreaseException ("Too many CFGs at " <> Text.pack path))
+    let addr = fromIntegral intAddr
+    loadAddressOverride archRegsType halloc memory addr path
 
 ---------------------------------------------------------------------
 
@@ -190,7 +246,9 @@ maybeRunAddressOverride ::
 maybeRunAddressOverride archCtx crucState segOff (AddressOverrides tgtOvs) =
   case Map.lookup segOff tgtOvs of
     Nothing -> pure ()
-    Just tgtOv -> tryRunAddressOverride archCtx crucState tgtOv
+    Just tgtOv -> do
+      AddressOverride cfg _ _ <- pure tgtOv
+      tryRunAddressOverride archCtx crucState cfg
 
 regStructRepr :: ArchContext arch -> C.TypeRepr (Symbolic.ArchRegStruct arch)
 regStructRepr arch =
