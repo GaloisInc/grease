@@ -5,7 +5,6 @@
 
 set -euo pipefail
 
-command=${1:-report}
 grease_ver=$(grep '^version:' grease/grease.cabal | awk '{ print $2; }')
 ghc_ver=$(ghc --numeric-version)
 
@@ -15,10 +14,10 @@ if [[ ${OSTYPE} == darwin* ]]; then
   platform=aarch64-osx
 fi
 
-tix=$(find  dist-newstyle -type f -name '*.tix')
+tix=$(find dist-newstyle -type f -name '*.tix')
 
 # For some reason, we have to pass absolute paths to `--hpcdir`.
-hpc "${command}" \
+hpc "${@}" \
   ${tix} \
   --hpcdir=${PWD}/dist-newstyle/build/${platform}/ghc-${ghc_ver}/grease-${grease_ver}/build/extra-compilation-artifacts/hpc/dyn/mix \
   --hpcdir=${PWD}/dist-newstyle/build/${platform}/ghc-${ghc_ver}/grease-cli-${grease_ver}/build/extra-compilation-artifacts/hpc/dyn/mix \
