@@ -128,7 +128,7 @@ import Grease.Macaw.Entrypoint (checkMacawEntrypointCfgsSignatures)
 import Grease.Macaw.Load (LoadedProgram (..), load)
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
-import Grease.Macaw.Overrides.Address (loadAddressOverrides)
+import Grease.Macaw.Overrides.Address (AddressOverrides, loadAddressOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.PLT
 import Grease.Macaw.RegName (RegName (..), RegNames (..), getRegName, mkRegName, regNameToString, regNames)
@@ -761,9 +761,9 @@ macawInitState ::
   ArchContext arch ->
   SimOpts ->
   Macaw.SetupHook sym arch ->
-  MM.Memory (MC.ArchAddrWidth arch) ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   C.GlobalVar Mem.Mem ->
+  AddressOverrides arch ->
   ArchRegs sym arch ->
   SetupMem sym ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
@@ -775,7 +775,7 @@ macawInitState ::
     ( SymIO.InitialFileSystemContents sym
     , C.ExecState (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch)))
     )
-macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook macawMem memPtrTable mvar regs' mem' mbCfgAddr entrypointCfgs = do
+macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable mvar addrOvs regs' mem' mbCfgAddr entrypointCfgs = do
   EntrypointCfgs
     { entrypointStartupOv = mbStartupOvSsa
     , entrypointCfg = ssa@(C.SomeCFG ssaCfg)
@@ -799,7 +799,6 @@ macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook macawMem m
   let personality =
         emptyGreaseSimulatorState toConcVar
           & discoveredFnHandles .~ discoveredHdls
-  addrOvs <- loadAddressOverrides (regStructRepr archCtx) halloc macawMem (simAddressOverrides simOpts)
   st <- initState bak la macawExtImpl halloc mvar mem' globals1 initFsOv archCtx setupHook addrOvs personality regs' fnOvsMap mbStartupOvSsaCfg ssa
   pure (fs0, st)
 
@@ -826,13 +825,14 @@ simulateMacawCfg ::
   ArchContext arch ->
   SimOpts ->
   Macaw.SetupHook sym arch ->
+  AddressOverrides arch ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   -- | The entrypoint-related CFGs.
   EntrypointCfgs (C.Reg.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   IO BatchStatus
-simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfgAddr entrypointCfgs = do
+simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs mbCfgAddr entrypointCfgs = do
   let sym = C.backendGetSym bak
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
@@ -874,7 +874,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
     let ?recordLLVMAnnotation = recordLLVMAnnotation
     let ?processMacawAssert = processMacawAssert
     memVar <- Mem.mkMemVar "grease:memmodel" halloc
-    (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memory memPtrTable memVar regs' setupMem mbCfgAddr entrypointCfgsSsa
+    (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable memVar addrOvs regs' setupMem mbCfgAddr entrypointCfgsSsa
     -- The order of the heuristics is significant, the 'macawHeuristics'
     -- find a sensible initial memory layout, which is necessary before
     -- applying the 'mustFailHeuristic' (which would otherwise report many
@@ -914,6 +914,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfg
       archCtx
       simOpts
       setupHook
+      addrOvs
       memPtrTable
       initMem
       initArgShapes
@@ -957,6 +958,7 @@ simulateRewrittenCfg ::
   ArchContext arch ->
   SimOpts ->
   Macaw.SetupHook sym arch ->
+  AddressOverrides arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   InitialMem sym ->
   ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
@@ -970,7 +972,7 @@ simulateRewrittenCfg ::
   -- | The SSA entrypoint-related CFGs.
   EntrypointCfgs (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   IO BatchStatus
-simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook memPtrTable initMem initArgShapes result execFeats mbCfgAddr entrypointCfgs entrypointCfgsSsa = do
+simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs memPtrTable initMem initArgShapes result execFeats mbCfgAddr entrypointCfgs entrypointCfgsSsa = do
   let regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
   let rNames@(RegNames _rNamesAssign) = regNames (archCtx ^. archVals)
   let rNameAssign =
@@ -1026,7 +1028,7 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook m
         let ?recordLLVMAnnotation = recordLLVMAnnotation
         let ?processMacawAssert = processMacawAssert
         memVar <- Mem.mkMemVar "grease:memmodel" halloc
-        (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memory memPtrTable memVar regs' setupMem mbCfgAddr entrypointCfgsSsa'
+        (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable memVar addrOvs regs' setupMem mbCfgAddr entrypointCfgsSsa'
         let concInitState =
               Conc.InitialState
                 { Conc.initStateArgs = args
@@ -1080,9 +1082,10 @@ simulateMacawCfgs ::
   ArchContext arch ->
   SimOpts ->
   (forall sym. Macaw.SetupHook sym arch) ->
+  AddressOverrides arch ->
   Map Entrypoint (MacawEntrypointCfgs arch) ->
   IO Results
-simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs = do
+simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs = do
   let fm = W4.FloatRealRepr
   withSolverOnlineBackend (simSolver simOpts) fm globalNonceGenerator $ \bak -> do
     results <-
@@ -1090,7 +1093,7 @@ simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs = do
         analyzeEntrypoint la entry $ do
           entrypointCfgsSome <-
             checkMacawEntrypointCfgsSignatures archCtx entrypointCfgs
-          status <- simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook mbCfgAddr entrypointCfgsSome
+          status <- simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs mbCfgAddr entrypointCfgsSome
           let result =
                 Batch
                   { batchStatus = status
@@ -1214,7 +1217,8 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
           , mcTxtBounds = (0, 0)
           , mcElf = Nothing
           }
-  simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs'
+  addrOvs <- loadAddressOverrides (regStructRepr archCtx) halloc memory (simAddressOverrides simOpts)
+  simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs'
 
 simulateMacaw ::
   forall arch.
@@ -1300,8 +1304,9 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
                 }
         pure (entry, MacawEntrypointCfgs entrypointCfgs (Just entryAddr))
 
+  addrOvs <- loadAddressOverrides (regStructRepr archCtx) halloc memory (simAddressOverrides simOpts)
   let setupHook :: forall sym. SetupHook sym arch
-      setupHook = Macaw.binSetupHook cfgs
+      setupHook = Macaw.binSetupHook addrOvs cfgs
 
   let macawCfgConfig =
         MacawCfgConfig
@@ -1316,7 +1321,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
           , mcTxtBounds = txtBounds
           , mcElf = Just elf
           }
-  simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook cfgs
+  simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs
 
 -- | Compute the initial 'ArgShapes' for an LLVM CFG.
 --
@@ -1709,8 +1714,9 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
           ( Entrypoint{entrypointLocation = EntrypointAddress entText, entrypointStartupOvPath = mbOverride}
           , MacawEntrypointCfgs entrypointCfgs (Just entAddr)
           )
+    addrOvs <- loadAddressOverrides (regStructRepr archCtx) halloc memory (simAddressOverrides simOpts)
     let setupHook :: forall sym. SetupHook sym arch
-        setupHook = Macaw.binSetupHook cfgs
+        setupHook = Macaw.binSetupHook addrOvs cfgs
     let dl = macawDataLayout archCtx
     let macawCfgConfig =
           MacawCfgConfig
@@ -1732,6 +1738,7 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
       archCtx
       simOpts
       setupHook
+      addrOvs
       cfgs
 
 -- | Given an arch runs the raw loader

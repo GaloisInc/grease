@@ -12,6 +12,7 @@ module Grease.Macaw.Overrides.Address (
   addressOverrideParser,
   AddressOverrides,
   loadAddressOverrides,
+  registerAddressOverrideHandles,
   maybeRunAddressOverride,
 ) where
 
@@ -29,15 +30,20 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Void (Void)
+import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Macaw.Arch (ArchContext, archVals)
+import Grease.Macaw.Overrides qualified as GMO
+import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Panic (panic)
 import Grease.Syntax (parseProgram)
 import Grease.Utility (GreaseException (GreaseException), tshow)
 import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend.Online qualified as LCBO
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as LCCR
 import Lang.Crucible.CFG.SSAConversion (toSSA)
 import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.LLVM.MemModel qualified as LCLM
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
@@ -48,7 +54,9 @@ import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
 import Text.Megaparsec.Char.Lexer qualified as TMCL
 import What4.Expr qualified as W4
+import What4.Expr.Builder qualified as WEB
 import What4.FunctionName qualified as W4
+import What4.Protocol.Online qualified as WPO
 
 -- | Parse a symbol from 'TM.Tokens'.
 symbol :: TM.Tokens Text -> TM.Parsec Void Text Text
@@ -164,6 +172,63 @@ loadAddressOverrides archRegsType halloc memory paths =
   fmap (AddressOverrides . Map.fromList) $ Monad.forM paths $ \(intAddr, path) -> do
     let addr = fromIntegral intAddr
     loadAddressOverride archRegsType halloc memory addr path
+
+---------------------------------------------------------------------
+
+-- | Redirect function handles from forward declarations appearing in
+-- 'AddressOverride's to their implementations.
+registerAddressOverrideForwardDeclarations ::
+  ( LCLM.HasPtrWidth (MC.ArchAddrWidth arch)
+  , C.IsSymBackend sym bak
+  , WPO.OnlineSolver solver
+  , sym ~ WEB.ExprBuilder scope st fs
+  , bak ~ LCBO.OnlineBackend solver scope st fs
+  , HasToConcretize p
+  ) =>
+  bak ->
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  AddressOverrides arch ->
+  C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
+registerAddressOverrideForwardDeclarations bak funOvs addrOvs = do
+  let AddressOverrides addrOvsMap = addrOvs
+  Monad.forM_ (Map.elems addrOvsMap) $ \addrOv -> do
+    let fwdDecs = aoForwardDeclarations addrOv
+    GMO.registerMacawOvForwardDeclarations bak funOvs fwdDecs
+
+-- | Register CFGs appearing an in 'AddressOverride'.
+registerAddressOverrideCfgs ::
+  ( Symbolic.SymArchConstraints arch
+  , LCLM.HasPtrWidth (MC.ArchAddrWidth arch)
+  ) =>
+  AddressOverrides arch ->
+  C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
+registerAddressOverrideCfgs addrOvs = do
+  let AddressOverrides addrOvsMap = addrOvs
+  Monad.forM_ (Map.elems addrOvsMap) $ \addrOv -> do
+    C.SomeCFG cfg <- pure (aoCfg addrOv)
+    C.bindCFG cfg
+    Monad.forM_ (aoAuxiliaryOverrides addrOv) $ \(LCCR.AnyCFG auxRegCfg) -> do
+      C.SomeCFG auxCfg <- pure (toSSA auxRegCfg)
+      C.bindCFG auxCfg
+
+-- | Register all handles from 'AddressOverrides', including defined CFGs and
+-- forwaAddressrd declarations.
+registerAddressOverrideHandles ::
+  ( Symbolic.SymArchConstraints arch
+  , LCLM.HasPtrWidth (MC.ArchAddrWidth arch)
+  , C.IsSymBackend sym bak
+  , WPO.OnlineSolver solver
+  , sym ~ WEB.ExprBuilder scope st fs
+  , bak ~ LCBO.OnlineBackend solver scope st fs
+  , HasToConcretize p
+  ) =>
+  bak ->
+  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  AddressOverrides arch ->
+  C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
+registerAddressOverrideHandles bak funOvs addrOvs = do
+  registerAddressOverrideCfgs addrOvs
+  registerAddressOverrideForwardDeclarations bak funOvs addrOvs
 
 ---------------------------------------------------------------------
 

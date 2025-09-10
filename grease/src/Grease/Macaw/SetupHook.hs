@@ -21,6 +21,7 @@ import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Entrypoint qualified as GE
 import Grease.Macaw.Overrides as GMO
+import Grease.Macaw.Overrides.Address as GMOA
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
 import Lang.Crucible.Backend qualified as LCB
 import Lang.Crucible.Backend.Online qualified as LCB
@@ -202,19 +203,27 @@ syntaxSetupHook la dl cfgs prog =
 -- the other hand, looks up functions in a different way, so 'syntaxSetupHook'
 -- must eagerly register all functions it might call ahead of time.
 --
--- The exception to this rule is startup overrides. If a startup override exists
--- and it contains forward declarations, then we redirect the function handles
--- to actually call the respective overrides. (Alternatively, we could plumb
--- the startup overrides' forward declarations into `lookupFunctionHandle`
--- and register them incrementally, but that is more work. Given that startup
--- overrides can't invoke anything defined in the main program itself, it's much
--- less work to register them ahead of time here.)
+-- The exceptions to this rule are (1) startup overrides and (2) address
+-- overrides.
+--
+-- If a startup override exists and it contains forward declarations, then we
+-- redirect the function handles to actually call the respective overrides.
+-- (Alternatively, we could plumb the startup overrides' forward declarations
+-- into `lookupFunctionHandle` and register them incrementally, but that is more
+-- work. Given that startup overrides can't invoke anything defined in the main
+-- program itself, it's much less work to register them ahead of time here.)
+--
+-- We do the same thing for forward declarations in address overrides.
 binSetupHook ::
-  LCLM.HasPtrWidth (ArchAddrWidth arch) =>
+  ( DMS.SymArchConstraints arch
+  , LCLM.HasPtrWidth (ArchAddrWidth arch)
+  ) =>
+  GMOA.AddressOverrides arch ->
   Map.Map GE.Entrypoint (GE.MacawEntrypointCfgs arch) ->
   SetupHook sym arch
-binSetupHook cfgs =
-  SetupHook $ \bak _mvar funOvs ->
+binSetupHook addrOvs cfgs =
+  SetupHook $ \bak _mvar funOvs -> do
+    GMOA.registerAddressOverrideHandles bak funOvs addrOvs
     Monad.forM_ (Map.elems cfgs) $ \(GE.MacawEntrypointCfgs entrypointCfgs _) ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
         GMO.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
