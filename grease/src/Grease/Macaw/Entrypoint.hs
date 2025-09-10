@@ -79,19 +79,8 @@ checkMacawEntrypointCfgsSignatures archCtx entrypointCfgs = do
       }
 
 throwMacawCfgTypecheckError ::
-  Either
-    MacawCfgTypecheckError
-    ( C.Reg.SomeCFG
-        (Symbolic.MacawExt arch)
-        (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
-        (Symbolic.ArchRegStruct arch)
-    ) ->
-  IO
-    ( C.Reg.SomeCFG
-        (Symbolic.MacawExt arch)
-        (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
-        (Symbolic.ArchRegStruct arch)
-    )
+  Either MacawCfgTypecheckError a ->
+  IO a
 throwMacawCfgTypecheckError =
   \case
     Right ok -> pure ok
