@@ -123,6 +123,14 @@ jobs:
         printf '```\n\n' >> "${GITHUB_STEP_SUMMARY}"
         printf '</details>\n' >> "${GITHUB_STEP_SUMMARY}"
 
+        ./scripts/coverage.sh markup --destdir=coverage-report
+
+    - name: Create coverage report artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report-${{ matrix.ghc }}-${{ matrix.cache-key-prefix }}
+        path: coverage-report/
+
     - name: Test grease-diagrams
       # TODO: Make sure there's no diff
       run: cabal run exe:grease-diagrams -- --output doc/mem.svg --width 400 --height 400
