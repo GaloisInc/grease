@@ -215,9 +215,7 @@ syntaxSetupHook la dl cfgs prog =
 --
 -- We do the same thing for forward declarations in address overrides.
 binSetupHook ::
-  ( DMS.SymArchConstraints arch
-  , LCLM.HasPtrWidth (ArchAddrWidth arch)
-  ) =>
+  LCLM.HasPtrWidth (ArchAddrWidth arch) =>
   GMOA.AddressOverrides arch ->
   Map.Map GE.Entrypoint (GE.MacawEntrypointCfgs arch) ->
   SetupHook sym arch
