@@ -88,7 +88,7 @@ data AddressOverride arch
         C.UnitType
   -- ^ The override for the public function, whose name matches that of the
   -- S-expression file.
-  , aoAuxiliaryOverrides :: [LCCR.AnyCFG (Symbolic.MacawExt arch)]
+  , aoAuxiliaryOverrides :: [C.AnyCFG (Symbolic.MacawExt arch)]
   -- ^ Overrides for the auxiliary functions in the S-expression file.
   , aoForwardDeclarations :: Map.Map W4.FunctionName C.SomeHandle
   -- ^ The map of names of forward declarations in the S-expression file to
@@ -121,7 +121,7 @@ loadAddressOverride archRegsType halloc memory addr path = do
   let fnNameText =
         Text.pack $ FilePath.dropExtensions $ FilePath.takeBaseName path
   let fnName = W4.functionNameFromText fnNameText
-  let (publicCfgs, auxCfgs) =
+  let (publicCfgs, auxRegCfgs) =
         List.partition (isPublicCblFun fnName) (CSyn.parsedProgCFGs prog)
   let userErr :: Text.Text -> IO a
       userErr msg = X.throw (GreaseException (msg <> " at " <> Text.pack path))
@@ -136,6 +136,10 @@ loadAddressOverride archRegsType halloc memory addr path = do
           Nothing -> userErr "Bad address override return value"
           Just r -> pure r
       let fwdDecs = CSyn.parsedProgForwardDecs prog
+      auxCfgs <-
+        Monad.forM auxRegCfgs $ \(LCCR.AnyCFG auxRegCfg) -> do
+          C.SomeCFG auxCfg <- pure (toSSA auxRegCfg)
+          pure (C.AnyCFG auxCfg)
       pure
         ( segOff
         , AddressOverride
@@ -197,9 +201,7 @@ registerAddressOverrideForwardDeclarations bak funOvs addrOvs = do
 
 -- | Register CFGs appearing an in 'AddressOverride'.
 registerAddressOverrideCfgs ::
-  ( Symbolic.SymArchConstraints arch
-  , LCLM.HasPtrWidth (MC.ArchAddrWidth arch)
-  ) =>
+  LCLM.HasPtrWidth (MC.ArchAddrWidth arch) =>
   AddressOverrides arch ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerAddressOverrideCfgs addrOvs = do
@@ -207,15 +209,13 @@ registerAddressOverrideCfgs addrOvs = do
   Monad.forM_ (Map.elems addrOvsMap) $ \addrOv -> do
     C.SomeCFG cfg <- pure (aoCfg addrOv)
     C.bindCFG cfg
-    Monad.forM_ (aoAuxiliaryOverrides addrOv) $ \(LCCR.AnyCFG auxRegCfg) -> do
-      C.SomeCFG auxCfg <- pure (toSSA auxRegCfg)
+    Monad.forM_ (aoAuxiliaryOverrides addrOv) $ \(C.AnyCFG auxCfg) ->
       C.bindCFG auxCfg
 
 -- | Register all handles from 'AddressOverrides', including defined CFGs and
 -- forwaAddressrd declarations.
 registerAddressOverrideHandles ::
-  ( Symbolic.SymArchConstraints arch
-  , LCLM.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( LCLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , C.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , sym ~ WEB.ExprBuilder scope st fs
