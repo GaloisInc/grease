@@ -858,7 +858,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
      in macawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr
 
   entrypointCfgsSsa@EntrypointCfgs{entrypointCfg = C.SomeCFG ssaCfg} <-
-    pure (toSsaSomeCfg <$> entrypointCfgs)
+    pure (entrypointCfgsToSsa entrypointCfgs)
   doLog la (Diag.TargetCFG ssaCfg)
 
   let bounds = simBoundsOpts simOpts
@@ -1114,14 +1114,6 @@ toSsaAnyCfg ::
   C.AnyCFG ext
 toSsaAnyCfg (C.Reg.AnyCFG cfg) =
   case C.toSSA cfg of C.SomeCFG ssa -> C.AnyCFG ssa
-
--- | Convert a register-based CFG ('C.Reg.SomeCFG') to an SSA-based CFG
--- ('C.SomeCFG').
-toSsaSomeCfg ::
-  C.IsSyntaxExtension ext =>
-  C.Reg.SomeCFG ext init ret ->
-  C.SomeCFG ext init ret
-toSsaSomeCfg (C.Reg.SomeCFG cfg) = C.toSSA cfg
 
 entrypointCfgMap ::
   ( C.IsSyntaxExtension ext

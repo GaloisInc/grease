@@ -19,6 +19,8 @@ module Grease.Entrypoint (
 
   -- * @EntrypointCfgs@ and friends
   EntrypointCfgs (..),
+  entrypointCfgsToSsa,
+  toSsaSomeCfg,
   MacawEntrypointCfgs (..),
   StartupOv (..),
   parseEntrypointStartupOv,
@@ -38,8 +40,10 @@ import Data.Void (Void)
 import Data.Word (Word64)
 import Grease.Syntax (parseProgram, parsedProgramCfgMap)
 import Grease.Utility (GreaseException (..))
+import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
+import Lang.Crucible.CFG.SSAConversion qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
@@ -222,3 +226,18 @@ parseEntrypointStartupOv halloc startupOvPath = do
       { startupOvCfg = cfg
       , startupOvForwardDecs = CSyn.parsedProgForwardDecs startupOvProg
       }
+
+-- | Convert the CFGs in an 'EntrypointCfgs' to SSA form.
+entrypointCfgsToSsa ::
+  C.IsSyntaxExtension ext =>
+  EntrypointCfgs (C.Reg.SomeCFG ext args ret) ->
+  EntrypointCfgs (C.SomeCFG ext args ret)
+entrypointCfgsToSsa = (toSsaSomeCfg <$>)
+
+-- | Convert a register-based CFG ('C.Reg.SomeCFG') to an SSA-based CFG
+-- ('C.SomeCFG').
+toSsaSomeCfg ::
+  C.IsSyntaxExtension ext =>
+  C.Reg.SomeCFG ext init ret ->
+  C.SomeCFG ext init ret
+toSsaSomeCfg (C.Reg.SomeCFG cfg) = C.toSSA cfg
