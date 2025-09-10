@@ -8,5 +8,4 @@ flags {"--symbol", "test"}
 flags {"--addr-override", "0x401000:tests/refine/pos/extra/addr-override.x64.cbl"}
 -- This can be any test that is expected to refine properly.
 go "tests/refine/pos/compare_to_null/test.x64.elf"
--- TODO(#357): should be ok()
-check "Could not resolve function: malloc"
+ok()
