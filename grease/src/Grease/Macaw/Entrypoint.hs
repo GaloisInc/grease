@@ -47,7 +47,8 @@ checkMacawEntrypointCfgsSignatures archCtx entrypointCfgs = do
     pure entrypointCfgs
   let entryName = W4.functionName (C.handleName (C.Reg.cfgHandle entrypointCfg0))
   let name = Text.concat ["CFG `", entryName, "`"]
-  C.Reg.SomeCFG entrypointCfg' <- checkCfgSignature archCtx name entrypointCfg0
+  C.Reg.SomeCFG entrypointCfg' <-
+    checkMacawCfgSignature archCtx name entrypointCfg0
   mbStartupOvSome <- for mbStartupOv $ \startupOv -> do
     GE.StartupOv
       { GE.startupOvCfg = C.Reg.AnyCFG startupOvCfg0
@@ -56,7 +57,8 @@ checkMacawEntrypointCfgsSignatures archCtx entrypointCfgs = do
       pure startupOv
     let entryName' = W4.functionName (C.handleName (C.Reg.cfgHandle startupOvCfg0))
     let name' = Text.concat ["startup override for `", entryName', "`"]
-    C.Reg.SomeCFG startupOvCfg' <- checkCfgSignature archCtx name' startupOvCfg0
+    C.Reg.SomeCFG startupOvCfg' <-
+      checkMacawCfgSignature archCtx name' startupOvCfg0
     pure $
       GE.StartupOv
         { GE.startupOvCfg = C.Reg.SomeCFG startupOvCfg'
@@ -68,10 +70,12 @@ checkMacawEntrypointCfgsSignatures archCtx entrypointCfgs = do
       , GE.entrypointCfg = C.Reg.SomeCFG entrypointCfg'
       }
 
--- Ensure that this CFG is a well-formed Macaw CFG, i.e., it takes the
--- register struct as its only argument and returns it.
-checkCfgSignature ::
+-- | Check that the a CFG has the signatures of a valid Macaw CFG (i.e.,
+-- it takes the register struct as its only argument and returns it). Throw
+-- 'GreaseException' if not.
+checkMacawCfgSignature ::
   ArchContext arch ->
+  -- | Name to use in error messages. A good default is the 'C.handleName'.
   Text.Text ->
   C.Reg.CFG (Symbolic.MacawExt arch) s init ret ->
   IO
@@ -80,7 +84,7 @@ checkCfgSignature ::
         (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
         (Symbolic.ArchRegStruct arch)
     )
-checkCfgSignature archCtx name regCfg = do
+checkMacawCfgSignature archCtx name regCfg = do
   let expectedArgTys = Ctx.singleton (regStructRepr archCtx)
   let expectedRet = regStructRepr archCtx
   let argTys = C.Reg.cfgArgTypes regCfg
