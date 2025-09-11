@@ -112,6 +112,9 @@ jobs:
     # in a code block, followed by a collapsible "spoiler" containing the more
     # detailed per-module information.
     - name: Report coverage
+      # We want to report coverage for *some* job, but we don't particularly
+      # care which one it is because it should be the same for any GHC version.
+      if: ${{ strategy.job-index == 0 }}
       run: |
         printf '## HPC coverage results\n' >> "${GITHUB_STEP_SUMMARY}"
         printf '```\n' >> "${GITHUB_STEP_SUMMARY}"
@@ -126,6 +129,8 @@ jobs:
         ./scripts/coverage.sh markup --destdir=coverage-report
 
     - name: Create coverage report artifact
+      # See above `if:` for coverage.
+      if: ${{ strategy.job-index == 0 }}
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report-${{ matrix.ghc }}-${{ matrix.cache-key-prefix }}
