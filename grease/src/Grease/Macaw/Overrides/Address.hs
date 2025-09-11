@@ -26,6 +26,7 @@ import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Macaw.Symbolic.Regs qualified as DMSR
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC qualified as TFC
@@ -37,7 +38,6 @@ import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Macaw.Arch (ArchContext, archVals)
 import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
-import Grease.Panic (panic)
 import Grease.Syntax (parseProgram)
 import Grease.Utility (GreaseException (GreaseException), tshow)
 import Lang.Crucible.Backend qualified as C
@@ -361,16 +361,16 @@ runAddressOverride ::
   ( sym ~ W4.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
   ) =>
-  C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ->
+  C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) C.UnitType ->
+  C.RegEntry sym (Symbolic.ArchRegStruct arch) ->
   IO ()
-runAddressOverride crucState someCfg = do
-  let regs = crucState Lens.^. C.stateCrucibleFrame . C.frameRegs
+runAddressOverride crucState someCfg regs = do
   C.SomeCFG cfg <- pure someCfg
   initState <-
     toInitialState crucState C.UnitRepr $
       C.runOverrideSim C.UnitRepr $
-        C.regValue <$> C.callCFG cfg regs
+        C.regValue <$> C.callCFG cfg (C.RegMap (Ctx.singleton regs))
   C.ctxSolverProof (C.execStateContext initState) $ do
     execResult <- C.executeCrucible [] initState
     case execResult of
@@ -388,18 +388,12 @@ tryRunAddressOverride ::
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) C.UnitType ->
   IO ()
 tryRunAddressOverride archCtx crucState cfg = do
-  let C.RegMap regMap = crucState Lens.^. C.stateCrucibleFrame . C.frameRegs
-  case Ctx.viewAssign regMap of
-    Ctx.AssignExtend Ctx.Empty regs ->
-      case testEquality (C.regType regs) (regStructRepr archCtx) of
-        Just Refl -> runAddressOverride crucState cfg
-        Nothing ->
-          panic
-            "extensionExec"
-            [ "Inside ill-typed Macaw CFG"
-            , show (C.regType regs)
-            ]
-    _ -> panic "extensionExec" ["Inside Macaw CFG with bad arity"]
+  let archFns = archCtx Lens.^. archVals . Lens.to Symbolic.archFunctions
+  case DMSR.simStateRegs archFns crucState of
+    Nothing -> pure ()
+    Just regs ->
+      let regsEntry = C.RegEntry (regStructRepr archCtx) regs
+       in runAddressOverride crucState cfg regsEntry
 
 -- | See if there is an address override corresponding to the current
 -- instruction pointer value, and if so, run it.
