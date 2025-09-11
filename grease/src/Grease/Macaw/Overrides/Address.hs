@@ -345,7 +345,7 @@ toInitialState ::
   IO (C.ExecState p sym ext (C.RegEntry sym ret))
 toInitialState crucState retTy action = do
   let ctx = crucState Lens.^. C.stateContext
-  C.ctxSolverProof ctx $ do
+  C.ctxSolverProof ctx $
     pure $
       C.InitialState
         ctx
