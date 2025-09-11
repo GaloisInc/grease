@@ -1170,6 +1170,23 @@ analyzeEntrypoint la entry act = do
   doLog la (Diag.FinishedAnalyzingEntrypoint (entrypointLocation entry) duration)
   pure a
 
+loadAddrOvs ::
+  ( Symbolic.SymArchConstraints arch
+  , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
+  ) =>
+  ArchContext arch ->
+  C.HandleAllocator ->
+  MM.Memory (MC.ArchAddrWidth arch) ->
+  SimOpts ->
+  IO (AddressOverrides arch)
+loadAddrOvs archCtx halloc memory simOpts = do
+  mbAddrOvs <- loadAddressOverrides (regStructRepr archCtx) halloc memory (simAddressOverrides simOpts)
+  case mbAddrOvs of
+    Left err -> do
+      let msg = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions (PP.pretty err))
+      throw (GreaseException ("user error: " <> msg))
+    Right addrOvs -> pure addrOvs
+
 simulateMacawSyntax ::
   forall arch.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
@@ -1209,7 +1226,7 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
           , mcTxtBounds = (0, 0)
           , mcElf = Nothing
           }
-  addrOvs <- loadAddressOverrides (regStructRepr archCtx) halloc memory (simAddressOverrides simOpts)
+  addrOvs <- loadAddrOvs archCtx halloc memory simOpts
   simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs'
 
 simulateMacaw ::
@@ -1296,7 +1313,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
                 }
         pure (entry, MacawEntrypointCfgs entrypointCfgs (Just entryAddr))
 
-  addrOvs <- loadAddressOverrides (regStructRepr archCtx) halloc memory (simAddressOverrides simOpts)
+  addrOvs <- loadAddrOvs archCtx halloc memory simOpts
   let setupHook :: forall sym. SetupHook sym arch
       setupHook = Macaw.binSetupHook addrOvs cfgs
 
@@ -1706,7 +1723,7 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
           ( Entrypoint{entrypointLocation = EntrypointAddress entText, entrypointStartupOvPath = mbOverride}
           , MacawEntrypointCfgs entrypointCfgs (Just entAddr)
           )
-    addrOvs <- loadAddressOverrides (regStructRepr archCtx) halloc memory (simAddressOverrides simOpts)
+    addrOvs <- loadAddrOvs archCtx halloc memory simOpts
     let setupHook :: forall sym. SetupHook sym arch
         setupHook = Macaw.binSetupHook addrOvs cfgs
     let dl = macawDataLayout archCtx

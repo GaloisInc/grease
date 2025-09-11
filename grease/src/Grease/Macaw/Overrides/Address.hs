@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |
@@ -11,6 +12,7 @@
 module Grease.Macaw.Overrides.Address (
   addressOverrideParser,
   AddressOverrides,
+  AddressOverrideError (..),
   loadAddressOverrides,
   registerAddressOverrideHandles,
   maybeRunAddressOverride,
@@ -26,6 +28,7 @@ import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (testEquality, (:~:) (Refl))
@@ -49,6 +52,7 @@ import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
+import Prettyprinter qualified as PP
 import System.FilePath qualified as FilePath
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
@@ -78,6 +82,63 @@ addressOverrideParser = do
 
 ---------------------------------------------------------------------
 
+-- | Error type for 'loadAddressOverrides'.
+data AddressOverrideError arch
+  = BadAddress Text FilePath
+  | BadAddressOverrideArgs
+      FilePath
+      (C.TypeRepr (Symbolic.ArchRegStruct arch))
+      (C.Some C.CtxRepr)
+  | BadAddressOverrideReturn FilePath (C.Some C.TypeRepr)
+  | ExpectedFunctionNotFound W4.FunctionName FilePath
+  | MultipleFunctionsFound W4.FunctionName FilePath
+
+instance PP.Pretty (AddressOverrideError arch) where
+  pretty =
+    \case
+      BadAddress addr path ->
+        PP.nest 2 $
+          "Bad address:" PP.<+> PP.pretty addr PP.<+> "at" PP.<+> PP.pretty path
+      BadAddressOverrideArgs path expected (C.Some actual) ->
+        PP.nest 2 $
+          PP.vcat
+            [ "Bad address override argument types at"
+                PP.<+> PP.pretty path
+            , "Expected:" PP.<+> PP.pretty expected
+            , "Actual:" PP.<+> PP.list (TFC.toListFC PP.pretty actual)
+            , "See https://galoisinc.github.io/grease/overrides.html#address-overrides"
+            ]
+      BadAddressOverrideReturn path (C.Some actual) ->
+        PP.nest 2 $
+          PP.vcat
+            [ "Bad address override return type at"
+                PP.<+> PP.pretty path
+            , "Expected:" PP.<+> PP.pretty C.UnitRepr
+            , "Actual:" PP.<+> PP.pretty actual
+            , "See https://galoisinc.github.io/grease/overrides.html#address-overrides"
+            ]
+      ExpectedFunctionNotFound fnName path ->
+        PP.nest 2 $
+          PP.vcat
+            [ "Expected to find a function named"
+                PP.<+> PP.squotes (PP.pretty fnName)
+            , "at" PP.<+> PP.pretty path
+            , "See https://galoisinc.github.io/grease/overrides.html#address-overrides"
+            ]
+      MultipleFunctionsFound fnName path ->
+        PP.nest 2 $
+          PP.vcat
+            [ PP.hsep
+                [ "Override contains multiple"
+                , PP.squotes (PP.pretty fnName)
+                , "functions"
+                ]
+            , "at" PP.<+> PP.pretty path
+            , "See https://galoisinc.github.io/grease/overrides.html#address-overrides"
+            ]
+
+---------------------------------------------------------------------
+
 -- | An address override, corresponding to a single S-expression file.
 data AddressOverride arch
   = AddressOverride
@@ -98,6 +159,90 @@ data AddressOverride arch
 newtype AddressOverrides arch
   = AddressOverrides (Map.Map (MC.ArchSegmentOff arch) (AddressOverride arch))
 
+partitionCfgs ::
+  Symbolic.SymArchConstraints arch =>
+  W4.FunctionName ->
+  FilePath ->
+  CSyn.ParsedProgram (Symbolic.MacawExt arch) ->
+  Either
+    (AddressOverrideError arch)
+    (LCCR.AnyCFG (Symbolic.MacawExt arch), [LCCR.AnyCFG (Symbolic.MacawExt arch)])
+partitionCfgs fnName path prog = do
+  let (publicCfgs, auxCfgs) =
+        List.partition (isPublicCblFun fnName) (CSyn.parsedProgCFGs prog)
+  case publicCfgs of
+    [mainCfg] -> Right (mainCfg, auxCfgs)
+    [] -> Left (ExpectedFunctionNotFound fnName path)
+    _ : _ -> Left (MultipleFunctionsFound fnName path)
+
+-- | Does a function have the same name as the @.cbl@ file in which it is
+-- defined? That is, is a function publicly visible from the @.cbl@ file?
+isPublicCblFun :: W4.FunctionName -> LCCR.AnyCFG ext -> Bool
+isPublicCblFun fnName (LCCR.AnyCFG cfg) =
+  C.handleName (LCCR.cfgHandle cfg) == fnName
+
+typecheckAddressOverrideCfg ::
+  C.TypeRepr (Symbolic.ArchRegStruct arch) ->
+  FilePath ->
+  LCCR.CFG (Symbolic.MacawExt arch) blocks args ret ->
+  Either
+    (AddressOverrideError arch)
+    ( LCCR.CFG
+        (Symbolic.MacawExt arch)
+        blocks
+        (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
+        C.UnitType
+    )
+typecheckAddressOverrideCfg archRegsType path cfg = do
+  let argTys = LCCR.cfgArgTypes cfg
+  Refl <-
+    case testEquality argTys (Ctx.Empty Ctx.:> archRegsType) of
+      Just r -> Right r
+      Nothing ->
+        Left (BadAddressOverrideArgs path archRegsType (C.Some argTys))
+  let retTy = LCCR.cfgReturnType cfg
+  Refl <-
+    case testEquality retTy C.UnitRepr of
+      Just r -> Right r
+      Nothing ->
+        Left (BadAddressOverrideReturn path (C.Some retTy))
+  Right cfg
+
+parsedProgToAddressOverride ::
+  Symbolic.SymArchConstraints arch =>
+  C.TypeRepr (Symbolic.ArchRegStruct arch) ->
+  MC.Memory (MC.ArchAddrWidth arch) ->
+  MM.MemWord (MC.ArchAddrWidth arch) ->
+  FilePath ->
+  CSyn.ParsedProgram (Symbolic.MacawExt arch) ->
+  Either (AddressOverrideError arch) (MC.ArchSegmentOff arch, AddressOverride arch)
+parsedProgToAddressOverride archRegsType memory addr path prog = do
+  segOff <-
+    case MM.resolveAbsoluteAddr memory addr of
+      Nothing -> Left (BadAddress (tshow addr) path)
+      Just segOff -> Right segOff
+
+  let fnNameText =
+        Text.pack $ FilePath.dropExtensions $ FilePath.takeBaseName path
+  let fnName = W4.functionNameFromText fnNameText
+
+  (LCCR.AnyCFG mainCfg, auxRegCfgs) <- partitionCfgs fnName path prog
+  defCfg <- typecheckAddressOverrideCfg archRegsType path mainCfg
+
+  let fwdDecs = CSyn.parsedProgForwardDecs prog
+  auxCfgs <-
+    Monad.forM auxRegCfgs $ \(LCCR.AnyCFG auxRegCfg) -> do
+      C.SomeCFG auxCfg <- pure (toSSA auxRegCfg)
+      pure (C.AnyCFG auxCfg)
+
+  let ao =
+        AddressOverride
+          { aoCfg = toSSA defCfg
+          , aoAuxiliaryOverrides = auxCfgs
+          , aoForwardDeclarations = fwdDecs
+          }
+  Right (segOff, ao)
+
 loadAddressOverride ::
   ( Symbolic.SymArchConstraints arch
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
@@ -108,56 +253,11 @@ loadAddressOverride ::
   -- | Absolute address to be overridden
   MM.MemWord (MC.ArchAddrWidth arch) ->
   FilePath ->
-  IO (MC.ArchSegmentOff arch, AddressOverride arch)
+  IO (Either (AddressOverrideError arch) (MC.ArchSegmentOff arch, AddressOverride arch))
 loadAddressOverride archRegsType halloc memory addr path = do
-  segOff <-
-    case MM.resolveAbsoluteAddr memory addr of
-      -- TODO improve error
-      Nothing -> X.throw (GreaseException ("Bad address: " <> tshow addr))
-      Just segOff -> pure segOff
   prog <- parseProgram halloc path
   CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
-
-  let fnNameText =
-        Text.pack $ FilePath.dropExtensions $ FilePath.takeBaseName path
-  let fnName = W4.functionNameFromText fnNameText
-  let (publicCfgs, auxRegCfgs) =
-        List.partition (isPublicCblFun fnName) (CSyn.parsedProgCFGs prog)
-  let userErr :: Text.Text -> IO a
-      userErr msg = X.throw (GreaseException (msg <> " at " <> Text.pack path))
-  case publicCfgs of
-    [LCCR.AnyCFG defCfg] -> do
-      Refl <-
-        case testEquality (LCCR.cfgArgTypes defCfg) (Ctx.Empty Ctx.:> archRegsType) of
-          Nothing -> userErr "Bad address override args"
-          Just r -> pure r
-      Refl <-
-        case testEquality (LCCR.cfgReturnType defCfg) C.UnitRepr of
-          Nothing -> userErr "Bad address override return value"
-          Just r -> pure r
-      let fwdDecs = CSyn.parsedProgForwardDecs prog
-      auxCfgs <-
-        Monad.forM auxRegCfgs $ \(LCCR.AnyCFG auxRegCfg) -> do
-          C.SomeCFG auxCfg <- pure (toSSA auxRegCfg)
-          pure (C.AnyCFG auxCfg)
-      pure
-        ( segOff
-        , AddressOverride
-            { aoCfg = toSSA defCfg
-            , aoAuxiliaryOverrides = auxCfgs
-            , aoForwardDeclarations = fwdDecs
-            }
-        )
-    [] ->
-      userErr ("Expected to find a function named `" <> fnNameText <> "`")
-    _ : _ ->
-      userErr ("Override contains multiple `" <> fnNameText <> "` functions")
-
--- | Does a function have the same name as the @.cbl@ file in which it is
--- defined? That is, is a function publicly visible from the @.cbl@ file?
-isPublicCblFun :: W4.FunctionName -> LCCR.AnyCFG ext -> Bool
-isPublicCblFun fnName (LCCR.AnyCFG cfg) =
-  C.handleName (LCCR.cfgHandle cfg) == fnName
+  pure (parsedProgToAddressOverride archRegsType memory addr path prog)
 
 -- | Parse and register address overrides in the Macaw S-expression syntax.
 --
@@ -171,11 +271,16 @@ loadAddressOverrides ::
   C.HandleAllocator ->
   MC.Memory (MC.ArchAddrWidth arch) ->
   [(Integer, FilePath)] ->
-  IO (AddressOverrides arch)
-loadAddressOverrides archRegsType halloc memory paths =
-  fmap (AddressOverrides . Map.fromList) $ Monad.forM paths $ \(intAddr, path) -> do
-    let addr = fromIntegral intAddr
-    loadAddressOverride archRegsType halloc memory addr path
+  IO (Either (AddressOverrideError arch) (AddressOverrides arch))
+loadAddressOverrides archRegsType halloc memory paths = do
+  results <-
+    Monad.forM paths $ \(intAddr, path) -> do
+      let addr = fromIntegral intAddr
+      loadAddressOverride archRegsType halloc memory addr path
+
+  case sequence results of
+    Left err -> pure (Left err)
+    Right rs -> pure (Right (AddressOverrides (Map.fromList rs)))
 
 ---------------------------------------------------------------------
 
@@ -240,7 +345,7 @@ toInitialState ::
   IO (C.ExecState p sym ext (C.RegEntry sym ret))
 toInitialState crucState retTy action = do
   let ctx = crucState Lens.^. C.stateContext
-  C.withBackend ctx $ \_bak ->
+  C.ctxSolverProof ctx $ do
     pure $
       C.InitialState
         ctx
@@ -266,7 +371,7 @@ runAddressOverride crucState someCfg = do
     toInitialState crucState C.UnitRepr $
       C.runOverrideSim C.UnitRepr $
         C.regValue <$> C.callCFG cfg regs
-  C.withBackend (C.execStateContext initState) $ \_bak -> do
+  C.ctxSolverProof (C.execStateContext initState) $ do
     execResult <- C.executeCrucible [] initState
     case execResult of
       C.FinishedResult _ (C.TotalRes{}) -> pure ()
