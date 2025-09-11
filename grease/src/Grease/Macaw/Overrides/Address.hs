@@ -266,13 +266,13 @@ runAddressOverride crucState someCfg = do
     toInitialState crucState C.UnitRepr $
       C.runOverrideSim C.UnitRepr $
         C.regValue <$> C.callCFG cfg regs
-  C.withBackend (C.execStateContext initState) $ \bak -> do
+  C.withBackend (C.execStateContext initState) $ \_bak -> do
     execResult <- C.executeCrucible [] initState
     case execResult of
       C.FinishedResult _ (C.TotalRes{}) -> pure ()
-      C.AbortedResult _ (C.AbortedExec (C.AssertionFailure simErr) _) ->
-        C.addFailedAssertion bak (C.simErrorReason simErr)
-      _ -> X.throw (GreaseException "Address override did not terminate successfully")
+      C.AbortedResult _ (C.AbortedExec reason _) -> C.abortExecBecause reason
+      _ ->
+        X.throw (GreaseException "Address override did not return a result nor abort")
 
 tryRunAddressOverride ::
   ( sym ~ W4.ExprBuilder t st fs

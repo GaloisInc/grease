@@ -298,7 +298,7 @@ will be passed the current contents of the registers.
 
 Address overrides are subject to a few limitations:
 
-- They must terminate and return a total result.
+- They must terminate and return a total result, or they must abort.
 - They may not modify memory.
 
 <!-- Copyright (c) Galois, Inc. 2024. -->
