@@ -79,7 +79,7 @@ loadSExpOvs ::
   [FilePath] ->
   C.HandleAllocator ->
   C.GlobalVar Mem.Mem ->
-  IO (Seq.Seq (W4.FunctionName, GLOS.LLVMSExpOverride p sym))
+  IO (Seq.Seq (W4.FunctionName, GLOS.LLVMSExpOverride))
 loadSExpOvs sexpOvPaths halloc mvar = do
   mbOvs <- liftIO (GLOS.loadOverrides sexpOvPaths halloc mvar)
   case mbOvs of
