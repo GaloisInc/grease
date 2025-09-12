@@ -67,8 +67,8 @@ instance PP.Pretty LLVMSExpOverrideError where
             , PP.pretty err
             ]
 
--- | A 'CLLVM.SomeLLVMOverride' universally quantified over @p@ and @sym@.
-data AnyLLVMOverride
+-- | A 'CLLVM.SomeLLVMOverride' quantified at a higher rank over @p@ and @sym@.
+newtype AnyLLVMOverride
   = AnyLLVMOverride (forall p sym. CLLVM.SomeLLVMOverride p sym CLLVM.LLVM)
 
 -- | An LLVM function override, corresponding to a single S-expression file.
@@ -107,13 +107,13 @@ isPublicCblFun fnName (C.Reg.AnyCFG cfg) =
 
 -- | Convert an 'C.Reg.AnyCFG' for a function defined in a Crucible-LLVM
 -- S-expression program to a 'CLLVM.SomeLLVMOverride' value.
-acfgToSomeLLVMOverride ::
+acfgToAnyLLVMOverride ::
   Mem.HasPtrWidth w =>
   FilePath {- The file which defines the CFG's function.
               This is only used for error messages. -} ->
   C.Reg.AnyCFG CLLVM.LLVM ->
   Either LLVMSExpOverrideError AnyLLVMOverride
-acfgToSomeLLVMOverride path (C.Reg.AnyCFG cfg) = do
+acfgToAnyLLVMOverride path (C.Reg.AnyCFG cfg) = do
   let argTys = C.Reg.cfgArgTypes cfg
   let retTy = C.Reg.cfgReturnType cfg
   C.SomeCFG ssa <- pure $ C.toSSA cfg
@@ -144,8 +144,8 @@ parsedProgToLLVMSExpOverride path prog = do
   let fnNameText = Text.pack $ dropExtensions $ takeBaseName path
   let fnName = W4.functionNameFromText fnNameText
   (publicCfg, auxCfgs) <- partitionCfgs fnName path prog
-  publicOv <- acfgToSomeLLVMOverride path publicCfg
-  auxOvs <- traverse (acfgToSomeLLVMOverride path) auxCfgs
+  publicOv <- acfgToAnyLLVMOverride path publicCfg
+  auxOvs <- traverse (acfgToAnyLLVMOverride path) auxCfgs
   let fwdDecs = CSyn.parsedProgForwardDecs prog
   let llvmOv =
         LLVMSExpOverride
