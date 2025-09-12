@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- | c.f. "Grease.Macaw.SetupHook"
 module Grease.LLVM.SetupHook (
@@ -9,18 +10,22 @@ module Grease.LLVM.SetupHook (
   moduleSetupHook,
 ) where
 
+import Control.Exception qualified as X
 import Control.Lens ((^.))
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Sequence qualified as Seq
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (Diagnostic (LLVMSetupHookDiagnostic), GreaseLogAction)
 import Grease.Entrypoint qualified as GE
 import Grease.LLVM.Overrides (registerLLVMSexpOverrides)
 import Grease.LLVM.Overrides qualified as GLO
 import Grease.LLVM.Overrides.Builtin (builtinLLVMOverrides)
+import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.LLVM.SetupHook.Diagnostic qualified as Diag
+import Grease.Utility (GreaseException (GreaseException))
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
@@ -37,6 +42,9 @@ import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lumberjack qualified as LJ
+import Prettyprinter qualified as PP
+import Prettyprinter.Render.Text qualified as PP
+import What4.FunctionName qualified as W4
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMSetupHookDiagnostic diag)
@@ -66,6 +74,20 @@ newtype SetupHook sym arch
         C.OverrideSim p sym LLVM rtp a r ()
       )
 
+loadSExpOvs ::
+  Mem.HasPtrWidth w =>
+  [FilePath] ->
+  C.HandleAllocator ->
+  C.GlobalVar Mem.Mem ->
+  IO (Seq.Seq (W4.FunctionName, GLOS.LLVMSExpOverride p sym))
+loadSExpOvs sexpOvPaths halloc mvar = do
+  mbOvs <- liftIO (GLOS.loadOverrides sexpOvPaths halloc mvar)
+  case mbOvs of
+    Left err -> do
+      let msg = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions (PP.pretty err))
+      X.throw (GreaseException ("user error: " <> msg))
+    Right ovs -> pure ovs
+
 -- | A 'SetupHook' for LLVM CFGs from S-expression programs.
 syntaxSetupHook ::
   GreaseLogAction ->
@@ -74,11 +96,13 @@ syntaxSetupHook ::
   CSyn.ParsedProgram LLVM ->
   Map GE.Entrypoint (GE.EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
   SetupHook sym arch
-syntaxSetupHook la ovs prog cfgs =
+syntaxSetupHook la sexpOvPaths prog cfgs =
   SetupHook $ \bak halloc llvmCtx fs -> do
     let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
     let dl = TCtx.llvmDataLayout typeCtx
     let mvar = Trans.llvmMemVar llvmCtx
+
+    ovs <- liftIO (loadSExpOvs sexpOvPaths halloc mvar)
 
     -- Register built-in and user overrides.
     funOvs <-
@@ -119,12 +143,14 @@ moduleSetupHook ::
   Trans.ModuleTranslation arch ->
   Map GE.Entrypoint (GE.EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
   SetupHook sym arch
-moduleSetupHook la ovs trans cfgs =
+moduleSetupHook la sexpOvPaths trans cfgs =
   SetupHook $ \bak halloc llvmCtx fs -> do
     let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
     let dl = TCtx.llvmDataLayout typeCtx
     let mvar = Trans.llvmMemVar llvmCtx
     let llvmMod = trans ^. Trans.modTransModule
+
+    ovs <- liftIO (loadSExpOvs sexpOvPaths halloc mvar)
 
     -- Register defined functions...
     let handleTranslationWarning warn = doLog la (Diag.LLVMTranslationWarning warn)

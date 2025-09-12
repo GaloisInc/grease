@@ -28,7 +28,7 @@ import Grease.Diagnostic (Diagnostic (LLVMOverridesDiagnostic), GreaseLogAction)
 import Grease.LLVM.Overrides.Builtin (basicLLVMOverrides)
 import Grease.LLVM.Overrides.Declare (mkDeclare)
 import Grease.LLVM.Overrides.Diagnostic as Diag
-import Grease.LLVM.Overrides.SExp (LLVMSExpOverride (..), loadOverrides)
+import Grease.LLVM.Overrides.SExp (LLVMSExpOverride (..))
 import Grease.Skip (declSkipOverride, registerSkipOverride)
 import Grease.Syntax.Overrides (freshBytesOverride, tryBindTypedOverride)
 import Grease.Utility (declaredFunNotFound, llvmOverrideName)
@@ -119,7 +119,7 @@ registerLLVMOverrides ::
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
-  [FilePath] ->
+  Seq.Seq (W4.FunctionName, LLVMSExpOverride p sym) ->
   bak ->
   C.HandleAllocator ->
   LLVMContext arch ->
@@ -130,9 +130,8 @@ registerLLVMOverrides ::
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
   C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
-registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx fs decls = do
+registerLLVMOverrides la builtinOvs userOvs bak halloc llvmCtx fs decls = do
   let mvar = CLLVM.llvmMemVar llvmCtx
-  userOvs <- liftIO (loadOverrides paths halloc mvar)
 
   -- For convenience, we treat all programs and overrides as if they `declare`d
   -- all of the libc and "basic" LLVM functions.
@@ -212,7 +211,7 @@ registerLLVMSexpOverrides ::
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
-  [FilePath] ->
+  Seq.Seq (W4.FunctionName, LLVMSExpOverride p sym) ->
   bak ->
   C.HandleAllocator ->
   LLVMContext arch ->
@@ -222,9 +221,9 @@ registerLLVMSexpOverrides ::
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
   C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
-registerLLVMSexpOverrides la builtinOvs paths bak halloc llvmCtx fs prog = do
+registerLLVMSexpOverrides la builtinOvs sexpOvs bak halloc llvmCtx fs prog = do
   let decls = forwardDeclDecls (CSyn.parsedProgForwardDecs prog)
-  registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx fs decls
+  registerLLVMOverrides la builtinOvs sexpOvs bak halloc llvmCtx fs decls
 
 -- | For an LLVM module, register function overrides and return a 'Map.Map' of
 -- override names to their corresponding 'CLLVM.SomeLLVMOverride's, suitable
@@ -245,7 +244,7 @@ registerLLVMModuleOverrides ::
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
-  [FilePath] ->
+  Seq.Seq (W4.FunctionName, LLVMSExpOverride p sym) ->
   bak ->
   C.HandleAllocator ->
   LLVMContext arch ->
@@ -255,9 +254,9 @@ registerLLVMModuleOverrides ::
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
   C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
-registerLLVMModuleOverrides la builtinOvs paths bak halloc llvmCtx fs llMod = do
+registerLLVMModuleOverrides la builtinOvs sexpOvs bak halloc llvmCtx fs llMod = do
   let decls = L.modDeclares llMod
-  registerLLVMOverrides la builtinOvs paths bak halloc llvmCtx fs decls
+  registerLLVMOverrides la builtinOvs sexpOvs bak halloc llvmCtx fs decls
 
 -- | Redirect handles for forward declarations in an LLVM S-expression program
 -- to call the corresponding LLVM overrides. Treat any calls to unresolved
