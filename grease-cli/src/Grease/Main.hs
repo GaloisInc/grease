@@ -114,6 +114,7 @@ import Grease.Entrypoint
 import Grease.Heuristic
 import Grease.LLVM qualified as LLVM
 import Grease.LLVM.DebugInfo qualified as GLD
+import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.LLVM.SetupHook qualified as LLVM (SetupHook, moduleSetupHook, syntaxSetupHook)
 import Grease.LLVM.SetupHook.Diagnostic qualified as LDiag (Diagnostic (LLVMTranslationWarning))
 import Grease.Macaw
@@ -1187,6 +1188,20 @@ loadAddrOvs archCtx halloc memory simOpts = do
       throw (GreaseException ("user error: " <> msg))
     Right addrOvs -> pure addrOvs
 
+loadLLVMSExpOvs ::
+  Mem.HasPtrWidth w =>
+  [FilePath] ->
+  C.HandleAllocator ->
+  C.GlobalVar Mem.Mem ->
+  IO (Seq.Seq (W4.FunctionName, GLOS.LLVMSExpOverride))
+loadLLVMSExpOvs sexpOvPaths halloc mvar = do
+  mbOvs <- liftIO (GLOS.loadOverrides sexpOvPaths halloc mvar)
+  case mbOvs of
+    Left err -> do
+      let msg = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions (PP.pretty err))
+      throw (GreaseException ("user error: " <> msg))
+    Right ovs -> pure ovs
+
 simulateMacawSyntax ::
   forall arch.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
@@ -1574,9 +1589,10 @@ simulateLlvmSyntax simOpts la = do
           , Trans.llvmGlobalAliases = Map.empty
           , Trans.llvmFunctionAliases = Map.empty
           }
+  sexpOvs <- loadLLVMSExpOvs (simOverrides simOpts) halloc mvar
   let llvmMod = Nothing
   let setupHook :: forall sym arch. LLVM.SetupHook sym arch
-      setupHook = LLVM.syntaxSetupHook la (simOverrides simOpts) prog cfgs
+      setupHook = LLVM.syntaxSetupHook la sexpOvs prog cfgs
   simulateLlvmCfgs la simOpts halloc llvmCtx llvmMod mkMem setupHook cfgs
 
 -- | Helper, not exported
@@ -1657,8 +1673,9 @@ simulateLlvm transOpts simOpts la = do
                   pure (entry, entrypointCfgs)
                 Nothing -> throw $ GreaseException $ "Could not find function: " <> nm
 
+    sexpOvs <- loadLLVMSExpOvs (simOverrides simOpts) halloc mvar
     let setupHook :: forall sym. LLVM.SetupHook sym arch
-        setupHook = LLVM.moduleSetupHook la (simOverrides simOpts) trans cfgs
+        setupHook = LLVM.moduleSetupHook la sexpOvs trans cfgs
 
     simulateLlvmCfgs la simOpts halloc llvmCtxt (Just llvmMod) mkMem setupHook cfgs
 
