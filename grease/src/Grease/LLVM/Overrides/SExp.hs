@@ -14,11 +14,11 @@ module Grease.LLVM.Overrides.SExp (
   loadOverrides,
 ) where
 
-import Data.List qualified as List
 import Data.Map qualified as Map
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Grease.LLVM.Overrides.Declare (mkDeclare)
+import Grease.Overrides (OverrideNameError (..), partitionCfgs)
 import Grease.Syntax (parseProgram)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
@@ -36,30 +36,13 @@ import What4.FunctionName qualified as W4
 
 -- | Error type for 'loadOverrides'.
 data LLVMSExpOverrideError
-  = ExpectedFunctionNotFound W4.FunctionName FilePath
-  | MultipleFunctionsFound W4.FunctionName FilePath
+  = OverrideNameError OverrideNameError
   | UnsupportedType FilePath Text.Text
 
 instance PP.Pretty LLVMSExpOverrideError where
   pretty =
     \case
-      ExpectedFunctionNotFound fnName path ->
-        PP.nest 2 $
-          PP.vcat
-            [ "Expected to find a function named"
-                PP.<+> PP.squotes (PP.pretty fnName)
-            , "in" PP.<+> PP.pretty path
-            ]
-      MultipleFunctionsFound fnName path ->
-        PP.nest 2 $
-          PP.vcat
-            [ PP.hsep
-                [ "Override contains multiple"
-                , PP.squotes (PP.pretty fnName)
-                , "functions"
-                ]
-            , "in" PP.<+> PP.pretty path
-            ]
+      OverrideNameError err -> PP.pretty err
       UnsupportedType path err ->
         PP.nest 2 $
           PP.vcat
@@ -83,27 +66,6 @@ data LLVMSExpOverride
   -- ^ The map of names of forward declarations in the S-expression file to
   -- their handles.
   }
-
-partitionCfgs ::
-  W4.FunctionName ->
-  FilePath ->
-  CSyn.ParsedProgram CLLVM.LLVM ->
-  Either
-    LLVMSExpOverrideError
-    (C.Reg.AnyCFG CLLVM.LLVM, [C.Reg.AnyCFG CLLVM.LLVM])
-partitionCfgs fnName path prog = do
-  let (publicCfgs, auxCfgs) =
-        List.partition (isPublicCblFun fnName) (CSyn.parsedProgCFGs prog)
-  case publicCfgs of
-    [mainCfg] -> Right (mainCfg, auxCfgs)
-    [] -> Left (ExpectedFunctionNotFound fnName path)
-    _ : _ -> Left (MultipleFunctionsFound fnName path)
-
--- | Does a function have the same name as the @.cbl@ file in which it is
--- defined? That is, is a function publicly visible from the @.cbl@ file?
-isPublicCblFun :: W4.FunctionName -> C.Reg.AnyCFG ext -> Bool
-isPublicCblFun fnName (C.Reg.AnyCFG cfg) =
-  C.handleName (C.Reg.cfgHandle cfg) == fnName
 
 -- | Convert an 'C.Reg.AnyCFG' for a function defined in a Crucible-LLVM
 -- S-expression program to a 'CLLVM.SomeLLVMOverride' value.
@@ -143,7 +105,10 @@ parsedProgToLLVMSExpOverride ::
 parsedProgToLLVMSExpOverride path prog = do
   let fnNameText = Text.pack $ dropExtensions $ takeBaseName path
   let fnName = W4.functionNameFromText fnNameText
-  (publicCfg, auxCfgs) <- partitionCfgs fnName path prog
+  (publicCfg, auxCfgs) <-
+    case partitionCfgs fnName path prog of
+      Left err -> Left (OverrideNameError err)
+      Right result -> Right result
   publicOv <- acfgToAnyLLVMOverride path publicCfg
   auxOvs <- traverse (acfgToAnyLLVMOverride path) auxCfgs
   let fwdDecs = CSyn.parsedProgForwardDecs prog
