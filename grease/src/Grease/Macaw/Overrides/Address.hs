@@ -22,7 +22,6 @@ import Control.Applicative (empty)
 import Control.Exception qualified as X
 import Control.Lens qualified as Lens
 import Control.Monad qualified as Monad
-import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
@@ -38,6 +37,7 @@ import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Macaw.Arch (ArchContext, archVals)
 import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
+import Grease.Overrides (OverrideNameError (..), partitionCfgs)
 import Grease.Syntax (parseProgram)
 import Grease.Utility (GreaseException (GreaseException), tshow)
 import Lang.Crucible.Backend qualified as C
@@ -90,8 +90,7 @@ data AddressOverrideError arch
       (C.TypeRepr (Symbolic.ArchRegStruct arch))
       (C.Some C.CtxRepr)
   | BadAddressOverrideReturn FilePath (C.Some C.TypeRepr)
-  | ExpectedFunctionNotFound W4.FunctionName FilePath
-  | MultipleFunctionsFound W4.FunctionName FilePath
+  | OverrideNameError OverrideNameError
 
 instance PP.Pretty (AddressOverrideError arch) where
   pretty =
@@ -117,25 +116,7 @@ instance PP.Pretty (AddressOverrideError arch) where
             , "Actual:" PP.<+> PP.pretty actual
             , "See https://galoisinc.github.io/grease/overrides.html#address-overrides"
             ]
-      ExpectedFunctionNotFound fnName path ->
-        PP.nest 2 $
-          PP.vcat
-            [ "Expected to find a function named"
-                PP.<+> PP.squotes (PP.pretty fnName)
-            , "at" PP.<+> PP.pretty path
-            , "See https://galoisinc.github.io/grease/overrides.html#address-overrides"
-            ]
-      MultipleFunctionsFound fnName path ->
-        PP.nest 2 $
-          PP.vcat
-            [ PP.hsep
-                [ "Override contains multiple"
-                , PP.squotes (PP.pretty fnName)
-                , "functions"
-                ]
-            , "at" PP.<+> PP.pretty path
-            , "See https://galoisinc.github.io/grease/overrides.html#address-overrides"
-            ]
+      OverrideNameError err -> PP.pretty err
 
 ---------------------------------------------------------------------
 
@@ -158,28 +139,6 @@ data AddressOverride arch
 
 newtype AddressOverrides arch
   = AddressOverrides (Map.Map (MC.ArchSegmentOff arch) (AddressOverride arch))
-
-partitionCfgs ::
-  Symbolic.SymArchConstraints arch =>
-  W4.FunctionName ->
-  FilePath ->
-  CSyn.ParsedProgram (Symbolic.MacawExt arch) ->
-  Either
-    (AddressOverrideError arch)
-    (LCCR.AnyCFG (Symbolic.MacawExt arch), [LCCR.AnyCFG (Symbolic.MacawExt arch)])
-partitionCfgs fnName path prog = do
-  let (publicCfgs, auxCfgs) =
-        List.partition (isPublicCblFun fnName) (CSyn.parsedProgCFGs prog)
-  case publicCfgs of
-    [mainCfg] -> Right (mainCfg, auxCfgs)
-    [] -> Left (ExpectedFunctionNotFound fnName path)
-    _ : _ -> Left (MultipleFunctionsFound fnName path)
-
--- | Does a function have the same name as the @.cbl@ file in which it is
--- defined? That is, is a function publicly visible from the @.cbl@ file?
-isPublicCblFun :: W4.FunctionName -> LCCR.AnyCFG ext -> Bool
-isPublicCblFun fnName (LCCR.AnyCFG cfg) =
-  C.handleName (LCCR.cfgHandle cfg) == fnName
 
 typecheckAddressOverrideCfg ::
   C.TypeRepr (Symbolic.ArchRegStruct arch) ->
@@ -226,7 +185,10 @@ parsedProgToAddressOverride archRegsType memory addr path prog = do
         Text.pack $ FilePath.dropExtensions $ FilePath.takeBaseName path
   let fnName = W4.functionNameFromText fnNameText
 
-  (LCCR.AnyCFG mainCfg, auxRegCfgs) <- partitionCfgs fnName path prog
+  (LCCR.AnyCFG mainCfg, auxRegCfgs) <-
+    case partitionCfgs fnName path prog of
+      Left err -> Left (OverrideNameError err)
+      Right result -> Right result
   defCfg <- typecheckAddressOverrideCfg archRegsType path mainCfg
 
   let fwdDecs = CSyn.parsedProgForwardDecs prog
