@@ -122,7 +122,6 @@ registerLLVMOverrides ::
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
   Seq.Seq (W4.FunctionName, LLVMSExpOverride) ->
   bak ->
-  C.HandleAllocator ->
   LLVMContext arch ->
   SymIO.LLVMFileSystem 64 ->
   -- | @declare@s in the target program
@@ -131,7 +130,7 @@ registerLLVMOverrides ::
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
   C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
-registerLLVMOverrides la builtinOvs userOvs bak halloc llvmCtx fs decls = do
+registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls = do
   let mvar = CLLVM.llvmMemVar llvmCtx
 
   -- For convenience, we treat all programs and overrides as if they `declare`d
@@ -214,7 +213,6 @@ registerLLVMSexpOverrides ::
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
   Seq.Seq (W4.FunctionName, LLVMSExpOverride) ->
   bak ->
-  C.HandleAllocator ->
   LLVMContext arch ->
   SymIO.LLVMFileSystem 64 ->
   CSyn.ParsedProgram CLLVM.LLVM ->
@@ -222,9 +220,9 @@ registerLLVMSexpOverrides ::
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
   C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
-registerLLVMSexpOverrides la builtinOvs sexpOvs bak halloc llvmCtx fs prog = do
+registerLLVMSexpOverrides la builtinOvs sexpOvs bak llvmCtx fs prog = do
   let decls = forwardDeclDecls (CSyn.parsedProgForwardDecs prog)
-  registerLLVMOverrides la builtinOvs sexpOvs bak halloc llvmCtx fs decls
+  registerLLVMOverrides la builtinOvs sexpOvs bak llvmCtx fs decls
 
 -- | For an LLVM module, register function overrides and return a 'Map.Map' of
 -- override names to their corresponding 'CLLVM.SomeLLVMOverride's, suitable
@@ -247,7 +245,6 @@ registerLLVMModuleOverrides ::
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
   Seq.Seq (W4.FunctionName, LLVMSExpOverride) ->
   bak ->
-  C.HandleAllocator ->
   LLVMContext arch ->
   SymIO.LLVMFileSystem 64 ->
   L.Module ->
@@ -255,9 +252,9 @@ registerLLVMModuleOverrides ::
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
   C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
-registerLLVMModuleOverrides la builtinOvs sexpOvs bak halloc llvmCtx fs llMod = do
+registerLLVMModuleOverrides la builtinOvs sexpOvs bak llvmCtx fs llMod = do
   let decls = L.modDeclares llMod
-  registerLLVMOverrides la builtinOvs sexpOvs bak halloc llvmCtx fs decls
+  registerLLVMOverrides la builtinOvs sexpOvs bak llvmCtx fs decls
 
 -- | Redirect handles for forward declarations in an LLVM S-expression program
 -- to call the corresponding LLVM overrides. Treat any calls to unresolved

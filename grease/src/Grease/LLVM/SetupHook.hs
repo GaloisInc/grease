@@ -106,7 +106,7 @@ syntaxSetupHook la sexpOvPaths prog cfgs =
 
     -- Register built-in and user overrides.
     funOvs <-
-      registerLLVMSexpOverrides la (builtinLLVMOverrides fs) ovs bak halloc llvmCtx fs prog
+      registerLLVMSexpOverrides la (builtinLLVMOverrides fs) ovs bak llvmCtx fs prog
 
     -- In addition to binding function handles for the user overrides,
     -- we must also redirect function handles resulting from parsing
@@ -160,7 +160,7 @@ moduleSetupHook la sexpOvPaths trans cfgs =
     -- registering defined functions so that overrides take precedence over
     -- defined functions.
     funOvs <-
-      GLO.registerLLVMModuleOverrides la (builtinLLVMOverrides fs) ovs bak halloc llvmCtx fs llvmMod
+      GLO.registerLLVMModuleOverrides la (builtinLLVMOverrides fs) ovs bak llvmCtx fs llvmMod
     -- If a startup override exists and it contains forward declarations,
     -- then we redirect the function handles to actually call the respective
     -- overrides.
