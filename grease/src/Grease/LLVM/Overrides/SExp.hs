@@ -8,6 +8,7 @@
 -- Description      : Support for LLVM overrides written in the S-expression syntax
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.LLVM.Overrides.SExp (
+  AnyLLVMOverride (..),
   LLVMSExpOverride (..),
   LLVMSExpOverrideError (..),
   loadOverrides,
@@ -66,15 +67,17 @@ instance PP.Pretty LLVMSExpOverrideError where
             , PP.pretty err
             ]
 
--- TODO: Universally quantify over p and sym
+-- | A 'CLLVM.SomeLLVMOverride' universally quantified over @p@ and @sym@.
+data AnyLLVMOverride
+  = AnyLLVMOverride (forall p sym. CLLVM.SomeLLVMOverride p sym CLLVM.LLVM)
 
 -- | An LLVM function override, corresponding to a single S-expression file.
-data LLVMSExpOverride p sym
+data LLVMSExpOverride
   = LLVMSExpOverride
-  { lsoPublicOverride :: CLLVM.SomeLLVMOverride p sym CLLVM.LLVM
+  { lsoPublicOverride :: AnyLLVMOverride
   -- ^ The override for the public function, whose name matches that of the
   -- S-expression file.
-  , lsoAuxiliaryOverrides :: [CLLVM.SomeLLVMOverride p sym CLLVM.LLVM]
+  , lsoAuxiliaryOverrides :: [AnyLLVMOverride]
   -- ^ Overrides for the auxiliary functions in the S-expression file.
   , lsoForwardDeclarations :: Map.Map W4.FunctionName C.SomeHandle
   -- ^ The map of names of forward declarations in the S-expression file to
@@ -109,7 +112,7 @@ acfgToSomeLLVMOverride ::
   FilePath {- The file which defines the CFG's function.
               This is only used for error messages. -} ->
   C.Reg.AnyCFG CLLVM.LLVM ->
-  Either LLVMSExpOverrideError (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM)
+  Either LLVMSExpOverrideError AnyLLVMOverride
 acfgToSomeLLVMOverride path (C.Reg.AnyCFG cfg) = do
   let argTys = C.Reg.cfgArgTypes cfg
   let retTy = C.Reg.cfgReturnType cfg
@@ -120,22 +123,23 @@ acfgToSomeLLVMOverride path (C.Reg.AnyCFG cfg) = do
     Left err -> Left (UnsupportedType path err)
     Right decl ->
       Right $
-        CLLVM.SomeLLVMOverride $
-          CLLVM.LLVMOverride
-            { CLLVM.llvmOverride_declare = decl
-            , CLLVM.llvmOverride_args = argTys
-            , CLLVM.llvmOverride_ret = retTy
-            , CLLVM.llvmOverride_def =
-                \_mvar args ->
-                  C.regValue <$> C.callCFG ssa (C.RegMap args)
-            }
+        AnyLLVMOverride $
+          CLLVM.SomeLLVMOverride $
+            CLLVM.LLVMOverride
+              { CLLVM.llvmOverride_declare = decl
+              , CLLVM.llvmOverride_args = argTys
+              , CLLVM.llvmOverride_ret = retTy
+              , CLLVM.llvmOverride_def =
+                  \_mvar args ->
+                    C.regValue <$> C.callCFG ssa (C.RegMap args)
+              }
 
 -- | Convert a parsed program to an LLVM S-expression override.
 parsedProgToLLVMSExpOverride ::
   Mem.HasPtrWidth w =>
   FilePath ->
   CSyn.ParsedProgram CLLVM.LLVM ->
-  Either LLVMSExpOverrideError (W4.FunctionName, LLVMSExpOverride p sym)
+  Either LLVMSExpOverrideError (W4.FunctionName, LLVMSExpOverride)
 parsedProgToLLVMSExpOverride path prog = do
   let fnNameText = Text.pack $ dropExtensions $ takeBaseName path
   let fnName = W4.functionNameFromText fnNameText
@@ -158,7 +162,7 @@ loadOverride ::
   FilePath ->
   C.HandleAllocator ->
   C.GlobalVar Mem.Mem ->
-  IO (Either LLVMSExpOverrideError (W4.FunctionName, LLVMSExpOverride p sym))
+  IO (Either LLVMSExpOverrideError (W4.FunctionName, LLVMSExpOverride))
 loadOverride path halloc mvar = do
   let ?parserHooks = llvmParserHooks emptyParserHooks mvar
   prog <- parseProgram halloc path
@@ -171,7 +175,7 @@ loadOverrides ::
   [FilePath] ->
   C.HandleAllocator ->
   C.GlobalVar Mem.Mem ->
-  IO (Either LLVMSExpOverrideError (Seq.Seq (W4.FunctionName, LLVMSExpOverride p sym)))
+  IO (Either LLVMSExpOverrideError (Seq.Seq (W4.FunctionName, LLVMSExpOverride)))
 loadOverrides paths halloc mvar = do
   results <- traverse (\path -> loadOverride path halloc mvar) paths
   pure (Seq.fromList <$> sequence results)

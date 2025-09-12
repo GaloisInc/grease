@@ -29,6 +29,7 @@ import Grease.LLVM.Overrides.Builtin (basicLLVMOverrides)
 import Grease.LLVM.Overrides.Declare (mkDeclare)
 import Grease.LLVM.Overrides.Diagnostic as Diag
 import Grease.LLVM.Overrides.SExp (LLVMSExpOverride (..))
+import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.Skip (declSkipOverride, registerSkipOverride)
 import Grease.Syntax.Overrides (freshBytesOverride, tryBindTypedOverride)
 import Grease.Utility (declaredFunNotFound, llvmOverrideName)
@@ -119,7 +120,7 @@ registerLLVMOverrides ::
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
-  Seq.Seq (W4.FunctionName, LLVMSExpOverride p sym) ->
+  Seq.Seq (W4.FunctionName, LLVMSExpOverride) ->
   bak ->
   C.HandleAllocator ->
   LLVMContext arch ->
@@ -170,10 +171,10 @@ registerLLVMOverrides la builtinOvs userOvs bak halloc llvmCtx fs decls = do
 
   userOvs' <-
     forM userOvs $ \(nm, lso) -> do
-      let publicOv = lsoPublicOverride lso
+      let GLOS.AnyLLVMOverride publicOv = lsoPublicOverride lso
           auxOvs = lsoAuxiliaryOverrides lso
       registerOv publicOv
-      Foldable.traverse_ registerOv auxOvs
+      Foldable.traverse_ (\(GLOS.AnyLLVMOverride ov) -> registerOv ov) auxOvs
       pure (nm, publicOv)
   -- Similarly, we put the user overrides after the built-in overrides here
   -- (Map.fromList will favor later entries over earlier ones).
@@ -211,7 +212,7 @@ registerLLVMSexpOverrides ::
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
-  Seq.Seq (W4.FunctionName, LLVMSExpOverride p sym) ->
+  Seq.Seq (W4.FunctionName, LLVMSExpOverride) ->
   bak ->
   C.HandleAllocator ->
   LLVMContext arch ->
@@ -244,7 +245,7 @@ registerLLVMModuleOverrides ::
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
-  Seq.Seq (W4.FunctionName, LLVMSExpOverride p sym) ->
+  Seq.Seq (W4.FunctionName, LLVMSExpOverride) ->
   bak ->
   C.HandleAllocator ->
   LLVMContext arch ->
