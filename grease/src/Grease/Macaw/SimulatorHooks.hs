@@ -65,12 +65,13 @@ greaseMacawExtImpl ::
   bak ->
   GreaseLogAction ->
   AddressOverrides arch ->
+  C.GlobalVar Mem.Mem ->
   C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   C.ExtensionImpl p sym (Symbolic.MacawExt arch)
-greaseMacawExtImpl archCtx bak la tgtOvs macawExtImpl =
+greaseMacawExtImpl archCtx bak la tgtOvs memVar macawExtImpl =
   macawExtImpl
     { C.extensionEval = extensionEval macawExtImpl
-    , C.extensionExec = extensionExec archCtx bak la tgtOvs macawExtImpl
+    , C.extensionExec = extensionExec archCtx bak la tgtOvs memVar macawExtImpl
     }
 
 -- | This evaluates a Macaw statement extension in the simulator.
@@ -132,9 +133,10 @@ extensionExec ::
   bak ->
   GreaseLogAction ->
   AddressOverrides arch ->
+  C.GlobalVar Mem.Mem ->
   C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   Symbolic.MacawEvalStmtFunc (C.StmtExtension (Symbolic.MacawExt arch)) p sym (Symbolic.MacawExt arch)
-extensionExec archCtx bak la tgtOvs baseExt stmt crucState = do
+extensionExec archCtx bak la tgtOvs memVar baseExt stmt crucState = do
   let sym = C.backendGetSym bak
   case stmt of
     Symbolic.PtrAnd _w (C.RegEntry _ x) (C.RegEntry _ y) -> do
@@ -162,7 +164,7 @@ extensionExec archCtx bak la tgtOvs baseExt stmt crucState = do
       case MM.incSegmentOff baddr (MM.memWordToUnsigned iaddr) of
         Just segOff -> do
           doLog la (Diag.ExecutingInstruction (PP.pretty segOff) dis)
-          maybeRunAddressOverride archCtx crucState segOff tgtOvs
+          maybeRunAddressOverride archCtx memVar crucState segOff tgtOvs
           pure ((), crucState)
         Nothing ->
           panic
