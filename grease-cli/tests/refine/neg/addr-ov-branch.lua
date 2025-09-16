@@ -7,6 +7,5 @@ flags {"--symbol", "test"}
 flags {"--addr-override", "0x401000:tests/refine/neg/extra/addr-override-branch.x64.cbl"}
 -- This can be any test that is expected to refine properly.
 go "tests/refine/pos/compare_to_null/test.x64.elf"
-exception()
--- TODO(#376): Don't throw an exception here
-check "Address override did not return a result nor abort"
+could_not_infer()
+check "rdi was null"
