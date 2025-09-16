@@ -50,6 +50,7 @@ import Lang.Crucible.LLVM.MemModel qualified as LCLM
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
+import Lang.Crucible.Simulator.GlobalState qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Prettyprinter qualified as PP
@@ -301,17 +302,22 @@ registerAddressOverrideHandles bak funOvs addrOvs = do
 
 toInitialState ::
   sym ~ W4.ExprBuilder t st fs =>
+  C.GlobalVar LCLM.Mem ->
   C.CrucibleState p sym ext rtp blocks r args ->
   C.TypeRepr ret ->
   C.ExecCont p sym ext (C.RegEntry sym ret) (C.OverrideLang ret) ('Just Ctx.EmptyCtx) ->
   IO (C.ExecState p sym ext (C.RegEntry sym ret))
-toInitialState crucState retTy action = do
+toInitialState memVar crucState retTy action = do
   let ctx = crucState Lens.^. C.stateContext
+  let globals =
+        case C.lookupGlobal memVar (crucState Lens.^. C.stateGlobals) of
+          Nothing -> C.emptyGlobals
+          Just mem -> C.insertGlobal memVar mem C.emptyGlobals
   C.ctxSolverProof ctx $
     pure $
       C.InitialState
         ctx
-        (crucState Lens.^. C.stateGlobals)
+        globals
         C.defaultAbortHandler -- (crucState Lens.^. C.abortHandler)
         retTy
         action
@@ -323,14 +329,15 @@ runAddressOverride ::
   ( sym ~ W4.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
   ) =>
+  C.GlobalVar LCLM.Mem ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) C.UnitType ->
   C.RegEntry sym (Symbolic.ArchRegStruct arch) ->
   IO ()
-runAddressOverride crucState someCfg regs = do
+runAddressOverride memVar crucState someCfg regs = do
   C.SomeCFG cfg <- pure someCfg
   initState <-
-    toInitialState crucState C.UnitRepr $
+    toInitialState memVar crucState C.UnitRepr $
       C.runOverrideSim C.UnitRepr $
         C.regValue <$> C.callCFG cfg (C.RegMap (Ctx.singleton regs))
   C.ctxSolverProof (C.execStateContext initState) $ do
@@ -351,16 +358,17 @@ tryRunAddressOverride ::
   , Symbolic.SymArchConstraints arch
   ) =>
   ArchContext arch ->
+  C.GlobalVar LCLM.Mem ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) C.UnitType ->
   IO ()
-tryRunAddressOverride archCtx crucState cfg = do
+tryRunAddressOverride archCtx memVar crucState cfg = do
   let archFns = archCtx Lens.^. archVals . Lens.to Symbolic.archFunctions
   case DMSR.simStateRegs archFns crucState of
     Nothing -> pure ()
     Just regs ->
       let regsEntry = C.RegEntry (regStructRepr archCtx) regs
-       in runAddressOverride crucState cfg regsEntry
+       in runAddressOverride memVar crucState cfg regsEntry
 
 -- | See if there is an address override corresponding to the current
 -- instruction pointer value, and if so, run it.
@@ -369,17 +377,18 @@ maybeRunAddressOverride ::
   , Symbolic.SymArchConstraints arch
   ) =>
   ArchContext arch ->
+  C.GlobalVar LCLM.Mem ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
   -- | Current instruction pointer
   MC.ArchSegmentOff arch ->
   AddressOverrides arch ->
   IO ()
-maybeRunAddressOverride archCtx crucState segOff (AddressOverrides tgtOvs) =
+maybeRunAddressOverride archCtx memVar crucState segOff (AddressOverrides tgtOvs) =
   case Map.lookup segOff tgtOvs of
     Nothing -> pure ()
     Just tgtOv -> do
       AddressOverride cfg _ _ <- pure tgtOv
-      tryRunAddressOverride archCtx crucState cfg
+      tryRunAddressOverride archCtx memVar crucState cfg
 
 regStructRepr :: ArchContext arch -> C.TypeRepr (Symbolic.ArchRegStruct arch)
 regStructRepr arch =

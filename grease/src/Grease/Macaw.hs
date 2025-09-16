@@ -531,7 +531,7 @@ initState bak la macawExtImpl halloc mvar mem0 globs0 (SymIO.SomeOverrideSim ini
   let sym = C.backendGetSym bak
   (mem1, globs1) <- liftIO $ (arch ^. archInitGlobals) (Stubs.Sym sym bak) (getSetupMem mem0) globs0
   let globs2 = C.insertGlobal mvar mem1 globs1
-  let extImpl = greaseMacawExtImpl arch bak la tgtOvs macawExtImpl
+  let extImpl = greaseMacawExtImpl arch bak la tgtOvs mvar macawExtImpl
   let cfgHdl = C.cfgHandle cfg
   let bindings =
         C.FnBindings $
