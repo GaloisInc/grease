@@ -1,5 +1,3 @@
-(declare @malloc ((size (Bitvector 64))) (Ptr 64))
-
 (defun @addr-override-branch ((regs X86Regs)) Unit
   (start start:
     (let rdi (get-reg rdi regs))
