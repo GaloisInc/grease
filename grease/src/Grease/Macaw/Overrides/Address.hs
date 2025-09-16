@@ -337,6 +337,11 @@ runAddressOverride crucState someCfg regs = do
     execResult <- C.executeCrucible [] initState
     case execResult of
       C.FinishedResult _ (C.TotalRes{}) -> pure ()
+      C.FinishedResult _ (C.PartialRes loc p _gp _aborted) -> do
+        let ctx = crucState Lens.^. C.stateContext
+        C.withBackend ctx $ \bak -> do
+          C.assert bak p (C.GenericSimError ("Assertion from address override at " ++ show loc))
+          pure ()
       C.AbortedResult _ (C.AbortedExec reason _) -> C.abortExecBecause reason
       _ ->
         X.throw (GreaseException "Address override did not return a result nor abort")
