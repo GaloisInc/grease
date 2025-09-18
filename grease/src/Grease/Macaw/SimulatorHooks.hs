@@ -164,8 +164,8 @@ extensionExec archCtx bak la tgtOvs memVar baseExt stmt crucState = do
       case MM.incSegmentOff baddr (MM.memWordToUnsigned iaddr) of
         Just segOff -> do
           doLog la (Diag.ExecutingInstruction (PP.pretty segOff) dis)
-          maybeRunAddressOverride archCtx memVar crucState segOff tgtOvs
-          pure ((), crucState)
+          crucState' <- maybeRunAddressOverride archCtx memVar crucState segOff tgtOvs
+          pure ((), crucState')
         Nothing ->
           panic
             "extensionExec"

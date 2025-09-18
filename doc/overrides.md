@@ -293,8 +293,9 @@ executing binaries. Address overrides follow the file and function naming
 conventions described above.
 
 An address override takes the register struct (e.g., `X86Regs`) as an input
-and returns `Unit`. When control reaches the address in question, the override
-will be passed the current contents of the registers.
+and also returns it. When control reaches the address in question, the override
+will be passed the current contents of the registers, and may return modified
+registers.
 
 Address overrides are subject to a few limitations:
 

@@ -1,3 +1,3 @@
-(defun @addr-override-bad-return ((regs X86Regs)) X86Regs
+(defun @addr-override-bad-return ((regs X86Regs)) Unit
   (start start:
-    (return regs)))
+    (return ())))

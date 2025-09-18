@@ -90,7 +90,10 @@ data AddressOverrideError arch
       FilePath
       (C.TypeRepr (Symbolic.ArchRegStruct arch))
       (C.Some C.CtxRepr)
-  | BadAddressOverrideReturn FilePath (C.Some C.TypeRepr)
+  | BadAddressOverrideReturn
+      FilePath
+      (C.TypeRepr (Symbolic.ArchRegStruct arch))
+      (C.Some C.TypeRepr)
   | OverrideNameError OverrideNameError
 
 instance PP.Pretty (AddressOverrideError arch) where
@@ -108,12 +111,12 @@ instance PP.Pretty (AddressOverrideError arch) where
             , "Actual:" PP.<+> PP.list (TFC.toListFC PP.pretty actual)
             , "See https://galoisinc.github.io/grease/overrides.html#address-overrides"
             ]
-      BadAddressOverrideReturn path (C.Some actual) ->
+      BadAddressOverrideReturn path expected (C.Some actual) ->
         PP.nest 2 $
           PP.vcat
             [ "Bad address override return type at"
                 PP.<+> PP.pretty path
-            , "Expected:" PP.<+> PP.pretty C.UnitRepr
+            , "Expected:" PP.<+> PP.pretty expected
             , "Actual:" PP.<+> PP.pretty actual
             , "See https://galoisinc.github.io/grease/overrides.html#address-overrides"
             ]
@@ -128,7 +131,7 @@ data AddressOverride arch
       C.SomeCFG
         (Symbolic.MacawExt arch)
         (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
-        C.UnitType
+        (Symbolic.ArchRegStruct arch)
   -- ^ The override for the public function, whose name matches that of the
   -- S-expression file.
   , aoAuxiliaryOverrides :: [C.AnyCFG (Symbolic.MacawExt arch)]
@@ -151,7 +154,7 @@ typecheckAddressOverrideCfg ::
         (Symbolic.MacawExt arch)
         blocks
         (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
-        C.UnitType
+        (Symbolic.ArchRegStruct arch)
     )
 typecheckAddressOverrideCfg archRegsType path cfg = do
   let argTys = LCCR.cfgArgTypes cfg
@@ -162,10 +165,10 @@ typecheckAddressOverrideCfg archRegsType path cfg = do
         Left (BadAddressOverrideArgs path archRegsType (C.Some argTys))
   let retTy = LCCR.cfgReturnType cfg
   Refl <-
-    case testEquality retTy C.UnitRepr of
+    case testEquality retTy archRegsType of
       Just r -> Right r
       Nothing ->
-        Left (BadAddressOverrideReturn path (C.Some retTy))
+        Left (BadAddressOverrideReturn path archRegsType (C.Some retTy))
   Right cfg
 
 parsedProgToAddressOverride ::
@@ -331,24 +334,24 @@ runAddressOverride ::
   ) =>
   C.GlobalVar LCLM.Mem ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
-  C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) C.UnitType ->
+  C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch) ->
   C.RegEntry sym (Symbolic.ArchRegStruct arch) ->
-  IO ()
-runAddressOverride memVar crucState someCfg regs = do
+  IO (C.RegEntry sym (Symbolic.ArchRegStruct arch))
+runAddressOverride memVar crucState someCfg regs@(C.RegEntry regsTy _) = do
   C.SomeCFG cfg <- pure someCfg
   initState <-
-    toInitialState memVar crucState C.UnitRepr $
-      C.runOverrideSim C.UnitRepr $
+    toInitialState memVar crucState regsTy $
+      C.runOverrideSim regsTy $
         C.regValue <$> C.callCFG cfg (C.RegMap (Ctx.singleton regs))
   C.ctxSolverProof (C.execStateContext initState) $ do
     execResult <- C.executeCrucible [] initState
     case execResult of
-      C.FinishedResult _ (C.TotalRes{}) -> pure ()
-      C.FinishedResult _ (C.PartialRes loc p _gp _aborted) -> do
+      C.FinishedResult _ (C.TotalRes gp) -> pure (gp Lens.^. C.gpValue)
+      C.FinishedResult _ (C.PartialRes loc p gp _aborted) -> do
         let ctx = crucState Lens.^. C.stateContext
         C.withBackend ctx $ \bak -> do
           C.assert bak p (C.GenericSimError ("Assertion from address override at " ++ show loc))
-          pure ()
+          pure (gp Lens.^. C.gpValue)
       C.AbortedResult _ (C.AbortedExec reason _) -> C.abortExecBecause reason
       _ ->
         X.throw (GreaseException "Address override did not return a result nor abort")
@@ -360,15 +363,16 @@ tryRunAddressOverride ::
   ArchContext arch ->
   C.GlobalVar LCLM.Mem ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
-  C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) C.UnitType ->
-  IO ()
+  C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch) ->
+  IO (C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args)
 tryRunAddressOverride archCtx memVar crucState cfg = do
   let archFns = archCtx Lens.^. archVals . Lens.to Symbolic.archFunctions
   case DMSR.simStateRegs archFns crucState of
-    Nothing -> pure ()
-    Just regs ->
+    Nothing -> pure crucState
+    Just regs -> do
       let regsEntry = C.RegEntry (regStructRepr archCtx) regs
-       in runAddressOverride memVar crucState cfg regsEntry
+      regs' <- runAddressOverride memVar crucState cfg regsEntry
+      pure (DMSR.setSimStateRegs archCtx regs' crucState)
 
 -- | See if there is an address override corresponding to the current
 -- instruction pointer value, and if so, run it.
@@ -382,10 +386,10 @@ maybeRunAddressOverride ::
   -- | Current instruction pointer
   MC.ArchSegmentOff arch ->
   AddressOverrides arch ->
-  IO ()
+  IO (C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args)
 maybeRunAddressOverride archCtx memVar crucState segOff (AddressOverrides tgtOvs) =
   case Map.lookup segOff tgtOvs of
-    Nothing -> pure ()
+    Nothing -> pure crucState
     Just tgtOv -> do
       AddressOverride cfg _ _ <- pure tgtOv
       tryRunAddressOverride archCtx memVar crucState cfg
