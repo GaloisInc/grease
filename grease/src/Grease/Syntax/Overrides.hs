@@ -27,6 +27,11 @@ import Lang.Crucible.FunctionHandle qualified as LCF
 import Lang.Crucible.Simulator qualified as LCS
 import Lang.Crucible.Types qualified as LCT
 import What4.Interface qualified as WI
+import Data.Macaw.Symbolic.Concretize qualified as MSC
+import GHC.TypeNats qualified as PT
+import Lang.Crucible.Backend.Online qualified as C
+import What4.Expr.Builder qualified as WE
+import What4.Protocol.Online qualified as WPO
 
 -- | Check if a 'LCS.TypedOverride' is compatible with a 'LCF.FnHandle'
 checkTypedOverrideHandleCompat ::
@@ -58,15 +63,20 @@ tryBindTypedOverride hdl ov =
 -- The number of bytes must be concrete. If a symbolic number is passed this
 -- function will generate an assertion failure.
 freshBytesOverride ::
+  forall p sym ext w scope st fs solver bak.  
   ( 1 <= w
   , ToConc.HasToConcretize p
   , LCB.IsSymInterface sym
+  , sym ~ WE.ExprBuilder scope st fs
+  , bak ~ C.OnlineBackend solver scope st fs
+  , WPO.OnlineSolver solver
   ) =>
+  bak ->
   NatRepr.NatRepr w ->
   LCS.TypedOverride p sym ext (Ctx.EmptyCtx Ctx.::> LCT.StringType WI.Unicode Ctx.::> LCT.BVType w) (LCT.VectorType (LCT.BVType 8))
-freshBytesOverride w =
+freshBytesOverride bak w =
   WI.withKnownNat w $
-    LCS.typedOverride (Ctx.uncurryAssignment freshBytes)
+    LCS.typedOverride (Ctx.uncurryAssignment $ freshBytes bak)
 
 -- | Implementation of @fresh-bytes@ override.
 --
@@ -79,21 +89,29 @@ freshBytes ::
   ( 1 <= w
   , ToConc.HasToConcretize p
   , LCB.IsSymInterface sym
+  , PT.KnownNat w
+  , LCB.IsSymInterface sym
+  , sym ~ WE.ExprBuilder scope st fs
+  , bak ~ C.OnlineBackend solver scope st fs
+  , WPO.OnlineSolver solver
   ) =>
+  bak ->
   LCS.RegValue' sym (LCT.StringType WI.Unicode) ->
   LCS.RegValue' sym (LCT.BVType w) ->
   LCS.OverrideSim p sym ext r args ret (LCS.RegValue sym (LCT.VectorType (LCT.BVType 8)))
-freshBytes name0 bv0 =
+freshBytes bak name0 bv0 =
   case WI.asString (LCS.unRV name0) of
     Nothing ->
       LCS.overrideError $
         LCS.AssertFailureSimError "Call to @fresh-bytes with symbolic name" ""
     Just (WI.UnicodeLiteral name) ->
-      case WI.asBV (LCS.unRV bv0) of
-        Nothing ->
-          LCS.overrideError $
-            LCS.AssertFailureSimError "Call to @fresh-bytes with symbolic length" ""
-        Just bv -> doFreshBytes name (BV.asUnsigned bv)
+      do 
+        x <- liftIO $ MSC.resolveSymBV bak WI.knownNat (LCS.unRV bv0) 
+        case WI.asBV x of
+          Nothing -> do 
+            LCS.overrideError $
+              LCS.AssertFailureSimError "Call to @fresh-bytes with symbolic length" ""
+          Just bv -> doFreshBytes name (BV.asUnsigned bv)
 
 doFreshBytes ::
   ( ToConc.HasToConcretize p
