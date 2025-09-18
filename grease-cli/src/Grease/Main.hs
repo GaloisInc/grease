@@ -95,6 +95,7 @@ import Data.Text qualified as Text
 import Data.Text.IO (putStrLn)
 import Data.Text.IO qualified as Text.IO
 import Data.Traversable (for, traverse)
+import Data.Traversable.WithIndex (iforM)
 import Data.Tuple (fst, snd)
 import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
@@ -195,7 +196,7 @@ import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
-import Prelude (Integer, Integral, Num (..), fromIntegral)
+import Prelude (Int, Integer, Integral, Num (..), fromIntegral)
 
 -- | Results of analysis, one per given 'Entrypoint'
 newtype Results = Results {getResults :: Map Entrypoint Batch}
@@ -1089,9 +1090,10 @@ simulateMacawCfgs ::
 simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs = do
   let fm = W4.FloatRealRepr
   withSolverOnlineBackend (simSolver simOpts) fm globalNonceGenerator $ \bak -> do
-    results <-
-      forM (Map.toList cfgs) $ \(entry, MacawEntrypointCfgs entrypointCfgs mbCfgAddr) ->
-        analyzeEntrypoint la entry $ do
+    results <- do
+      let nEntries = Map.size cfgs
+      iforM (Map.toList cfgs) $ \i (entry, MacawEntrypointCfgs entrypointCfgs mbCfgAddr) ->
+        analyzeEntrypoint la entry i nEntries $ do
           entrypointCfgsSome <-
             checkMacawEntrypointCfgsSignatures archCtx entrypointCfgs
           status <- simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs mbCfgAddr entrypointCfgsSome
@@ -1164,9 +1166,18 @@ entrypointCfgMap la halloc prog entries =
  where
   cfgs = parsedProgramCfgMap prog
 
-analyzeEntrypoint :: GreaseLogAction -> Entrypoint -> IO a -> IO a
-analyzeEntrypoint la entry act = do
-  doLog la (Diag.AnalyzingEntrypoint entry)
+analyzeEntrypoint ::
+  GreaseLogAction ->
+  Entrypoint ->
+  -- | Index of current entrypoint
+  Int ->
+  -- | Total number of entrypoints
+  Int ->
+  IO a ->
+  IO a
+analyzeEntrypoint la entry current total act = do
+  Monad.unless (total <= 1) $
+    doLog la (Diag.AnalyzingEntrypoint entry current total)
   (duration, a) <- time act
   doLog la (Diag.FinishedAnalyzingEntrypoint (entrypointLocation entry) duration)
   pure a
@@ -1517,9 +1528,10 @@ simulateLlvmCfgs la simOpts halloc llvmCtx llvmMod mkMem setupHook cfgs = do
   let fm = W4.FloatRealRepr
   withSolverOnlineBackend (simSolver simOpts) fm globalNonceGenerator $ \bak -> do
     initMem <- mkMem bak
-    results <-
-      forM (Map.toList cfgs) $ \(entry, entrypointCfgs) ->
-        analyzeEntrypoint la entry $ do
+    results <- do
+      let nEntries = Map.size cfgs
+      iforM (Map.toList cfgs) $ \i (entry, entrypointCfgs) ->
+        analyzeEntrypoint la entry i nEntries $ do
           EntrypointCfgs
             { entrypointStartupOv = mbStartupOv
             , entrypointCfg = C.AnyCFG entrypointCfg'
