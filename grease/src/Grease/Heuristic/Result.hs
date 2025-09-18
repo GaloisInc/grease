@@ -21,8 +21,10 @@ import Prettyprinter qualified as PP
 -- | There is no way to proceed with refinement, for some explicit reason
 data CantRefine
   = Exhausted String
-  | Exit (Maybe Int)
-  | MissingFunc (Maybe String)
+  | -- | optional exit code
+    Exit (Maybe Int)
+  | -- | optional function name
+    MissingFunc (Maybe String)
   | MissingSemantics Text
   | MutableGlobal String
   | Timeout
