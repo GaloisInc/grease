@@ -133,12 +133,12 @@ boundsOptsParser = Opt.parserOptionGroup "Bounds, limits, and timeouts" $ do
             <> Opt.metavar "N"
         )
   simTimeout <-
-    GO.Milliseconds
+    secondsFromInt
       <$> Opt.option
         Opt.auto
         ( Opt.long "timeout"
-            <> Opt.help "timeout (in milliseconds)"
-            <> Opt.metavar "MILLIS"
+            <> Opt.help "symbolic execution timeout (in seconds)"
+            <> Opt.metavar "SECS"
             <> Opt.showDefault
             <> Opt.value GO.defaultTimeout
         )
@@ -428,7 +428,7 @@ processSimOpts sOpts =
           { GO.simTimeout =
               -- TODO(#37): Fully disable timeout if --debug is passed
               if GO.simDebug sOpts
-                then GO.Milliseconds maxBound
+                then secondsFromInt maxBound
                 else GO.simTimeout (GO.simBoundsOpts sOpts)
           }
     }

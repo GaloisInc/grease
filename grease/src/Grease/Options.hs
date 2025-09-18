@@ -9,7 +9,6 @@ module Grease.Options (
   parsePathStrategy,
   LoopBound (..),
   defaultLoopBound,
-  Milliseconds (..),
   defaultTimeout,
   defaultSolverTimeout,
   defaultTypeUnrollingBound,
@@ -37,6 +36,7 @@ import Grease.Requirement (Requirement)
 import Grease.Shape.Pointer (ExtraStackSlots (..))
 import Grease.Shape.Simple (SimpleShape)
 import Grease.Solver (Solver (..))
+import Lang.Crucible.Utils.Seconds (Seconds)
 import Lang.Crucible.Utils.Timeout (Timeout)
 
 data PathStrategy
@@ -70,12 +70,9 @@ newtype LoopBound = LoopBound Word64
 defaultLoopBound :: Word64
 defaultLoopBound = 32
 
-newtype Milliseconds = Milliseconds Int
-  deriving Show
-
--- | 30 seconds in milliseconds
+-- | 30 seconds
 defaultTimeout :: Int
-defaultTimeout = 30000
+defaultTimeout = 30
 
 -- | 5 seconds
 defaultSolverTimeout :: Int
@@ -137,7 +134,7 @@ data BoundsOpts
   -- recursive calls to the same function
   , simMaxIters :: Maybe Int
   -- ^ Maximum number of iterations of the refinement loop
-  , simTimeout :: Milliseconds
+  , simTimeout :: Seconds
   -- ^ Timeout (implemented using 'timeout')
   , simSolverTimeout :: Timeout
   -- ^ Solver timeout (in seconds)
