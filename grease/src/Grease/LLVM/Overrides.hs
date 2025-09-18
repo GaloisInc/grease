@@ -50,6 +50,9 @@ import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lumberjack qualified as LJ
 import Text.LLVM.AST qualified as L
 import What4.FunctionName qualified as W4
+import What4.Expr qualified as W4
+import Lang.Crucible.Backend.Online qualified as C
+import What4.Protocol.Online qualified as W4
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMOverridesDiagnostic diag)
@@ -110,12 +113,16 @@ forwardDeclDecls m =
 --
 -- * User-defined overrides from S-expressions (see 'loadOverrides')
 registerLLVMOverrides ::
-  forall sym bak arch p rtp as r.
+  forall sym bak arch p rtp as r solver scope st fs.
   ( C.IsSymBackend sym bak
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth 64
   , ToConc.HasToConcretize p
   , ?lc :: TypeContext
+  , C.IsSymBackend sym bak
+  , sym ~ W4.ExprBuilder scope st fs
+  , bak ~ C.OnlineBackend solver scope st fs
+  , W4.OnlineSolver solver
   , ?memOpts :: Mem.MemOptions
   ) =>
   GreaseLogAction ->
@@ -182,7 +189,7 @@ registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls = do
   -- overrides. We only do this after registering all of the public functions
   -- so as to ensure that we get the dependencies correct.
   Foldable.for_ userOvs $ \(_, lso) ->
-    registerLLVMOvForwardDeclarations mvar allOvs $
+    registerLLVMOvForwardDeclarations bak mvar allOvs $
       lsoForwardDeclarations lso
   pure allOvs
  where
@@ -201,13 +208,16 @@ registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls = do
 --
 -- * User-defined overrides from S-expressions (see 'loadOverrides')
 registerLLVMSexpOverrides ::
-  forall sym bak arch p rtp as r.
+  forall sym bak arch p rtp as r solver scope st fs.
   ( C.IsSymBackend sym bak
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth 64
   , ToConc.HasToConcretize p
   , ?lc :: TypeContext
   , ?memOpts :: Mem.MemOptions
+  , sym ~ W4.ExprBuilder scope st fs
+  , bak ~ C.OnlineBackend solver scope st fs
+  , W4.OnlineSolver solver
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
@@ -233,13 +243,16 @@ registerLLVMSexpOverrides la builtinOvs sexpOvs bak llvmCtx fs prog = do
 --
 -- * User-defined overrides from S-expressions (see 'loadOverrides')
 registerLLVMModuleOverrides ::
-  forall sym bak arch p rtp as r.
+  forall sym bak arch p rtp as r solver scope st fs.
   ( C.IsSymBackend sym bak
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth 64
   , ToConc.HasToConcretize p
   , ?lc :: TypeContext
   , ?memOpts :: Mem.MemOptions
+  , sym ~ W4.ExprBuilder scope st fs
+  , bak ~ C.OnlineBackend solver scope st fs
+  , W4.OnlineSolver solver
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
@@ -265,7 +278,11 @@ registerLLVMSexpProgForwardDeclarations ::
   , Mem.HasPtrWidth 64
   , ToConc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
+  , sym ~ W4.ExprBuilder scope st fs
+  , bak ~ C.OnlineBackend solver scope st fs
+  , W4.OnlineSolver solver
   ) =>
+  bak ->
   GreaseLogAction ->
   CLLVM.DataLayout ->
   C.GlobalVar Mem.Mem ->
@@ -274,8 +291,8 @@ registerLLVMSexpProgForwardDeclarations ::
   -- | The map of forward declaration names to their handles.
   Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym CLLVM.LLVM rtp as r ()
-registerLLVMSexpProgForwardDeclarations la dl mvar funOvs =
-  registerLLVMForwardDeclarations mvar funOvs $
+registerLLVMSexpProgForwardDeclarations bak la dl mvar funOvs =
+  registerLLVMForwardDeclarations bak mvar funOvs $
     registerSkipOverride la dl mvar
 
 -- | Redirect handles for forward declarations in an LLVM S-expression override
@@ -287,15 +304,19 @@ registerLLVMOvForwardDeclarations ::
   , Mem.HasLLVMAnn sym
   , ToConc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
+  , sym ~ W4.ExprBuilder scope st fs
+  , bak ~ C.OnlineBackend solver scope st fs
+  , W4.OnlineSolver solver
   ) =>
+  bak ->
   C.GlobalVar Mem.Mem ->
   -- | The map of public function names to their overrides.
   Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM) ->
   -- | The map of forward declaration names to their handles.
   Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym CLLVM.LLVM rtp as r ()
-registerLLVMOvForwardDeclarations mvar funOvs =
-  registerLLVMForwardDeclarations mvar funOvs $ \fwdDecName _ ->
+registerLLVMOvForwardDeclarations bak mvar funOvs =
+  registerLLVMForwardDeclarations  bak mvar funOvs $ \fwdDecName _ ->
     declaredFunNotFound fwdDecName
 
 -- | Redirect handles for forward declarations in an S-expression file to
@@ -307,7 +328,12 @@ registerLLVMForwardDeclarations ::
   , Mem.HasLLVMAnn sym
   , ToConc.HasToConcretize p
   , ?memOpts :: Mem.MemOptions
+  , C.IsSymBackend sym bak
+  , sym ~ W4.ExprBuilder scope st fs
+  , bak ~ C.OnlineBackend solver scope st fs
+  , W4.OnlineSolver solver
   ) =>
+  bak ->
   C.GlobalVar Mem.Mem ->
   -- | The map of public function names to their overrides.
   Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM) ->
@@ -320,7 +346,7 @@ registerLLVMForwardDeclarations ::
   -- | The map of forward declaration names to their handles.
   Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym CLLVM.LLVM rtp as r ()
-registerLLVMForwardDeclarations mvar funOvs cannotResolve fwdDecs =
+registerLLVMForwardDeclarations bak mvar funOvs cannotResolve fwdDecs =
   Foldable.for_ (Map.toList fwdDecs) $ \(fwdDecName, C.SomeHandle hdl) ->
     case Map.lookup fwdDecName funOvs of
       Just (CLLVM.SomeLLVMOverride llvmOverride) ->
@@ -330,7 +356,7 @@ registerLLVMForwardDeclarations mvar funOvs cannotResolve fwdDecs =
         -- S-expression files with forward-declarations of them.
         case fwdDecName of
           "fresh-bytes" -> do
-            ok <- tryBindTypedOverride hdl (freshBytesOverride ?ptrWidth)
+            ok <- tryBindTypedOverride hdl (freshBytesOverride bak ?ptrWidth)
             unless ok (cannotResolve fwdDecName hdl)
           "read-bytes" -> do
             ok <- tryBindTypedOverride hdl (StrOv.readBytesOverride mvar)
