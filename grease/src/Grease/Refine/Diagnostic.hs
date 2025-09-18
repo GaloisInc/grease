@@ -116,7 +116,7 @@ instance PP.Pretty Diagnostic where
       GoalMatchingHeuristic ->
         "Found a matching heuristic and refined configuration"
       NoAnnotationOnPredicate ->
-        "Warning: no annotation on predicate!"
+        "No annotation on predicate!"
       RefinementFinalPrecondition w argNames (ArgShapes argShapes) ->
         PP.vcat
           [ "Final refined precondition:"
@@ -170,13 +170,13 @@ severity =
     ExecutionResult{} -> Debug
     GoalNoMatchingHeuristic{} -> Debug
     GoalMatchingHeuristic{} -> Debug
-    NoAnnotationOnPredicate{} -> Info
+    NoAnnotationOnPredicate{} -> Debug
     RefinementFinalPrecondition{} -> Debug
     RefinementFinishedPath{} -> Info
     RefinementLoopMaximumIterationsExceeded{} -> Info
     RefinementLoopRetrying{} -> Debug
     RefinementLoopAllGoalsPassed{} -> Info
-    RefinementLoopNoHeuristic{} -> Info
+    RefinementLoopNoHeuristic{} -> Debug
     RefinementUsingPrecondition{} -> Debug
     ResumingFromBranch{} -> Debug
     SolverGoalPassed{} -> Debug

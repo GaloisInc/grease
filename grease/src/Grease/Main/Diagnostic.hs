@@ -133,7 +133,7 @@ severity =
     FinishedAnalyzingEntrypoint{} -> Debug
     LoadedPrecondition{} -> Debug
     NoEntrypoints -> Warn
-    SimulationTestingRequirements{} -> Info
+    SimulationTestingRequirements{} -> Debug
     SimulationAllGoalsPassed{} -> Info
     SimulationGoalsFailed{} -> Info
     TargetCFG{} -> Debug
