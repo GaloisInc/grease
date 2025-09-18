@@ -144,6 +144,7 @@ import Lang.Crucible.Utils.Seconds qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
+import System.Exit qualified as Exit
 import System.IO (IO)
 import What4.Config qualified as W4C
 import What4.Expr qualified as W4
@@ -483,6 +484,16 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
           case execResult of
             C.TimeoutResult _execState ->
               pure (ProveCantRefine Timeout)
+            C.AbortedResult _ (C.AbortedExit Exit.ExitSuccess _) ->
+              pure (ProveCantRefine (Exit (Just 0)))
+            C.AbortedResult _ (C.AbortedExit (Exit.ExitFailure code) _) ->
+              pure (ProveCantRefine (Exit (Just code)))
+            C.AbortedResult _ (C.AbortedExec (C.EarlyExit _loc) _gp) ->
+              pure (ProveCantRefine (Exit Nothing))
+            C.AbortedResult _ (C.AbortedExec (C.AssertionFailure (C.SimError _loc (C.ResourceExhausted msg))) _gp) ->
+              pure (ProveCantRefine (Exhausted msg))
+            C.AbortedResult _ (C.AbortedExec (C.AssertionFailure (C.SimError _loc (C.Unsupported _cs feat))) _gp) ->
+              pure (ProveCantRefine (Unsupported feat))
             _ -> do
               bbMap <- readIORef bbMapRef
               proveAndRefine bak solver solverTimeout anns execResult la heuristics argNames argShapes initState bbMap goals
@@ -547,11 +558,15 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
       ProveBug{} -> "likely bug"
       ProveNoHeuristic{} -> "possible bug"
       ProveRefine{} -> "refined precondition"
+      ProveCantRefine (Exhausted{}) -> "resource exhausted"
+      ProveCantRefine (Exit (Just code)) -> "exited with " <> tshow code
+      ProveCantRefine (Exit Nothing) -> "exited"
       ProveCantRefine (MissingFunc (Just nm)) -> "missing function " <> Text.pack nm
       ProveCantRefine (MissingFunc{}) -> "missing function"
       ProveCantRefine (MissingSemantics{}) -> "missing semantics"
       ProveCantRefine (MutableGlobal{}) -> "load from mut global"
       ProveCantRefine (Timeout{}) -> "symex timeout"
+      ProveCantRefine (Unsupported{}) -> "unsupported feature"
 
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)

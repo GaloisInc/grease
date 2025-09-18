@@ -44,9 +44,9 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.List qualified as P.List
 import Data.Parameterized.Map qualified as MapF
 import Data.Proxy (Proxy (Proxy))
-import Data.Text qualified as Text
 import Data.Type.Equality ((:~:) (Refl))
 import Data.Word (Word64, Word8)
+import GHC.Stack (HasCallStack, callStack)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic
 import Grease.Macaw.Arch
@@ -81,6 +81,7 @@ import Stubs.Syscall qualified as Stubs
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
+import What4.ProgramLoc as W4PL
 import What4.Protocol.Online qualified as W4
 
 emptyMacawMem ::
@@ -357,6 +358,7 @@ memConfigInitial ::
   , Mem.HasLLVMAnn sym
   , MSM.MacawProcessAssertion sym
   , Symbolic.HasMacawLazySimulatorState p sym (MC.ArchAddrWidth arch)
+  , HasCallStack
   ) =>
   bak ->
   ArchContext arch ->
@@ -377,8 +379,9 @@ memConfigInitial bak arch ptrTable skipUnsupportedRelocs relocs =
       -- way to hook each read without needing to re-implement all of the logic
       -- for MacawReadMem/MacawCondReadMem, which is quite involved.
       Symbolic.concreteImmutableGlobalRead = \memRep ptr -> do
-        Monad.unless (Opts.getSkipUnsupportedRelocs skipUnsupportedRelocs) $
-          assertRelocSupported arch ptr relocs
+        Monad.unless (Opts.getSkipUnsupportedRelocs skipUnsupportedRelocs) $ do
+          loc <- W4.getCurrentProgramLoc (C.backendGetSym bak)
+          assertRelocSupported arch loc ptr relocs
         Symbolic.concreteImmutableGlobalRead lazyMemModelConfig memRep ptr
     }
  where
@@ -452,13 +455,15 @@ assertRelocSupported ::
   ( C.IsSymInterface sym
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , Show (ArchReloc arch)
+  , HasCallStack
   ) =>
   ArchContext arch ->
+  W4PL.ProgramLoc ->
   Mem.LLVMPtr sym (MC.ArchAddrWidth arch) ->
   -- | Map of relocation addresses and types
   Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (ArchReloc arch) ->
   IO ()
-assertRelocSupported arch (Mem.LLVMPointer _base offset) relocs =
+assertRelocSupported arch loc (Mem.LLVMPointer _base offset) relocs =
   case W4.asBV offset of
     Nothing ->
       -- Symbolic read. Cannot check whether this is an unsupported relocation.
@@ -468,21 +473,23 @@ assertRelocSupported arch (Mem.LLVMPointer _base offset) relocs =
       let addr = MM.memWord (fromInteger (BV.asUnsigned bv))
       case Map.lookup addr relocs of
         Just relocType
-          | Nothing <- (arch ^. archRelocSupported) relocType ->
-              throw $
-                GreaseException $
-                  Text.unlines
-                    [ "Attempted to read from an unsupported relocation type ("
-                        <> tshow relocType
-                        <> ") at address "
-                        <> tshow addr
-                        <> "."
-                    , "This may be due to a PLT stub that grease did not detect."
-                    , "If so, try passing --plt-stub <ADDR>:<NAME>, where"
-                    , "<ADDR> and <NAME> can be obtained by disassembling the"
-                    , "relevant PLT section of the binary"
-                    , "(.plt, .plt.got, .plt.sec, etc.)."
-                    ]
+          | Nothing <- (arch ^. archRelocSupported) relocType -> do
+              let msg =
+                    unlines
+                      [ "Attempted to read from an unsupported relocation type ("
+                          <> show relocType
+                          <> ") at address "
+                          <> show addr
+                          <> "."
+                      , "This may be due to a PLT stub that grease did not detect."
+                      , "If so, try passing --plt-stub <ADDR>:<NAME>, where"
+                      , "<ADDR> and <NAME> can be obtained by disassembling the"
+                      , "relevant PLT section of the binary"
+                      , "(.plt, .plt.got, .plt.sec, etc.)."
+                      ]
+              let reason = C.Unsupported callStack msg
+              let simErr = C.SimError loc reason
+              C.abortExecBecause (C.AssertionFailure simErr)
         _ ->
           pure ()
 
