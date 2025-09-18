@@ -35,7 +35,12 @@ data Diagnostic where
   AnalyzedEntrypoint ::
     EntrypointLocation -> BatchStatus -> Diagnostic
   AnalyzingEntrypoint ::
-    Entrypoint -> Diagnostic
+    Entrypoint ->
+    -- | Index of current entrypoint
+    Int ->
+    -- | Total number of entrypoints
+    Int ->
+    Diagnostic
   BitcodeParseWarnings ::
     Seq ParseWarning -> Diagnostic
   LoadedPrecondition ::
@@ -73,8 +78,12 @@ instance PP.Pretty Diagnostic where
           , PP.squotes (PP.pretty entry) PP.<> "."
           , PP.pretty status
           ]
-      AnalyzingEntrypoint entry ->
-        "Analyzing from entrypoint" PP.<+> PP.pretty entry
+      AnalyzingEntrypoint entry idx total ->
+        PP.hsep
+          [ "Analyzing entrypoint"
+          , PP.hcat [PP.pretty (idx + 1), "/", PP.pretty total] <> ","
+          , PP.pretty entry
+          ]
       BitcodeParseWarnings warns -> PP.viaShow (ppParseWarnings warns)
       FinishedAnalyzingEntrypoint entry duration ->
         PP.hsep
