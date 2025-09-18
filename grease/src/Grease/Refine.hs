@@ -479,8 +479,13 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
   let refineOne initSt = do
         (execResult, goals, remaining) <- execCfg bak strat execFeats' initSt
         doLog la (Diag.ExecutionResult memVar execResult)
-        bbMap <- readIORef bbMapRef
-        refineResult <- proveAndRefine bak solver solverTimeout anns execResult la heuristics argNames argShapes initState bbMap goals
+        refineResult <-
+          case execResult of
+            C.TimeoutResult _execState ->
+              pure (ProveCantRefine Timeout)
+            _ -> do
+              bbMap <- readIORef bbMapRef
+              proveAndRefine bak solver solverTimeout anns execResult la heuristics argNames argShapes initState bbMap goals
         case strat of
           Opts.Dfs -> do
             loc <- W4.getCurrentProgramLoc (C.backendGetSym bak)
@@ -546,6 +551,7 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
       ProveCantRefine (MissingFunc{}) -> "missing function"
       ProveCantRefine (MissingSemantics{}) -> "missing semantics"
       ProveCantRefine (MutableGlobal{}) -> "load from mut global"
+      ProveCantRefine (Timeout{}) -> "symex timeout"
 
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)
@@ -553,7 +559,6 @@ data RefinementSummary sym ext tys
   | RefinementItersExceeded
   | RefinementCantRefine CantRefine
   | RefinementBug Bug.BugInstance (ConcretizedData sym ext tys)
-  | RefinementTimeout
 
 refinementLoop ::
   forall sym ext argTys w.

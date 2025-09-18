@@ -86,7 +86,6 @@ data BatchStatus
   | BatchItersExceeded
   | BatchChecks (Map Requirement CheckStatus)
   | BatchCantRefine CantRefine
-  | BatchTimeout
   deriving (Show, Generic)
 
 instance Aeson.ToJSON BatchStatus
@@ -133,7 +132,6 @@ instance PP.Pretty BatchStatus where
   pretty BatchItersExceeded =
     "Failed to infer precondition; maximum iterations exceeded"
   pretty (BatchCantRefine b) = PP.pretty b
-  pretty BatchTimeout = "Exceeded timeout!"
 
 -- | A 'BatchStatus' and any other information that is useful to report (e.g.,
 -- for consumption by tools that use @grease@'s JSON output).

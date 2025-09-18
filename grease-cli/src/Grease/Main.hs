@@ -992,8 +992,6 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
       pure (BatchCantRefine b)
     RefinementItersExceeded ->
       pure BatchItersExceeded
-    RefinementTimeout ->
-      pure BatchTimeout
     RefinementNoHeuristic errs -> do
       maybeBug <- checkMustFail bak errs
       case maybeBug of
@@ -1497,8 +1495,6 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
       pure (BatchCantRefine b)
     RefinementItersExceeded ->
       pure BatchItersExceeded
-    RefinementTimeout ->
-      pure BatchTimeout
     RefinementNoHeuristic errs -> do
       maybeBug <- checkMustFail bak errs
       case maybeBug of
