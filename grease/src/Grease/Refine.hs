@@ -106,6 +106,7 @@ import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.String (String)
 import Data.Text qualified as Text
+import Data.Time.Clock (secondsToNominalDiffTime)
 import Data.Type.Equality (type (~))
 import GHC.IORef (newIORef)
 import Grease.Bug qualified as Bug
@@ -114,7 +115,7 @@ import Grease.Concretize qualified as Conc
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic
 import Grease.Heuristic
-import Grease.Options (BoundsOpts, LoopBound (..), Milliseconds (..))
+import Grease.Options (BoundsOpts, LoopBound (..))
 import Grease.Options qualified as Opts
 import Grease.Panic (panic)
 import Grease.Refine.Diagnostic qualified as Diag
@@ -139,11 +140,11 @@ import Lang.Crucible.Simulator.BoundedRecursion qualified as C
 import Lang.Crucible.Simulator.PathSatisfiability qualified as C
 import Lang.Crucible.Simulator.PathSplitting qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
+import Lang.Crucible.Utils.Seconds qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import System.IO (IO)
-import System.Timeout (timeout)
 import What4.Config qualified as W4C
 import What4.Expr qualified as W4
 import What4.Expr.App qualified as W4
@@ -151,7 +152,7 @@ import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as W4
 import What4.LabeledPred qualified as W4
 import What4.Solver qualified as W4
-import Prelude (Num (..), show)
+import Prelude (Num (..), realToFrac, show)
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (RefineDiagnostic diag)
@@ -460,6 +461,7 @@ execAndRefine ::
   C.ExecState p sym ext (C.RegEntry sym ret) ->
   m (ProveRefineResult sym ext argTys)
 execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initState bbMapRef boundsOpts strat execFeats initialState = do
+  let symexTimeout = realToFrac (C.secondsToInt (Opts.simTimeout boundsOpts))
   let solverTimeout = Opts.simSolverTimeout boundsOpts
 
   -- Due to the way these execution features manage their internal data, they
@@ -467,7 +469,9 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
   let LoopBound loopBound = Opts.simLoopBound boundsOpts
   boundExecFeat <- liftIO (C.boundedExecFeature (\_ -> pure (Just loopBound)) True)
   boundRecFeat <- liftIO (C.boundedRecursionFeature (\_ -> pure (Just loopBound)) True)
-  let boundsExecFeats = List.map C.genericToExecutionFeature [boundExecFeat, boundRecFeat]
+  timeoutFeat <- liftIO (C.timeoutFeature (secondsToNominalDiffTime symexTimeout))
+  let boundsExecFeats_ = [boundExecFeat, boundRecFeat, timeoutFeat]
+  let boundsExecFeats = List.map C.genericToExecutionFeature boundsExecFeats_
 
   pathSatFeat <- liftIO configurePathSatFeature
   let execFeats' = pathSatFeat : (boundsExecFeats List.++ execFeats)
@@ -594,7 +598,4 @@ refinementLoop la boundsOpts argNames initArgShapes go = do
             ProveNoHeuristic errs -> do
               doLog la Diag.RefinementLoopNoHeuristic
               pure $ RefinementNoHeuristic errs
-  let millisToMicros (Milliseconds millis) = 1000 * millis
-  let microTimeout = millisToMicros (Opts.simTimeout boundsOpts)
-  Maybe.fromMaybe RefinementTimeout
-    <$> timeout microTimeout (loop 0 initArgShapes)
+  loop 0 initArgShapes
