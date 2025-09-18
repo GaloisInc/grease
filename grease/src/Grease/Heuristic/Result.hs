@@ -23,6 +23,7 @@ data CantRefine
   = MissingFunc (Maybe String)
   | MissingSemantics Text
   | MutableGlobal String
+  | Timeout
   deriving (Generic, Show)
 
 instance Aeson.ToJSON CantRefine
@@ -34,6 +35,7 @@ instance PP.Pretty CantRefine where
       MissingFunc Nothing -> "Missing implementation for function"
       MissingSemantics msg -> PP.pretty msg
       MutableGlobal name -> "Load from mutable global " PP.<> PP.pretty name
+      Timeout -> "Symbolic execution timed out"
 
 data HeuristicResult ext tys
   = CantRefine CantRefine
