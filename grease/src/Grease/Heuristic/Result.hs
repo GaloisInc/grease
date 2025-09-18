@@ -20,10 +20,13 @@ import Prettyprinter qualified as PP
 
 -- | There is no way to proceed with refinement, for some explicit reason
 data CantRefine
-  = MissingFunc (Maybe String)
+  = Exhausted String
+  | Exit (Maybe Int)
+  | MissingFunc (Maybe String)
   | MissingSemantics Text
   | MutableGlobal String
   | Timeout
+  | Unsupported String
   deriving (Generic, Show)
 
 instance Aeson.ToJSON CantRefine
@@ -31,11 +34,15 @@ instance Aeson.ToJSON CantRefine
 instance PP.Pretty CantRefine where
   pretty =
     \case
+      Exhausted msg -> "Resource exhausted:" PP.<+> PP.pretty msg
+      Exit (Just code) -> "Program exited with" PP.<> PP.pretty code
+      Exit Nothing -> "Program exited"
       MissingFunc (Just nm) -> "Missing implementation for '" PP.<> PP.pretty nm PP.<> "'"
       MissingFunc Nothing -> "Missing implementation for function"
       MissingSemantics msg -> PP.pretty msg
       MutableGlobal name -> "Load from mutable global " PP.<> PP.pretty name
       Timeout -> "Symbolic execution timed out"
+      Unsupported msg -> "Unsupported:" PP.<+> PP.pretty msg
 
 data HeuristicResult ext tys
   = CantRefine CantRefine
