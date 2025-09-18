@@ -34,9 +34,11 @@ import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.GlobalState qualified as C
 import What4.Expr qualified as W4
+import Lang.Crucible.Backend.Online qualified as C
+import What4.Protocol.Online qualified as W4
 
 initState ::
-  forall p sym bak arch m t st fs argTys retTy.
+  forall p sym bak arch m t st fs argTys retTy solver.
   ( MonadIO m
   , MonadThrow m
   , C.IsSymBackend sym bak
@@ -47,6 +49,8 @@ initState ::
   , Mem.HasLLVMAnn sym
   , HasToConcretize p
   , ?memOpts :: Mem.MemOptions
+  , bak ~ C.OnlineBackend solver t st fs
+  , W4.OnlineSolver solver
   ) =>
   bak ->
   GreaseLogAction ->
