@@ -200,6 +200,9 @@ available:
 
 - `void @__stack_chk_fail()`
 - `void @__stack_chk_fail_local()`
+<!-- TODO(#387): Make these available for LLVM, too -->
+- `accept`, `bind`, `connect`, `listen`, `recv`, `send`, and `socket`: see
+  [I/O](io.md)>
 
 ### S-expression-specific overrides
 

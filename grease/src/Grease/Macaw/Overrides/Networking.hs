@@ -659,6 +659,8 @@ callSocket bak fs domainReg typeReg _protocol = do
 -- Exceptions
 -----
 
+-- TODO(#388): Replace these with aborting execution on the current path.
+
 -- | An exception thrown from a networking-related override.
 data NetworkException where
   NetworkConcretizationFailedSymbolic ::
