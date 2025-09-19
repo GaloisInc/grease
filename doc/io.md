@@ -25,8 +25,28 @@ file descriptor numbers.
 
 ## Sockets and networking
 
-<!-- TODO(#197) -->
+GREASE provides basic overrides for the following socket I/O functions:
 
-GREASE [doesn't yet][socket] provide support for socket-based networking APIs.
+- `accept`
+- `bind`
+- `connect`
+- `listen`
+- `recv`
+- `send`
+- `socket`
 
-[socket]: https://github.com/GaloisInc/grease/issues/197
+These overrides are quite limited. 
+
+- For successful execution, GREASE must execute the entire
+  "chain" of socket-related function calls, e.g., for a server,
+  `socket`/`bind`/`listen`/`accept`/`recv`. If GREASE only executes a suffix of
+  the chain, execution will fail.
+- Opening different sockets in different branches of execution is not supported.
+- The socket domain, type, and path (for `AF_UNIX` sockets) or port number (for
+  `AF_INET{6}` sockets) must all be concrete.
+- Only domains `AF_UNIX`, `AF_INET`, and `AF_INET6` are supported.
+- Only socket types `SOCK_STREAM`, `SOCK_DGRAM`, and `SOCK_SEQPACKET` are
+  supported.
+- Reading from sockets requires setting their contents in the symbolic
+  filesystem in advance. (See GREASE's test suite for an example.)
+- `accept` ignores the `addr` and `addrlen` parameters.

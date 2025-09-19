@@ -229,12 +229,14 @@ library
     Grease.Macaw.Overrides
     Grease.Macaw.Overrides.Address
     Grease.Macaw.Overrides.Builtin
+    Grease.Macaw.Overrides.Networking
     Grease.Macaw.Overrides.SExp
     Grease.Macaw.PLT
     Grease.Macaw.SetupHook
     Grease.Macaw.SimulatorHooks
     Grease.Macaw.SimulatorHooks.Diagnostic
     Grease.Macaw.SimulatorState
+    Grease.Macaw.SimulatorState.Networking
     Grease.Macaw.RegName
     Grease.Macaw.ResolveCall
     Grease.Macaw.ResolveCall.Diagnostic

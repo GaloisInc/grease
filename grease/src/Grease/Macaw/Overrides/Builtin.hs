@@ -25,6 +25,8 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Grease.LLVM.Overrides.Builtin (libcOverrides)
 import Grease.Macaw.Overrides.Defs (customStubsOverrides)
+import Grease.Macaw.Overrides.Networking (networkOverrides)
+import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
 import Grease.Panic qualified as Panic
 import Grease.Utility (llvmOverrideName)
 import Lang.Crucible.Backend qualified as C
@@ -49,6 +51,7 @@ builtinStubsOverrides ::
   , Mem.HasLLVMAnn sym
   , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
+  , HasGreaseSimulatorState p sym arch
   ) =>
   bak ->
   C.GlobalVar Mem.Mem ->
@@ -56,7 +59,7 @@ builtinStubsOverrides ::
   SymIO.LLVMFileSystem (MC.ArchAddrWidth arch) ->
   Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
 builtinStubsOverrides bak mvar mmConf fs =
-  customOvs <> fromLlvmOvs
+  customOvs <> fromLlvmOvs <> networkingOvs
  where
   -- Custom overrides that are only applicable at the machine code level (and
   -- therefore do not belong in crucible-llvm).
@@ -77,6 +80,8 @@ builtinStubsOverrides bak mvar mmConf fs =
                   `Set.notMember` excludedLibcOverrides
             )
             (libcOverrides fs)
+
+  networkingOvs = networkOverrides fs mvar mmConf
 
   -- Overrides that we do not want to use at the binary level. If you add an
   -- override to this list, make sure to include a comment with the reason why

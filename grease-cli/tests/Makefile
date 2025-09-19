@@ -40,6 +40,7 @@ DIRS = $(shell find prop/ -mindepth 3 -maxdepth 3 -type d) $(shell find refine s
 DYNAMIC_DIRS = \
   prop/no-mprotect/pos/mprotect \
   refine/bug/assert_false \
+  refine/bug/networking \
   refine/pos/excluded_overrides \
   refine/pos/malloc \
   refine/pos/malloc-free-external \

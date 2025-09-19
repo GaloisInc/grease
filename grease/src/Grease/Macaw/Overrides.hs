@@ -35,7 +35,7 @@ import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (..), loadOverrides)
-import Grease.Macaw.SimulatorState (MacawFnHandle, MacawOverride)
+import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, MacawOverride)
 import Grease.Skip (registerSkipOverride)
 import Grease.Syntax.Overrides as SExp
 import Grease.Utility (declaredFunNotFound)
@@ -207,6 +207,7 @@ mkMacawOverrideMapWithBuiltins ::
   , Symbolic.SymArchConstraints arch
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
+  , HasGreaseSimulatorState p sym arch
   ) =>
   bak ->
   -- | The paths of each user-supplied override file.
