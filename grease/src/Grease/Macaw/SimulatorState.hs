@@ -18,6 +18,7 @@ module Grease.Macaw.SimulatorState (
   stateDiscoveredFnHandles,
   stateSyscallHandles,
   stateMacawLazySimulatorState,
+  serverSocketFds,
 
   -- * Auxiliary definitions
   MacawFnHandle,
@@ -32,7 +33,9 @@ import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
+import Data.Parameterized.Some (Some)
 import Grease.Concretize.ToConcretize qualified as ToConc
+import Grease.Macaw.SimulatorState.Networking qualified as GMSN
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Simulator qualified as C
 import Stubs.Syscall qualified as Stubs
@@ -73,6 +76,10 @@ data GreaseSimulatorState sym arch = GreaseSimulatorState
   , _macawLazySimulatorState :: Symbolic.MacawLazySimulatorState sym (MC.ArchAddrWidth arch)
   -- ^ The state used in the lazy @macaw-symbolic@ memory model, on top of
   -- which @grease@ is built.
+  , _serverSocketFds :: Map.Map Integer (Some GMSN.ServerSocketInfo)
+  -- ^ A map from registered socket file descriptors to their corresponding
+  -- metadata. See @Note [The networking story]@ in
+  -- "Grease.Macaw.Overrides.Networking".
   }
 
 -- | An initial value for 'GreaseSimulatorState'.
@@ -85,6 +92,7 @@ emptyGreaseSimulatorState toConcVar =
     , _toConcretize = toConcVar
     , _syscallHandles = MapF.empty
     , _macawLazySimulatorState = Symbolic.emptyMacawLazySimulatorState
+    , _serverSocketFds = Map.empty
     }
 
 -- | A class for Crucible personality types @p@ which contain a
