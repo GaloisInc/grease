@@ -50,3 +50,5 @@ These overrides are quite limited.
 - Reading from sockets requires setting their contents in the symbolic
   filesystem in advance. (See GREASE's test suite for an example.)
 - `accept` ignores the `addr` and `addrlen` parameters.
+<!-- TODO(#387): Make these available for LLVM, too -->
+- These overrides are only available when analyzing binaries.
