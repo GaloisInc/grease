@@ -268,7 +268,7 @@ addrOverridesParser =
       )
 
 fsOptsParser :: Opt.Parser GO.FsOpts
-fsOptsParser = do
+fsOptsParser = Opt.parserOptionGroup "Symbolic I/O options" $ do
   fsRoot <- fsRootParser
   fsStdin <- symStdinParser
   fsSymFiles <- symFilesParser
