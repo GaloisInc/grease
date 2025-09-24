@@ -92,8 +92,8 @@ jobs:
     - name: Configure coverage collection
       run: cat cabal/coverage.cabal.project >> cabal.project.local
 
-    - name: Build grease-cli
-      run: cabal build pkg:grease-cli pkg:grease-diagrams
+    - name: Build grease-exe
+      run: cabal build pkg:grease-exe pkg:grease-diagrams
 
     - name: Install solvers
       run: .github/ci.sh install_system_deps
@@ -104,8 +104,8 @@ jobs:
         # of Yices mentioned in the installation instructions.
         SOLVER_PKG_VERSION: "snapshot-20241119"
 
-    - name: Test grease-cli
-      run: cabal test pkg:grease-cli
+    - name: Test grease-exe
+      run: cabal test pkg:grease-exe
 
     # This step will produce a Github-flavored Markdown report on the "job
     # summary" page. The report will first contain the output of `hpc report`
@@ -158,7 +158,7 @@ jobs:
       # identifiers from library dependencies. Since we are only building
       # Haddocks to ensure well-formedness, we consider this an acceptable
       # tradeoff.
-      run: cabal haddock --disable-documentation pkg:grease pkg:grease-cli pkg:elf-edit-core-dump
+      run: cabal haddock --disable-documentation pkg:grease pkg:grease-cli pkg:grease-exe pkg:elf-edit-core-dump
 
     - name: Check .cabal files
       run: |
@@ -167,6 +167,7 @@ jobs:
         (cd grease-ppc && cabal check)
         (cd grease-x86 && cabal check)
         (cd grease-cli && cabal check)
+        (cd grease-exe && cabal check)
         (cd doc/diagrams && cabal check)
         (cd elf-edit-core-dump && cabal check)
 

@@ -4,7 +4,7 @@ This [Ghidra](https://github.com/NationalSecurityAgency/ghidra) plugin adds an a
 
 Installing this plugin requires building native GREASE binary which requires cabal (can be installed from [ghcup](https://www.haskell.org/ghcup/)).
 
-Follow the [GREASE install instructions for building GREASE](https://github.com/GaloisInc/grease/blob/main/doc/install.md#building-a-binary-from-source) (should only require updating submodules via `git submodule update --init` then running `cabal build grease-cli`)
+Follow the [GREASE install instructions for building GREASE](https://github.com/GaloisInc/grease/blob/main/doc/install.md#building-a-binary-from-source) (should only require updating submodules via `git submodule update --init` then running `cabal build grease-exe`)
 
 After building GREASE one can use [gradle](https://gradle.org/) to build the plugin zip file by:
 1. Adding the Ghidra install directory to `gradle.properties` and uncommenting the line

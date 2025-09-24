@@ -51,10 +51,10 @@ jobs:
         run: ruff format --check --diff ghidra_scripts
 
       - name: Lint the CFLAGS script with ruff
-        run: ruff check grease-cli/tests/extract-cflags.py
+        run: ruff check grease-exe/tests/extract-cflags.py
 
       - name: Ensure the CFLAGS script is formatted
-        run: ruff format --check --diff grease-cli/tests/extract-cflags.py
+        run: ruff format --check --diff grease-exe/tests/extract-cflags.py
 
       - name: Run hlint
         run: |
@@ -67,7 +67,7 @@ jobs:
             --tlsv1.2 \
             https://github.com/ndmitchell/hlint/releases/download/v3.8/hlint-3.8-x86_64-linux.tar.gz | \
             tar xzf - hlint-3.8/hlint
-          ./hlint-3.8/hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/{main,src,tests}
+          ./hlint-3.8/hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/src grease-exe/{main,src,tests}
 
       - name: Spell check docs
         # We pin a specific version because updates can come with additional

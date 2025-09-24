@@ -3,10 +3,10 @@
 To run the tests:
 
 ```sh
-$ cabal test pkg:grease-cli
+$ cabal test pkg:grease-exe
 ```
 
-The tests reside in the `grease-cli/tests/` directory. They are automatically
+The tests reside in the `grease-exe/tests/` directory. They are automatically
 discovered by the test harness based on their file name. They are written using
 [Oughta][oughta].
 
@@ -134,7 +134,7 @@ cat cabal/coverage.cabal.project >> cabal.project.local
 ```
 
 This will configure Cabal to collect coverage information for the `grease` and
-`grease-cli` packages, but *not* for any of their dependencies.
+`grease-exe` packages, but *not* for any of their dependencies.
 
 Unfortunately, you'll have to force Cabal to recompile GREASE and all of its
 dependencies for these changes to take effect.
@@ -147,7 +147,7 @@ cabal build
 Now, run the test suite:
 
 ```sh
-cabal test pkg:grease-cli
+cabal test pkg:grease-exe
 ```
 
 Finally, run a report. Note that this script is best-effort and some adjustment

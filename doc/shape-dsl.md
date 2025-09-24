@@ -152,7 +152,7 @@ For LLVM, the arguments are numbered starting from `0` and prefixed with `%`, so
 
 In addition to the concrete syntax described above, GREASE supports ingesting
 initial preconditions written in [JSON]. The schema is not yet comprehensively
-documented here, see `grease-cli/tests/x86/extra/json-shapes.json` for an
+documented here, see `grease-exe/tests/x86/extra/json-shapes.json` for an
 example. GREASE parses the file passed to `--initial-precondition` as JSON if it
 ends in `.json`.
 
