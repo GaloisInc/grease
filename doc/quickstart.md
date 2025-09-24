@@ -18,4 +18,4 @@ docker run --rm -v "${PWD}:${PWD}" -w "${PWD}" ghcr.io/galoisinc/grease:nightly 
 
 Note that GREASE only supports analysis of ELF executables, so this will work
 best on Linux. If you're not using Linux, you can try running GREASE on one of
-the binaries in its test suite, under `grease-cli/tests`.
+the binaries in its test suite, under `grease-exe/tests`.

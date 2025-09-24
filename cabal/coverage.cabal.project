@@ -11,3 +11,5 @@ package grease
   coverage: True
 package grease-cli
   coverage: True
+package grease-exe
+  coverage: True

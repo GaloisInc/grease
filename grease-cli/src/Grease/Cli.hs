@@ -7,6 +7,22 @@
 -- Copyright        : (c) Galois, Inc. 2025
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Cli (
+  -- These individual option parsers are used in a downstream project.
+
+  -- * Individual option parsers
+  addrOverridesParser,
+  boundsOptsParser,
+  fsRootParser,
+  globalsParser,
+  initPrecondParser,
+  overridesParser,
+  overridesYamlParser,
+  simpleShapesParser,
+  solverParser,
+  stackArgSlotsParser,
+  symStdinParser,
+
+  -- * High-level entrypoints
   optsInfo,
   optsFromList,
   optsFromArgs,
@@ -22,6 +38,7 @@ import Data.String qualified as String
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Void (Void)
+import Data.Word (Word64)
 import Grease.Diagnostic.Severity qualified as Sev
 import Grease.Entrypoint
 import Grease.Macaw.Overrides.Address (addressOverrideParser)
@@ -37,6 +54,9 @@ import Lang.Crucible.Utils.Seconds (secondsFromInt)
 import Lang.Crucible.Utils.Timeout (Timeout (Timeout))
 import Options.Applicative qualified as Opt
 import Text.Megaparsec qualified as TM
+
+------------------------------------------------------------
+-- Helpers (not exported)
 
 megaparsecReader :: TM.Parsec Void Text a -> Opt.ReadM a
 megaparsecReader p = Opt.eitherReader $ \rawStr ->
@@ -62,6 +82,38 @@ boundedEnumMetavar _ = Opt.metavar $ varShowS ""
       List.foldr (.) id $
         List.intersperse (showChar '|') $
           List.map shows [minBound @a .. maxBound @a]
+
+-- Format a list of two or more possible values for a command-line
+-- option by separating each value with a comma (if necessary) and
+-- parenthesizing the results.
+--
+-- Precondition: the list contains two or more values.
+describeOptions :: [String] -> String
+describeOptions ls = showParen True description ""
+ where
+  description :: ShowS
+  description =
+    case unsnoc (List.map showString ls) of
+      Just ([x], y) ->
+        x . showString " or " . y
+      Just (xs, y) ->
+        List.foldr (.) id (List.intersperse (showString ", ") xs)
+          . showString ", or "
+          . y
+      _ ->
+        panic "opts.describeOptions" $
+          [ "Precondition violated (list contains fewer than two values:"
+          ]
+            List.++ ls
+
+  -- This was introduced in `base` in `base-4.19.0.0` (GHC 9.8), so we
+  -- backport its definition here for backwards compatibility.
+  unsnoc :: forall a. [a] -> Maybe ([a], a)
+  unsnoc = List.foldr (\x -> Just . maybe ([], x) (\(~(a, b)) -> (x : a, b))) Nothing
+  {-# INLINEABLE unsnoc #-}
+
+------------------------------------------------------------
+-- Individual option parsers
 
 entrypointParser :: Opt.Parser Entrypoint
 entrypointParser =
@@ -167,13 +219,7 @@ initPrecondOptsParser = Opt.parserOptionGroup "Initial precondition options" $ d
             <> Opt.showDefault
             <> Opt.value GO.defaultTypeUnrollingBound
         )
-  initPrecondPath <-
-    Opt.optional $
-      Opt.strOption
-        ( Opt.long "initial-precondition"
-            <> Opt.metavar "FILE"
-            <> Opt.help "Initial precondition for use in refinement. Can be (partially) overridden by --arg-* and/or --*-startup-override."
-        )
+  initPrecondPath <- initPrecondParser
   initPrecondSimpleShapes <- simpleShapesParser
   pure GO.InitialPreconditionOpts{..}
 
@@ -208,20 +254,111 @@ simpleShapesParser = fmap Map.fromList $ Opt.many $ do
         )
     ]
 
+addrOverridesParser :: Opt.Parser [(Integer, FilePath)]
+addrOverridesParser =
+  Opt.many $
+    Opt.option
+      (megaparsecReader addressOverrideParser)
+      ( Opt.long "addr-override"
+          <> Opt.metavar "ADDR:FILE"
+          <> Opt.help "address overrides, in Crucible S-expression syntax"
+      )
+
+fsRootParser :: Opt.Parser (Maybe FilePath)
+fsRootParser =
+  Opt.optional
+    ( Opt.strOption
+        ( Opt.long "fs-root"
+            <> Opt.metavar "PATH"
+            <> Opt.help "The path to the symbolic filesystem"
+        )
+    )
+
+globalsParser :: Opt.Parser GO.MutableGlobalState
+globalsParser =
+  Opt.option
+    Opt.auto
+    ( Opt.long "globals"
+        <> Opt.help ("how to initialize mutable global variables " List.++ describeOptions allMutableGlobalStateStrs)
+        <> Opt.value GO.Initialized
+        <> Opt.showDefault
+        <> Opt.completeWith allMutableGlobalStateStrs
+    )
+ where
+  allMutableGlobalStateStrs :: [String]
+  allMutableGlobalStateStrs = List.map show GO.allMutableGlobalStates
+
+initPrecondParser :: Opt.Parser (Maybe FilePath)
+initPrecondParser =
+  Opt.optional $
+    Opt.strOption
+      ( Opt.long "initial-precondition"
+          <> Opt.metavar "FILE"
+          <> Opt.help "Initial precondition for use in refinement. Can be (partially) overridden by --arg-* and/or --*-startup-override."
+      )
+
+noHeuristicsParser :: Opt.Parser Bool
+noHeuristicsParser =
+  Opt.switch (Opt.long "no-heuristics" <> Opt.help "disable heuristics")
+
+overridesParser :: Opt.Parser [FilePath]
+overridesParser =
+  Opt.many
+    ( Opt.strOption
+        ( Opt.long "overrides"
+            <> Opt.metavar "FILE"
+            <> Opt.help "overrides, in Crucible S-expression syntax"
+        )
+    )
+
+overridesYamlParser :: Opt.Parser [FilePath]
+overridesYamlParser =
+  Opt.many
+    ( Opt.strOption
+        ( Opt.long "overrides-yaml"
+            <> Opt.metavar "FILE"
+            <> Opt.help "overrides, in YAML format"
+        )
+    )
+
+solverParser :: Opt.Parser Solver
+solverParser =
+  Opt.option
+    Opt.auto
+    ( Opt.long "solver"
+        <> boundedEnumMetavar (Proxy @Solver)
+        <> Opt.value Yices
+        <> Opt.showDefault
+        <> Opt.help "The SMT solver to use for solving proof goals"
+    )
+
+stackArgSlotsParser :: Opt.Parser GO.ExtraStackSlots
+stackArgSlotsParser =
+  Opt.option
+    Opt.auto
+    ( Opt.long "stack-argument-slots"
+        <> Opt.metavar "NUM"
+        <> Opt.value 0
+        <> Opt.help "Reserve NUM slots above the stack frame for stack-spilled arguments"
+    )
+
+symStdinParser :: Opt.Parser Word64
+symStdinParser =
+  Opt.option
+    Opt.auto
+    ( Opt.long "sym-stdin"
+        <> Opt.value 0
+        <> Opt.showDefault
+        <> Opt.metavar "N"
+        <> Opt.help "populate stdin with this many symbolic bytes"
+    )
+
 simOpts :: Opt.Parser GO.SimOpts
 simOpts = do
   simProgPath <- Opt.strArgument (Opt.help "filename of binary" <> Opt.metavar "FILENAME")
   simDebug <- Opt.switch (Opt.long "debug" <> Opt.help "run the debugger")
   simEntryPoints <- Opt.many entrypointParser
-  simMutGlobs <-
-    Opt.option
-      Opt.auto
-      ( Opt.long "globals"
-          <> Opt.help ("how to initialize mutable global variables " List.++ describeOptions allMutableGlobalStateStrs)
-          <> Opt.value GO.Initialized
-          <> Opt.showDefault
-          <> Opt.completeWith allMutableGlobalStateStrs
-      )
+  simMutGlobs <- globalsParser
   simReqs <-
     Opt.many
       ( Opt.option
@@ -232,31 +369,10 @@ simOpts = do
               <> Opt.completeWith allRequirementStrs
           )
       )
-  simNoHeuristics <- Opt.switch (Opt.long "no-heuristics" <> Opt.help "disable heuristics")
-  simOverrides <-
-    Opt.many
-      ( Opt.strOption
-          ( Opt.long "overrides"
-              <> Opt.metavar "FILE"
-              <> Opt.help "overrides, in Crucible S-expression syntax"
-          )
-      )
-  simAddressOverrides <-
-    Opt.many $
-      Opt.option
-        (megaparsecReader addressOverrideParser)
-        ( Opt.long "addr-override"
-            <> Opt.metavar "ADDR:FILE"
-            <> Opt.help "address overrides, in Crucible S-expression syntax"
-        )
-  simOverridesYaml <-
-    Opt.many
-      ( Opt.strOption
-          ( Opt.long "overrides-yaml"
-              <> Opt.metavar "FILE"
-              <> Opt.help "overrides, in YAML format"
-          )
-      )
+  simNoHeuristics <- noHeuristicsParser
+  simOverrides <- overridesParser
+  simAddressOverrides <- addrOverridesParser
+  simOverridesYaml <- overridesYamlParser
   simPathStrategy <-
     Opt.option
       (Opt.maybeReader GO.parsePathStrategy)
@@ -285,23 +401,8 @@ simOpts = do
                   ]
               )
         )
-  simStackArgumentSlots <-
-    Opt.option
-      Opt.auto
-      ( Opt.long "stack-argument-slots"
-          <> Opt.metavar "NUM"
-          <> Opt.value 0
-          <> Opt.help "Reserve NUM slots above the stack frame for stack-spilled arguments"
-      )
-  simSolver <-
-    Opt.option
-      Opt.auto
-      ( Opt.long "solver"
-          <> boundedEnumMetavar (Proxy @Solver)
-          <> Opt.value Yices
-          <> Opt.showDefault
-          <> Opt.help "The SMT solver to use for solving proof goals"
-      )
+  simStackArgumentSlots <- stackArgSlotsParser
+  simSolver <- solverParser
   simRawBinaryMode <-
     Opt.switch
       (Opt.long "raw-binary" <> Opt.help "load binary as a position dependent non-elf")
@@ -360,23 +461,8 @@ simOpts = do
       ( Opt.long "rust"
           <> Opt.help "Use simulator settings that are more likely to work for Rust programs"
       )
-  simFsRoot <-
-    Opt.optional
-      ( Opt.strOption
-          ( Opt.long "fs-root"
-              <> Opt.metavar "PATH"
-              <> Opt.help "The path to the symbolic filesystem"
-          )
-      )
-  simFsStdin <-
-    Opt.option
-      Opt.auto
-      ( Opt.long "sym-stdin"
-          <> Opt.value 0
-          <> Opt.showDefault
-          <> Opt.metavar "N"
-          <> Opt.help "populate stdin with this many symbolic bytes"
-      )
+  simFsRoot <- fsRootParser
+  simFsStdin <- symStdinParser
 
   simInitPrecondOpts <- initPrecondOptsParser
   simBoundsOpts <- boundsOptsParser
@@ -384,41 +470,9 @@ simOpts = do
  where
   callOptionsGroup = "Call options"
 
-  allMutableGlobalStateStrs :: [String]
-  allMutableGlobalStateStrs = List.map show GO.allMutableGlobalStates
-
   allRequirementStrs :: [String]
   allRequirementStrs =
     List.map (Text.unpack . displayReq) [minBound .. maxBound]
-
-  -- Format a list of two or more possible values for a command-line
-  -- option by separating each value with a comma (if necessary) and
-  -- parenthesizing the results.
-  --
-  -- Precondition: the list contains two or more values.
-  describeOptions :: [String] -> String
-  describeOptions ls = showParen True description ""
-   where
-    description :: ShowS
-    description =
-      case unsnoc (List.map showString ls) of
-        Just ([x], y) ->
-          x . showString " or " . y
-        Just (xs, y) ->
-          List.foldr (.) id (List.intersperse (showString ", ") xs)
-            . showString ", or "
-            . y
-        _ ->
-          panic "opts.describeOptions" $
-            [ "Precondition violated (list contains fewer than two values:"
-            ]
-              List.++ ls
-
-  -- This was introduced in `base` in `base-4.19.0.0` (GHC 9.8), so we
-  -- backport its definition here for backwards compatibility.
-  unsnoc :: forall a. [a] -> Maybe ([a], a)
-  unsnoc = List.foldr (\x -> Just . maybe ([], x) (\(~(a, b)) -> (x : a, b))) Nothing
-  {-# INLINEABLE unsnoc #-}
 
 processSimOpts :: GO.SimOpts -> GO.SimOpts
 processSimOpts sOpts =
@@ -432,6 +486,9 @@ processSimOpts sOpts =
                 else GO.simTimeout (GO.simBoundsOpts sOpts)
           }
     }
+
+------------------------------------------------------------
+-- High-level entrypoints
 
 opts :: Opt.Parser GO.Opts
 opts = do

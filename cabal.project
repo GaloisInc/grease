@@ -1,6 +1,7 @@
 packages:
   grease/grease.cabal
   grease-cli/grease-cli.cabal
+  grease-exe/grease-exe.cabal
   grease-aarch32/grease-aarch32.cabal
   grease-ppc/grease-ppc.cabal
   grease-x86/grease-x86.cabal

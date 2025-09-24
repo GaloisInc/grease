@@ -1,5 +1,5 @@
 cabal-version: 3.0
-name: grease-cli
+name: grease-exe
 version: 0.1.0.0
 author: Galois, Inc.
 maintainer: grease@galois.com
@@ -7,17 +7,20 @@ copyright: Galois, Inc. 2024
 license: BSD-3-Clause
 license-file: LICENSE
 synopsis:
-  CLI for grease-exe
+  Checks properties about binaries using under-constrained symbolic execution
 description:
-  CLI for grease-exe.
+  @grease@ is a tool that checks properties about binaries using
+  under-constrained symbolic execution.
 extra-doc-files:
   README.md
+extra-source-files:
+  tests/test.lua
 category: Static Analysis
 
 source-repository head
   type: git
   location: https://github.com/GaloisInc/grease
-  subdir: grease-cli
+  subdir: grease-exe
 
 common shared
   default-language: GHC2021
@@ -136,18 +139,107 @@ library
   hs-source-dirs: src
   build-depends:
     , grease
+    , grease-aarch32
+    , grease-cli
+    , grease-ppc
+    , grease-x86
 
     -- Hackage dependencies
+    , aeson ^>= 2.2
+    , async ^>= 2.2.5
+    , bytestring ^>= { 0.11.5, 0.12.1 }
     , containers ^>= { 0.6.7, 0.7 }
+    , directory ^>= 1.3.7.1
+    , file-embed ^>= 0.0.16
+    , filepath ^>= { 1.4.2.2, 1.5.4.0 }
+    , indexed-traversable ^>= { 0.1.4 }
+    , lens ^>= 5.3
+    , lumberjack ^>= 1.0
     , megaparsec ^>= 9.6
     , optparse-applicative ^>= 0.19.0.0
+    , safe-exceptions ^>= 0.1.7.4
     , text ^>= { 2.0, 2.1 }
+    , vector ^>= 0.13.2
+    , prettyprinter ^>= 1.7.1
+    , parameterized-utils ^>= 2.1.10
 
     -- Submodules
     --
     -- No version bounds are needed, as Cabal will always choose the versions
     -- specified in `cabal.project`, namely, the version in the submodule.
     , crucible
+    , crucible-debug
+    , crucible-llvm
+    , crucible-llvm-debug
+    , crucible-llvm-syntax
+    , crucible-macaw-debug
+    , crucible-symio
+    , crucible-syntax
+    , elf-edit
+    , llvm-pretty
+    , llvm-pretty-bc-parser
+    , macaw-aarch32
+    , macaw-aarch32-symbolic
+    , macaw-aarch32-syntax
+    , macaw-base
+    , macaw-loader
+    , macaw-loader-aarch32
+    , macaw-loader-x86
+    , macaw-ppc
+    , macaw-ppc-symbolic
+    , macaw-ppc-syntax
+    , macaw-symbolic
+    , macaw-symbolic-syntax
+    , macaw-x86
+    , macaw-x86-symbolic
+    , macaw-x86-syntax
+    , stubs-common
+    , what4
 
   exposed-modules:
-    Grease.Cli
+    Grease.Main
+
+  other-modules:
+    Grease.Profiler.EmbeddedData
+    Grease.Profiler.Feature
+    Grease.Profiler.Paths
+
+executable grease
+  import: shared
+  hs-source-dirs: main
+  main-is: Main.hs
+  build-depends: grease-exe
+
+test-suite grease-tests
+  import: shared
+  hs-source-dirs: tests
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules:
+    Shape
+  build-depends:
+      grease-exe
+    , grease
+    , grease-cli
+
+    -- Hackage dependencies
+    , bv-sized ^>= 1.0.6
+    , bytestring ^>= { 0.11.5, 0.12.1 }
+    , containers ^>= { 0.6.7, 0.7 }
+    , directory ^>= 1.3.7.1
+    , file-embed ^>= 0.0.16
+    , filepath ^>= { 1.4.2.2, 1.5.4.0 }
+    , hedgehog ^>= 1.5
+    , hslua ^>= 2.3.1
+    , lumberjack ^>= 1.0
+    , oughta ^>= 0.3
+    , parameterized-utils ^>= 2.1.10
+    , prettyprinter ^>= 1.7.1
+    , tasty ^>= 1.5.3
+    , tasty-hedgehog ^>= 1.4.0.2
+    , tasty-hunit ^>= 0.10.2
+    , text ^>= { 2.0, 2.1 }
+
+    -- Submodules
+    , crucible-llvm
+    , macaw-base

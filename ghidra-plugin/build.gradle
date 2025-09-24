@@ -78,12 +78,12 @@ dependencies {
 
 task buildGrease(type: Exec) {
 	workingDir '../'
-	commandLine 'cabal', 'build', 'grease-cli'
+	commandLine 'cabal', 'build', 'grease-exe'
 }
 
 task findGrease(type: Exec) {
 	workingDir '../'
-	commandLine 'cabal', 'list-bin', 'grease-cli'
+	commandLine 'cabal', 'list-bin', 'grease-exe'
   	//store the output instead of printing to the console:
   	standardOutput = new ByteArrayOutputStream()
 	ext.output = {

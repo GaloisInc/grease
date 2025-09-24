@@ -1,6 +1,6 @@
-# grease-cli
+# grease-exe
 
-`grease-cli` is the CLI of the `grease-exe` executable.
+`grease-exe` is a CLI tool that checks properties about binaries using under-constrained symbolic execution, building on top of the `grease` library.
 
 For more information, see [the blog post introducing GREASE](https://www.galois.com/articles/introducing-grease), or [the documentation](https://galoisinc.github.io/grease).
 
@@ -16,4 +16,4 @@ Distribution Statement A. Approved for public release: distribution is unlimited
 
 ## Copyright
 
-Copyright (c) Galois, Inc. 2025.
+Copyright (c) Galois, Inc. 2024.

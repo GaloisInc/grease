@@ -117,7 +117,7 @@ git config blame.ignorerevsfile .git-blame-ignore-revs
 We treat a small number of hlint warnings as errors in CI. To run hlint locally, try:
 
 ```sh
-hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/{main,src,tests}
+hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/src grease-exe/{main,src,tests}
 ```
 
 ### ruff
@@ -148,6 +148,7 @@ The `grease` source code is split up into a number of smaller libraries, each
 residing in its own top-level directory:
 
 * `grease`: This comprises the core of `grease` as a library.
+* `grease-cli`: This library contains the parsers for the CLI of `grease-exe`.
 * `grease-aarch32`: This extends the `grease` library with the ability to reason
   about AArch32 binaries.
 * `grease-ppc`: This extends the `grease` library with the ability to reason
