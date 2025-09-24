@@ -264,6 +264,7 @@ library
     Grease.Skip
     Grease.Skip.Diagnostic
     Grease.Solver
+    Grease.SymIO
     Grease.Syntax
     Grease.Syntax.Overrides
     Grease.Syscall

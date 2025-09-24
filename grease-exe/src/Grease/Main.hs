@@ -153,6 +153,7 @@ import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Simple qualified as Simple
 import Grease.Solver (withSolverOnlineBackend)
+import Grease.SymIO qualified as GSIO
 import Grease.Syntax (parseOverridesYaml, parseProgram, parsedProgramCfgMap, resolveOverridesYaml)
 import Grease.Syscall
 import Grease.Time (time)
@@ -179,7 +180,6 @@ import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.SymIO qualified as SymIO
-import Lang.Crucible.SymIO.Loader qualified as SymIO.Loader
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Lumberjack qualified as LJ
@@ -512,41 +512,6 @@ interestingConcretizedShapes names initArgs (ConcArgs cArgs) =
                 names
                 (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgs')
 
--- | Helper, not exported
---
--- Initialize the symbolic file system.
-initialLlvmFileSystem ::
-  ( C.IsSymInterface sym
-  , Mem.HasPtrWidth ptrW
-  ) =>
-  C.HandleAllocator ->
-  sym ->
-  FsOpts ->
-  IO
-    ( SymIO.InitialFileSystemContents sym
-    , CLLVM.SymIO.LLVMFileSystem ptrW
-    , C.SymGlobalState sym
-    , CLLVM.SymIO.SomeOverrideSim sym ()
-    )
-initialLlvmFileSystem halloc sym simOpts = do
-  fileContents_ <-
-    case fsRoot simOpts of
-      Nothing -> pure SymIO.emptyInitialFileSystemContents
-      Just rootDir -> SymIO.Loader.loadInitialFiles sym rootDir
-  fileContents <- withSymStdin (fsStdin simOpts) fileContents_
-  -- We currently don't mirror stdout or stderr
-  let mirroredOutputs = []
-  (fs, gs, ov) <- CLLVM.SymIO.initialLLVMFileSystem halloc sym ?ptrWidth fileContents mirroredOutputs C.emptyGlobals
-  pure (fileContents, fs, gs, ov)
- where
-  withSymStdin nBytes fs = do
-    symStdin <-
-      let mkByte = W4.freshConstant sym (W4.safeSymbol "stdin") (W4.BaseBVRepr (knownNat @8))
-       in Monad.replicateM (fromIntegral nBytes) mkByte
-    let symFiles_ = SymIO.symbolicFiles fs
-    let symFiles = Map.insert SymIO.StdinTarget symStdin symFiles_
-    pure (fs{SymIO.symbolicFiles = symFiles})
-
 -- | Compute the initial 'ArgShapes' for a Macaw CFG.
 --
 -- Sources argument shapes from:
@@ -786,8 +751,8 @@ macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTabl
   let mbStartupOvSsaCfg = startupOvCfg <$> mbStartupOvSsa
 
   let sym = C.backendGetSym bak
-  (fs0, fs, globals0, initFsOv) <-
-    liftIO $ initialLlvmFileSystem halloc sym (simFsOpts simOpts)
+  GSIO.InitializedFs fs0 fs globals0 initFsOv <-
+    liftIO $ GSIO.initialLlvmFileSystem halloc sym (simFsOpts simOpts)
   (memCfg, fnOvsMap) <- macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable
   evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @arch (archCtx ^. archVals) sym pure
   let macawExtImpl = Symbolic.macawExtensions evalFn mvar memCfg
@@ -1449,8 +1414,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
       let ?recordLLVMAnnotation = recordLLVMAnnotation
       let ?processMacawAssert = processMacawAssert
       let llvmExtImpl = CLLVM.llvmExtensionImpl ?memOpts
-      (fs0, fs, globals0, initFsOv) <-
-        liftIO $ initialLlvmFileSystem halloc sym (simFsOpts simOpts)
+      GSIO.InitializedFs fs0 fs globals0 initFsOv <-
+        liftIO $ GSIO.initialLlvmFileSystem halloc sym (simFsOpts simOpts)
       (p, globals1) <- liftIO $ ToConc.newToConcretize halloc globals0
       st <- LLVM.initState bak la llvmExtImpl p halloc (simErrorSymbolicFunCalls simOpts) setupMem fs globals1 initFsOv llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
       let cmdExt = Debug.llvmCommandExt
