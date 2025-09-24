@@ -521,7 +521,7 @@ initialLlvmFileSystem ::
   ) =>
   C.HandleAllocator ->
   sym ->
-  SimOpts ->
+  FsOpts ->
   IO
     ( SymIO.InitialFileSystemContents sym
     , CLLVM.SymIO.LLVMFileSystem ptrW
@@ -530,10 +530,10 @@ initialLlvmFileSystem ::
     )
 initialLlvmFileSystem halloc sym simOpts = do
   fileContents_ <-
-    case simFsRoot simOpts of
+    case fsRoot simOpts of
       Nothing -> pure SymIO.emptyInitialFileSystemContents
-      Just fsRoot -> SymIO.Loader.loadInitialFiles sym fsRoot
-  fileContents <- withSymStdin (simFsStdin simOpts) fileContents_
+      Just rootDir -> SymIO.Loader.loadInitialFiles sym rootDir
+  fileContents <- withSymStdin (fsStdin simOpts) fileContents_
   -- We currently don't mirror stdout or stderr
   let mirroredOutputs = []
   (fs, gs, ov) <- CLLVM.SymIO.initialLLVMFileSystem halloc sym ?ptrWidth fileContents mirroredOutputs C.emptyGlobals
@@ -786,7 +786,8 @@ macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTabl
   let mbStartupOvSsaCfg = startupOvCfg <$> mbStartupOvSsa
 
   let sym = C.backendGetSym bak
-  (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
+  (fs0, fs, globals0, initFsOv) <-
+    liftIO $ initialLlvmFileSystem halloc sym (simFsOpts simOpts)
   (memCfg, fnOvsMap) <- macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable
   evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @arch (archCtx ^. archVals) sym pure
   let macawExtImpl = Symbolic.macawExtensions evalFn mvar memCfg
@@ -1448,7 +1449,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
       let ?recordLLVMAnnotation = recordLLVMAnnotation
       let ?processMacawAssert = processMacawAssert
       let llvmExtImpl = CLLVM.llvmExtensionImpl ?memOpts
-      (fs0, fs, globals0, initFsOv) <- liftIO $ initialLlvmFileSystem halloc sym simOpts
+      (fs0, fs, globals0, initFsOv) <-
+        liftIO $ initialLlvmFileSystem halloc sym (simFsOpts simOpts)
       (p, globals1) <- liftIO $ ToConc.newToConcretize halloc globals0
       st <- LLVM.initState bak la llvmExtImpl p halloc (simErrorSymbolicFunCalls simOpts) setupMem fs globals1 initFsOv llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
       let cmdExt = Debug.llvmCommandExt
