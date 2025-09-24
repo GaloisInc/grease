@@ -148,6 +148,8 @@ data FsOpts
   -- ^ File system root
   , fsStdin :: Word64
   -- ^ Symbolic bytes of stdin
+  , fsSymFiles :: Map Text Integer
+  -- ^ Paths and sizes of symbolic files
   }
   deriving Show
 

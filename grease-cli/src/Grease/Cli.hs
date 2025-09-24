@@ -12,6 +12,7 @@ module Grease.Cli (
   -- * Individual option parsers
   addrOverridesParser,
   boundsOptsParser,
+  fsOptsParser,
   fsRootParser,
   globalsParser,
   initPrecondParser,
@@ -20,6 +21,7 @@ module Grease.Cli (
   simpleShapesParser,
   solverParser,
   stackArgSlotsParser,
+  symFilesParser,
   symStdinParser,
 
   -- * High-level entrypoints
@@ -54,6 +56,7 @@ import Lang.Crucible.Utils.Seconds (secondsFromInt)
 import Lang.Crucible.Utils.Timeout (Timeout (Timeout))
 import Options.Applicative qualified as Opt
 import Text.Megaparsec qualified as TM
+import Text.Megaparsec.Char.Lexer qualified as TMCL
 
 ------------------------------------------------------------
 -- Helpers (not exported)
@@ -268,6 +271,7 @@ fsOptsParser :: Opt.Parser GO.FsOpts
 fsOptsParser = do
   fsRoot <- fsRootParser
   fsStdin <- symStdinParser
+  fsSymFiles <- symFilesParser
   pure GO.FsOpts{..}
 
 fsRootParser :: Opt.Parser (Maybe FilePath)
@@ -347,6 +351,25 @@ stackArgSlotsParser =
         <> Opt.value 0
         <> Opt.help "Reserve NUM slots above the stack frame for stack-spilled arguments"
     )
+
+symFilesParser :: Opt.Parser (Map Text Integer)
+symFilesParser =
+  fmap Map.fromList $
+    let hex :: TM.Parsec Void Text Integer
+        hex = TM.single '0' >> TM.single 'x' >> TMCL.hexadecimal
+        num = TMCL.decimal TM.<|> hex
+        reader = do
+          n <- num
+          _ <- TM.chunk ":"
+          path <- TM.takeRest
+          pure (path, n)
+     in Opt.many $
+          Opt.option
+            (megaparsecReader reader)
+            ( Opt.long "sym-file"
+                <> Opt.help ("sizes and paths of symbolic files")
+                <> Opt.metavar "SIZE:PATH"
+            )
 
 symStdinParser :: Opt.Parser Word64
 symStdinParser =

@@ -3,7 +3,8 @@
 // Test that the overrides for networking-related functions work as expected.
 
 // all: flags {"--symbol", "test"}
-// all: flags {"--fs-root", "tests/refine/neg/extra/server-fs"}
+// all: flags {"--sym-file", "0:/network/AF_INET/SOCK_STREAM/socket"}
+// all: flags {"--sym-file", "4:/network/AF_INET/SOCK_STREAM/34835/0"}
 // all: go(prog)
 
 #include <arpa/inet.h>

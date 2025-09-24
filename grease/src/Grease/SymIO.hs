@@ -12,6 +12,7 @@ module Grease.SymIO (
 import Control.Monad qualified as Monad
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.NatRepr (knownNat)
+import Data.Text qualified as Text
 import Grease.Options qualified as GO
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
@@ -44,22 +45,41 @@ initialLlvmFileSystem halloc sym simOpts = do
     case GO.fsRoot simOpts of
       Nothing -> pure SymIO.emptyInitialFileSystemContents
       Just rootDir -> SymIO.Loader.loadInitialFiles sym rootDir
-  fileContents <- withSymStdin (GO.fsStdin simOpts) fileContents_
+  fileContentsWithStdin <- withSymStdin (GO.fsStdin simOpts) fileContents_
+  fileContentsWithFiles <-
+    Monad.foldM withSymFile fileContentsWithStdin (Map.toList (GO.fsSymFiles simOpts))
+
   -- We currently don't mirror stdout or stderr
   let mirroredOutputs = []
-  (fs, gs, ov) <- CLLVM.SymIO.initialLLVMFileSystem halloc sym ?ptrWidth fileContents mirroredOutputs C.emptyGlobals
+  (fs, gs, ov) <-
+    CLLVM.SymIO.initialLLVMFileSystem
+      halloc
+      sym
+      ?ptrWidth
+      fileContentsWithFiles
+      mirroredOutputs
+      C.emptyGlobals
   pure $
     InitializedFs
-      { initFsContents = fileContents
+      { initFsContents = fileContentsWithFiles
       , initFs = fs
       , initFsGlobals = gs
       , initFsOverride = ov
       }
  where
+  mkBytes symb nBytes =
+    let mkByte = W4.freshConstant sym symb (W4.BaseBVRepr (knownNat @8))
+     in Monad.replicateM (fromIntegral nBytes) mkByte
+
+  withSymFile fs (path, nBytes) = do
+    let pathStr = Text.unpack path
+    symFile <- mkBytes (W4.safeSymbol pathStr) nBytes
+    let symFiles_ = SymIO.symbolicFiles fs
+    let symFiles = Map.insert (SymIO.FileTarget pathStr) symFile symFiles_
+    pure (fs{SymIO.symbolicFiles = symFiles})
+
   withSymStdin nBytes fs = do
-    symStdin <-
-      let mkByte = W4.freshConstant sym (W4.safeSymbol "stdin") (W4.BaseBVRepr (knownNat @8))
-       in Monad.replicateM (fromIntegral nBytes) mkByte
+    symStdin <- mkBytes (W4.safeSymbol "stdin") nBytes
     let symFiles_ = SymIO.symbolicFiles fs
     let symFiles = Map.insert SymIO.StdinTarget symStdin symFiles_
     pure (fs{SymIO.symbolicFiles = symFiles})
