@@ -21,6 +21,7 @@ module Grease.Options (
   SkipInvalidCallAddrs (..),
   SkipUnsupportedRelocs (..),
   BoundsOpts (..),
+  FsOpts (..),
   InitialPreconditionOpts (..),
   SimOpts (..),
   Opts (..),
@@ -141,6 +142,15 @@ data BoundsOpts
   }
   deriving Show
 
+data FsOpts
+  = FsOpts
+  { fsRoot :: Maybe FilePath
+  -- ^ File system root
+  , fsStdin :: Word64
+  -- ^ Symbolic bytes of stdin
+  }
+  deriving Show
+
 -- | Options that affect the initial precondition used for simulation
 data InitialPreconditionOpts
   = InitialPreconditionOpts
@@ -202,11 +212,8 @@ data SimOpts
   -- ^ Default: 0.
   , simSolver :: Solver
   -- ^ Default: 'Yices'.
-  , simFsRoot :: Maybe FilePath
-  -- ^ File system root
-  , simFsStdin :: Word64
-  -- ^ Symbolic bytes of stdin
   , simBoundsOpts :: BoundsOpts
+  , simFsOpts :: FsOpts
   , simInitPrecondOpts :: InitialPreconditionOpts
   }
   deriving Show

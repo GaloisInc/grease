@@ -264,6 +264,12 @@ addrOverridesParser =
           <> Opt.help "address overrides, in Crucible S-expression syntax"
       )
 
+fsOptsParser :: Opt.Parser GO.FsOpts
+fsOptsParser = do
+  fsRoot <- fsRootParser
+  fsStdin <- symStdinParser
+  pure GO.FsOpts{..}
+
 fsRootParser :: Opt.Parser (Maybe FilePath)
 fsRootParser =
   Opt.optional
@@ -461,9 +467,8 @@ simOpts = do
       ( Opt.long "rust"
           <> Opt.help "Use simulator settings that are more likely to work for Rust programs"
       )
-  simFsRoot <- fsRootParser
-  simFsStdin <- symStdinParser
 
+  simFsOpts <- fsOptsParser
   simInitPrecondOpts <- initPrecondOptsParser
   simBoundsOpts <- boundsOptsParser
   pure GO.SimOpts{..}
