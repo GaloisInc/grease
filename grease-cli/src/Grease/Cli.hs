@@ -367,7 +367,7 @@ symFilesParser =
           Opt.option
             (megaparsecReader reader)
             ( Opt.long "sym-file"
-                <> Opt.help ("sizes and paths of symbolic files")
+                <> Opt.help "sizes and paths of symbolic files"
                 <> Opt.metavar "SIZE:PATH"
             )
 
