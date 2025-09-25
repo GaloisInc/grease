@@ -181,7 +181,6 @@ import Lang.Crucible.LLVM.Translation qualified as Trans
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
-import Lang.Crucible.SymIO qualified as SymIO
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Lumberjack qualified as LJ
@@ -742,71 +741,6 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
   pure (memCfg, fnOvsMap)
 
 macawInitState ::
-  forall sym bak arch solver scope st fm.
-  ( Mem.HasLLVMAnn sym
-  , MSM.MacawProcessAssertion sym
-  , C.IsSymBackend sym bak
-  , OnlineSolverAndBackend solver sym bak scope st (W4.Flags fm)
-  , C.IsSyntaxExtension (Symbolic.MacawExt arch)
-  , Symbolic.SymArchConstraints arch
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
-  , MM.MemWidth (MC.ArchAddrWidth arch)
-  , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
-  , Show (ArchReloc arch)
-  , ?memOpts :: Mem.MemOptions
-  , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
-  , ?lc :: TCtx.TypeContext
-  ) =>
-  GreaseLogAction ->
-  bak ->
-  C.HandleAllocator ->
-  MacawCfgConfig arch ->
-  ArchContext arch ->
-  SimOpts ->
-  Macaw.SetupHook sym arch ->
-  Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
-  C.GlobalVar Mem.Mem ->
-  AddressOverrides arch ->
-  ArchRegs sym arch ->
-  SetupMem sym ->
-  -- | If simulating a binary, this is 'Just' the address of the user-requested
-  -- entrypoint function. Otherwise, this is 'Nothing'.
-  Maybe (MC.ArchSegmentOff arch) ->
-  -- | The entrypoint-related CFGs.
-  EntrypointCfgs (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
-  IO
-    ( SymIO.InitialFileSystemContents sym
-    , C.ExecState (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch)))
-    )
-macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable mvar addrOvs regs' mem' mbCfgAddr entrypointCfgs = do
-  EntrypointCfgs
-    { entrypointStartupOv = mbStartupOvSsa
-    , entrypointCfg = ssa@(C.SomeCFG ssaCfg)
-    } <-
-    pure entrypointCfgs
-  let mbStartupOvSsaCfg = startupOvCfg <$> mbStartupOvSsa
-
-  let sym = C.backendGetSym bak
-  GSIO.InitializedFs fs0 fs globals0 initFsOv <-
-    liftIO $ GSIO.initialLlvmFileSystem halloc sym (simFsOpts simOpts)
-  (memCfg, fnOvsMap) <- macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable
-  evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @arch (archCtx ^. archVals) sym pure
-  let macawExtImpl = Symbolic.macawExtensions evalFn mvar memCfg
-  let ssaCfgHdl = C.cfgHandle ssaCfg
-  -- At this point, the only function we have discovered is the user-requested
-  -- entrypoint function. If we are simulating a binary, add it to the
-  -- discovered function handles. (See Note [Incremental code discovery] in
-  -- Grease.Macaw.SimulatorState.) If we are simulating an S-expression program,
-  -- use an empty map instead. (See gitlab#118 for more discussion on this point.)
-  let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` ssaCfgHdl) mbCfgAddr
-  (toConcVar, globals1) <- liftIO $ ToConc.newToConcretize halloc globals0
-  let personality =
-        emptyGreaseSimulatorState toConcVar
-          & discoveredFnHandles .~ discoveredHdls
-  st <- initState bak la macawExtImpl halloc mvar mem' globals1 initFsOv archCtx setupHook addrOvs personality regs' fnOvsMap mbStartupOvSsaCfg ssa
-  pure (fs0, st)
-
-macawMkInitState ::
   ( C.IsSymBackend sym bak
   , Symbolic.SymArchConstraints arch
   , Mem.HasPtrWidth wptr
@@ -843,7 +777,7 @@ macawMkInitState ::
   GSIO.InitializedFs sym wptr ->
   Args sym ext (Symbolic.MacawCrucibleRegTypes arch) ->
   IO (C.ExecState p sym ext (C.RegEntry sym ret))
-macawMkInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConcVar setupMem initFs args = do
+macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConcVar setupMem initFs args = do
   let sym = C.backendGetSym bak
   regs <- liftIO (overrideRegs archCtx sym (argVals args))
   EntrypointCfgs
@@ -954,7 +888,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
       memVar
       heuristics
       execFeats
-      (macawMkInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
+      (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
       `catches` [ Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
                     pure $ ProveCantRefine $ MissingSemantics $ pshow ex
                 , Handler
@@ -1078,7 +1012,6 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
         let entrypointCfgsSsa' = entrypointCfgsSsa{entrypointCfg = toSsaSomeCfg assertingCfg}
         C.resetAssumptionState bak
         (args, setupMem, setupAnns) <- setup la bak dl rNameAssign regTypes argShapes initMem
-        regs' <- liftIO (overrideRegs archCtx sym (argVals args))
         ErrorCallbacks
           { errorMap = bbMapRef
           , llvmErrCallback = recordLLVMAnnotation
@@ -1088,11 +1021,15 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
         let ?recordLLVMAnnotation = recordLLVMAnnotation
         let ?processMacawAssert = processMacawAssert
         memVar <- Mem.mkMemVar "grease:memmodel" halloc
-        (fs0, st) <- macawInitState la bak halloc macawCfgConfig archCtx simOpts setupHook memPtrTable memVar addrOvs regs' setupMem mbCfgAddr entrypointCfgsSsa'
+        initFs_ <- GSIO.initialLlvmFileSystem halloc sym (simFsOpts simOpts)
+        (toConcVar, globals1) <-
+          ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
+        let initFs = initFs_{GSIO.initFsGlobals = globals1}
+        st <- macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa' toConcVar setupMem initFs args
         let concInitState =
               Conc.InitialState
                 { Conc.initStateArgs = args
-                , Conc.initStateFs = fs0
+                , Conc.initStateFs = GSIO.initFsContents initFs
                 , Conc.initStateMem = initMem
                 }
         let boundsOpts = simBoundsOpts simOpts
