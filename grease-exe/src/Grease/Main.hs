@@ -601,6 +601,44 @@ overrideRegs archCtx sym =
               Nothing -> pure reg
         )
 
+greaseExecFeats ::
+  ( C.IsSymInterface sym
+  , C.IsSyntaxExtension ext
+  , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
+  , ?parserHooks :: CSyn.ParserHooks ext
+  , PP.Pretty cExt
+  , PP.Pretty (Dbg.ResponseExt cExt)
+  ) =>
+  GreaseLogAction ->
+  SimOpts ->
+  Dbg.CommandExt cExt ->
+  Dbg.ExtImpl cExt p sym ext ret ->
+  C.TypeRepr ret ->
+  IO ([C.ExecutionFeature p sym ext (C.RegEntry sym ret)], Maybe (Async ()))
+greaseExecFeats la simOpts cmdExt extImpl retTy = do
+  profFeatLog <- traverse greaseProfilerFeature (simProfileTo simOpts)
+  debuggerFeat <-
+    liftIO $
+      if simDebug simOpts
+        then do
+          dbgInputs <- Dbg.defaultDebuggerInputs cmdExt
+          Just
+            <$> Dbg.debugger
+              cmdExt
+              extImpl
+              prettyPtrFnMap
+              dbgInputs
+              Dbg.defaultDebuggerOutputs
+              retTy
+        else pure Nothing
+  let execFeats =
+        catMaybes
+          [ fmap fst profFeatLog
+          , debuggerFeat
+          , Just (greaseBranchTracerFeature la)
+          ]
+  pure (execFeats, snd <$> profFeatLog)
+
 macawExecFeats ::
   ( Symbolic.SymArchConstraints arch
   , C.IsSymInterface sym
@@ -613,33 +651,13 @@ macawExecFeats ::
   SimOpts ->
   IO ([C.ExecutionFeature p sym (Symbolic.MacawExt arch) (C.RegEntry sym (Symbolic.ArchRegStruct arch))], Maybe (Async ()))
 macawExecFeats la archCtx macawCfgConfig simOpts = do
-  profFeatLog <- traverse greaseProfilerFeature (simProfileTo simOpts)
   let cmdExt = MDebug.macawCommandExt (archCtx ^. archVals)
-  debuggerFeat <-
-    liftIO $
-      if simDebug simOpts
-        then do
-          dbgInputs <- Dbg.defaultDebuggerInputs cmdExt
-          let mbElf = snd . Elf.getElf <$> mcElf macawCfgConfig
-          Just
-            <$> Dbg.debugger
-              cmdExt
-              (MDebug.macawExtImpl prettyPtrFnMap (archCtx ^. archVals) mbElf)
-              prettyPtrFnMap
-              dbgInputs
-              Dbg.defaultDebuggerOutputs
-              (regStructRepr archCtx)
-        else pure Nothing
-  let execFeats =
-        catMaybes
-          [ fmap fst profFeatLog
-          , debuggerFeat
-          , Just (greaseBranchTracerFeature la)
-          ]
-  pure (execFeats, snd <$> profFeatLog)
+  let mbElf = snd . Elf.getElf <$> mcElf macawCfgConfig
+  let extImpl = MDebug.macawExtImpl prettyPtrFnMap (archCtx ^. archVals) mbElf
+  greaseExecFeats la simOpts cmdExt extImpl (regStructRepr archCtx)
 
 llvmExecFeats ::
-  forall p sym ext ret scope st fm blocks args.
+  forall p sym ext ret scope st fm.
   ( C.IsSymInterface sym
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
   , ext ~ CLLVM.LLVM
@@ -649,32 +667,12 @@ llvmExecFeats ::
   SimOpts ->
   sym ->
   C.GlobalVar Mem.Mem ->
-  C.CFG ext blocks args ret ->
+  C.TypeRepr ret ->
   IO ([C.ExecutionFeature p sym ext (C.RegEntry sym ret)], Maybe (Async ()))
-llvmExecFeats la simOpts _sym memVar cfg = do
-  profFeatLog <- traverse greaseProfilerFeature (simProfileTo simOpts)
+llvmExecFeats la simOpts _sym memVar ret = do
   let cmdExt = Debug.llvmCommandExt
-  debuggerFeat <-
-    liftIO $
-      if simDebug simOpts
-        then do
-          dbgInputs <- Dbg.defaultDebuggerInputs cmdExt
-          Just
-            <$> Dbg.debugger
-              cmdExt
-              (Debug.llvmExtImpl memVar)
-              prettyPtrFnMap
-              dbgInputs
-              Dbg.defaultDebuggerOutputs
-              (C.cfgReturnType cfg)
-        else pure Nothing
-  let execFeats =
-        catMaybes
-          [ fmap fst profFeatLog
-          , debuggerFeat
-          , Just (greaseBranchTracerFeature la)
-          ]
-  pure (execFeats, snd <$> profFeatLog)
+  let extImpl = Debug.llvmExtImpl memVar
+  greaseExecFeats la simOpts cmdExt extImpl ret
 
 macawMemConfig ::
   ( Symbolic.SymArchConstraints arch
@@ -1420,7 +1418,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
 
   let memVar = Trans.llvmMemVar llvmCtx
   (execFeats, profLogTask) <-
-    llvmExecFeats @(C.GlobalVar ToConc.ToConcretizeType) la simOpts sym memVar cfg
+    llvmExecFeats @(C.GlobalVar ToConc.ToConcretizeType) la simOpts sym memVar (C.cfgReturnType cfg)
 
   C.Refl <-
     case C.testEquality ?ptrWidth (knownNat @64) of
