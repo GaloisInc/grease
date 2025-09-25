@@ -638,6 +638,44 @@ macawExecFeats la archCtx macawCfgConfig simOpts = do
           ]
   pure (execFeats, snd <$> profFeatLog)
 
+llvmExecFeats ::
+  forall p sym ext ret scope st fm blocks args.
+  ( C.IsSymInterface sym
+  , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
+  , ext ~ CLLVM.LLVM
+  , ?parserHooks :: CSyn.ParserHooks ext
+  ) =>
+  GreaseLogAction ->
+  SimOpts ->
+  sym ->
+  C.GlobalVar Mem.Mem ->
+  C.CFG ext blocks args ret ->
+  IO ([C.ExecutionFeature p sym ext (C.RegEntry sym ret)], Maybe (Async ()))
+llvmExecFeats la simOpts _sym memVar cfg = do
+  profFeatLog <- traverse greaseProfilerFeature (simProfileTo simOpts)
+  let cmdExt = Debug.llvmCommandExt
+  debuggerFeat <-
+    liftIO $
+      if simDebug simOpts
+        then do
+          dbgInputs <- Dbg.defaultDebuggerInputs cmdExt
+          Just
+            <$> Dbg.debugger
+              cmdExt
+              (Debug.llvmExtImpl memVar)
+              prettyPtrFnMap
+              dbgInputs
+              Dbg.defaultDebuggerOutputs
+              (C.cfgReturnType cfg)
+        else pure Nothing
+  let execFeats =
+        catMaybes
+          [ fmap fst profFeatLog
+          , debuggerFeat
+          , Just (greaseBranchTracerFeature la)
+          ]
+  pure (execFeats, snd <$> profFeatLog)
+
 macawMemConfig ::
   ( Symbolic.SymArchConstraints arch
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
@@ -1380,10 +1418,9 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
 
   doLog la (Diag.TargetCFG cfg)
 
-  profFeatLog <-
-    traverse
-      (greaseProfilerFeature @(C.GlobalVar ToConc.ToConcretizeType) @sym @CLLVM.LLVM @(C.RegEntry sym ret))
-      (simProfileTo simOpts)
+  let memVar = Trans.llvmMemVar llvmCtx
+  (execFeats, profLogTask) <-
+    llvmExecFeats @(C.GlobalVar ToConc.ToConcretizeType) la simOpts sym memVar cfg
 
   C.Refl <-
     case C.testEquality ?ptrWidth (knownNat @64) of
@@ -1418,27 +1455,6 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
         liftIO $ GSIO.initialLlvmFileSystem halloc sym (simFsOpts simOpts)
       (p, globals1) <- liftIO $ ToConc.newToConcretize halloc globals0
       st <- LLVM.initState bak la llvmExtImpl p halloc (simErrorSymbolicFunCalls simOpts) setupMem fs globals1 initFsOv llvmCtx setupHook (argVals args) mbStartupOvCfg scfg
-      let cmdExt = Debug.llvmCommandExt
-      debuggerFeat <-
-        liftIO $
-          if simDebug simOpts
-            then do
-              dbgInputs <- Dbg.defaultDebuggerInputs cmdExt
-              Just
-                <$> Dbg.debugger
-                  cmdExt
-                  (Debug.llvmExtImpl (Trans.llvmMemVar llvmCtx))
-                  prettyPtrFnMap
-                  dbgInputs
-                  Dbg.defaultDebuggerOutputs
-                  (C.cfgReturnType cfg)
-            else pure Nothing
-      let execFeats =
-            catMaybes
-              [ fmap fst profFeatLog
-              , debuggerFeat
-              , Just (greaseBranchTracerFeature la)
-              ]
       -- See comment above on heuristics in 'simulateMacawCfg'
       let heuristics =
             if simNoHeuristics simOpts
@@ -1450,7 +1466,6 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
               , Conc.initStateFs = fs0
               , Conc.initStateMem = initMem
               }
-      let memVar = Trans.llvmMemVar llvmCtx
       let boundsOpts = simBoundsOpts simOpts
       let pathStrat = simPathStrategy simOpts
       execAndRefine bak (simSolver simOpts) fm la memVar setupAnns heuristics argNames argShapes concInitState bbMapRef boundsOpts pathStrat execFeats st
@@ -1472,7 +1487,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
               errs <&> \noHeuristic ->
                 toFailedPredicate fm MM.Addr64 argNames argTys initArgShapes noHeuristic
     RefinementSuccess _argShapes -> pure (BatchChecks Map.empty)
-  traverse_ cancel (fmap snd profFeatLog)
+  traverse_ cancel profLogTask
   pure res
 
 simulateLlvmCfgs ::
