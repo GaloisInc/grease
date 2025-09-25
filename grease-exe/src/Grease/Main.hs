@@ -1010,7 +1010,15 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
                 }
         let boundsOpts = simBoundsOpts simOpts
         let pathStrat = simPathStrategy simOpts
-        new <- execAndRefine bak (simSolver simOpts) fm la memVar setupAnns (macawHeuristics la rNames) argNames argShapes concInitState bbMapRef boundsOpts pathStrat execFeats st
+        let refineData =
+              RefinementData
+                { refineAnns = setupAnns
+                , refineArgNames = argNames
+                , refineArgShapes = argShapes
+                , refineHeuristics = macawHeuristics la rNames
+                , refineInitState = concInitState
+                }
+        new <- execAndRefine bak (simSolver simOpts) fm la memVar refineData bbMapRef boundsOpts pathStrat execFeats st
         case new of
           ProveBug{} ->
             throw (GreaseException "CFG rewriting introduced a bug!")
@@ -1418,17 +1426,21 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
           }
   let boundsOpts = simBoundsOpts simOpts
   let pathStrat = simPathStrategy simOpts
+  let refineData =
+        RefinementData
+          { refineAnns = setupAnns
+          , refineArgNames = argNames
+          , refineArgShapes = argShapes
+          , refineHeuristics = heuristics
+          , refineInitState = concInitState
+          }
   execAndRefine
     bak
     (simSolver simOpts)
     fm
     la
     memVar
-    setupAnns
-    heuristics
-    argNames
-    argShapes
-    concInitState
+    refineData
     bbMapRef
     boundsOpts
     pathStrat

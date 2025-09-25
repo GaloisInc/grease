@@ -67,6 +67,7 @@
 module Grease.Refine (
   ProveRefineResult (..),
   NoHeuristic (..),
+  RefinementData (..),
   execAndRefine,
   RefinementSummary (..),
   refinementLoop,
@@ -383,6 +384,16 @@ execCfg bak strat execFeats initialState = do
         o <- C.getProofObligations bak
         pure (r, o, Seq.empty)
 
+-- | Data needed for refinement
+data RefinementData sym bak ext argTys
+  = RefinementData
+  { refineAnns :: Anns.Annotations sym ext argTys
+  , refineArgNames :: Ctx.Assignment (Const String) argTys
+  , refineArgShapes :: ArgShapes ext NoTag argTys
+  , refineHeuristics :: [RefineHeuristic sym bak ext argTys]
+  , refineInitState :: Conc.InitialState sym ext argTys
+  }
+
 -- | Helper, not exported
 proveAndRefine ::
   forall p ext r solver sym bak t st argTys w fm.
@@ -399,18 +410,20 @@ proveAndRefine ::
   Solver ->
   -- | Solver timeout
   C.Timeout ->
-  Anns.Annotations sym ext argTys ->
   C.ExecResult p sym ext r ->
   GreaseLogAction ->
-  [RefineHeuristic sym bak ext argTys] ->
-  -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
-  ArgShapes ext NoTag argTys ->
-  Conc.InitialState sym ext argTys ->
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
+  RefinementData sym bak ext argTys ->
   C.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
-proveAndRefine bak solver tout anns execResult la heuristics argNames argShapes initState bbMap goals = do
+proveAndRefine bak solver tout execResult la bbMap refineData goals = do
+  let RefinementData
+        { refineAnns = anns
+        , refineArgNames = argNames
+        , refineArgShapes = argShapes
+        , refineHeuristics = heuristics
+        , refineInitState = initState
+        } = refineData
   let sym = C.backendGetSym bak
   let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
   let strat = C.ProofStrategy prover combiner
@@ -442,19 +455,14 @@ execAndRefine ::
   W4FM.FloatModeRepr fm ->
   GreaseLogAction ->
   C.GlobalVar Mem.Mem ->
-  Anns.Annotations sym ext argTys ->
-  [RefineHeuristic sym bak ext argTys] ->
-  -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
-  ArgShapes ext NoTag argTys ->
-  Conc.InitialState sym ext argTys ->
+  RefinementData sym bak ext argTys ->
   IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
   BoundsOpts ->
   Opts.PathStrategy ->
   [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
   C.ExecState p sym ext (C.RegEntry sym ret) ->
   m (ProveRefineResult sym ext argTys)
-execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initState bbMapRef boundsOpts strat execFeats initialState = do
+execAndRefine bak solver _fm la memVar refineData bbMapRef boundsOpts strat execFeats initialState = do
   let solverTimeout = Opts.simSolverTimeout boundsOpts
   let refineOne initSt = do
         (execResult, goals, remaining) <- execCfg bak strat execFeats initSt
@@ -475,7 +483,7 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
               pure (ProveCantRefine (Unsupported feat))
             _ -> do
               bbMap <- readIORef bbMapRef
-              proveAndRefine bak solver solverTimeout anns execResult la heuristics argNames argShapes initState bbMap goals
+              proveAndRefine bak solver solverTimeout execResult la bbMap refineData goals
         case strat of
           Opts.Dfs -> do
             loc <- W4.getCurrentProgramLoc (C.backendGetSym bak)
