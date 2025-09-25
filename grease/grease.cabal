@@ -203,6 +203,7 @@ library
     Grease.Diagnostic.Severity
     Grease.ErrorDescription
     Grease.Entrypoint
+    Grease.ExecutionFeatures
     Grease.Heuristic
     Grease.Heuristic.Diagnostic
     Grease.Heuristic.Result

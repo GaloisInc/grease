@@ -107,7 +107,6 @@ import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.String (String)
 import Data.Text qualified as Text
-import Data.Time.Clock (secondsToNominalDiffTime)
 import Data.Type.Equality (type (~))
 import GHC.IORef (newIORef)
 import Grease.Bug qualified as Bug
@@ -116,7 +115,7 @@ import Grease.Concretize qualified as Conc
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic
 import Grease.Heuristic
-import Grease.Options (BoundsOpts, LoopBound (..))
+import Grease.Options (BoundsOpts)
 import Grease.Options qualified as Opts
 import Grease.Panic (panic)
 import Grease.Refine.Diagnostic qualified as Diag
@@ -127,7 +126,6 @@ import Grease.Shape.Pointer (PtrShape)
 import Grease.Solver (Solver, solverAdapter)
 import Grease.Utility
 import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.Backend.Prove qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
@@ -136,25 +134,20 @@ import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Simulator.BoundedExec qualified as C
-import Lang.Crucible.Simulator.BoundedRecursion qualified as C
-import Lang.Crucible.Simulator.PathSatisfiability qualified as C
 import Lang.Crucible.Simulator.PathSplitting qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
-import Lang.Crucible.Utils.Seconds qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import System.Exit qualified as Exit
 import System.IO (IO)
-import What4.Config qualified as W4C
 import What4.Expr qualified as W4
 import What4.Expr.App qualified as W4
 import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as W4
 import What4.LabeledPred qualified as W4
 import What4.Solver qualified as W4
-import Prelude (Num (..), realToFrac, show)
+import Prelude (Num (..))
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (RefineDiagnostic diag)
@@ -470,23 +463,9 @@ execAndRefine ::
   C.ExecState p sym ext (C.RegEntry sym ret) ->
   m (ProveRefineResult sym ext argTys)
 execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initState bbMapRef boundsOpts strat execFeats initialState = do
-  let symexTimeout = realToFrac (C.secondsToInt (Opts.simTimeout boundsOpts))
   let solverTimeout = Opts.simSolverTimeout boundsOpts
-
-  -- Due to the way these execution features manage their internal data, they
-  -- must be initialized once and shared across executions of different paths.
-  let LoopBound loopBound = Opts.simLoopBound boundsOpts
-  boundExecFeat <- liftIO (C.boundedExecFeature (\_ -> pure (Just loopBound)) True)
-  boundRecFeat <- liftIO (C.boundedRecursionFeature (\_ -> pure (Just loopBound)) True)
-  timeoutFeat <- liftIO (C.timeoutFeature (secondsToNominalDiffTime symexTimeout))
-  let boundsExecFeats_ = [boundExecFeat, boundRecFeat, timeoutFeat]
-  let boundsExecFeats = List.map C.genericToExecutionFeature boundsExecFeats_
-
-  pathSatFeat <- liftIO configurePathSatFeature
-  let execFeats' = pathSatFeat : (boundsExecFeats List.++ execFeats)
-
   let refineOne initSt = do
-        (execResult, goals, remaining) <- execCfg bak strat execFeats' initSt
+        (execResult, goals, remaining) <- execCfg bak strat execFeats initSt
         doLog la (Diag.ExecutionResult memVar execResult)
         refineResult <-
           case execResult of
@@ -545,20 +524,6 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
               Right combinedResult -> pure (C.subgoalResult combinedResult)
   liftIO (go refineResult)
  where
-  configurePathSatFeature = do
-    let sym = C.backendGetSym bak
-    pathSat <- C.pathSatisfiabilityFeature sym (C.considerSatisfiability bak)
-    let cfg = W4.getConfiguration sym
-    assertThenAssume <- W4C.getOptionSetting C.assertThenAssumeConfigOption cfg
-    -- This can technically return warnings/errors, but seems unlikely in this
-    -- case...
-    warns <- W4C.setOpt assertThenAssume True
-    case warns of
-      [] -> pure ()
-      _ -> panic "configurePathSatFeature" (List.map show warns)
-    let pathSatFeat = C.genericToExecutionFeature pathSat
-    pure pathSatFeat
-
   -- Very short summary for single-line log message
   shortResult =
     \case
