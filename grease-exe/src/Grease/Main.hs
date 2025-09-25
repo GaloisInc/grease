@@ -1399,11 +1399,11 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   let bounds = simBoundsOpts simOpts
-  result <- withMemOptions simOpts $
+  result <- withMemOptions simOpts $ do
+    let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
+    let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
+    let dl = TCtx.llvmDataLayout typeCtx
     refinementLoop la bounds argNames initArgShapes $ \argShapes -> do
-      let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
-      let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
-      let dl = TCtx.llvmDataLayout typeCtx
       (args, setupMem, setupAnns) <- setup la bak dl valueNames argTys argShapes initMem
       ErrorCallbacks
         { errorMap = bbMapRef
