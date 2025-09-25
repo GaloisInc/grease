@@ -40,14 +40,14 @@ initialLlvmFileSystem ::
   sym ->
   GO.FsOpts ->
   IO (InitializedFs sym ptrW)
-initialLlvmFileSystem halloc sym simOpts = do
+initialLlvmFileSystem halloc sym fsOpts = do
   fileContents_ <-
-    case GO.fsRoot simOpts of
+    case GO.fsRoot fsOpts of
       Nothing -> pure SymIO.emptyInitialFileSystemContents
       Just rootDir -> SymIO.Loader.loadInitialFiles sym rootDir
-  fileContentsWithStdin <- withSymStdin (GO.fsStdin simOpts) fileContents_
+  fileContentsWithStdin <- withSymStdin (GO.fsStdin fsOpts) fileContents_
   fileContentsWithFiles <-
-    Monad.foldM withSymFile fileContentsWithStdin (Map.toList (GO.fsSymFiles simOpts))
+    Monad.foldM withSymFile fileContentsWithStdin (Map.toList (GO.fsSymFiles fsOpts))
 
   -- We currently don't mirror stdout or stderr
   let mirroredOutputs = []
