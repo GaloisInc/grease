@@ -67,6 +67,7 @@
 module Grease.Refine (
   ProveRefineResult (..),
   NoHeuristic (..),
+  proveAndRefine,
   execAndRefine,
   RefinementSummary (..),
   refinementLoop,
@@ -214,23 +215,30 @@ combiner = C.Combiner $ \mr1 mr2 -> do
   r1 <- mr1
   case C.subgoalResult r1 of
     -- can't refine further, no matter what the other result would be
-    ProveBug{} -> pure r1
     ProveCantRefine{} -> pure r1
     -- if we find a refinement, don't bother with other goals
     ProveRefine{} -> pure r1
     -- if this goal succeeded, continue with the others
     ProveSuccess -> mr2
+    -- a bug is only reachable if there are no other errors
+    ProveBug{} -> do
+      r2 <- mr2
+      case C.subgoalResult r2 of
+        ProveRefine{} -> pure r2
+        ProveCantRefine{} -> pure r2
+        ProveNoHeuristic{} -> pure r2
+        ProveBug{} -> pure r1 -- would be nice to combine r1+r2 here
+        ProveSuccess -> pure r1
     ProveNoHeuristic errs1 -> do
       r2 <- mr2
       let failed = C.SubgoalResult False
       case C.subgoalResult r2 of
-        -- can't refine further
-        ProveBug{} -> pure r2
         ProveCantRefine{} -> pure r2
         -- if we manage to refine the second goal, use that
         ProveRefine{} -> pure r2
         -- otherwise, no heuristic propagates
-        ProveSuccess -> pure (failed (ProveNoHeuristic errs1))
+        ProveBug{} -> pure r1
+        ProveSuccess -> pure r1
         ProveNoHeuristic errs2 ->
           pure (failed (ProveNoHeuristic (errs1 <> errs2)))
 
