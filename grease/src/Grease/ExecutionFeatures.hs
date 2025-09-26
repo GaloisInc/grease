@@ -65,6 +65,7 @@ pathSatFeat bak = do
     _ -> panic "configurePathSatFeature" (List.map show warns)
   pure pathSat
 
+-- | Debugger, path satisfiability, and branch tracing features
 greaseExecFeats ::
   ( C.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
@@ -80,9 +81,8 @@ greaseExecFeats ::
   bak ->
   -- | Debugger configuration, if desired
   Maybe (Dbg.CommandExt cExt, Dbg.ExtImpl cExt p sym ext ret, CT.TypeRepr ret) ->
-  GO.BoundsOpts ->
   IO [C.ExecutionFeature p sym ext (C.RegEntry sym ret)]
-greaseExecFeats la bak dbgOpts boundsOpts = do
+greaseExecFeats la bak dbgOpts = do
   debuggerFeat <-
     case dbgOpts of
       Just (cmdExt, extImpl, retTy) -> do
@@ -98,10 +98,8 @@ greaseExecFeats la bak dbgOpts boundsOpts = do
       Nothing -> pure Nothing
   let execFeats_ = Maybe.catMaybes [debuggerFeat]
   pathSat <- pathSatFeat bak
-  boundsFeats <- boundedExecFeats boundsOpts
   let execFeats =
         C.genericToExecutionFeature pathSat
           : greaseBranchTracerFeature la
           : execFeats_
-          List.++ List.map C.genericToExecutionFeature boundsFeats
   pure execFeats

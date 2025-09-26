@@ -123,6 +123,7 @@ import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic
+import Grease.ExecutionFeatures (boundedExecFeats)
 import Grease.Heuristic
 import Grease.Options (BoundsOpts)
 import Grease.Options qualified as Opts
@@ -565,7 +566,7 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
       ProveCantRefine (Timeout{}) -> "symex timeout"
       ProveCantRefine (Unsupported{}) -> "unsupported feature"
 
--- TODO: Fold into `refinementLoop`?
+-- | Run 'Setup.setup' then 'execAndRefine'. Usually passed to 'refinementLoop'.
 refineOnce ::
   ( Mem.HasPtrWidth wptr
   , C.IsSyntaxExtension ext
@@ -622,9 +623,11 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
           , Conc.initStateMem = initMem
           }
   let boundsOpts = Opts.simBoundsOpts simOpts
+  boundsFeats_ <- boundedExecFeats boundsOpts
+  let boundsFeats = List.map C.genericToExecutionFeature boundsFeats_
   let execData =
         ExecData
-          { execFeats = execFeats
+          { execFeats = execFeats List.++ boundsFeats
           , execInitState = st
           , execPathStrat = Opts.simPathStrategy simOpts
           }
