@@ -38,8 +38,9 @@ boundedExecFeats ::
 boundedExecFeats boundsOpts = do
   let symexTimeout = realToFrac (C.secondsToInt (GO.simTimeout boundsOpts))
   let GO.LoopBound loopBound = GO.simLoopBound boundsOpts
-  boundExecFeat <- C.boundedExecFeature (\_ -> pure (Just loopBound)) True
-  boundRecFeat <- C.boundedRecursionFeature (\_ -> pure (Just loopBound)) True
+  let boundObligation = GO.simLoopBoundObligation boundsOpts
+  boundExecFeat <- C.boundedExecFeature (\_ -> pure (Just loopBound)) boundObligation
+  boundRecFeat <- C.boundedRecursionFeature (\_ -> pure (Just loopBound)) boundObligation
   timeoutFeat <- C.timeoutFeature (secondsToNominalDiffTime symexTimeout)
   pure [boundExecFeat, boundRecFeat, timeoutFeat]
 

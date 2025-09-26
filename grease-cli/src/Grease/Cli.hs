@@ -179,6 +179,13 @@ boundsOptsParser = Opt.parserOptionGroup "Bounds, limits, and timeouts" $ do
             <> Opt.showDefault
             <> Opt.value GO.defaultLoopBound
         )
+  simLoopBoundObligation <-
+    Opt.flag
+      True
+      False -- Note: flipped to make True default
+      ( Opt.long "no-loop-bound-obligation"
+          <> Opt.help "Disable proof obligations for loop bounds"
+      )
   simMaxIters <-
     optional $
       Opt.option
