@@ -949,7 +949,6 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
           (Ctx.size regTypes)
           (\idx -> ValueName (regNameToString (getRegName rNames idx)))
   let argNames = fmapFC (Const . getValueName) rNameAssign
-  let sym = C.backendGetSym bak
 
   res <- case result of
     RefinementBug b cData ->
@@ -984,45 +983,35 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
         assertingCfg <- pure $ assert $ entrypointCfg entrypointCfgs
         let entrypointCfgsSsa' = entrypointCfgsSsa{entrypointCfg = toSsaSomeCfg assertingCfg}
         C.resetAssumptionState bak
-        (args, setupMem, setupAnns) <- setup la bak dl rNameAssign regTypes argShapes initMem
-        ErrorCallbacks
-          { errorMap = bbMapRef
-          , llvmErrCallback = recordLLVMAnnotation
-          , macawAssertionCallback = processMacawAssert
-          } <-
-          liftIO buildErrMaps
-        let ?recordLLVMAnnotation = recordLLVMAnnotation
-        let ?processMacawAssert = processMacawAssert
         memVar <- Mem.mkMemVar "grease:memmodel" halloc
-        initFs_ <- GSIO.initialLlvmFileSystem halloc sym (simFsOpts simOpts)
-        (toConcVar, globals1) <-
-          ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
-        let initFs = initFs_{GSIO.initFsGlobals = globals1}
-        st <- macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa' toConcVar setupMem initFs args
-        let concInitState =
-              Conc.InitialState
-                { Conc.initStateArgs = args
-                , Conc.initStateFs = GSIO.initFsContents initFs
-                , Conc.initStateMem = initMem
-                }
-        let boundsOpts = simBoundsOpts simOpts
-        let execData =
-              ExecData
-                { execFeats = execFeats
-                , execInitState = st
-                , execPathStrat = simPathStrategy simOpts
-                }
-        let refineData =
-              RefinementData
-                { refineAnns = setupAnns
-                , refineArgNames = argNames
-                , refineArgShapes = argShapes
-                , refineHeuristics = macawHeuristics la rNames
-                , refineInitState = concInitState
-                , refineSolver = simSolver simOpts
-                , refineSolverTimeout = simSolverTimeout boundsOpts
-                }
-        new <- execAndRefine bak fm la memVar refineData bbMapRef execData
+        new <-
+          refineOnce
+            la
+            simOpts
+            halloc
+            bak
+            fm
+            dl
+            rNameAssign
+            argNames
+            regTypes
+            argShapes
+            initMem
+            memVar
+            (macawHeuristics la rNames)
+            execFeats
+            (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa')
+            `catches` [ Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
+                          pure $ ProveCantRefine $ MissingSemantics $ pshow ex
+                      , Handler
+                          ( \(ex :: AArch32Symbolic.AArch32Exception) ->
+                              pure (ProveCantRefine (MissingSemantics (tshow ex)))
+                          )
+                      , Handler
+                          ( \(ex :: PPCSymbolic.SemanticsError) ->
+                              pure (ProveCantRefine (MissingSemantics (tshow ex)))
+                          )
+                      ]
         case new of
           ProveBug{} ->
             throw (GreaseException "CFG rewriting introduced a bug!")
