@@ -10,8 +10,6 @@ import Control.Concurrent.Async (Async, async)
 import Data.ByteString qualified as BS
 import Data.Foldable qualified as Foldable
 import Grease.Profiler.EmbeddedData (profilerDataFiles)
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.Profiling qualified as C
 import System.Directory (createDirectoryIfMissing)
@@ -21,10 +19,8 @@ import System.FilePath (takeDirectory, (</>))
 -- @grease@, as well as an 'Async' action that updates a profiling report at
 -- periodic intervals.
 greaseProfilerFeature ::
-  forall p sym ext rtp.
-  (C.IsSymInterface sym, C.IsSyntaxExtension ext) =>
   FilePath ->
-  IO (C.ExecutionFeature p sym ext rtp, Async ())
+  IO (C.GenericExecutionFeature sym, Async ())
 greaseProfilerFeature dir = do
   Foldable.for_ profilerDataFiles $ \(fp, contents) ->
     createDirectoriesAndWriteFile (dir </> fp) contents
@@ -37,7 +33,7 @@ greaseProfilerFeature dir = do
         doLog
   logger <- async doLog
   opt <- C.profilingFeature tbl flt Nothing
-  return (C.genericToExecutionFeature opt, logger)
+  return (opt, logger)
 
 -- | Like 'BS.writeFile', but also create parent directories if they are
 -- missing.

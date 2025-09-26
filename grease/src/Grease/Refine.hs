@@ -67,6 +67,9 @@
 module Grease.Refine (
   ProveRefineResult (..),
   NoHeuristic (..),
+  ExecData (..),
+  RefinementData (..),
+  refineOnce,
   execAndRefine,
   RefinementSummary (..),
   refinementLoop,
@@ -106,54 +109,53 @@ import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.String (String)
 import Data.Text qualified as Text
-import Data.Time.Clock (secondsToNominalDiffTime)
 import Data.Type.Equality (type (~))
 import GHC.IORef (newIORef)
 import Grease.Bug qualified as Bug
 import Grease.Concretize (ConcretizedData)
 import Grease.Concretize qualified as Conc
 import Grease.Concretize.ToConcretize qualified as ToConc
+import Grease.Cursor qualified as Cursor
+import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic
 import Grease.Heuristic
-import Grease.Options (BoundsOpts, LoopBound (..))
+import Grease.Options (BoundsOpts)
 import Grease.Options qualified as Opts
 import Grease.Panic (panic)
 import Grease.Refine.Diagnostic qualified as Diag
+import Grease.Setup qualified as Setup
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Solver (Solver, solverAdapter)
+import Grease.SymIO qualified as GSIO
 import Grease.Utility
 import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.Backend.Prove qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.LLVM.DataLayout (DataLayout)
 import Lang.Crucible.LLVM.Errors qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Simulator.BoundedExec qualified as C
-import Lang.Crucible.Simulator.BoundedRecursion qualified as C
-import Lang.Crucible.Simulator.PathSatisfiability qualified as C
 import Lang.Crucible.Simulator.PathSplitting qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
-import Lang.Crucible.Utils.Seconds qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import System.Exit qualified as Exit
 import System.IO (IO)
-import What4.Config qualified as W4C
 import What4.Expr qualified as W4
 import What4.Expr.App qualified as W4
 import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as W4
 import What4.LabeledPred qualified as W4
 import What4.Solver qualified as W4
-import Prelude (Num (..), realToFrac, show)
+import Prelude (Num (..))
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (RefineDiagnostic diag)
@@ -279,17 +281,19 @@ consumer ::
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
-  Anns.Annotations sym ext argTys ->
   C.ExecResult p sym ext r ->
   GreaseLogAction ->
-  [RefineHeuristic sym bak ext argTys] ->
-  -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
-  ArgShapes ext NoTag argTys ->
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
-  Conc.InitialState sym ext argTys ->
+  RefinementData sym bak ext argTys ->
   C.ProofConsumer sym t (ProveRefineResult sym ext argTys)
-consumer bak anns execResult la heuristics argNames argShapes bbMap initState =
+consumer bak execResult la bbMap refineData = do
+  let RefinementData
+        { refineAnns = anns
+        , refineArgNames = argNames
+        , refineArgShapes = argShapes
+        , refineHeuristics = heuristics
+        , refineInitState = initState
+        } = refineData
   C.ProofConsumer $ \goal result -> do
     let sym = C.backendGetSym bak
     let lp = C.proofGoal goal
@@ -346,6 +350,14 @@ consumer bak anns execResult la heuristics argNames argShapes bbMap initState =
             , PP.indent 4 (C.ppSimError simErr)
             ]
 
+-- | Data needed to execute Crucible
+data ExecData p sym ext ret
+  = ExecData
+  { execFeats :: [C.ExecutionFeature p sym ext (C.RegEntry sym ret)]
+  , execInitState :: C.ExecState p sym ext (C.RegEntry sym ret)
+  , execPathStrat :: Opts.PathStrategy
+  }
+
 -- | Helper, not exported
 execCfg ::
   ( C.IsSyntaxExtension ext
@@ -357,9 +369,7 @@ execCfg ::
   , ?memOpts :: Mem.MemOptions
   ) =>
   bak ->
-  Opts.PathStrategy ->
-  [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
-  C.ExecState p sym ext (C.RegEntry sym ret) ->
+  ExecData p sym ext ret ->
   -- | The result of a single execution (in 'Opts.Dfs' mode, of a single path),
   -- the proof obligations resulting from that execution, and any suspended
   -- paths.
@@ -368,7 +378,12 @@ execCfg ::
     , C.ProofObligations sym
     , Seq (C.WorkItem p sym ext (C.RegEntry sym ret))
     )
-execCfg bak strat execFeats initialState = do
+execCfg bak execData = do
+  let ExecData
+        { execFeats = feats
+        , execInitState = initialState
+        , execPathStrat = strat
+        } = execData
   let withCleanup action = X.finally action $ do
         C.resetAssumptionState bak
         C.clearProofObligations bak
@@ -376,7 +391,7 @@ execCfg bak strat execFeats initialState = do
     case strat of
       Opts.Dfs -> do
         resultRef <- IORef.newIORef Nothing
-        (_n, rest) <- C.executeCrucibleDFSPaths execFeats initialState $ \r -> do
+        (_n, rest) <- C.executeCrucibleDFSPaths feats initialState $ \r -> do
           IORef.writeIORef resultRef (Just r)
           pure False -- don't continue exploring other paths
         mbResult <- IORef.readIORef resultRef
@@ -386,9 +401,21 @@ execCfg bak strat execFeats initialState = do
             o <- C.getProofObligations bak
             pure (r, o, rest)
       Opts.Sse -> do
-        r <- C.executeCrucible execFeats initialState
+        r <- C.executeCrucible feats initialState
         o <- C.getProofObligations bak
         pure (r, o, Seq.empty)
+
+-- | Data needed for refinement
+data RefinementData sym bak ext argTys
+  = RefinementData
+  { refineAnns :: Anns.Annotations sym ext argTys
+  , refineArgNames :: Ctx.Assignment (Const String) argTys
+  , refineArgShapes :: ArgShapes ext NoTag argTys
+  , refineHeuristics :: [RefineHeuristic sym bak ext argTys]
+  , refineInitState :: Conc.InitialState sym ext argTys
+  , refineSolver :: Solver
+  , refineSolverTimeout :: C.Timeout
+  }
 
 -- | Helper, not exported
 proveAndRefine ::
@@ -403,25 +430,19 @@ proveAndRefine ::
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
-  Solver ->
-  -- | Solver timeout
-  C.Timeout ->
-  Anns.Annotations sym ext argTys ->
   C.ExecResult p sym ext r ->
   GreaseLogAction ->
-  [RefineHeuristic sym bak ext argTys] ->
-  -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
-  ArgShapes ext NoTag argTys ->
-  Conc.InitialState sym ext argTys ->
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
+  RefinementData sym bak ext argTys ->
   C.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
-proveAndRefine bak solver tout anns execResult la heuristics argNames argShapes initState bbMap goals = do
+proveAndRefine bak execResult la bbMap refineData goals = do
   let sym = C.backendGetSym bak
+  let solver = refineSolver refineData
+  let tout = refineSolverTimeout refineData
   let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
   let strat = C.ProofStrategy prover combiner
-  let cons = consumer bak anns execResult la heuristics argNames argShapes bbMap initState
+  let cons = consumer bak execResult la bbMap refineData
   case goals of
     Nothing -> pure ProveSuccess
     Just goals' ->
@@ -445,40 +466,17 @@ execAndRefine ::
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
-  Solver ->
   W4FM.FloatModeRepr fm ->
   GreaseLogAction ->
   C.GlobalVar Mem.Mem ->
-  Anns.Annotations sym ext argTys ->
-  [RefineHeuristic sym bak ext argTys] ->
-  -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
-  ArgShapes ext NoTag argTys ->
-  Conc.InitialState sym ext argTys ->
+  RefinementData sym bak ext argTys ->
   IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
-  BoundsOpts ->
-  Opts.PathStrategy ->
-  [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
-  C.ExecState p sym ext (C.RegEntry sym ret) ->
+  ExecData p sym ext ret ->
   m (ProveRefineResult sym ext argTys)
-execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initState bbMapRef boundsOpts strat execFeats initialState = do
-  let symexTimeout = realToFrac (C.secondsToInt (Opts.simTimeout boundsOpts))
-  let solverTimeout = Opts.simSolverTimeout boundsOpts
-
-  -- Due to the way these execution features manage their internal data, they
-  -- must be initialized once and shared across executions of different paths.
-  let LoopBound loopBound = Opts.simLoopBound boundsOpts
-  boundExecFeat <- liftIO (C.boundedExecFeature (\_ -> pure (Just loopBound)) True)
-  boundRecFeat <- liftIO (C.boundedRecursionFeature (\_ -> pure (Just loopBound)) True)
-  timeoutFeat <- liftIO (C.timeoutFeature (secondsToNominalDiffTime symexTimeout))
-  let boundsExecFeats_ = [boundExecFeat, boundRecFeat, timeoutFeat]
-  let boundsExecFeats = List.map C.genericToExecutionFeature boundsExecFeats_
-
-  pathSatFeat <- liftIO configurePathSatFeature
-  let execFeats' = pathSatFeat : (boundsExecFeats List.++ execFeats)
-
+execAndRefine bak _fm la memVar refineData bbMapRef execData = do
   let refineOne initSt = do
-        (execResult, goals, remaining) <- execCfg bak strat execFeats' initSt
+        let execData' = execData{execInitState = initSt}
+        (execResult, goals, remaining) <- execCfg bak execData'
         doLog la (Diag.ExecutionResult memVar execResult)
         refineResult <-
           case execResult of
@@ -496,8 +494,8 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
               pure (ProveCantRefine (Unsupported feat))
             _ -> do
               bbMap <- readIORef bbMapRef
-              proveAndRefine bak solver solverTimeout anns execResult la heuristics argNames argShapes initState bbMap goals
-        case strat of
+              proveAndRefine bak execResult la bbMap refineData goals
+        case execPathStrat execData of
           Opts.Dfs -> do
             loc <- W4.getCurrentProgramLoc (C.backendGetSym bak)
             doLog la (Diag.RefinementFinishedPath loc (shortResult refineResult))
@@ -505,6 +503,7 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
         pure (refineResult, remaining)
 
   -- Process the state that was passed in
+  let initialState = execInitState execData
   (refineResult, remainingPaths) <- liftIO (refineOne initialState)
   remainingRef <- liftIO (IORef.newIORef remainingPaths)
 
@@ -537,20 +536,6 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
               Right combinedResult -> pure (C.subgoalResult combinedResult)
   liftIO (go refineResult)
  where
-  configurePathSatFeature = do
-    let sym = C.backendGetSym bak
-    pathSat <- C.pathSatisfiabilityFeature sym (C.considerSatisfiability bak)
-    let cfg = W4.getConfiguration sym
-    assertThenAssume <- W4C.getOptionSetting C.assertThenAssumeConfigOption cfg
-    -- This can technically return warnings/errors, but seems unlikely in this
-    -- case...
-    warns <- W4C.setOpt assertThenAssume True
-    case warns of
-      [] -> pure ()
-      _ -> panic "configurePathSatFeature" (List.map show warns)
-    let pathSatFeat = C.genericToExecutionFeature pathSat
-    pure pathSatFeat
-
   -- Very short summary for single-line log message
   shortResult =
     \case
@@ -568,6 +553,76 @@ execAndRefine bak solver _fm la memVar anns heuristics argNames argShapes initSt
       ProveCantRefine (Timeout{}) -> "symex timeout"
       ProveCantRefine (Unsupported{}) -> "unsupported feature"
 
+-- TODO: Fold into `refinementLoop`
+refineOnce ::
+  ( Mem.HasPtrWidth wptr
+  , C.IsSyntaxExtension ext
+  , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
+  , ToConc.HasToConcretize p
+  , ?memOpts :: Mem.MemOptions
+  , ExtShape ext ~ PtrShape ext wptr
+  , Cursor.CursorExt ext ~ PtrCursor.Dereference ext wptr
+  , MSM.MacawProcessAssertion sym
+  , Mem.HasLLVMAnn sym
+  ) =>
+  GreaseLogAction ->
+  Opts.SimOpts ->
+  C.HandleAllocator ->
+  bak ->
+  W4.FloatModeRepr fm ->
+  DataLayout ->
+  Ctx.Assignment Setup.ValueName argTys ->
+  Ctx.Assignment (Const String) argTys ->
+  Ctx.Assignment C.TypeRepr argTys ->
+  ArgShapes ext NoTag argTys ->
+  InitialMem sym ->
+  C.GlobalVar Mem.Mem ->
+  IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
+  [RefineHeuristic sym bak ext argTys] ->
+  [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
+  ( ( MSM.MacawProcessAssertion sym
+    , Mem.HasLLVMAnn sym
+    ) =>
+    C.GlobalVar ToConc.ToConcretizeType ->
+    Setup.SetupMem sym ->
+    GSIO.InitializedFs sym wptr ->
+    Setup.Args sym ext argTys ->
+    IO (C.ExecState p sym ext (C.RegEntry sym ret))
+  ) ->
+  IO (ProveRefineResult sym ext argTys)
+refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem memVar bbMapRef heuristics execFeats mkInitState = do
+  let sym = C.backendGetSym bak
+  (args, setupMem, setupAnns) <-
+    Setup.setup la bak dl valueNames argTys argShapes initMem
+  initFs_ <- GSIO.initialLlvmFileSystem halloc sym (Opts.simFsOpts simOpts)
+  (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
+  let initFs = initFs_{GSIO.initFsGlobals = globals1}
+  st <- mkInitState toConc setupMem initFs args
+  let concInitState =
+        Conc.InitialState
+          { Conc.initStateArgs = args
+          , Conc.initStateFs = GSIO.initFsContents initFs
+          , Conc.initStateMem = initMem
+          }
+  let boundsOpts = Opts.simBoundsOpts simOpts
+  let execData =
+        ExecData
+          { execFeats = execFeats
+          , execInitState = st
+          , execPathStrat = Opts.simPathStrategy simOpts
+          }
+  let refineData =
+        RefinementData
+          { refineAnns = setupAnns
+          , refineArgNames = argNames
+          , refineArgShapes = argShapes
+          , refineHeuristics = heuristics
+          , refineInitState = concInitState
+          , refineSolver = Opts.simSolver simOpts
+          , refineSolverTimeout = Opts.simSolverTimeout boundsOpts
+          }
+  execAndRefine bak fm la memVar refineData bbMapRef execData
+
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)
   | RefinementNoHeuristic (NE.NonEmpty (NoHeuristic sym ext tys))
@@ -576,19 +631,26 @@ data RefinementSummary sym ext tys
   | RefinementBug Bug.BugInstance (ConcretizedData sym ext tys)
 
 refinementLoop ::
-  forall sym ext argTys w.
+  forall sym ext argTys w t st fs.
   ( C.IsSyntaxExtension ext
   , 16 C.<= w
   , Mem.HasPtrWidth w
   , MC.MemWidth w
   , ExtShape ext ~ PtrShape ext w
   , PrettyExt ext NoTag
+  , sym ~ W4.ExprBuilder t st fs
   ) =>
   GreaseLogAction ->
   BoundsOpts ->
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
-  (ArgShapes ext NoTag argTys -> IO (ProveRefineResult sym ext argTys)) ->
+  ( ( MSM.MacawProcessAssertion sym
+    , Mem.HasLLVMAnn sym
+    ) =>
+    ArgShapes ext NoTag argTys ->
+    IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
+    IO (ProveRefineResult sym ext argTys)
+  ) ->
   IO (RefinementSummary sym ext argTys)
 refinementLoop la boundsOpts argNames initArgShapes go = do
   let
@@ -604,7 +666,15 @@ refinementLoop la boundsOpts argNames initArgShapes go = do
         else do
           let addrWidth = MC.addrWidthRepr (Proxy @w)
           doLog la (Diag.RefinementUsingPrecondition addrWidth argNames argShapes)
-          new <- go argShapes
+          ErrorCallbacks
+            { errorMap = bbMapRef
+            , llvmErrCallback = recordLLVMAnnotation
+            , macawAssertionCallback = processMacawAssert
+            } <-
+            buildErrMaps
+          let ?recordLLVMAnnotation = recordLLVMAnnotation
+          let ?processMacawAssert = processMacawAssert
+          new <- go argShapes bbMapRef
           case new of
             ProveBug b cData -> pure (RefinementBug b cData)
             ProveCantRefine b -> pure (RefinementCantRefine b)
