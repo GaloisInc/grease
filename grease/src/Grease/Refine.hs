@@ -76,6 +76,10 @@ module Grease.Refine (
   refinementLoop,
   buildErrMaps,
   ErrorCallbacks (..),
+  -- The following are used by a downstream project
+
+  -- * Implementation details
+  findPredAnnotations,
 ) where
 
 import Control.Applicative (pure)
@@ -561,7 +565,7 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
       ProveCantRefine (Timeout{}) -> "symex timeout"
       ProveCantRefine (Unsupported{}) -> "unsupported feature"
 
--- TODO: Fold into `refinementLoop`
+-- TODO: Fold into `refinementLoop`?
 refineOnce ::
   ( Mem.HasPtrWidth wptr
   , C.IsSyntaxExtension ext
@@ -656,6 +660,7 @@ refinementLoop ::
   BoundsOpts ->
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
+  -- | This callback is usually 'refineOnce'
   (ArgShapes ext NoTag argTys -> IO (ProveRefineResult sym ext argTys)) ->
   IO (RefinementSummary sym ext argTys)
 refinementLoop la boundsOpts argNames initArgShapes go = do
