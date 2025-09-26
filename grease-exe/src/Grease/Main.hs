@@ -619,7 +619,7 @@ macawExecFeats la bak archCtx macawCfgConfig simOpts = do
                 extImpl = MDebug.macawExtImpl prettyPtrFnMap (archCtx ^. archVals) mbElf
              in Just (cmdExt, extImpl, regStructRepr archCtx)
           else Nothing
-  feats <- greaseExecFeats la bak dbgOpts (simBoundsOpts simOpts)
+  feats <- greaseExecFeats la bak dbgOpts
   pure (feats, snd <$> profFeatLog)
 
 llvmExecFeats ::
@@ -645,7 +645,7 @@ llvmExecFeats la bak simOpts memVar ret = do
               , ret
               )
           else Nothing
-  feats <- greaseExecFeats la bak dbgOpts (simBoundsOpts simOpts)
+  feats <- greaseExecFeats la bak dbgOpts
   pure (feats, snd <$> profFeatLog)
 
 macawMemConfig ::
