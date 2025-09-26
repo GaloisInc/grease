@@ -274,17 +274,19 @@ consumer ::
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
-  Anns.Annotations sym ext argTys ->
   C.ExecResult p sym ext r ->
   GreaseLogAction ->
-  [RefineHeuristic sym bak ext argTys] ->
-  -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
-  ArgShapes ext NoTag argTys ->
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
-  Conc.InitialState sym ext argTys ->
+  RefinementData sym bak ext argTys ->
   C.ProofConsumer sym t (ProveRefineResult sym ext argTys)
-consumer bak anns execResult la heuristics argNames argShapes bbMap initState =
+consumer bak execResult la bbMap refineData = do
+  let RefinementData
+        { refineAnns = anns
+        , refineArgNames = argNames
+        , refineArgShapes = argShapes
+        , refineHeuristics = heuristics
+        , refineInitState = initState
+        } = refineData
   C.ProofConsumer $ \goal result -> do
     let sym = C.backendGetSym bak
     let lp = C.proofGoal goal
@@ -428,19 +430,12 @@ proveAndRefine ::
   C.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
 proveAndRefine bak execResult la bbMap refineData goals = do
-  let RefinementData
-        { refineAnns = anns
-        , refineArgNames = argNames
-        , refineArgShapes = argShapes
-        , refineHeuristics = heuristics
-        , refineInitState = initState
-        , refineSolver = solver
-        , refineSolverTimeout = tout
-        } = refineData
   let sym = C.backendGetSym bak
+  let solver = refineSolver refineData
+  let tout = refineSolverTimeout refineData
   let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
   let strat = C.ProofStrategy prover combiner
-  let cons = consumer bak anns execResult la heuristics argNames argShapes bbMap initState
+  let cons = consumer bak execResult la bbMap refineData
   case goals of
     Nothing -> pure ProveSuccess
     Just goals' ->
@@ -473,7 +468,7 @@ execAndRefine ::
   m (ProveRefineResult sym ext argTys)
 execAndRefine bak _fm la memVar refineData bbMapRef execData = do
   let refineOne initSt = do
-        let execData' = execData'{execInitState = initSt}
+        let execData' = execData{execInitState = initSt}
         (execResult, goals, remaining) <- execCfg bak execData'
         doLog la (Diag.ExecutionResult memVar execResult)
         refineResult <-
