@@ -107,9 +107,6 @@ import Grease.Concretize (ConcArgs (..), ConcretizedData)
 import Grease.Concretize qualified as Conc
 import Grease.Concretize.JSON (concArgsToJson)
 import Grease.Concretize.ToConcretize qualified as ToConc
-import Grease.Cursor qualified as Cursor
-import Grease.Cursor.Pointer ()
-import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint
@@ -1376,79 +1373,6 @@ llvmInitArgShapes la opts llvmMod argNames cfg = do
     let path = initPrecondPath opts
      in loadInitialPreconditions la path argNames (ArgShapes initArgs0)
   useSimpleShapes argNames initArgs1 (initPrecondSimpleShapes opts)
-
-refineOnce ::
-  ( Mem.HasPtrWidth wptr
-  , C.IsSyntaxExtension ext
-  , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
-  , ToConc.HasToConcretize p
-  , ?memOpts :: Mem.MemOptions
-  , ExtShape ext ~ PtrShape ext wptr
-  , Cursor.CursorExt ext ~ PtrCursor.Dereference ext wptr
-  ) =>
-  GreaseLogAction ->
-  SimOpts ->
-  C.HandleAllocator ->
-  bak ->
-  W4.FloatModeRepr fm ->
-  DataLayout ->
-  Ctx.Assignment ValueName argTys ->
-  Ctx.Assignment (Const String) argTys ->
-  Ctx.Assignment C.TypeRepr argTys ->
-  ArgShapes ext NoTag argTys ->
-  InitialMem sym ->
-  C.GlobalVar Mem.Mem ->
-  [RefineHeuristic sym bak ext argTys] ->
-  [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
-  ( ( MSM.MacawProcessAssertion sym
-    , Mem.HasLLVMAnn sym
-    ) =>
-    C.GlobalVar ToConc.ToConcretizeType ->
-    SetupMem sym ->
-    GSIO.InitializedFs sym wptr ->
-    Args sym ext argTys ->
-    IO (C.ExecState p sym ext (C.RegEntry sym ret))
-  ) ->
-  IO (ProveRefineResult sym ext argTys)
-refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem memVar heuristics execFeats mkInitState = do
-  let sym = C.backendGetSym bak
-  ErrorCallbacks
-    { errorMap = bbMapRef
-    , llvmErrCallback = recordLLVMAnnotation
-    , macawAssertionCallback = processMacawAssert
-    } <-
-    buildErrMaps
-  let ?recordLLVMAnnotation = recordLLVMAnnotation
-  let ?processMacawAssert = processMacawAssert
-  (args, setupMem, setupAnns) <- setup la bak dl valueNames argTys argShapes initMem
-  initFs_ <- GSIO.initialLlvmFileSystem halloc sym (simFsOpts simOpts)
-  (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
-  let initFs = initFs_{GSIO.initFsGlobals = globals1}
-  st <- mkInitState toConc setupMem initFs args
-  let concInitState =
-        Conc.InitialState
-          { Conc.initStateArgs = args
-          , Conc.initStateFs = GSIO.initFsContents initFs
-          , Conc.initStateMem = initMem
-          }
-  let boundsOpts = simBoundsOpts simOpts
-  let execData =
-        ExecData
-          { execFeats = execFeats
-          , execInitState = st
-          , execPathStrat = simPathStrategy simOpts
-          }
-  let refineData =
-        RefinementData
-          { refineAnns = setupAnns
-          , refineArgNames = argNames
-          , refineArgShapes = argShapes
-          , refineHeuristics = heuristics
-          , refineInitState = concInitState
-          , refineSolver = simSolver simOpts
-          , refineSolverTimeout = simSolverTimeout boundsOpts
-          }
-  execAndRefine bak fm la memVar refineData bbMapRef execData
 
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.
