@@ -1009,7 +1009,12 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
                 , Conc.initStateMem = initMem
                 }
         let boundsOpts = simBoundsOpts simOpts
-        let pathStrat = simPathStrategy simOpts
+        let execData =
+              ExecData
+                { execFeats = execFeats
+                , execInitState = st
+                , execPathStrat = simPathStrategy simOpts
+                }
         let refineData =
               RefinementData
                 { refineAnns = setupAnns
@@ -1017,8 +1022,10 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
                 , refineArgShapes = argShapes
                 , refineHeuristics = macawHeuristics la rNames
                 , refineInitState = concInitState
+                , refineSolver = simSolver simOpts
+                , refineSolverTimeout = simSolverTimeout boundsOpts
                 }
-        new <- execAndRefine bak (simSolver simOpts) fm la memVar refineData bbMapRef boundsOpts pathStrat execFeats st
+        new <- execAndRefine bak fm la memVar refineData bbMapRef execData
         case new of
           ProveBug{} ->
             throw (GreaseException "CFG rewriting introduced a bug!")
@@ -1425,7 +1432,12 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
           , Conc.initStateMem = initMem
           }
   let boundsOpts = simBoundsOpts simOpts
-  let pathStrat = simPathStrategy simOpts
+  let execData =
+        ExecData
+          { execFeats = execFeats
+          , execInitState = st
+          , execPathStrat = simPathStrategy simOpts
+          }
   let refineData =
         RefinementData
           { refineAnns = setupAnns
@@ -1433,19 +1445,10 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
           , refineArgShapes = argShapes
           , refineHeuristics = heuristics
           , refineInitState = concInitState
+          , refineSolver = simSolver simOpts
+          , refineSolverTimeout = simSolverTimeout boundsOpts
           }
-  execAndRefine
-    bak
-    (simSolver simOpts)
-    fm
-    la
-    memVar
-    refineData
-    bbMapRef
-    boundsOpts
-    pathStrat
-    execFeats
-    st
+  execAndRefine bak fm la memVar refineData bbMapRef execData
 
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.
