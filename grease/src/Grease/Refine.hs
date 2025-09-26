@@ -69,6 +69,7 @@ module Grease.Refine (
   NoHeuristic (..),
   ExecData (..),
   RefinementData (..),
+  refineOnce,
   execAndRefine,
   RefinementSummary (..),
   refinementLoop,
@@ -114,22 +115,28 @@ import Grease.Bug qualified as Bug
 import Grease.Concretize (ConcretizedData)
 import Grease.Concretize qualified as Conc
 import Grease.Concretize.ToConcretize qualified as ToConc
+import Grease.Cursor qualified as Cursor
+import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic
 import Grease.Heuristic
 import Grease.Options (BoundsOpts)
 import Grease.Options qualified as Opts
 import Grease.Panic (panic)
 import Grease.Refine.Diagnostic qualified as Diag
+import Grease.Setup qualified as Setup
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Solver (Solver, solverAdapter)
+import Grease.SymIO qualified as GSIO
 import Grease.Utility
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Prove qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.LLVM.DataLayout (DataLayout)
 import Lang.Crucible.LLVM.Errors qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
@@ -545,6 +552,81 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
       ProveCantRefine (MutableGlobal{}) -> "load from mut global"
       ProveCantRefine (Timeout{}) -> "symex timeout"
       ProveCantRefine (Unsupported{}) -> "unsupported feature"
+
+-- TODO: Fold into `refinementLoop`
+refineOnce ::
+  ( Mem.HasPtrWidth wptr
+  , C.IsSyntaxExtension ext
+  , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
+  , ToConc.HasToConcretize p
+  , ?memOpts :: Mem.MemOptions
+  , ExtShape ext ~ PtrShape ext wptr
+  , Cursor.CursorExt ext ~ PtrCursor.Dereference ext wptr
+  ) =>
+  GreaseLogAction ->
+  Opts.SimOpts ->
+  C.HandleAllocator ->
+  bak ->
+  W4.FloatModeRepr fm ->
+  DataLayout ->
+  Ctx.Assignment Setup.ValueName argTys ->
+  Ctx.Assignment (Const String) argTys ->
+  Ctx.Assignment C.TypeRepr argTys ->
+  ArgShapes ext NoTag argTys ->
+  InitialMem sym ->
+  C.GlobalVar Mem.Mem ->
+  [RefineHeuristic sym bak ext argTys] ->
+  [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
+  ( ( MSM.MacawProcessAssertion sym
+    , Mem.HasLLVMAnn sym
+    ) =>
+    C.GlobalVar ToConc.ToConcretizeType ->
+    Setup.SetupMem sym ->
+    GSIO.InitializedFs sym wptr ->
+    Setup.Args sym ext argTys ->
+    IO (C.ExecState p sym ext (C.RegEntry sym ret))
+  ) ->
+  IO (ProveRefineResult sym ext argTys)
+refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem memVar heuristics execFeats mkInitState = do
+  let sym = C.backendGetSym bak
+  ErrorCallbacks
+    { errorMap = bbMapRef
+    , llvmErrCallback = recordLLVMAnnotation
+    , macawAssertionCallback = processMacawAssert
+    } <-
+    buildErrMaps
+  let ?recordLLVMAnnotation = recordLLVMAnnotation
+  let ?processMacawAssert = processMacawAssert
+  (args, setupMem, setupAnns) <-
+    Setup.setup la bak dl valueNames argTys argShapes initMem
+  initFs_ <- GSIO.initialLlvmFileSystem halloc sym (Opts.simFsOpts simOpts)
+  (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
+  let initFs = initFs_{GSIO.initFsGlobals = globals1}
+  st <- mkInitState toConc setupMem initFs args
+  let concInitState =
+        Conc.InitialState
+          { Conc.initStateArgs = args
+          , Conc.initStateFs = GSIO.initFsContents initFs
+          , Conc.initStateMem = initMem
+          }
+  let boundsOpts = Opts.simBoundsOpts simOpts
+  let execData =
+        ExecData
+          { execFeats = execFeats
+          , execInitState = st
+          , execPathStrat = Opts.simPathStrategy simOpts
+          }
+  let refineData =
+        RefinementData
+          { refineAnns = setupAnns
+          , refineArgNames = argNames
+          , refineArgShapes = argShapes
+          , refineHeuristics = heuristics
+          , refineInitState = concInitState
+          , refineSolver = Opts.simSolver simOpts
+          , refineSolverTimeout = Opts.simSolverTimeout boundsOpts
+          }
+  execAndRefine bak fm la memVar refineData bbMapRef execData
 
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)
