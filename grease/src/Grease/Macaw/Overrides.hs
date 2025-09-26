@@ -352,7 +352,8 @@ lookupMacawForwardDeclarationOverride bak funOvs decName hdl =
       -- forward-declarations of them.
       case decName of
         "fresh-bytes" -> do
-          let ov = SExp.freshBytesOverride @_ @p @sym @(Symbolic.MacawExt arch) ?ptrWidth
+          -- p sym ext w scope st fs solver bak
+          let ov = SExp.freshBytesOverride @p @sym @(Symbolic.MacawExt arch) bak ?ptrWidth
           (C.Refl, C.Refl) <- SExp.checkTypedOverrideHandleCompat hdl ov
           Just (C.runTypedOverride (C.handleName hdl) ov)
         _ -> Nothing
