@@ -132,7 +132,7 @@ import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
 import Grease.Macaw.Overrides.Address (AddressOverrides, loadAddressOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.PLT
-import Grease.Macaw.RegName (RegName (..), RegNames (..), getRegName, mkRegName, regNameToString, regNames)
+import Grease.Macaw.RegName (getRegName, mkRegName, regNameToString, regNames)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
 import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, emptyGreaseSimulatorState)
 import Grease.Main.Diagnostic qualified as Diag
@@ -777,6 +777,79 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable s
   let initFsOv = GSIO.initFsOverride initFs
   initState bak la macawExtImpl halloc memVar setupMem globals initFsOv archCtx setupHook addrOvs personality regs fnOvsMap mbStartupOvSsaCfg ssa
 
+macawRefineOnce ::
+  ( C.IsSymBackend sym bak
+  , Symbolic.SymArchConstraints arch
+  , Mem.HasPtrWidth wptr
+  , MM.MemWidth wptr
+  , Symbolic.SymArchConstraints arch
+  , OnlineSolverAndBackend solver sym bak scope st (W4.Flags fm)
+  , Show (ArchReloc arch)
+  , argTys ~ Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)
+  , wptr ~ MC.ArchAddrWidth arch
+  , ext ~ Symbolic.MacawExt arch
+  , ret ~ Symbolic.ArchRegStruct arch
+  , p ~ GreaseSimulatorState sym arch
+  , Mem.HasLLVMAnn sym
+  , ?memOpts :: Mem.MemOptions
+  , ?lc :: TCtx.TypeContext
+  ) =>
+  GreaseLogAction ->
+  ArchContext arch ->
+  SimOpts ->
+  C.HandleAllocator ->
+  MacawCfgConfig arch ->
+  Symbolic.MemPtrTable sym wptr ->
+  Macaw.SetupHook sym arch ->
+  AddressOverrides arch ->
+  bak ->
+  W4.FloatModeRepr fm ->
+  ArgShapes ext NoTag argTys ->
+  InitialMem sym ->
+  C.GlobalVar Mem.Mem ->
+  [RefineHeuristic sym bak ext argTys] ->
+  [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
+  -- | If simulating a binary, this is 'Just' the address of the user-requested
+  -- entrypoint function. Otherwise, this is 'Nothing'.
+  Maybe (MC.ArchSegmentOff arch) ->
+  EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
+  IO (ProveRefineResult sym ext argTys)
+macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
+  let regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
+  let rNames = regNames (archCtx ^. archVals)
+  let rNameAssign =
+        Ctx.generate
+          (Ctx.size regTypes)
+          (\idx -> ValueName (regNameToString (getRegName rNames idx)))
+  let argNames = fmapFC (Const . getValueName) rNameAssign
+  refineOnce
+    la
+    simOpts
+    halloc
+    bak
+    fm
+    (mcDataLayout macawCfgConfig)
+    rNameAssign
+    argNames
+    regTypes
+    argShapes
+    initMem
+    memVar
+    heuristics
+    execFeats
+    (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
+    `catches` [ Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
+                  pure $ ProveCantRefine $ MissingSemantics $ pshow ex
+              , Handler
+                  ( \(ex :: AArch32Symbolic.AArch32Exception) ->
+                      pure (ProveCantRefine (MissingSemantics (tshow ex)))
+                  )
+              , Handler
+                  ( \(ex :: PPCSymbolic.SemanticsError) ->
+                      pure (ProveCantRefine (MissingSemantics (tshow ex)))
+                  )
+              ]
+
 simulateMacawCfg ::
   forall sym bak arch solver scope st fm.
   ( C.IsSymBackend sym bak
@@ -815,16 +888,13 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
   let ?lc = tyCtx
   mapM_ (doLog la . Diag.TypeContextError) tyCtxErrs
 
-  let regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
-  let rNames@(RegNames rNamesAssign) = regNames (archCtx ^. archVals)
-      rNamesAssign' = fmapFC (\(Const (RegName n)) -> Const n) rNamesAssign
-
   (execFeats, profLogTask) <- macawExecFeats la bak archCtx macawCfgConfig simOpts
-  let rNameAssign =
+  let regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
+  let rNames = regNames (archCtx ^. archVals)
+  let argNames =
         Ctx.generate
           (Ctx.size regTypes)
-          (\idx -> ValueName (regNameToString (getRegName rNames idx)))
-  let argNames = fmapFC (Const . getValueName) rNameAssign
+          (\idx -> Const (regNameToString (getRegName rNames idx)))
 
   initArgShapes <-
     let opts = simInitPrecondOpts simOpts
@@ -845,34 +915,25 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
         if simNoHeuristics simOpts
           then [mustFailHeuristic]
           else macawHeuristics la rNames List.++ [mustFailHeuristic]
-  result <- refinementLoop la bounds rNamesAssign' initArgShapes $ \argShapes ->
-    refineOnce
+  result <- refinementLoop la bounds argNames initArgShapes $ \argShapes ->
+    macawRefineOnce
       la
+      archCtx
       simOpts
       halloc
+      macawCfgConfig
+      memPtrTable
+      setupHook
+      addrOvs
       bak
       fm
-      dl
-      rNameAssign
-      argNames
-      regTypes
       argShapes
       initMem
       memVar
       heuristics
       execFeats
-      (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
-      `catches` [ Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
-                    pure $ ProveCantRefine $ MissingSemantics $ pshow ex
-                , Handler
-                    ( \(ex :: AArch32Symbolic.AArch32Exception) ->
-                        pure (ProveCantRefine (MissingSemantics (tshow ex)))
-                    )
-                , Handler
-                    ( \(ex :: PPCSymbolic.SemanticsError) ->
-                        pure (ProveCantRefine (MissingSemantics (tshow ex)))
-                    )
-                ]
+      mbCfgAddr
+      entrypointCfgsSsa
   finalResult <-
     simulateRewrittenCfg
       la
@@ -943,12 +1004,11 @@ simulateRewrittenCfg ::
   IO BatchStatus
 simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs memPtrTable initMem initArgShapes result execFeats mbCfgAddr entrypointCfgs entrypointCfgsSsa = do
   let regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
-  let rNames@(RegNames _rNamesAssign) = regNames (archCtx ^. archVals)
-  let rNameAssign =
+  let rNames = regNames (archCtx ^. archVals)
+  let argNames =
         Ctx.generate
           (Ctx.size regTypes)
-          (\idx -> ValueName (regNameToString (getRegName rNames idx)))
-  let argNames = fmapFC (Const . getValueName) rNameAssign
+          (\idx -> Const (regNameToString (getRegName rNames idx)))
 
   res <- case result of
     RefinementBug b cData ->
@@ -984,34 +1044,26 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
         let entrypointCfgsSsa' = entrypointCfgsSsa{entrypointCfg = toSsaSomeCfg assertingCfg}
         C.resetAssumptionState bak
         memVar <- Mem.mkMemVar "grease:memmodel" halloc
+        let heuristics = macawHeuristics la rNames
         new <-
-          refineOnce
+          macawRefineOnce
             la
+            archCtx
             simOpts
             halloc
+            macawCfgConfig
+            memPtrTable
+            setupHook
+            addrOvs
             bak
             fm
-            dl
-            rNameAssign
-            argNames
-            regTypes
             argShapes
             initMem
             memVar
-            (macawHeuristics la rNames)
+            heuristics
             execFeats
-            (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa')
-            `catches` [ Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
-                          pure $ ProveCantRefine $ MissingSemantics $ pshow ex
-                      , Handler
-                          ( \(ex :: AArch32Symbolic.AArch32Exception) ->
-                              pure (ProveCantRefine (MissingSemantics (tshow ex)))
-                          )
-                      , Handler
-                          ( \(ex :: PPCSymbolic.SemanticsError) ->
-                              pure (ProveCantRefine (MissingSemantics (tshow ex)))
-                          )
-                      ]
+            mbCfgAddr
+            entrypointCfgsSsa'
         case new of
           ProveBug{} ->
             throw (GreaseException "CFG rewriting introduced a bug!")
@@ -1033,8 +1085,7 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
   pure res
  where
   MacawCfgConfig
-    { mcDataLayout = dl
-    , mcMprotectAddr = mprotectAddr
+    { mcMprotectAddr = mprotectAddr
     , mcPltStubs = pltStubs
     , mcMemory = memory
     , mcTxtBounds = (starttext, endtext)
