@@ -845,7 +845,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
         if simNoHeuristics simOpts
           then [mustFailHeuristic]
           else macawHeuristics la rNames List.++ [mustFailHeuristic]
-  result <- refinementLoop la bounds rNamesAssign' initArgShapes $ \argShapes bbMapRef ->
+  result <- refinementLoop la bounds rNamesAssign' initArgShapes $ \argShapes ->
     refineOnce
       la
       simOpts
@@ -859,7 +859,6 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
       argShapes
       initMem
       memVar
-      bbMapRef
       heuristics
       execFeats
       (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
@@ -1425,7 +1424,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
           if simNoHeuristics simOpts
             then [mustFailHeuristic]
             else llvmHeuristics la List.++ [mustFailHeuristic]
-    refinementLoop la bounds argNames initArgShapes $ \argShapes bbMapRef ->
+    refinementLoop la bounds argNames initArgShapes $ \argShapes ->
       refineOnce
         la
         simOpts
@@ -1439,7 +1438,6 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
         argShapes
         initMem
         memVar
-        bbMapRef
         heuristics
         execFeats
         $ \p setupMem initFs args ->

@@ -570,8 +570,6 @@ refineOnce ::
   , ?memOpts :: Mem.MemOptions
   , ExtShape ext ~ PtrShape ext wptr
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext wptr
-  , MSM.MacawProcessAssertion sym
-  , Mem.HasLLVMAnn sym
   ) =>
   GreaseLogAction ->
   Opts.SimOpts ->
@@ -585,7 +583,6 @@ refineOnce ::
   ArgShapes ext NoTag argTys ->
   InitialMem sym ->
   C.GlobalVar Mem.Mem ->
-  IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
   [RefineHeuristic sym bak ext argTys] ->
   [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
   ( ( MSM.MacawProcessAssertion sym
@@ -598,8 +595,16 @@ refineOnce ::
     IO (C.ExecState p sym ext (C.RegEntry sym ret))
   ) ->
   IO (ProveRefineResult sym ext argTys)
-refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem memVar bbMapRef heuristics execFeats mkInitState = do
+refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem memVar heuristics execFeats mkInitState = do
   let sym = C.backendGetSym bak
+  ErrorCallbacks
+    { errorMap = bbMapRef
+    , llvmErrCallback = recordLLVMAnnotation
+    , macawAssertionCallback = processMacawAssert
+    } <-
+    buildErrMaps
+  let ?recordLLVMAnnotation = recordLLVMAnnotation
+  let ?processMacawAssert = processMacawAssert
   (args, setupMem, setupAnns) <-
     Setup.setup la bak dl valueNames argTys argShapes initMem
   initFs_ <- GSIO.initialLlvmFileSystem halloc sym (Opts.simFsOpts simOpts)
@@ -639,26 +644,19 @@ data RefinementSummary sym ext tys
   | RefinementBug Bug.BugInstance (ConcretizedData sym ext tys)
 
 refinementLoop ::
-  forall sym ext argTys w t st fs.
+  forall sym ext argTys w.
   ( C.IsSyntaxExtension ext
   , 16 C.<= w
   , Mem.HasPtrWidth w
   , MC.MemWidth w
   , ExtShape ext ~ PtrShape ext w
   , PrettyExt ext NoTag
-  , sym ~ W4.ExprBuilder t st fs
   ) =>
   GreaseLogAction ->
   BoundsOpts ->
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
-  ( ( MSM.MacawProcessAssertion sym
-    , Mem.HasLLVMAnn sym
-    ) =>
-    ArgShapes ext NoTag argTys ->
-    IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
-    IO (ProveRefineResult sym ext argTys)
-  ) ->
+  (ArgShapes ext NoTag argTys -> IO (ProveRefineResult sym ext argTys)) ->
   IO (RefinementSummary sym ext argTys)
 refinementLoop la boundsOpts argNames initArgShapes go = do
   let
@@ -674,15 +672,7 @@ refinementLoop la boundsOpts argNames initArgShapes go = do
         else do
           let addrWidth = MC.addrWidthRepr (Proxy @w)
           doLog la (Diag.RefinementUsingPrecondition addrWidth argNames argShapes)
-          ErrorCallbacks
-            { errorMap = bbMapRef
-            , llvmErrCallback = recordLLVMAnnotation
-            , macawAssertionCallback = processMacawAssert
-            } <-
-            buildErrMaps
-          let ?recordLLVMAnnotation = recordLLVMAnnotation
-          let ?processMacawAssert = processMacawAssert
-          new <- go argShapes bbMapRef
+          new <- go argShapes
           case new of
             ProveBug b cData -> pure (RefinementBug b cData)
             ProveCantRefine b -> pure (RefinementCantRefine b)
