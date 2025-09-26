@@ -133,6 +133,8 @@ data BoundsOpts
   { simLoopBound :: LoopBound
   -- ^ Maximum number of iterations of each program loop/maximum number of
   -- recursive calls to the same function
+  , simLoopBoundObligation :: Bool
+  -- ^ Should hitting a loop bound incur a proof obligation?
   , simMaxIters :: Maybe Int
   -- ^ Maximum number of iterations of the refinement loop
   , simTimeout :: Seconds
