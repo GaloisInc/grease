@@ -68,6 +68,7 @@ module Grease.Refine (
   ProveRefineResult (..),
   NoHeuristic (..),
   proveAndRefine,
+  ExecData (..),
   RefinementData (..),
   execAndRefine,
   RefinementSummary (..),
@@ -348,6 +349,14 @@ consumer bak anns execResult la heuristics argNames argShapes bbMap initState =
             , PP.indent 4 (C.ppSimError simErr)
             ]
 
+-- | Data needed to execute Crucible
+data ExecData p sym ext ret
+  = ExecData
+  { execFeats :: [C.ExecutionFeature p sym ext (C.RegEntry sym ret)]
+  , execInitState :: C.ExecState p sym ext (C.RegEntry sym ret)
+  , execPathStrat :: Opts.PathStrategy
+  }
+
 -- | Helper, not exported
 execCfg ::
   ( C.IsSyntaxExtension ext
@@ -359,9 +368,7 @@ execCfg ::
   , ?memOpts :: Mem.MemOptions
   ) =>
   bak ->
-  Opts.PathStrategy ->
-  [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
-  C.ExecState p sym ext (C.RegEntry sym ret) ->
+  ExecData p sym ext ret ->
   -- | The result of a single execution (in 'Opts.Dfs' mode, of a single path),
   -- the proof obligations resulting from that execution, and any suspended
   -- paths.
@@ -370,7 +377,12 @@ execCfg ::
     , C.ProofObligations sym
     , Seq (C.WorkItem p sym ext (C.RegEntry sym ret))
     )
-execCfg bak strat execFeats initialState = do
+execCfg bak execData = do
+  let ExecData
+        { execFeats = feats
+        , execInitState = initialState
+        , execPathStrat = strat
+        } = execData
   let withCleanup action = X.finally action $ do
         C.resetAssumptionState bak
         C.clearProofObligations bak
@@ -378,7 +390,7 @@ execCfg bak strat execFeats initialState = do
     case strat of
       Opts.Dfs -> do
         resultRef <- IORef.newIORef Nothing
-        (_n, rest) <- C.executeCrucibleDFSPaths execFeats initialState $ \r -> do
+        (_n, rest) <- C.executeCrucibleDFSPaths feats initialState $ \r -> do
           IORef.writeIORef resultRef (Just r)
           pure False -- don't continue exploring other paths
         mbResult <- IORef.readIORef resultRef
@@ -388,7 +400,7 @@ execCfg bak strat execFeats initialState = do
             o <- C.getProofObligations bak
             pure (r, o, rest)
       Opts.Sse -> do
-        r <- C.executeCrucible execFeats initialState
+        r <- C.executeCrucible feats initialState
         o <- C.getProofObligations bak
         pure (r, o, Seq.empty)
 
@@ -400,6 +412,8 @@ data RefinementData sym bak ext argTys
   , refineArgShapes :: ArgShapes ext NoTag argTys
   , refineHeuristics :: [RefineHeuristic sym bak ext argTys]
   , refineInitState :: Conc.InitialState sym ext argTys
+  , refineSolver :: Solver
+  , refineSolverTimeout :: C.Timeout
   }
 
 -- | Helper, not exported
@@ -415,22 +429,21 @@ proveAndRefine ::
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
-  Solver ->
-  -- | Solver timeout
-  C.Timeout ->
   C.ExecResult p sym ext r ->
   GreaseLogAction ->
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
   RefinementData sym bak ext argTys ->
   C.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
-proveAndRefine bak solver tout execResult la bbMap refineData goals = do
+proveAndRefine bak execResult la bbMap refineData goals = do
   let RefinementData
         { refineAnns = anns
         , refineArgNames = argNames
         , refineArgShapes = argShapes
         , refineHeuristics = heuristics
         , refineInitState = initState
+        , refineSolver = solver
+        , refineSolverTimeout = tout
         } = refineData
   let sym = C.backendGetSym bak
   let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
@@ -459,21 +472,17 @@ execAndRefine ::
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
-  Solver ->
   W4FM.FloatModeRepr fm ->
   GreaseLogAction ->
   C.GlobalVar Mem.Mem ->
   RefinementData sym bak ext argTys ->
   IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
-  BoundsOpts ->
-  Opts.PathStrategy ->
-  [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
-  C.ExecState p sym ext (C.RegEntry sym ret) ->
+  ExecData p sym ext ret ->
   m (ProveRefineResult sym ext argTys)
-execAndRefine bak solver _fm la memVar refineData bbMapRef boundsOpts strat execFeats initialState = do
-  let solverTimeout = Opts.simSolverTimeout boundsOpts
+execAndRefine bak _fm la memVar refineData bbMapRef execData = do
   let refineOne initSt = do
-        (execResult, goals, remaining) <- execCfg bak strat execFeats initSt
+        let execData' = execData'{execInitState = initSt}
+        (execResult, goals, remaining) <- execCfg bak execData'
         doLog la (Diag.ExecutionResult memVar execResult)
         refineResult <-
           case execResult of
@@ -491,8 +500,8 @@ execAndRefine bak solver _fm la memVar refineData bbMapRef boundsOpts strat exec
               pure (ProveCantRefine (Unsupported feat))
             _ -> do
               bbMap <- readIORef bbMapRef
-              proveAndRefine bak solver solverTimeout execResult la bbMap refineData goals
-        case strat of
+              proveAndRefine bak execResult la bbMap refineData goals
+        case execPathStrat execData of
           Opts.Dfs -> do
             loc <- W4.getCurrentProgramLoc (C.backendGetSym bak)
             doLog la (Diag.RefinementFinishedPath loc (shortResult refineResult))
@@ -500,6 +509,7 @@ execAndRefine bak solver _fm la memVar refineData bbMapRef boundsOpts strat exec
         pure (refineResult, remaining)
 
   -- Process the state that was passed in
+  let initialState = execInitState execData
   (refineResult, remainingPaths) <- liftIO (refineOne initialState)
   remainingRef <- liftIO (IORef.newIORef remainingPaths)
 
