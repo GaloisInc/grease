@@ -12,30 +12,19 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Main (
   main,
-  simulateARM,
-  simulateARMSyntax,
-  simulatePPC32,
-  simulatePPC32Syntax,
-  simulatePPC64,
-  simulatePPC64Syntax,
-  simulateX86,
-  simulateX86Syntax,
   simulateLlvm,
   simulateLlvmSyntax,
-  simulateFile,
   Results (..),
-  logResults,
 ) where
 
 import Control.Applicative (pure)
 import Control.Concurrent.Async (Async, cancel)
 import Control.Exception.Safe (Handler (..), MonadThrow, catches, throw)
 import Control.Lens (to, (.~), (^.))
-import Control.Monad (forM, forM_, mapM_, when, (>>=))
+import Control.Monad (forM, forM_, mapM_, (>>=))
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Bool (Bool (..), not, otherwise, (&&), (||))
-import Data.ByteString qualified as BS
+import Data.Bool (Bool (..), otherwise)
 import Data.Either (Either (..))
 import Data.ElfEdit qualified as Elf
 import Data.Eq ((==))
@@ -49,8 +38,6 @@ import Data.LLVM.BitCode (parseBitCodeFromFileWithWarnings)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.AArch32.Symbolic qualified as AArch32Symbolic
-import Data.Macaw.AArch32.Symbolic.Syntax qualified as AArch32Syn
-import Data.Macaw.ARM qualified as ARM
 import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.BinaryLoader (BinaryLoader)
 import Data.Macaw.BinaryLoader qualified as Loader
@@ -62,17 +49,13 @@ import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
 import Data.Macaw.Memory.LoadCommon qualified as MML
-import Data.Macaw.PPC qualified as PPC
 import Data.Macaw.PPC.Symbolic qualified as PPCSymbolic
-import Data.Macaw.PPC.Symbolic.Syntax qualified as PPCSyn
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Debug qualified as MDebug
 import Data.Macaw.Symbolic.Memory qualified as MSM (MacawProcessAssertion)
 import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
 import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
-import Data.Macaw.X86 qualified as X86
 import Data.Macaw.X86.Crucible qualified as X86Symbolic
-import Data.Macaw.X86.Symbolic.Syntax qualified as X86Syn
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe (..), fromMaybe)
@@ -88,27 +71,20 @@ import Data.Parameterized.TraversableFC.WithIndex (imapFC)
 import Data.Proxy (Proxy (..))
 import Data.Semigroup ((<>))
 import Data.Sequence qualified as Seq
-import Data.Set (Set)
-import Data.Set qualified as Set
 import Data.String (String)
 import Data.Text qualified as Text
-import Data.Text.IO (putStrLn)
 import Data.Text.IO qualified as Text.IO
 import Data.Traversable (for, traverse)
 import Data.Traversable.WithIndex (iforM)
 import Data.Tuple (fst, snd)
 import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
-import GHC.TypeNats (KnownNat)
 import Grease.AssertProperty
 import Grease.Bug qualified as Bug
-import Grease.Cli (optsFromArgs)
-import Grease.Concretize (ConcArgs (..), ConcretizedData)
+import Grease.Concretize (ConcretizedData)
 import Grease.Concretize qualified as Conc
-import Grease.Concretize.JSON (concArgsToJson)
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic
-import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint
 import Grease.ExecutionFeatures (greaseExecFeats)
 import Grease.Heuristic
@@ -119,14 +95,10 @@ import Grease.LLVM.SetupHook qualified as LLVM (SetupHook, moduleSetupHook, synt
 import Grease.LLVM.SetupHook.Diagnostic qualified as LDiag (Diagnostic (LLVMTranslationWarning))
 import Grease.Macaw
 import Grease.Macaw.Arch
-import Grease.Macaw.Arch.AArch32 (armCtx)
-import Grease.Macaw.Arch.PPC32 (ppc32Ctx)
-import Grease.Macaw.Arch.PPC64 (ppc64Ctx)
-import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.Dwarf (loadDwarfPreconditions)
 import Grease.Macaw.Entrypoint (checkMacawEntrypointCfgsSignatures)
-import Grease.Macaw.Load (LoadedProgram (..), load)
+import Grease.Macaw.Load (LoadedProgram (..))
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
 import Grease.Macaw.Overrides.Address (AddressOverrides, loadAddressOverrides)
@@ -146,7 +118,6 @@ import Grease.Requirement
 import Grease.Setup
 import Grease.Shape (ArgShapes (..), ExtShape, minimalShapeWithPtrs)
 import Grease.Shape qualified as Shape
-import Grease.Shape.Concretize (concShape)
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
@@ -176,24 +147,21 @@ import Lang.Crucible.LLVM.Syntax (emptyParserHooks, llvmParserHooks)
 import Lang.Crucible.LLVM.Translation qualified as Trans
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
-import System.Directory (Permissions, getPermissions)
+import System.Directory (Permissions)
 import System.FilePath (FilePath)
 import System.IO (IO)
 import Text.LLVM qualified as L
-import Text.Read (readMaybe)
 import Text.Show (Show (..))
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
-import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
-import Prelude (Int, Integer, Integral, Num (..), fromIntegral)
+import Prelude (Int, Integral, Num (..), fromIntegral, undefined)
 
 -- | Results of analysis, one per given 'Entrypoint'
 newtype Results = Results {getResults :: Map Entrypoint Batch}
@@ -210,22 +178,7 @@ readElfHeaderInfo ::
   proxy arch ->
   FilePath ->
   m (Permissions, Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
-readElfHeaderInfo _proxy path =
-  do
-    perms <- liftIO $ getPermissions path
-    bs <- liftIO $ BS.readFile path
-    case Elf.decodeElfHeaderInfo bs of
-      Right (Elf.SomeElf hdr) ->
-        case ( Elf.headerClass (Elf.header hdr)
-             , C.testEquality ?ptrWidth (knownNat @32)
-             , C.testEquality ?ptrWidth (knownNat @64)
-             ) of
-          (Elf.ELFCLASS32, Just Refl, Nothing) -> pure (perms, hdr)
-          (Elf.ELFCLASS64, Nothing, Just Refl) -> pure (perms, hdr)
-          _ -> throw $ GreaseException "Internal error: bad pointer width!"
-      Left _ -> userError ("expected AArch32, PowerPC, or x86_64 ELF binary, but found non-ELF file at " <> Text.pack path)
- where
-  userError msg = throw $ GreaseException ("User error: " <> msg)
+readElfHeaderInfo _proxy path = undefined
 
 -- Helper, not exported
 --
@@ -337,16 +290,7 @@ toBatchBug ::
   Bug.BugInstance ->
   ConcretizedData sym ext args ->
   BatchBug
-toBatchBug fm addrWidth argNames argTys initArgs b cData =
-  let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
-   in let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (Conc.concArgs cData)
-       in let prettyConc = Conc.printConcData addrWidth argNames interestingShapes cData
-           in let prettyConc' = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyConc)
-               in MkBatchBug
-                    { bugDesc = b
-                    , bugArgs = argsJson
-                    , bugShapes = prettyConc'
-                    }
+toBatchBug = undefined
 
 toFailedPredicate ::
   Mem.HasPtrWidth wptr =>
@@ -359,31 +303,7 @@ toFailedPredicate ::
   Shape.ArgShapes ext NoTag args ->
   NoHeuristic sym ext args ->
   FailedPredicate
-toFailedPredicate fm addrWidth argNames argTys initArgs (NoHeuristic goal cData _err) =
-  let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
-      interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (Conc.concArgs cData)
-      prettyConc = Conc.printConcData addrWidth argNames interestingShapes cData
-      lp = C.proofGoal goal
-      simErr = lp ^. C.labeledPredMsg
-      -- We inline and modify 'ppSimError', because we don't need to repeat the
-      -- function name nor location.
-      msg =
-        tshow $
-          PP.vcat $
-            let details = C.simErrorDetailsMsg (C.simErrorReason simErr)
-             in (PP.pretty (C.simErrorReasonMsg (C.simErrorReason simErr)) :)
-                  ( if List.null details
-                      then []
-                      else ["Details:", PP.indent 2 (PP.pretty details)]
-                  )
-   in FailedPredicate
-        { _failedPredicateLocation =
-            tshow (PP.pretty (W4.plSourceLoc (C.simErrorLoc simErr)))
-        , _failedPredicateMessage = msg
-        , _failedPredicateArgs = argsJson
-        , _failedPredicateConcShapes =
-            PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyConc)
-        }
+toFailedPredicate = undefined
 
 checkMustFail ::
   ( C.IsSymBackend sym bak
@@ -452,62 +372,6 @@ macawDataLayout archCtx =
   DataLayout.defaultDataLayout
     & DataLayout.intLayout
       .~ (archCtx ^. archInfo . to (Symbolic.toCrucibleEndian . MI.archEndianness))
-
--- | Integer argument registers
-interestingRegs :: Set String
-interestingRegs =
-  Set.fromList
-    [ -- AArch32
-      "R0"
-    , "R1"
-    , "R2"
-    , "R3"
-    , -- PPC32
-      "r3"
-    , "r4"
-    , "r5"
-    , "r6"
-    , "r7"
-    , "r8"
-    , "r9"
-    , "r10"
-    , -- x86_64
-      "rdi"
-    , "rsi"
-    , "rdx"
-    , "rcx"
-    , "r8" -- also listed above in PPC32, but it's a set, so...
-    , "r9"
-    ]
-
--- | Filter out \"uninteresting\" concretized shapes
---
--- They are interesting when:
---
--- * They have a non-default value, and
--- * The name is in a known \"interesting\" set ('interestingRegs'), or is an
---   LLVM argument name (i.e., is prefixed by @%@).
---
--- This is clearly a bit of a hack, but leads to concise and readable output.
-interestingConcretizedShapes ::
-  Mem.HasPtrWidth wptr =>
-  (ExtShape ext ~ PtrShape ext wptr) =>
-  -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
-  -- | Default/initial/minimal shapes
-  Ctx.Assignment (Shape.Shape ext tag) argTys ->
-  ConcArgs sym ext argTys ->
-  Ctx.Assignment (Const Bool) argTys
-interestingConcretizedShapes names initArgs (ConcArgs cArgs) =
-  let cShapes = fmapFC (Shape.tagWithType . concShape) cArgs
-   in let initArgs' = fmapFC Shape.tagWithType initArgs
-       in let isLlvmArg name = "%" `List.isPrefixOf` name
-           in Ctx.zipWith
-                ( \(Const name) (Const isDefault) ->
-                    Const ((name `List.elem` interestingRegs || isLlvmArg name) && not isDefault)
-                )
-                names
-                (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgs')
 
 -- | Compute the initial 'ArgShapes' for a Macaw CFG.
 --
@@ -1660,303 +1524,5 @@ simulateLlvm transOpts simOpts la = do
 
     simulateLlvmCfgs la simOpts halloc llvmCtxt (Just llvmMod) mkMem setupHook cfgs
 
--- | A 'GreaseLogAction' that diagnostics directly to @stderr@.
-logAction :: Severity -> GreaseLogAction
-logAction sev = LJ.LogAction $ \diag ->
-  when (severity diag <= sev) $
-    log (PP.pretty diag)
-
-simulateARMSyntax ::
-  SimOpts ->
-  GreaseLogAction ->
-  IO Results
-simulateARMSyntax simOpts la = withMemOptions simOpts $ do
-  let ?ptrWidth = knownNat @32
-  halloc <- C.newHandleAllocator
-  archCtx <- armCtx halloc Nothing (simStackArgumentSlots simOpts)
-  simulateMacawSyntax la halloc archCtx simOpts AArch32Syn.aarch32ParserHooks
-
-simulateMacawRaw ::
-  forall arch.
-  ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
-  , Symbolic.SymArchConstraints arch
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
-  , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
-  , Show (ArchReloc arch)
-  , ?memOpts :: Mem.MemOptions
-  ) =>
-  GreaseLogAction ->
-  MM.Memory (MC.ArchAddrWidth arch) ->
-  C.HandleAllocator ->
-  ArchContext arch ->
-  SimOpts ->
-  CSyn.ParserHooks (Symbolic.MacawExt arch) ->
-  IO Results
-simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
-  do
-    let entries = simEntryPoints simOpts
-    -- When loading a binary in raw mode
-    -- symbol entrypoints cannot be used
-    let getAddressEntrypoint ent = do
-          (txt, fpath) <- case ent of
-            Entrypoint{entrypointLocation = EntrypointAddress x, entrypointStartupOvPath = override} -> Just (x, override)
-            _ -> throw (GreaseException "When loading a binary in raw mode, only address entrypoints are valid")
-          intAddr <- (readMaybe $ Text.unpack txt :: Maybe Integer)
-          addr <- MM.resolveAbsoluteAddr memory $ fromIntegral intAddr
-          pure (fpath, txt, addr)
-
-    let entryAddrs :: [(Maybe FilePath, Text.Text, MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)))] = Maybe.mapMaybe getAddressEntrypoint entries
-    let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
-    cfgs <-
-      fmap Map.fromList $ forM entryAddrs $ \(mbOverride, entText, entAddr) -> do
-        C.Reg.SomeCFG cfg <- discoverFunction la halloc archCtx memory Map.empty Map.empty entAddr
-        mbStartupOv <-
-          traverse (parseEntrypointStartupOv halloc) mbOverride
-        let entrypointCfgs =
-              EntrypointCfgs
-                { entrypointStartupOv = mbStartupOv
-                , entrypointCfg = C.Reg.AnyCFG cfg
-                }
-        pure
-          ( Entrypoint{entrypointLocation = EntrypointAddress entText, entrypointStartupOvPath = mbOverride}
-          , MacawEntrypointCfgs entrypointCfgs (Just entAddr)
-          )
-    addrOvs <- loadAddrOvs archCtx halloc memory simOpts
-    let setupHook :: forall sym. SetupHook sym arch
-        setupHook = Macaw.binSetupHook addrOvs cfgs
-    let dl = macawDataLayout archCtx
-    let macawCfgConfig =
-          MacawCfgConfig
-            { mcDataLayout = dl
-            , mcMprotectAddr = Nothing
-            , mcLoadOptions = MML.defaultLoadOptions
-            , mcSymMap = Map.empty
-            , mcPltStubs = Map.empty
-            , mcDynFunMap = Map.empty
-            , mcRelocs = Map.empty
-            , mcMemory = memory
-            , mcTxtBounds = (0, 0)
-            , mcElf = Nothing
-            }
-    simulateMacawCfgs
-      la
-      halloc
-      macawCfgConfig
-      archCtx
-      simOpts
-      setupHook
-      addrOvs
-      cfgs
-
--- | Given an arch runs the raw loader
--- loading a binary in a single segment at a fixed offset
-simulateRawArch ::
-  forall arch.
-  ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
-  , MM.MemWidth
-      (MC.RegAddrWidth (MC.ArchReg arch))
-  , KnownNat
-      (MC.RegAddrWidth (MC.ArchReg arch))
-  , C.IsSyntaxExtension (Symbolic.MacawExt arch)
-  , Symbolic.SymArchConstraints arch
-  , Integral
-      (Elf.ElfWordType (MC.RegAddrWidth (MC.ArchReg arch)))
-  , Show (ArchReloc arch)
-  , ?memOpts :: Mem.MemOptions
-  ) =>
-  SimOpts ->
-  GreaseLogAction ->
-  C.HandleAllocator ->
-  CSyn.ParserHooks (Symbolic.MacawExt arch) ->
-  ArchContext arch ->
-  MM.Endianness ->
-  IO Results
-simulateRawArch simOpts la halloc hooks archCtx end = do
-  bs <- BS.readFile (simProgPath simOpts)
-  let ldr = Loader.RawBin bs end
-  -- TODO: we should allow setting a load offset via an option
-  let opts = MML.LoadOptions{MML.loadOffset = Just $ simRawBinaryOffset simOpts}
-  lded <- Loader.loadBinary @arch opts ldr
-  simulateMacawRaw la (Loader.memoryImage lded) halloc archCtx simOpts hooks
-
-simulateARMRaw :: SimOpts -> GreaseLogAction -> IO Results
-simulateARMRaw simOpts la = withMemOptions simOpts $ do
-  let ?ptrWidth = knownNat @32
-  halloc <- C.newHandleAllocator
-  archCtx <- armCtx halloc Nothing (simStackArgumentSlots simOpts)
-  simulateRawArch simOpts la halloc AArch32Syn.aarch32ParserHooks archCtx MM.LittleEndian
-
--- TODO(#287) We cannot load ppc64 raw because of https://github.com/GaloisInc/macaw/issues/415 we
--- do not have a TOC
-simulatePPC32Raw :: SimOpts -> GreaseLogAction -> IO Results
-simulatePPC32Raw simOpts la = withMemOptions simOpts $ do
-  let ?ptrWidth = knownNat @32
-  halloc <- C.newHandleAllocator
-  archCtx <- ppc32Ctx Nothing (simStackArgumentSlots simOpts)
-  simulateRawArch simOpts la halloc PPCSyn.ppc32ParserHooks archCtx MM.LittleEndian
-
-simulateX86Raw :: SimOpts -> GreaseLogAction -> IO Results
-simulateX86Raw simOpts la = withMemOptions simOpts $ do
-  let ?ptrWidth = knownNat @64
-  halloc <- C.newHandleAllocator
-  archCtx <- x86Ctx halloc Nothing (simStackArgumentSlots simOpts)
-  simulateRawArch simOpts la halloc X86Syn.x86ParserHooks archCtx MM.LittleEndian
-
-simulateARM :: SimOpts -> GreaseLogAction -> IO Results
-simulateARM simOpts la = do
-  let ?ptrWidth = knownNat @32
-  let proxy = Proxy @ARM.ARM
-  (perms, elf) <- readElfHeaderInfo proxy (simProgPath simOpts)
-  halloc <- C.newHandleAllocator
-  withMemOptions simOpts $ do
-    loadedProg <- load la (simEntryPoints simOpts) perms elf
-    txtBounds@(starttext, _) <- textBounds (progLoadOptions loadedProg) elf
-    -- Return address must be in .text to satisfy the `in-text` requirement.
-    archCtx <- armCtx halloc (Just starttext) (simStackArgumentSlots simOpts)
-    simulateMacaw la halloc elf loadedProg (Just ARM.armPLTStubInfo) archCtx txtBounds simOpts AArch32Syn.aarch32ParserHooks
-
-simulatePPC32Syntax ::
-  SimOpts ->
-  GreaseLogAction ->
-  IO Results
-simulatePPC32Syntax simOpts la = withMemOptions simOpts $ do
-  let ?ptrWidth = knownNat @32
-  halloc <- C.newHandleAllocator
-  -- We don't have an ELF file on hand, so there's no reasonable concrete
-  -- default value to put on the stack as the return address, so we use fresh,
-  -- symbolic bytes (Nothing).
-  archCtx <- ppc32Ctx Nothing (simStackArgumentSlots simOpts)
-  simulateMacawSyntax la halloc archCtx simOpts PPCSyn.ppc32ParserHooks
-
--- | Currently, @.ppc64.cbl@ files are not supported, as the @macaw-ppc@ API
--- does not make it straightforward to create a PPC64 'MI.ArchitectureInfo'
--- value without having access to a full binary. See
--- <https://github.com/GaloisInc/macaw/issues/415> for the full details.
-simulatePPC64Syntax ::
-  SimOpts ->
-  GreaseLogAction ->
-  IO Results
-simulatePPC64Syntax _simOpts _la =
-  throw $ GreaseException "*.ppc64.cbl files are not currently supported."
-
-simulatePPC32 :: SimOpts -> GreaseLogAction -> IO Results
-simulatePPC32 simOpts la = do
-  let ?ptrWidth = knownNat @32
-  let proxy = Proxy @PPC.PPC32
-  (perms, elf) <- readElfHeaderInfo proxy (simProgPath simOpts)
-  halloc <- C.newHandleAllocator
-  withMemOptions simOpts $ do
-    loadedProg <- load la (simEntryPoints simOpts) perms elf
-    txtBounds@(starttext, _) <- textBounds (progLoadOptions loadedProg) elf
-    -- Return address must be in .text to satisfy the `in-text` requirement.
-    archCtx <- ppc32Ctx (Just starttext) (simStackArgumentSlots simOpts)
-    -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
-    -- Grease.Macaw.PLT for why we use Nothing here.
-    let ppcPltStubInfo = Nothing
-    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx txtBounds simOpts PPCSyn.ppc32ParserHooks
-
-simulatePPC64 :: SimOpts -> GreaseLogAction -> IO Results
-simulatePPC64 simOpts la = do
-  let ?ptrWidth = knownNat @64
-  let proxy = Proxy @PPC.PPC64
-  (perms, elf) <- readElfHeaderInfo proxy (simProgPath simOpts)
-  halloc <- C.newHandleAllocator
-  withMemOptions simOpts $ do
-    loadedProg <- load la (simEntryPoints simOpts) perms elf
-    txtBounds@(starttext, _) <- textBounds (progLoadOptions loadedProg) elf
-    -- Return address must be in .text to satisfy the `in-text` requirement.
-    archCtx <- ppc64Ctx (Just starttext) (simStackArgumentSlots simOpts) (progLoadedBinary loadedProg)
-    -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
-    -- Grease.Macaw.PLT for why we use Nothing here.
-    let ppcPltStubInfo = Nothing
-    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx txtBounds simOpts PPCSyn.ppc64ParserHooks
-
-simulateX86Syntax ::
-  SimOpts ->
-  GreaseLogAction ->
-  IO Results
-simulateX86Syntax simOpts la = withMemOptions simOpts $ do
-  let ?ptrWidth = knownNat @64
-  halloc <- C.newHandleAllocator
-  -- We don't have an ELF file on hand, so there's no reasonable concrete
-  -- default value to put on the stack as the return address, so we use fresh,
-  -- symbolic bytes (Nothing).
-  archCtx <- x86Ctx halloc Nothing (simStackArgumentSlots simOpts)
-  simulateMacawSyntax la halloc archCtx simOpts X86Syn.x86ParserHooks
-
-simulateX86 :: SimOpts -> GreaseLogAction -> IO Results
-simulateX86 simOpts la = do
-  let ?ptrWidth = knownNat @64
-  let proxy = Proxy @X86.X86_64
-  (perms, elf) <- readElfHeaderInfo proxy (simProgPath simOpts)
-  halloc <- C.newHandleAllocator
-  withMemOptions simOpts $ do
-    loadedProg <- load la (simEntryPoints simOpts) perms elf
-    txtBounds@(startText, _) <- textBounds (progLoadOptions loadedProg) elf
-    -- Return address must be in .text to satisfy the `in-text` requirement.
-    archCtx <- x86Ctx halloc (Just startText) (simStackArgumentSlots simOpts)
-    simulateMacaw la halloc elf loadedProg (Just X86.x86_64PLTStubInfo) archCtx txtBounds simOpts X86Syn.x86ParserHooks
-
-simulateElf ::
-  SimOpts ->
-  GreaseLogAction ->
-  IO Results
-simulateElf simOpts la = do
-  bs <- liftIO $ BS.readFile (simProgPath simOpts)
-  case Elf.decodeElfHeaderInfo bs of
-    Right (Elf.SomeElf hdr) ->
-      case (Elf.headerClass (Elf.header hdr), Elf.headerMachine (Elf.header hdr)) of
-        (Elf.ELFCLASS32, Elf.EM_ARM) -> simulateARM simOpts la
-        (Elf.ELFCLASS32, Elf.EM_PPC) -> simulatePPC32 simOpts la
-        (Elf.ELFCLASS64, Elf.EM_PPC64) -> simulatePPC64 simOpts la
-        (Elf.ELFCLASS64, Elf.EM_X86_64) -> simulateX86 simOpts la
-        (_, mach) -> throw $ GreaseException $ "User error: unsupported ELF architecture: " <> tshow mach
-    Left _ -> throw (GreaseException ("User error: expected ELF binary, but found non-ELF file at " <> Text.pack (simProgPath simOpts)))
-
-simulateFile ::
-  SimOpts ->
-  GreaseLogAction ->
-  IO Results
-simulateFile opts la =
-  let path = simProgPath opts
-   in -- This list also appears in {overrides,sexp}.md
-      if
-        | simRawBinaryMode opts ->
-            if
-              | ".armv7l.elf" `List.isSuffixOf` path -> simulateARMRaw opts la
-              | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32Raw opts la
-              | ".x64.elf" `List.isSuffixOf` path -> simulateX86Raw opts la
-              | otherwise -> throw (GreaseException "Unsupported file suffix for raw binary mode")
-        | ".armv7l.elf" `List.isSuffixOf` path -> simulateARM opts la
-        | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32 opts la
-        | ".ppc64.elf" `List.isSuffixOf` path -> simulatePPC64 opts la
-        | ".x64.elf" `List.isSuffixOf` path -> simulateX86 opts la
-        | ".bc" `List.isSuffixOf` path -> simulateLlvm Trans.defaultTranslationOptions opts la
-        | ".armv7l.cbl" `List.isSuffixOf` path -> simulateARMSyntax opts la
-        | ".ppc32.cbl" `List.isSuffixOf` path -> simulatePPC32Syntax opts la
-        | ".ppc64.cbl" `List.isSuffixOf` path -> simulatePPC64Syntax opts la
-        | ".x64.cbl" `List.isSuffixOf` path -> simulateX86Syntax opts la
-        | ".llvm.cbl" `List.isSuffixOf` path -> simulateLlvmSyntax opts la
-        | otherwise -> simulateElf opts la
-
--- | Also used in the test suite
-logResults :: GreaseLogAction -> Results -> IO ()
-logResults la (Results results) =
-  forM_ (Map.toList results) $ \(entrypoint, result) ->
-    doLog la $
-      Diag.AnalyzedEntrypoint
-        (entrypointLocation entrypoint)
-        (batchStatus result)
-
 main :: IO ()
-main = do
-  parsedOpts <- optsFromArgs
-  let simOpts = optsSimOpts parsedOpts
-
-      la :: GreaseLogAction
-      la = logAction (optsVerbosity parsedOpts)
-  rs@(Results results) <-
-    simulateFile simOpts la
-  if optsJSON parsedOpts
-    then forM_ (Map.elems results) $ putStrLn . renderJSON
-    else logResults la rs
+main = pure ()
