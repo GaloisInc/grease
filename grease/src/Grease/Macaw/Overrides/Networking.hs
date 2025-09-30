@@ -7,17 +7,10 @@
 
 -- | Overrides for network-related functions.
 module Grease.Macaw.Overrides.Networking (
-  -- * Overrides
   networkOverrides,
-
-  -- * Exceptions
-  NetworkException (..),
-  NetworkFunctionArgument (..),
 ) where
 
-import Control.Exception qualified as X
 import Control.Lens (use, (%=))
-import Control.Monad.Catch qualified as Catch
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.State qualified as State
 import Data.BitVector.Sized as BV
@@ -31,6 +24,7 @@ import Data.Parameterized.Some (Some (..))
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Data.Word (Word16)
+import GHC.Stack (HasCallStack, callStack)
 import Grease.Macaw.Memory qualified as GMM
 import Grease.Macaw.SimulatorState qualified as GMSS
 import Grease.Macaw.SimulatorState.Networking qualified as GMSSN
@@ -615,7 +609,9 @@ callSocket bak fs domainReg typeReg _protocol = do
   domain <-
     case Map.lookup domainInt socketDomainMap of
       Just d -> pure d
-      Nothing -> Catch.throwM $ UnsupportedSocketArgument DomainArgument domainInt
+      Nothing -> liftIO $ do
+        loc <- WI.getCurrentProgramLoc sym
+        unsupportedSocketArgument loc DomainArgument domainInt
   Some domainRepr <- pure $ GMSSN.toSocketDomainRepr domain
   typeInt <-
     liftIO $
@@ -624,7 +620,9 @@ callSocket bak fs domainReg typeReg _protocol = do
   typ <-
     case Map.lookup typeInt socketTypeMap of
       Just t -> pure t
-      Nothing -> Catch.throwM $ UnsupportedSocketArgument TypeArgument typeInt
+      Nothing -> liftIO $ do
+        loc <- WI.getCurrentProgramLoc sym
+        unsupportedSocketArgument loc TypeArgument typeInt
   let ssi =
         GMSSN.ServerSocketInfo
           { GMSSN.serverSocketDomain = domainRepr
@@ -659,52 +657,49 @@ callSocket bak fs domainReg typeReg _protocol = do
 -- Exceptions
 -----
 
--- TODO(#388): Replace these with aborting execution on the current path.
-
--- | An exception thrown from a networking-related override.
-data NetworkException where
-  NetworkConcretizationFailedSymbolic ::
-    WP.ProgramLoc ->
-    -- | The function being invoked.
-    Text.Text ->
-    -- | The argument to the function for which concretization was attempted.
-    NetworkFunctionArgument ->
-    NetworkException
-  UnsupportedSocketArgument ::
-    -- | The type of argument to the @socket@ function.
-    NetworkFunctionArgument ->
-    -- | The unsupported argument value.
-    Integer ->
-    NetworkException
-
-instance PP.Pretty NetworkException where
-  pretty =
-    \case
-      NetworkConcretizationFailedSymbolic loc nm arg ->
+networkConcretizationFailedSymbolic ::
+  HasCallStack =>
+  WP.ProgramLoc ->
+  -- | The function being invoked.
+  Text.Text ->
+  -- | The argument to the function for which concretization was attempted.
+  NetworkFunctionArgument ->
+  IO a
+networkConcretizationFailedSymbolic loc nm arg = do
+  let msg =
         "Attempted to make a call to the"
           PP.<+> PP.squotes (PP.pretty nm)
           PP.<+> "function with non-concrete"
           PP.<+> networkFunctionArgumentDescription arg
-          PP.<+> "at"
-          PP.<+> PP.pretty (WP.plSourceLoc loc)
-      UnsupportedSocketArgument arg value ->
+  let reason = CS.Unsupported callStack (show msg)
+  let simErr = CS.SimError loc reason
+  CB.abortExecBecause (CB.AssertionFailure simErr)
+
+unsupportedSocketArgument ::
+  HasCallStack =>
+  WP.ProgramLoc ->
+  -- | The type of argument to the @socket@ function.
+  NetworkFunctionArgument ->
+  -- | The unsupported argument value.
+  Integer ->
+  IO a
+unsupportedSocketArgument loc arg value = do
+  let msg =
         "Attempted to call the 'socket' function with an unsupported"
           PP.<+> networkFunctionArgumentDescription arg
           <> PP.colon
           PP.<+> PP.viaShow value
-   where
-    networkFunctionArgumentDescription :: NetworkFunctionArgument -> PP.Doc a
-    networkFunctionArgumentDescription =
-      \case
-        FdArgument -> "file descriptor argument"
-        DomainArgument -> "domain argument"
-        TypeArgument -> "type argument"
-        PortArgument -> "port argument"
+  let reason = CS.Unsupported callStack (show msg)
+  let simErr = CS.SimError loc reason
+  CB.abortExecBecause (CB.AssertionFailure simErr)
 
-instance Show NetworkException where
-  show = show . PP.pretty
-
-instance X.Exception NetworkException
+networkFunctionArgumentDescription :: NetworkFunctionArgument -> PP.Doc a
+networkFunctionArgumentDescription =
+  \case
+    FdArgument -> "file descriptor argument"
+    DomainArgument -> "domain argument"
+    TypeArgument -> "type argument"
+    PortArgument -> "port argument"
 
 -- | Which argument to a networking-related override did a solver try to
 -- resolve as concrete?
@@ -901,7 +896,7 @@ networkConstantBv bak fnName fnArg w symBV =
         pure bv
       WURB.BVSymbolic{} -> do
         loc <- WI.getCurrentProgramLoc sym
-        Catch.throwM $ NetworkConcretizationFailedSymbolic loc fnName fnArg
+        networkConcretizationFailedSymbolic loc fnName fnArg
  where
   onlinePanic =
     error "networkConstantBv: Online solver support is not enabled"
