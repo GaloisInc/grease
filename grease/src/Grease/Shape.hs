@@ -70,9 +70,9 @@ import Data.Text.Encoding qualified as Text
 import Data.Traversable qualified as Traversable
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import GHC.Show qualified as GShow
+import Grease.Error (GreaseException (GreaseException))
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (PtrShape, minimalPtrShape, parseJsonPtrShape, ptrShapeType, traversePtrShapeWithType)
-import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel (HasPtrWidth)

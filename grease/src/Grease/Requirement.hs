@@ -15,7 +15,8 @@ import Data.Aeson qualified as Aeson
 import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Generics (Generic)
-import Grease.Utility (GreaseException (GreaseException), tshow)
+import Grease.Error (GreaseException (GreaseException))
+import Grease.Utility (tshow)
 import Prettyprinter qualified as PP
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC

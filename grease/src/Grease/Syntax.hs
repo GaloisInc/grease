@@ -39,7 +39,8 @@ import Data.Text.Encoding qualified as Text
 import Data.Text.IO qualified as Text.IO
 import Data.Word (Word64)
 import Data.Yaml qualified as Yaml
-import Grease.Utility (GreaseException (..), tshow)
+import Grease.Error (GreaseException (GreaseException))
+import Grease.Utility (tshow)
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.FunctionHandle qualified as C

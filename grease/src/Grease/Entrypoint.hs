@@ -38,8 +38,8 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Void (Void)
 import Data.Word (Word64)
+import Grease.Error (GreaseException (GreaseException))
 import Grease.Syntax (parseProgram, parsedProgramCfgMap)
-import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg

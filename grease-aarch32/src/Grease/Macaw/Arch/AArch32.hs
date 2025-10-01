@@ -23,12 +23,12 @@ import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
 import Data.Word (Word32)
+import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw.Arch (ArchContext (..), ArchReloc)
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Macaw.RegName (RegName (..))
 import Grease.Options (ExtraStackSlots)
 import Grease.Shape.Pointer (armStackPtrShape)
-import Grease.Utility (GreaseException (..))
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.Simulator.RegValue qualified as C

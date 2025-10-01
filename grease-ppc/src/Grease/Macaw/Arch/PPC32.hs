@@ -22,12 +22,13 @@ import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
 import Data.Word (Word32)
 import Dismantle.PPC qualified as D
+import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw.Arch (ArchContext (..), ArchReloc)
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Macaw.RegName (RegName (..))
 import Grease.Options (ExtraStackSlots)
 import Grease.Shape.Pointer (ppcStackPtrShape)
-import Grease.Utility (GreaseException (..), bytes32LE)
+import Grease.Utility (bytes32LE)
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.Simulator.RegValue qualified as C
 import Stubs.FunctionOverride.PPC.Linux qualified as Stubs

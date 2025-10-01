@@ -46,6 +46,7 @@ import Grease.Bug.UndefinedBehavior qualified as UB
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer (Dereference)
 import Grease.Diagnostic
+import Grease.Error (GreaseException (GreaseException))
 import Grease.ErrorDescription (ErrorDescription (..))
 import Grease.Heuristic.Diagnostic qualified as Diag
 import Grease.Heuristic.Result
@@ -57,7 +58,7 @@ import Grease.Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer
 import Grease.Shape.Selector
-import Grease.Utility (GreaseException (..), OnlineSolverAndBackend, ppProgramLoc, tshow)
+import Grease.Utility (OnlineSolverAndBackend, ppProgramLoc, tshow)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C

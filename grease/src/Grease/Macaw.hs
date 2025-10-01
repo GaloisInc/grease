@@ -49,6 +49,7 @@ import Data.Word (Word64, Word8)
 import GHC.Stack (HasCallStack, callStack)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic
+import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw.Arch
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Macaw.Overrides.Address (AddressOverrides)
