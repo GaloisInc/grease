@@ -318,7 +318,7 @@ minimalArgShapes _bak arch mbEntryAddr = do
             MT.BVTypeRepr w ->
               case testEquality w $ MT.knownNat @(MC.ArchAddrWidth arch) of
                 Just C.Refl -> pure (ShapeExt (arch ^. archStackPtrShape))
-                Nothing -> throw $ GreaseException "Bad stack pointer width"
+                Nothing -> panic "minimalArgShapes" ["Bad stack pointer width"]
       | Just Refl <- testEquality r MC.ip_reg
       , Just ipVal <- mbEntryAddr ->
           case MT.typeRepr r of
@@ -327,7 +327,7 @@ minimalArgShapes _bak arch mbEntryAddr = do
                 Just C.Refl ->
                   let bv = BV.mkBV w (fromIntegral (EL.memWordValue ipVal))
                    in pure (ShapeExt (ShapePtrBVLit NoTag w bv))
-                Nothing -> throw $ GreaseException "Bad instruction pointer width"
+                Nothing -> panic "minimalArgShapes" ["Bad stack pointer width"]
       | otherwise -> do
           shape <- case MT.typeRepr r of
             MT.BoolTypeRepr -> pure (ShapeBool NoTag)
