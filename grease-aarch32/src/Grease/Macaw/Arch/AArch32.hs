@@ -10,7 +10,6 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Arch.AArch32 (armCtx) where
 
-import Control.Exception.Safe (throw)
 import Data.BitVector.Sized qualified as BV
 import Data.ElfEdit qualified as EE
 import Data.Macaw.AArch32.Symbolic qualified as ARM.Symbolic
@@ -23,11 +22,11 @@ import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
 import Data.Word (Word32)
-import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw.Arch (ArchContext (..), ArchReloc)
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Macaw.RegName (RegName (..))
 import Grease.Options (ExtraStackSlots)
+import Grease.Panic (panic)
 import Grease.Shape.Pointer (armStackPtrShape)
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as Mem
@@ -51,7 +50,9 @@ armCtx halloc mbReturnAddr stackArgSlots = do
   tlsGlob <- Stubs.freshTLSGlobalVar halloc
   let extOverride = Stubs.aarch32LinuxStmtExtensionOverride
   avals <- case Symbolic.genArchVals Proxy Proxy (Just extOverride) of
-    Nothing -> throw $ GreaseException "Failed to generate architecture-specific values"
+    Nothing ->
+      -- `genArchVals` is total: https://github.com/GaloisInc/macaw/issues/231
+      panic "armCtx" ["Failed to generate architecture-specific values"]
     Just avals -> pure avals
   let regOverrides =
         case mbReturnAddr of
