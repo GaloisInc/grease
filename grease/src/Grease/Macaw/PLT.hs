@@ -29,6 +29,7 @@ import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Void (Void)
 import Data.Word (Word64)
+import Grease.Error (GreaseException (GreaseException))
 import Grease.Panic (panic)
 import Grease.Utility
 import Text.Megaparsec qualified as TM

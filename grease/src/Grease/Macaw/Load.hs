@@ -37,6 +37,7 @@ import Data.Tuple qualified as Tuple
 import Data.Vector qualified as Vec
 import Grease.Diagnostic
 import Grease.Entrypoint (Entrypoint (..), EntrypointLocation (..))
+import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Utility
 import Lang.Crucible.CFG.Core qualified as C

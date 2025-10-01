@@ -34,12 +34,13 @@ import Data.Text qualified as Text
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Void (Void)
 import Grease.Concretize.ToConcretize (HasToConcretize)
+import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw.Arch (ArchContext, archVals)
 import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Overrides (OverrideNameError (..), partitionCfgs)
 import Grease.Syntax (parseProgram)
-import Grease.Utility (GreaseException (GreaseException), tshow)
+import Grease.Utility (tshow)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as LCBO
 import Lang.Crucible.CFG.Core qualified as C
