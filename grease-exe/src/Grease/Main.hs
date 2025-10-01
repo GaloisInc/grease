@@ -132,6 +132,7 @@ import Grease.Macaw.Load qualified as Load
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
 import Grease.Macaw.Overrides.Address (AddressOverrides, loadAddressOverrides)
+import Grease.Macaw.Overrides.Address qualified as AddrOv
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.PLT
 import Grease.Macaw.RegName (getRegName, mkRegName, regNameToString, regNames)
@@ -156,7 +157,8 @@ import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Simple qualified as Simple
 import Grease.Solver (withSolverOnlineBackend)
 import Grease.SymIO qualified as GSIO
-import Grease.Syntax (parseOverridesYaml, parseProgram, parsedProgramCfgMap, resolveOverridesYaml)
+import Grease.Syntax (parseOverridesYaml, parsedProgramCfgMap, resolveOverridesYaml)
+import Grease.Syntax qualified as GSyn
 import Grease.Syscall
 import Grease.Time (time)
 import Grease.Utility
@@ -198,6 +200,16 @@ import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
 import Prelude (Int, Integer, Integral, Num (..), fromIntegral)
 
+{- Note [Explicitly listed errors]
+
+In this module, we frequently explicitly list all constructors of an error type,
+even when performing the same action for many or all of them. This is so that
+we get a compile error when new error constructors are added and can make an
+informed judgment about whether they are in fact user errors, internal GREASE
+errors, malformed inputs, etc.
+
+-}
+
 -- | Results of analysis, one per given 'Entrypoint'
 newtype Results = Results {getResults :: Map Entrypoint Batch}
 
@@ -212,7 +224,7 @@ malformedElf la doc = do
 userError :: GreaseLogAction -> PP.Doc Void -> IO a
 userError la doc = do
   doLog la (Diag.UserError doc)
-  throw (GreaseException (Text.pack (show doc)))
+  throw (GreaseException (Text.pack (show ("user error:" PP.<+> doc))))
 
 -- | Read a binary's file permissions and ELF header info.
 readElfHeaderInfo ::
@@ -703,8 +715,20 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
   let memCfg_ = memConfigInitial bak archCtx memPtrTable skipUnsupportedRelocs relocs
   let userOvPaths = simOverrides simOpts
   fnOvsMap <- mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg_ fs
-  fnAddrOvsRaw <- mconcat <$> traverse parseOverridesYaml (simOverridesYaml simOpts)
-  fnAddrOvs <- resolveOverridesYaml loadOpts memory (Map.keysSet fnOvsMap) fnAddrOvsRaw
+  fnAddrOvsRaw_ <-
+    fmap mconcat . Monad.sequence
+      <$> traverse parseOverridesYaml (simOverridesYaml simOpts)
+  fnAddrOvsRaw <-
+    case fnAddrOvsRaw_ of
+      Left err -> userError la (PP.pretty err)
+      Right ok -> pure ok
+  fnAddrOvs_ <- resolveOverridesYaml loadOpts memory (Map.keysSet fnOvsMap) fnAddrOvsRaw
+  fnAddrOvs <-
+    case fnAddrOvs_ of
+      -- See Note [Explicitly listed errors]
+      Left e@GSyn.AddressUnresolvable{} -> userError la (PP.pretty e)
+      Left e@GSyn.FunctionNameNotFound{} -> userError la (PP.pretty e)
+      Right ok -> pure ok
   let errorSymbolicFunCalls = simErrorSymbolicFunCalls simOpts
   let errorSymbolicSyscalls = simErrorSymbolicSyscalls simOpts
   let skipInvalidCallAddrs = simSkipInvalidCallAddrs simOpts
@@ -1227,17 +1251,21 @@ loadAddrOvs ::
   ( Symbolic.SymArchConstraints arch
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
   ) =>
+  GreaseLogAction ->
   ArchContext arch ->
   C.HandleAllocator ->
   MM.Memory (MC.ArchAddrWidth arch) ->
   SimOpts ->
   IO (AddressOverrides arch)
-loadAddrOvs archCtx halloc memory simOpts = do
+loadAddrOvs la archCtx halloc memory simOpts = do
   mbAddrOvs <- loadAddressOverrides (regStructRepr archCtx) halloc memory (simAddressOverrides simOpts)
   case mbAddrOvs of
-    Left err -> do
-      let msg = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions (PP.pretty err))
-      throw (GreaseException ("user error: " <> msg))
+    -- See Note [Explicitly listed errors]
+    Left e@AddrOv.BadAddress{} -> userError la (PP.pretty e)
+    Left e@AddrOv.BadAddressOverrideArgs{} -> userError la (PP.pretty e)
+    Left e@AddrOv.BadAddressOverrideReturn{} -> userError la (PP.pretty e)
+    Left e@AddrOv.OverrideNameError{} -> userError la (PP.pretty e)
+    Left e@AddrOv.AddressOverrideParseError{} -> userError la (PP.pretty e)
     Right addrOvs -> pure addrOvs
 
 loadLLVMSExpOvs ::
@@ -1253,6 +1281,20 @@ loadLLVMSExpOvs sexpOvPaths halloc mvar = do
       let msg = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions (PP.pretty err))
       throw (GreaseException ("user error: " <> msg))
     Right ovs -> pure ovs
+
+doParse ::
+  ( ?parserHooks :: CSyn.ParserHooks ext
+  , C.IsSyntaxExtension ext
+  ) =>
+  GreaseLogAction ->
+  C.HandleAllocator ->
+  FilePath ->
+  IO (CSyn.ParsedProgram ext)
+doParse la halloc path = do
+  r <- GSyn.parseProgram halloc path
+  case r of
+    Left err -> userError la (PP.pretty err)
+    Right p -> pure p
 
 simulateMacawSyntax ::
   forall arch.
@@ -1272,7 +1314,7 @@ simulateMacawSyntax ::
   IO Results
 simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
   let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
-  prog <- parseProgram halloc (simProgPath simOpts)
+  prog <- doParse la halloc (simProgPath simOpts)
   CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
   cfgs <- entrypointCfgMap la halloc prog (simEntryPoints simOpts)
   let cfgs' = Map.map (\cfg -> MacawEntrypointCfgs cfg Nothing) cfgs
@@ -1293,7 +1335,7 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
           , mcTxtBounds = (0, 0)
           , mcElf = Nothing
           }
-  addrOvs <- loadAddrOvs archCtx halloc memory simOpts
+  addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
   simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs'
 
 simulateMacaw ::
@@ -1386,7 +1428,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
                 }
         pure (entry, MacawEntrypointCfgs entrypointCfgs (Just entryAddr))
 
-  addrOvs <- loadAddrOvs archCtx halloc memory simOpts
+  addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
   let setupHook :: forall sym. SetupHook sym arch
       setupHook = Macaw.binSetupHook addrOvs cfgs
 
@@ -1617,7 +1659,7 @@ simulateLlvmSyntax simOpts la = do
   let mkMem = \_ -> InitialMem <$> Mem.emptyMem DataLayout.LittleEndian
   let ?ptrWidth = knownNat @64
   let ?parserHooks = llvmParserHooks emptyParserHooks mvar
-  prog <- parseProgram halloc (simProgPath simOpts)
+  prog <- doParse la halloc (simProgPath simOpts)
   CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
   regCfgs <- entrypointCfgMap la halloc prog (simEntryPoints simOpts)
   let cfgs = Map.map (fmap toSsaAnyCfg) regCfgs
@@ -1709,7 +1751,11 @@ simulateLlvm transOpts simOpts la = do
                       Just startupOvPath -> do
                         result <- parseEntrypointStartupOv halloc startupOvPath
                         case result of
-                          Left cfgNotFound -> throw $ GreaseException $ Text.pack $ show $ PP.pretty cfgNotFound
+                          -- See Note [Explicitly listed errors]
+                          Left err@StartupOvParseError{} ->
+                            userError la (PP.pretty err)
+                          Left err@StartupOvCFGNotFound{} ->
+                            userError la (PP.pretty err)
                           Right startupOv -> pure $ Just startupOv
                   let mbStartupOvSsa = fmap toSsaAnyCfg <$> mbStartupOv
                   let entrypointCfgs =
@@ -1782,7 +1828,9 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
             Just startupOvPath -> do
               result <- parseEntrypointStartupOv halloc startupOvPath
               case result of
-                Left cfgNotFound -> throw $ GreaseException $ Text.pack $ show $ PP.pretty cfgNotFound
+                -- See Note [Explicitly listed errors]
+                Left err@StartupOvParseError{} -> userError la (PP.pretty err)
+                Left err@StartupOvCFGNotFound{} -> userError la (PP.pretty err)
                 Right startupOv -> pure $ Just startupOv
         let entrypointCfgs =
               EntrypointCfgs
@@ -1793,7 +1841,7 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
           ( Entrypoint{entrypointLocation = EntrypointAddress entText, entrypointStartupOvPath = mbOverride}
           , MacawEntrypointCfgs entrypointCfgs (Just entAddr)
           )
-    addrOvs <- loadAddrOvs archCtx halloc memory simOpts
+    addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
     let setupHook :: forall sym. SetupHook sym arch
         setupHook = Macaw.binSetupHook addrOvs cfgs
     let dl = macawDataLayout archCtx
@@ -1891,6 +1939,7 @@ doLoad la _proxy entries perms elf =
   Load.load la entries perms elf
     >>= \case
       Right ok -> pure ok
+      -- See Note [Explicitly listed errors]
       -- User errors
       Left e@Load.UnsupportedObjectFile{} -> userError la (PP.pretty e)
       Left e@Load.EntrypointNotFound{} -> userError la (PP.pretty e)

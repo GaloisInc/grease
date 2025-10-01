@@ -8,16 +8,20 @@ module Grease.Macaw.Overrides.SExp (
   loadOverrides,
 ) where
 
+import Control.Exception.Safe (throw)
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
 import Data.Proxy (Proxy (..))
 import Data.Sequence qualified as Seq
+import Data.Text qualified as Text
+import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw.SimulatorState (MacawFnHandle, MacawOverride)
 import Grease.Syntax (parseProgram)
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.Syntax (emptyParserHooks)
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
+import Prettyprinter qualified as PP
 import Stubs.FunctionOverride qualified as Stubs
 import Stubs.Wrapper qualified as Stubs
 
@@ -59,6 +63,9 @@ loadOverride ::
   IO (Stubs.SomeFunctionOverride p sym arch)
 loadOverride path halloc = do
   let ?parserHooks = machineCodeParserHooks Proxy emptyParserHooks
-  prog <- parseProgram halloc path
-  CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
-  Stubs.parsedProgToFunctionOverride path prog
+  progResult <- parseProgram halloc path
+  case progResult of
+    Left err -> throw $ GreaseException $ Text.pack $ show $ PP.pretty err
+    Right prog -> do
+      CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
+      Stubs.parsedProgToFunctionOverride path prog

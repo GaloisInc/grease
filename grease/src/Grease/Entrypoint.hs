@@ -22,6 +22,7 @@ module Grease.Entrypoint (
   entrypointCfgsToSsa,
   toSsaSomeCfg,
   MacawEntrypointCfgs (..),
+  StartupOvError (..),
   StartupOv (..),
   CFGNotFound (..),
   parseEntrypointStartupOv,
@@ -38,7 +39,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Void (Void)
 import Data.Word (Word64)
-import Grease.Syntax (parseProgram, parsedProgramCfgMap)
+import Grease.Syntax (ParseProgramError, parseProgram, parsedProgramCfgMap)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
@@ -200,12 +201,22 @@ data CFGNotFound = CFGNotFound
   , cfgNotFoundPath :: FilePath
   }
 
+data StartupOvError
+  = StartupOvParseError ParseProgramError
+  | StartupOvCFGNotFound CFGNotFound
+
 instance PP.Pretty CFGNotFound where
   pretty (CFGNotFound funcName filePath) =
     PP.vcat
       [ "Could not find a function named" PP.<+> PP.squotes (PP.pretty funcName)
       , "In the startup override located in" PP.<+> PP.pretty filePath
       ]
+
+instance PP.Pretty StartupOvError where
+  pretty =
+    \case
+      StartupOvParseError err -> PP.pretty err
+      StartupOvCFGNotFound err -> PP.pretty err
 
 -- | Parse a startup override in Crucible S-expression syntax and perform a
 -- light amount of validation.
@@ -215,28 +226,32 @@ parseEntrypointStartupOv ::
   ) =>
   C.HandleAllocator ->
   FilePath ->
-  IO (Either CFGNotFound (StartupOv (C.Reg.AnyCFG ext)))
+  IO (Either StartupOvError (StartupOv (C.Reg.AnyCFG ext)))
 parseEntrypointStartupOv halloc startupOvPath = do
   -- Parse the program...
-  startupOvProg <- parseProgram halloc startupOvPath
-  -- ...ensure it has no externs...
-  CSyn.assertNoExterns (CSyn.parsedProgExterns startupOvProg)
-  --- ...and then ensure that it has a function named `startup`.
-  case Map.lookup "startup" (parsedProgramCfgMap startupOvProg) of
-    Nothing ->
-      pure $
-        Left $
-          CFGNotFound
-            { cfgNotFoundFuncName = "startup"
-            , cfgNotFoundPath = startupOvPath
-            }
-    Just cfg ->
-      pure $
-        Right $
-          StartupOv
-            { startupOvCfg = cfg
-            , startupOvForwardDecs = CSyn.parsedProgForwardDecs startupOvProg
-            }
+  startupOvProgResult <- parseProgram halloc startupOvPath
+  case startupOvProgResult of
+    Left parseErr -> pure $ Left $ StartupOvParseError parseErr
+    Right startupOvProg -> do
+      -- ...ensure it has no externs...
+      CSyn.assertNoExterns (CSyn.parsedProgExterns startupOvProg)
+      --- ...and then ensure that it has a function named `startup`.
+      case Map.lookup "startup" (parsedProgramCfgMap startupOvProg) of
+        Nothing ->
+          pure $
+            Left $
+              StartupOvCFGNotFound $
+                CFGNotFound
+                  { cfgNotFoundFuncName = "startup"
+                  , cfgNotFoundPath = startupOvPath
+                  }
+        Just cfg ->
+          pure $
+            Right $
+              StartupOv
+                { startupOvCfg = cfg
+                , startupOvForwardDecs = CSyn.parsedProgForwardDecs startupOvProg
+                }
 
 -- | Convert the CFGs in an 'EntrypointCfgs' to SSA form.
 entrypointCfgsToSsa ::

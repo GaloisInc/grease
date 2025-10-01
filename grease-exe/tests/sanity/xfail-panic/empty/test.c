@@ -6,4 +6,5 @@
 // all: flags {"--symbol", "test"}
 // all: go(prog)
 
-// all: check [[Exception: Could not find entrypoint symbol "test"]]
+// all: exception()
+// all: check [[user error: Could not find entrypoint symbol "test"]]
