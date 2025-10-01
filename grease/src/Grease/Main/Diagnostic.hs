@@ -56,6 +56,9 @@ data Diagnostic where
     Diagnostic
   FinishedAnalyzingEntrypoint ::
     EntrypointLocation -> Nanoseconds -> Diagnostic
+  MalformedElf ::
+    PP.Doc Void ->
+    Diagnostic
   NoEntrypoints ::
     Diagnostic
   SimulationTestingRequirements ::
@@ -99,6 +102,8 @@ instance PP.Pretty Diagnostic where
           [ "Loaded precondition from path" PP.<+> PP.pretty path PP.<> ":"
           , ShapePP.evalPrinter (printCfg w) (ShapePP.printNamedShapes argNames argShapes)
           ]
+      MalformedElf err ->
+        "Malformed ELF file: " <> fmap absurd err
       NoEntrypoints ->
         "No entry points specified, analyzing all known functions."
       SimulationTestingRequirements rs ->
@@ -135,6 +140,7 @@ severity =
     BitcodeParseWarnings{} -> Warn
     FinishedAnalyzingEntrypoint{} -> Debug
     LoadedPrecondition{} -> Debug
+    MalformedElf{} -> Error
     NoEntrypoints -> Warn
     SimulationTestingRequirements{} -> Debug
     SimulationAllGoalsPassed{} -> Info

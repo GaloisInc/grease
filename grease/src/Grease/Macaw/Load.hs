@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -10,12 +11,13 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Load (
   LoadedProgram (..),
+  LoadError (..),
   load,
 ) where
 
-import Control.Exception.Safe (throw)
 import Control.Monad (forM, when)
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Data.ByteString qualified as BS
 import Data.ElfEdit qualified as Elf
 import Data.ElfEdit.CoreDump qualified as CoreDump
@@ -35,14 +37,15 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Tuple qualified as Tuple
 import Data.Vector qualified as Vec
+import Data.Word (Word64)
 import Grease.Diagnostic
 import Grease.Entrypoint (Entrypoint (..), EntrypointLocation (..))
-import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Utility
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lumberjack qualified as LJ
+import Prettyprinter qualified as PP
 import System.Directory (Permissions)
 import Text.Read (readMaybe)
 import What4.FunctionName qualified as W4
@@ -66,6 +69,51 @@ data LoadedProgram arch
   -- ^ The entrypoint addresses after resolving the user-supplied
   -- 'Entrypoint'.
   }
+
+-- | Errors that can occur during binary loading
+--
+-- See the 'PP.Pretty' instance for details on each constructor.
+data LoadError
+  = UnsupportedObjectFile
+  | EntrypointNotFound Text.Text
+  | InvalidEntrypointAddress Text.Text
+  | DynamicFunctionAddressUnresolvable Word64
+  | ElfParseError Text.Text
+  | CoreDumpClassMismatch Text.Text Text.Text
+  | CoreDumpNotesError CoreDump.NoteDecodeError
+  | CoreDumpPcError CoreDump.CoreDumpAnalyzeError
+  | CoreDumpAddressUnresolvable Word64
+  | CoreDumpNoEntrypoint
+
+instance PP.Pretty LoadError where
+  pretty =
+    \case
+      UnsupportedObjectFile ->
+        "Loading object files is not supported"
+      EntrypointNotFound nm ->
+        "Could not find entrypoint symbol" PP.<+> PP.dquotes (PP.pretty nm)
+      InvalidEntrypointAddress addr ->
+        "Unable to resolve specified entrypoint address:" PP.<+> PP.pretty addr
+      DynamicFunctionAddressUnresolvable addr ->
+        "Unable to resolve dynamic function address:" PP.<+> PP.pretty addr
+      ElfParseError err ->
+        "Failed to parse ELF file:" PP.<+> PP.pretty err
+      CoreDumpClassMismatch binaryClass coreDumpClass ->
+        PP.vsep
+          [ "The binary and the core dump file have different ELF classes."
+          , "Binary:" PP.<+> PP.pretty binaryClass
+          , "Core dump file:" PP.<+> PP.pretty coreDumpClass
+          ]
+      CoreDumpNotesError err ->
+        "Error decoding ELF notes in core dump file:" PP.<+> PP.viaShow err
+      CoreDumpPcError err ->
+        "Error computing program counter from core dump:" PP.<+> PP.viaShow err
+      CoreDumpAddressUnresolvable addr ->
+        "The core was dumped at address"
+          PP.<+> PP.pretty addr
+          PP.<+> ", but this could not be resolved to an address in the binary."
+      CoreDumpNoEntrypoint ->
+        "Could not find an entrypoint address in the binary."
 
 -- | Compute the 'LC.LoadOptions' for the binary being analyzed. Note that we do
 -- different things depending on whether the binary is a position-independent
@@ -100,15 +148,14 @@ load ::
   [Entrypoint] ->
   Permissions ->
   Elf.ElfHeaderInfo (MC.RegAddrWidth (MC.ArchReg arch)) ->
-  IO (LoadedProgram arch)
-load la userEntrypoints perms elf = do
+  IO (Either LoadError (LoadedProgram arch))
+load la userEntrypoints perms elf = runExceptT $ do
   let loadOpts = loadOptions (Elf.elfIsPie perms elf)
-  loaded <- Loader.loadBinary @arch loadOpts elf
+  loaded <- liftIO $ Loader.loadBinary @arch loadOpts elf
   let mem = Loader.memoryImage loaded
   when (Elf.headerType (Elf.header elf) == Elf.ET_REL) $
-    throw $
-      GreaseException "Loading object files is not supported"
-  entrypoints <- Loader.entryPoints loaded
+    throwE UnsupportedObjectFile
+  entrypoints <- liftIO $ Loader.entryPoints loaded
   let entrypointNamePairs =
         -- Use `mapMaybe` here, because `symbolFor` may return `Nothing` if an
         -- entry point lacks a corresponding function symbol. This is common
@@ -126,7 +173,7 @@ load la userEntrypoints perms elf = do
       case entrypointLocation entry of
         EntrypointSymbolName nm ->
           case Map.lookup nm revSymMap of
-            Nothing -> throw . GreaseException $ "Could not find entrypoint symbol " <> tshow nm
+            Nothing -> throwE $ EntrypointNotFound nm
             Just addr -> pure (entry, addr)
         EntrypointAddress (readMaybe . Text.unpack -> Just addr)
           | Just so <-
@@ -134,7 +181,7 @@ load la userEntrypoints perms elf = do
                in let addrWithOffset = EL.memWord (addr + offset)
                    in Loader.resolveAbsoluteAddress mem addrWithOffset ->
               pure (entry, so)
-        EntrypointAddress addr -> throw . GreaseException $ "Unable to resolve specified entrypoint address: " <> addr
+        EntrypointAddress addr -> throwE $ InvalidEntrypointAddress addr
         EntrypointCoreDump coreDumpPath ->
           (entry,)
             <$> resolveCoreDumpEntrypointAddress la loadOpts mem elf symMap coreDumpPath
@@ -150,10 +197,8 @@ load la userEntrypoints perms elf = do
                     Just addrSegOff ->
                       pure addrSegOff
                     Nothing ->
-                      throw $
-                        GreaseException $
-                          "Unable to resolve dynamic function address: "
-                            <> tshow addrWord
+                      let addr = MM.memWordValue addrWord
+                       in throwE (DynamicFunctionAddressUnresolvable addr)
               )
           )
       )
@@ -330,9 +375,9 @@ resolveCoreDumpEntrypointAddress ::
   FilePath ->
   -- | The address of the function entrypoint closest to the address where the
   -- core was dumped.
-  IO (MM.MemSegmentOff w)
+  ExceptT LoadError IO (MM.MemSegmentOff w)
 resolveCoreDumpEntrypointAddress la loadOpts mem binaryHeaderInfo symMap coreDumpPath = do
-  coreDumpBytes <- BS.readFile coreDumpPath
+  coreDumpBytes <- liftIO $ BS.readFile coreDumpPath
   withElfHeader coreDumpBytes $ \coreDumpHeaderInfo -> do
     let binaryHeader = Elf.header binaryHeaderInfo
         binaryClass = Elf.headerClass binaryHeader
@@ -342,25 +387,20 @@ resolveCoreDumpEntrypointAddress la loadOpts mem binaryHeaderInfo symMap coreDum
       case C.testEquality binaryClass coreDumpClass of
         Just r -> pure r
         Nothing ->
-          throw $
-            GreaseException $
-              Text.unlines
-                [ "The binary and the core dump file have different ELF classes."
-                , "Binary:         " <> tshow binaryClass
-                , "Core dump file: " <> tshow coreDumpClass
-                ]
+          throwE $
+            CoreDumpClassMismatch (tshow binaryClass) (tshow coreDumpClass)
     Elf.elfClassInstances coreDumpClass $ do
       -- Decode the ELF notes in the core dump file.
       notes <-
         case CoreDump.decodeHeaderNotes coreDumpHeaderInfo of
           Right notes -> pure notes
-          Left err -> throw $ GreaseException $ tshow err
+          Left err -> throwE $ CoreDumpNotesError err
 
       -- Compute the address where the core was dumped in the core dump file.
       prStatusPc <-
         case CoreDump.coreDumpHeaderProgramCounter coreDumpHeaderInfo notes of
           Right prStatusPc -> pure prStatusPc
-          Left err -> throw $ GreaseException $ tshow err
+          Left err -> throwE $ CoreDumpPcError err
 
       -- Finally, compute the nearest entrypoint address.
       let offset :: Elf.ElfWordType w
@@ -372,31 +412,27 @@ resolveCoreDumpEntrypointAddress la loadOpts mem binaryHeaderInfo symMap coreDum
         case Loader.resolveAbsoluteAddress mem prStatusPcWithOffset of
           Just prStatusPcSegOff -> pure prStatusPcSegOff
           Nothing ->
-            throw $
-              GreaseException $
-                "The core was dumped at address "
-                  <> tshow prStatusPcWithOffset
-                  <> ", but this could not be resolved to an address in the binary."
+            throwE $
+              CoreDumpAddressUnresolvable (MM.memWordValue prStatusPcWithOffset)
       (nearestEntrypointAddr, nearestEntrypointName) <-
         case Map.lookupLE prStatusPcSegOff symMap of
           Just nearestEntrypoint -> pure nearestEntrypoint
           Nothing ->
-            throw $
-              GreaseException
-                "Could not find an entrypoint address in the binary."
-      doLog la $
-        Diag.DiscoveredCoreDumpEntrypoint
-          nearestEntrypointAddr
-          (functionNameFromByteString nearestEntrypointName)
-          prStatusPcWithOffset
+            throwE CoreDumpNoEntrypoint
+      liftIO $
+        doLog la $
+          Diag.DiscoveredCoreDumpEntrypoint
+            nearestEntrypointAddr
+            (functionNameFromByteString nearestEntrypointName)
+            prStatusPcWithOffset
       pure nearestEntrypointAddr
 
 -- Helper, not exported
 --
 -- Decode an ELF file and pass it to a continuation.
-withElfHeader :: BS.ByteString -> (forall w. Elf.ElfHeaderInfo w -> IO r) -> IO r
+withElfHeader :: BS.ByteString -> (forall w. Elf.ElfHeaderInfo w -> ExceptT LoadError IO r) -> ExceptT LoadError IO r
 withElfHeader bs k =
   case Elf.decodeElfHeaderInfo bs of
     Left (_, err) ->
-      throw $ GreaseException $ "Failed to parse ELF file: " <> tshow err
+      throwE $ ElfParseError (Text.pack err)
     Right (Elf.SomeElf e) -> k e

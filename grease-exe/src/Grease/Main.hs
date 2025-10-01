@@ -128,7 +128,7 @@ import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.Dwarf (loadDwarfPreconditions)
 import Grease.Macaw.Entrypoint (checkMacawEntrypointCfgsSignatures)
-import Grease.Macaw.Load (LoadedProgram (..), load)
+import Grease.Macaw.Load qualified as Load
 import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
 import Grease.Macaw.Overrides.Address (AddressOverrides, loadAddressOverrides)
@@ -186,7 +186,6 @@ import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import System.Directory (Permissions, getPermissions)
-import System.Exit qualified as Exit
 import System.FilePath (FilePath)
 import System.IO (IO)
 import Text.LLVM qualified as L
@@ -205,10 +204,15 @@ newtype Results = Results {getResults :: Map Entrypoint Batch}
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (MainDiagnostic diag)
 
+malformedElf :: GreaseLogAction -> PP.Doc Void -> IO a
+malformedElf la doc = do
+  doLog la (Diag.MalformedElf doc)
+  throw (GreaseException (Text.pack (show doc)))
+
 userError :: GreaseLogAction -> PP.Doc Void -> IO a
 userError la doc = do
   doLog la (Diag.UserError doc)
-  Exit.exitFailure
+  throw (GreaseException (Text.pack (show doc)))
 
 -- | Read a binary's file permissions and ELF header info.
 readElfHeaderInfo ::
@@ -1306,7 +1310,7 @@ simulateMacaw ::
   GreaseLogAction ->
   C.HandleAllocator ->
   Elf.ElfHeaderInfo (MC.ArchAddrWidth arch) ->
-  LoadedProgram arch ->
+  Load.LoadedProgram arch ->
   Maybe (PLT.PLTStubInfo (ArchReloc arch)) ->
   ArchContext arch ->
   (Elf.ElfWordType (MC.ArchAddrWidth arch), Elf.ElfWordType (MC.ArchAddrWidth arch)) ->
@@ -1316,10 +1320,10 @@ simulateMacaw ::
 simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts parserHooks = do
   let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
   let dl = macawDataLayout archCtx
-  let memory = Loader.memoryImage $ progLoadedBinary loadedProg
-  let loadOpts = progLoadOptions loadedProg
-  let symMap = progSymMap loadedProg
-  let dynFunMap = progDynFunMap loadedProg
+  let memory = Loader.memoryImage $ Load.progLoadedBinary loadedProg
+  let loadOpts = Load.progLoadOptions loadedProg
+  let symMap = Load.progSymMap loadedProg
+  let dynFunMap = Load.progDynFunMap loadedProg
 
   let relocs = elfRelocationMap (Proxy @(ArchReloc arch)) loadOpts elf
   let symbolRelocs =
@@ -1355,10 +1359,10 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
         pure
           ( List.map
               (\(k, v) -> (entrypointFromBytestring v, k))
-              (Map.toList (progSymMap loadedProg))
+              (Map.toList (Load.progSymMap loadedProg))
           )
       else forM (simEntryPoints simOpts) $ \entry -> do
-        case Map.lookup entry (progEntrypointAddrs loadedProg) of
+        case Map.lookup entry (Load.progEntrypointAddrs loadedProg) of
           Nothing -> throw . GreaseException $ "Impossible: entrypoint not in map"
           Just a -> pure (entry, a)
 
@@ -1870,6 +1874,36 @@ simulateX86Raw simOpts la = withMemOptions simOpts $ do
   archCtx <- x86Ctx halloc Nothing (simStackArgumentSlots simOpts)
   simulateRawArch simOpts la halloc X86Syn.x86ParserHooks archCtx MM.LittleEndian
 
+doLoad ::
+  ( 16 C.<= MC.ArchAddrWidth arch
+  , Symbolic.SymArchConstraints arch
+  , Loader.BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
+  , ?memOpts :: Mem.MemOptions
+  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  ) =>
+  GreaseLogAction ->
+  proxy arch ->
+  [Entrypoint] ->
+  Permissions ->
+  Elf.ElfHeaderInfo (MC.ArchAddrWidth arch) ->
+  IO (Load.LoadedProgram arch)
+doLoad la _proxy entries perms elf =
+  Load.load la entries perms elf
+    >>= \case
+      Right ok -> pure ok
+      -- User errors
+      Left e@Load.UnsupportedObjectFile{} -> userError la (PP.pretty e)
+      Left e@Load.EntrypointNotFound{} -> userError la (PP.pretty e)
+      Left e@Load.InvalidEntrypointAddress{} -> userError la (PP.pretty e)
+      -- Bad inputs
+      Left e@Load.ElfParseError{} -> malformedElf la (PP.pretty e)
+      Left e@Load.DynamicFunctionAddressUnresolvable{} -> malformedElf la (PP.pretty e)
+      Left e@Load.CoreDumpClassMismatch{} -> malformedElf la (PP.pretty e)
+      Left e@Load.CoreDumpNotesError{} -> malformedElf la (PP.pretty e)
+      Left e@Load.CoreDumpPcError{} -> malformedElf la (PP.pretty e)
+      Left e@Load.CoreDumpAddressUnresolvable{} -> malformedElf la (PP.pretty e)
+      Left e@Load.CoreDumpNoEntrypoint{} -> malformedElf la (PP.pretty e)
+
 simulateARM :: SimOpts -> GreaseLogAction -> IO Results
 simulateARM simOpts la = do
   let ?ptrWidth = knownNat @32
@@ -1877,8 +1911,8 @@ simulateARM simOpts la = do
   (perms, elf) <- readElfHeaderInfo la proxy (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- load la (simEntryPoints simOpts) perms elf
-    txtBounds@(starttext, _) <- textBounds (progLoadOptions loadedProg) elf
+    loadedProg <- doLoad la proxy (simEntryPoints simOpts) perms elf
+    txtBounds@(starttext, _) <- textBounds (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- armCtx halloc (Just starttext) (simStackArgumentSlots simOpts)
     simulateMacaw la halloc elf loadedProg (Just ARM.armPLTStubInfo) archCtx txtBounds simOpts AArch32Syn.aarch32ParserHooks
@@ -1914,8 +1948,8 @@ simulatePPC32 simOpts la = do
   (perms, elf) <- readElfHeaderInfo la proxy (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- load la (simEntryPoints simOpts) perms elf
-    txtBounds@(starttext, _) <- textBounds (progLoadOptions loadedProg) elf
+    loadedProg <- doLoad la proxy (simEntryPoints simOpts) perms elf
+    txtBounds@(starttext, _) <- textBounds (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- ppc32Ctx (Just starttext) (simStackArgumentSlots simOpts)
     -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
@@ -1930,10 +1964,10 @@ simulatePPC64 simOpts la = do
   (perms, elf) <- readElfHeaderInfo la proxy (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- load la (simEntryPoints simOpts) perms elf
-    txtBounds@(starttext, _) <- textBounds (progLoadOptions loadedProg) elf
+    loadedProg <- doLoad la proxy (simEntryPoints simOpts) perms elf
+    txtBounds@(starttext, _) <- textBounds (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
-    archCtx <- ppc64Ctx (Just starttext) (simStackArgumentSlots simOpts) (progLoadedBinary loadedProg)
+    archCtx <- ppc64Ctx (Just starttext) (simStackArgumentSlots simOpts) (Load.progLoadedBinary loadedProg)
     -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
     -- Grease.Macaw.PLT for why we use Nothing here.
     let ppcPltStubInfo = Nothing
@@ -1959,8 +1993,8 @@ simulateX86 simOpts la = do
   (perms, elf) <- readElfHeaderInfo la proxy (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- load la (simEntryPoints simOpts) perms elf
-    txtBounds@(startText, _) <- textBounds (progLoadOptions loadedProg) elf
+    loadedProg <- doLoad la proxy (simEntryPoints simOpts) perms elf
+    txtBounds@(startText, _) <- textBounds (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- x86Ctx halloc (Just startText) (simStackArgumentSlots simOpts)
     simulateMacaw la halloc elf loadedProg (Just X86.x86_64PLTStubInfo) archCtx txtBounds simOpts X86Syn.x86ParserHooks
