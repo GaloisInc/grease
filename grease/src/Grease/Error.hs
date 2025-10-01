@@ -5,6 +5,7 @@
 -- Description : Error handling
 module Grease.Error (
   GreaseException (..),
+  MalformedBinary (..),
 ) where
 
 import Control.Exception.Safe qualified as X
@@ -16,3 +17,13 @@ newtype GreaseException = GreaseException Text
 instance X.Exception GreaseException
 instance Show GreaseException where
   show (GreaseException msg) = Text.unpack msg
+
+data MalformedBinary
+  = MalformedBinary
+  { badBinaryPath :: FilePath
+  , badBinaryError :: Text
+  }
+instance X.Exception MalformedBinary
+instance Show MalformedBinary where
+  show (MalformedBinary path err) =
+    "Malformed binary at '" ++ path ++ "': " ++ Text.unpack err

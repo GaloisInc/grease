@@ -29,7 +29,7 @@ import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Void (Void)
 import Data.Word (Word64)
-import Grease.Error (GreaseException (GreaseException))
+import Grease.Error (MalformedBinary (MalformedBinary))
 import Grease.Panic (panic)
 import Grease.Utility
 import Text.Megaparsec qualified as TM
@@ -180,6 +180,8 @@ resolvePltStubs ::
   , MM.MemWidth w
   , Elf.IsRelocationType reloc
   ) =>
+  -- | Path to the binary, used in exception messages
+  FilePath ->
   -- | Heuristics about how large PLT stubs should be. If the binary uses an
   --          architecture for which @grease@ cannot find PLT stubs (see
   --          @Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC)@ for one
@@ -195,7 +197,7 @@ resolvePltStubs ::
   [PltStub] ->
   MC.Memory w ->
   IO (Map.Map (MM.MemSegmentOff w) W4.FunctionName)
-resolvePltStubs mbPltStubInfo loadOptions ehi symbolRelocs userPltStubs memory = do
+resolvePltStubs path mbPltStubInfo loadOptions ehi symbolRelocs userPltStubs memory = do
   let
     -- This only contains the PLT stubs located in the @.plt@ section, for
     -- which Macaw's heuristics are somewhat reliable.
@@ -236,7 +238,7 @@ resolvePltStubs mbPltStubInfo loadOptions ehi symbolRelocs userPltStubs memory =
           case Loader.resolveAbsoluteAddress memory addr of
             Just so -> pure (so, name)
             Nothing ->
-              throw . GreaseException $
+              throw . MalformedBinary path $
                 "Could not resolve PLT stub address "
                   <> tshow addr
                   <> ": "
