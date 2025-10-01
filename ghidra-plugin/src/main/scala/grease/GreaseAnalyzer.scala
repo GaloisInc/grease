@@ -26,41 +26,16 @@ import ghidra.util.Msg
 import scala.concurrent.duration._
 import ghidra.app.services.AnalysisPriority
 import ghidra.program.model.listing.CommentType
-
-object GreaseBackgroundCmd {
-  val GREASE_BOOKMARK_TYPE = "GREASE"
-
-  def greaseBookmark(
-      prog: Program,
-      addr: Address,
-      category: String,
-      note: String
-  ): Unit = {
-    prog
-      .getBookmarkManager()
-      .setBookmark(addr, GREASE_BOOKMARK_TYPE, category, note)
-  }
-
-  def addComment(comm: String, prog: Program, toAddr: Address): Unit = {
-    val prevCom = Option(
-      prog
-        .getListing()
-        .getComment(CommentType.PRE, toAddr)
-    )
-    val nextCom =
-      prevCom
-        .getOrElse("") + comm
-    prog
-      .getListing()
-      .setComment(toAddr, CommentType.PRE, nextCom)
-  }
-}
+import java.io.File
 
 class GreaseBackgroundCmd(
     val entrypoints: AddressSetView,
     timeout: Option[FiniteDuration],
     loadBase: Option[Long],
-    rawMode: Boolean
+    rawMode: Boolean,
+    overridesFile: Option[File],
+    loopBound: Option[Int],
+    useDebug: Boolean
 ) extends BackgroundCommand[Program] {
 
   override def applyTo(prog: Program, monitor: TaskMonitor): Boolean = {
@@ -79,31 +54,29 @@ class GreaseBackgroundCmd(
         val res = GreaseWrapper(
           prog
         ).runGrease(
-          GreaseConfiguration(targetBin, item, timeout, loadBase, rawMode)
+          GreaseConfiguration(
+            targetBin,
+            item,
+            timeout,
+            loadBase,
+            rawMode,
+            overridesFile,
+            loopBound,
+            useDebug
+          )
         )
 
         res match
           case Failure(exception) => {
             Msg.warn(this, s"GREASE could not analyze ${item}, ${exception}")
-            GreaseBackgroundCmd.addComment(
+            ParsedBatch.addComment(
               s"\n Failed to analyze function with GREASE",
               prog,
               item
             )
           }
-          case scala.util.Success(bugs) => {
-            for bug <- bugs.possibleBugs do
-              GreaseBackgroundCmd.addComment(
-                s"\n Possible bug: ${bug.description.render()}",
-                prog,
-                bug.appliedTo
-              )
-              GreaseBackgroundCmd.greaseBookmark(
-                prog,
-                bug.appliedTo,
-                "Possible bug",
-                "GREASE detected a potential bug"
-              )
+          case scala.util.Success(items) => {
+            for bug <- items.possibleBugs do bug.printToProg(prog)
           }
 
         monitor.increment()
@@ -127,6 +100,9 @@ object GreaseAnalyzer {
   val RAW_MODE_OPT: String = "Raw mode"
   val LOAD_BASE_OPT: String = "Load base"
   val USE_IMAGE_BASE_AS_LOAD_BASE_OPT: String = "Use image base as load base"
+  val OVERRIDE_FILE: String = "Override file"
+  val LOOP_BOUND_OPT: String = "Loop bound"
+  val SHOULD_USE_DEBUG_OPT: String = "Use debug info for shapes"
 
   def getOption[T](options: Options, optName: String): Option[T] = {
     Option(options.getObject(optName, null))
@@ -150,9 +126,12 @@ class GreaseAnalyzer
 
   var timeoutDuration: Option[FiniteDuration] = None
   var loadBase: Option[Long] = None
+  var loopBound: Option[Int] = None
   var shouldLoadRaw = false
   var useImageBaseAsLoadBase = true
+  var overridesFile: Option[File] = None
   val supportedProcs: Set[String] = Set("ARM", "PowerPC", "x86")
+  var shouldUseDebug = false
 
   setSupportsOneTimeAnalysis()
 
@@ -180,6 +159,13 @@ class GreaseAnalyzer
     useImageBaseAsLoadBase = GreaseAnalyzer
       .getOption[Boolean](x, GreaseAnalyzer.USE_IMAGE_BASE_AS_LOAD_BASE_OPT)
       .getOrElse(true)
+    overridesFile =
+      GreaseAnalyzer.getOption[File](x, GreaseAnalyzer.OVERRIDE_FILE)
+    loopBound = GreaseAnalyzer
+      .getOption[Int](x, GreaseAnalyzer.LOOP_BOUND_OPT).filter(l => l != 0)
+    shouldUseDebug = GreaseAnalyzer
+      .getOption[Boolean](x, GreaseAnalyzer.SHOULD_USE_DEBUG_OPT)
+      .getOrElse(false)
   }
 
   override def registerOptions(options: Options, program: Program): Unit = {
@@ -214,6 +200,30 @@ class GreaseAnalyzer
       null,
       "Uses the image base of this Ghidra binary as the load base when in raw mode (this is the default, disable to use custom image base)"
     )
+
+    options.registerOption(
+      GreaseAnalyzer.OVERRIDE_FILE,
+      OptionType.FILE_TYPE,
+      null,
+      null,
+      "Override file to use in GREASE"
+    )
+
+    options.registerOption(
+      GreaseAnalyzer.LOOP_BOUND_OPT,
+      OptionType.INT_TYPE,
+      0,
+      null,
+      "Loop bound limit for analysis"
+    )
+
+    options.registerOption(
+      GreaseAnalyzer.SHOULD_USE_DEBUG_OPT,
+      OptionType.BOOLEAN_TYPE,
+      true,
+      null,
+      "Uses any available DWARF information to populate shapes with type signatures"
+    )
   }
 
   @throws(classOf[CancelledException])
@@ -223,7 +233,15 @@ class GreaseAnalyzer
       monitor: TaskMonitor,
       log: MessageLog
   ): Boolean = {
-    GreaseBackgroundCmd(set, timeoutDuration, loadBase, shouldLoadRaw)
+    GreaseBackgroundCmd(
+      set,
+      timeoutDuration,
+      loadBase,
+      shouldLoadRaw,
+      overridesFile,
+      loopBound,
+      shouldUseDebug
+    )
       .applyTo(program, monitor)
     true
   }

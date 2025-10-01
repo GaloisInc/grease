@@ -44,6 +44,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (toBytes)
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.Types qualified as CT
+import Data.Maybe qualified as Maybe
 
 -- | Find the pc for DWARF which is relative to the ELF absent its base load address.
 -- We find this address by finding the segment that corresponds to the target address
@@ -156,7 +157,7 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
   -- even if in practice this should not occur.
   shapeSeq (MDwarf.StructType sdecl) =
     let structSize = MDwarf.structByteSize sdecl
-     in do
+        mbStruct = do
           (endLoc, seqs) <-
             foldM
               ( \(currLoc, seqs) mem ->
@@ -167,10 +168,14 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
               (0, Seq.empty)
               (MDwarf.structMembers sdecl)
           let endPad = if endLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - endLoc)
-          Just $ (seqs Seq.>< endPad)
+          Just $ (seqs Seq.>< endPad) in
+    -- TODO this is unsound because we init padding 
+    Just $ Maybe.fromMaybe (Seq.singleton $ Initialized NoTag (toBytes structSize)) mbStruct
+
   shapeSeq (MDwarf.PointerType _ maybeRef) =
     let mshape = constructPtrMemShapeFromRef tyUnrollBound sprog visitCount =<< maybeRef
      in Seq.singleton <$> mshape
+  shapeSeq (MDwarf.TypedefType (MDwarf.Typedef _ _ _ tyRef)) = shapeSeq =<< extractType sprog tyRef
   shapeSeq _ = Nothing
 
 type VisitCount = Map.Map MDwarf.TypeRef Int
