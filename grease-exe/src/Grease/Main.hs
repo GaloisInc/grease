@@ -99,6 +99,7 @@ import Data.Traversable.WithIndex (iforM)
 import Data.Tuple (fst, snd)
 import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
 import Data.Vector qualified as Vec
+import Data.Void (Void)
 import GHC.TypeNats (KnownNat)
 import Grease.AssertProperty
 import Grease.Bug qualified as Bug
@@ -184,6 +185,7 @@ import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import System.Directory (Permissions, getPermissions)
+import System.Exit qualified as Exit
 import System.FilePath (FilePath)
 import System.IO (IO)
 import Text.LLVM qualified as L
@@ -202,16 +204,22 @@ newtype Results = Results {getResults :: Map Entrypoint Batch}
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (MainDiagnostic diag)
 
+userError :: GreaseLogAction -> PP.Doc Void -> IO a
+userError la doc = do
+  doLog la (Diag.UserError doc)
+  Exit.exitFailure
+
 -- | Read a binary's file permissions and ELF header info.
 readElfHeaderInfo ::
   ( MonadIO m
   , MonadThrow m
   , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
   ) =>
+  GreaseLogAction ->
   proxy arch ->
   FilePath ->
   m (Permissions, Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
-readElfHeaderInfo _proxy path =
+readElfHeaderInfo la _proxy path =
   do
     perms <- liftIO $ getPermissions path
     bs <- liftIO $ BS.readFile path
@@ -224,9 +232,8 @@ readElfHeaderInfo _proxy path =
           (Elf.ELFCLASS32, Just Refl, Nothing) -> pure (perms, hdr)
           (Elf.ELFCLASS64, Nothing, Just Refl) -> pure (perms, hdr)
           _ -> throw $ GreaseException "Internal error: bad pointer width!"
-      Left _ -> userError ("expected AArch32, PowerPC, or x86_64 ELF binary, but found non-ELF file at " <> Text.pack path)
- where
-  userError msg = throw $ GreaseException ("User error: " <> msg)
+      Left _ ->
+        liftIO (userError la ("expected AArch32, PowerPC, or x86_64 ELF binary, but found non-ELF file at " <> PP.pretty path))
 
 -- Helper, not exported
 --
@@ -1176,9 +1183,13 @@ entrypointCfgMap la halloc prog entries =
               case Map.lookup nm cfgs of
                 Just cfg -> do
                   mbStartupOv <-
-                    traverse
-                      (parseEntrypointStartupOv halloc)
-                      (entrypointStartupOvPath e)
+                    case entrypointStartupOvPath e of
+                      Nothing -> pure Nothing
+                      Just startupOvPath -> do
+                        result <- parseEntrypointStartupOv halloc startupOvPath
+                        case result of
+                          Left err -> userError la (PP.pretty err)
+                          Right startupOv -> pure $ Just startupOv
                   let entrypointCfgs =
                         EntrypointCfgs
                           { entrypointStartupOv = mbStartupOv
@@ -1355,7 +1366,13 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
         C.Reg.SomeCFG cfg <-
           discoverFunction la halloc archCtx memory symMap pltStubSegOffToNameMap entryAddr
         mbStartupOv <-
-          traverse (parseEntrypointStartupOv halloc) (entrypointStartupOvPath entry)
+          case entrypointStartupOvPath entry of
+            Nothing -> pure Nothing
+            Just startupOvPath -> do
+              result <- parseEntrypointStartupOv halloc startupOvPath
+              case result of
+                Left err -> userError la (PP.pretty err)
+                Right startupOv -> pure $ Just startupOv
         let entrypointCfgs =
               EntrypointCfgs
                 { entrypointStartupOv = mbStartupOv
@@ -1681,9 +1698,13 @@ simulateLlvm transOpts simOpts la = do
                   forM_ warns $ \warn ->
                     LJ.writeLog la (LLVMSetupHookDiagnostic (LDiag.LLVMTranslationWarning warn))
                   mbStartupOv <-
-                    traverse
-                      (parseEntrypointStartupOv halloc)
-                      (entrypointStartupOvPath entry)
+                    case entrypointStartupOvPath entry of
+                      Nothing -> pure Nothing
+                      Just startupOvPath -> do
+                        result <- parseEntrypointStartupOv halloc startupOvPath
+                        case result of
+                          Left cfgNotFound -> throw $ GreaseException $ Text.pack $ show $ PP.pretty cfgNotFound
+                          Right startupOv -> pure $ Just startupOv
                   let mbStartupOvSsa = fmap toSsaAnyCfg <$> mbStartupOv
                   let entrypointCfgs =
                         EntrypointCfgs
@@ -1750,7 +1771,13 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
       fmap Map.fromList $ forM entryAddrs $ \(mbOverride, entText, entAddr) -> do
         C.Reg.SomeCFG cfg <- discoverFunction la halloc archCtx memory Map.empty Map.empty entAddr
         mbStartupOv <-
-          traverse (parseEntrypointStartupOv halloc) mbOverride
+          case mbOverride of
+            Nothing -> pure Nothing
+            Just startupOvPath -> do
+              result <- parseEntrypointStartupOv halloc startupOvPath
+              case result of
+                Left cfgNotFound -> throw $ GreaseException $ Text.pack $ show $ PP.pretty cfgNotFound
+                Right startupOv -> pure $ Just startupOv
         let entrypointCfgs =
               EntrypointCfgs
                 { entrypointStartupOv = mbStartupOv
@@ -1845,7 +1872,7 @@ simulateARM :: SimOpts -> GreaseLogAction -> IO Results
 simulateARM simOpts la = do
   let ?ptrWidth = knownNat @32
   let proxy = Proxy @ARM.ARM
-  (perms, elf) <- readElfHeaderInfo proxy (simProgPath simOpts)
+  (perms, elf) <- readElfHeaderInfo la proxy (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
     loadedProg <- load la (simEntryPoints simOpts) perms elf
@@ -1882,7 +1909,7 @@ simulatePPC32 :: SimOpts -> GreaseLogAction -> IO Results
 simulatePPC32 simOpts la = do
   let ?ptrWidth = knownNat @32
   let proxy = Proxy @PPC.PPC32
-  (perms, elf) <- readElfHeaderInfo proxy (simProgPath simOpts)
+  (perms, elf) <- readElfHeaderInfo la proxy (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
     loadedProg <- load la (simEntryPoints simOpts) perms elf
@@ -1898,7 +1925,7 @@ simulatePPC64 :: SimOpts -> GreaseLogAction -> IO Results
 simulatePPC64 simOpts la = do
   let ?ptrWidth = knownNat @64
   let proxy = Proxy @PPC.PPC64
-  (perms, elf) <- readElfHeaderInfo proxy (simProgPath simOpts)
+  (perms, elf) <- readElfHeaderInfo la proxy (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
     loadedProg <- load la (simEntryPoints simOpts) perms elf
@@ -1927,7 +1954,7 @@ simulateX86 :: SimOpts -> GreaseLogAction -> IO Results
 simulateX86 simOpts la = do
   let ?ptrWidth = knownNat @64
   let proxy = Proxy @X86.X86_64
-  (perms, elf) <- readElfHeaderInfo proxy (simProgPath simOpts)
+  (perms, elf) <- readElfHeaderInfo la proxy (simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
     loadedProg <- load la (simEntryPoints simOpts) perms elf

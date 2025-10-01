@@ -23,11 +23,11 @@ module Grease.Entrypoint (
   toSsaSomeCfg,
   MacawEntrypointCfgs (..),
   StartupOv (..),
+  CFGNotFound (..),
   parseEntrypointStartupOv,
 ) where
 
 import Control.Applicative (Alternative (..))
-import Control.Exception.Safe (throw)
 import Data.ByteString qualified as BS
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
@@ -38,7 +38,6 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Void (Void)
 import Data.Word (Word64)
-import Grease.Error (GreaseException (GreaseException))
 import Grease.Syntax (parseProgram, parsedProgramCfgMap)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
@@ -195,6 +194,19 @@ data MacawEntrypointCfgs arch
       -- Nothing.
       (Maybe (MC.ArchSegmentOff arch))
 
+-- | Error type for 'parseEntrypointStartupOv'
+data CFGNotFound = CFGNotFound
+  { cfgNotFoundFuncName :: Text
+  , cfgNotFoundPath :: FilePath
+  }
+
+instance PP.Pretty CFGNotFound where
+  pretty (CFGNotFound funcName filePath) =
+    PP.vcat
+      [ "Could not find a function named" PP.<+> PP.squotes (PP.pretty funcName)
+      , "In the startup override located in" PP.<+> PP.pretty filePath
+      ]
+
 -- | Parse a startup override in Crucible S-expression syntax and perform a
 -- light amount of validation.
 parseEntrypointStartupOv ::
@@ -203,29 +215,28 @@ parseEntrypointStartupOv ::
   ) =>
   C.HandleAllocator ->
   FilePath ->
-  IO (StartupOv (C.Reg.AnyCFG ext))
+  IO (Either CFGNotFound (StartupOv (C.Reg.AnyCFG ext)))
 parseEntrypointStartupOv halloc startupOvPath = do
   -- Parse the program...
   startupOvProg <- parseProgram halloc startupOvPath
   -- ...ensure it has no externs...
   CSyn.assertNoExterns (CSyn.parsedProgExterns startupOvProg)
   --- ...and then ensure that it has a function named `startup`.
-  cfg <-
-    maybe
-      ( throw $
-          GreaseException $
-            Text.unlines
-              [ "Could not find a function named `startup`"
-              , "In the startup override located in " <> Text.pack startupOvPath
-              ]
-      )
-      pure
-      (Map.lookup "startup" (parsedProgramCfgMap startupOvProg))
-  pure $
-    StartupOv
-      { startupOvCfg = cfg
-      , startupOvForwardDecs = CSyn.parsedProgForwardDecs startupOvProg
-      }
+  case Map.lookup "startup" (parsedProgramCfgMap startupOvProg) of
+    Nothing ->
+      pure $
+        Left $
+          CFGNotFound
+            { cfgNotFoundFuncName = "startup"
+            , cfgNotFoundPath = startupOvPath
+            }
+    Just cfg ->
+      pure $
+        Right $
+          StartupOv
+            { startupOvCfg = cfg
+            , startupOvForwardDecs = CSyn.parsedProgForwardDecs startupOvProg
+            }
 
 -- | Convert the CFGs in an 'EntrypointCfgs' to SSA form.
 entrypointCfgsToSsa ::
