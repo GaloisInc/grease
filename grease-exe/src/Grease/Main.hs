@@ -141,6 +141,7 @@ import Grease.Main.Diagnostic qualified as Diag
 import Grease.MustFail qualified as MustFail
 import Grease.Options
 import Grease.Output
+import Grease.Panic (panic)
 import Grease.Pretty (prettyPtrFnMap)
 import Grease.Profiler.Feature (greaseProfilerFeature)
 import Grease.Refine
@@ -231,7 +232,7 @@ readElfHeaderInfo la _proxy path =
              ) of
           (Elf.ELFCLASS32, Just Refl, Nothing) -> pure (perms, hdr)
           (Elf.ELFCLASS64, Nothing, Just Refl) -> pure (perms, hdr)
-          _ -> throw $ GreaseException "Internal error: bad pointer width!"
+          _ -> panic "readElfHeaderInfo" ["Bad pointer width"]
       Left _ ->
         liftIO (userError la ("expected AArch32, PowerPC, or x86_64 ELF binary, but found non-ELF file at " <> PP.pretty path))
 
@@ -321,16 +322,17 @@ useSimpleShapes ::
   ExtShape ext ~ PtrShape ext w =>
   Mem.HasPtrWidth w =>
   MM.MemWidth w =>
+  GreaseLogAction ->
   -- | Argument names
   Ctx.Assignment (Const.Const String) tys ->
   -- | Initial arguments
   Shape.ArgShapes ext NoTag tys ->
   Map Text.Text Simple.SimpleShape ->
   IO (Shape.ArgShapes ext NoTag tys)
-useSimpleShapes argNames initArgs simpleShapes = do
+useSimpleShapes la argNames initArgs simpleShapes = do
   let parsedShapes = Parse.ParsedShapes (fmap Simple.toShape simpleShapes)
   case Shape.replaceShapes argNames initArgs parsedShapes of
-    Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
+    Left err -> userError la (PP.pretty err)
     Right shapes -> pure shapes
 
 toBatchBug ::
@@ -569,7 +571,7 @@ macawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr = do
   let dwarfedArgs = if shouldUseDwarf then fromMaybe initArgs0 getDwarfArgs else initArgs0
   initArgs1 <-
     loadInitialPreconditions la (initPrecondPath opts) argNames dwarfedArgs
-  useSimpleShapes argNames initArgs1 (initPrecondSimpleShapes opts)
+  useSimpleShapes la argNames initArgs1 (initPrecondSimpleShapes opts)
 
 -- | Implement 'archRegOverrides'
 overrideRegs ::
@@ -1430,7 +1432,7 @@ llvmInitArgShapes la opts llvmMod argNames cfg = do
   initArgs1 <-
     let path = initPrecondPath opts
      in loadInitialPreconditions la path argNames (ArgShapes initArgs0)
-  useSimpleShapes argNames initArgs1 (initPrecondSimpleShapes opts)
+  useSimpleShapes la argNames initArgs1 (initPrecondSimpleShapes opts)
 
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.
