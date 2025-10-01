@@ -18,7 +18,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Sequence (Seq)
 import Data.Text qualified as Text
 import Data.Void (Void, absurd)
-import Grease.Diagnostic.Severity (Severity (Debug, Info, Warn))
+import Grease.Diagnostic.Severity (Severity (Debug, Error, Info, Warn))
 import Grease.Entrypoint (Entrypoint, EntrypointLocation)
 import Grease.Output (BatchStatus)
 import Grease.Requirement (Requirement, displayReq)
@@ -68,6 +68,8 @@ data Diagnostic where
     C.PrettyExt ext => C.CFG ext blocks args ret -> Diagnostic
   TypeContextError ::
     PP.Doc Void -> Diagnostic
+  UserError ::
+    PP.Doc Void -> Diagnostic
 
 instance PP.Pretty Diagnostic where
   pretty =
@@ -116,6 +118,7 @@ instance PP.Pretty Diagnostic where
             , C.ppCFG' True (C.postdomInfo cfg) cfg
             ]
       TypeContextError e -> fmap absurd e
+      UserError e -> "User error:" PP.<+> fmap absurd e
    where
     printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w
     printCfg w =
@@ -138,3 +141,4 @@ severity =
     SimulationGoalsFailed{} -> Info
     TargetCFG{} -> Debug
     TypeContextError{} -> Warn
+    UserError{} -> Error
