@@ -42,12 +42,11 @@ module Grease.Shape.Pointer (
   growPtrTarget,
   initializePtrTarget,
   initializeOrGrowPtrTarget,
+  ModifyPtrError (..),
   modifyPtrTarget,
 ) where
 
-import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens qualified as Lens
-import Control.Monad.IO.Class (MonadIO (..))
 import Data.Aeson ((.:))
 import Data.Aeson.KeyMap qualified as Aeson
 import Data.Aeson.Types qualified as Aeson
@@ -73,8 +72,6 @@ import Data.Word (Word8)
 import GHC.TypeLits (type Natural, type (<=))
 import Grease.Cursor
 import Grease.Cursor.Pointer (Dereference (..))
-import Grease.Error (GreaseException (GreaseException))
-import Grease.Panic (panic)
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (Bytes (..))
@@ -753,13 +750,33 @@ stackArgMemShapes stackArgSlots ptrWidth =
       stackArgsSize = Bytes (toInteger stackArgSlots) * ptrWidth
    in (stackArgs, stackArgsSize)
 
+-- | Error type for pointer modification operations
+data ModifyPtrError
+  = ModifyPtrPathOutOfBounds !Int !Int
+  | ModifyPtrMismatchedSelector
+  | ModifyPtrBytePrecondition
+
+instance PP.Pretty ModifyPtrError where
+  pretty =
+    \case
+      ModifyPtrPathOutOfBounds idx upperBound ->
+        PP.hcat
+          [ "Path index out of bounds: "
+          , PP.pretty idx
+          , " (upper bound: "
+          , PP.pretty upperBound
+          , ")"
+          ]
+      ModifyPtrMismatchedSelector ->
+        "Mismatched selector and pointer target"
+      ModifyPtrBytePrecondition ->
+        "Can't have pointer precondition on byte"
+
 -- This is far too broad, it makes the entire allocation consist of pointers
 -- when it's likely that only one part of it needs to be.
 bytesToPointers ::
-  forall proxy m ext tag w ts.
-  ( MonadIO m
-  , MonadThrow m
-  , Mem.HasPtrWidth w
+  forall proxy ext tag w ts.
+  ( Mem.HasPtrWidth w
   , CursorExt ext ~ Dereference ext w
   , Last ts ~ Mem.LLVMPointerType 8
   , Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8)))
@@ -768,39 +785,28 @@ bytesToPointers ::
   tag (Mem.LLVMPointerType w) ->
   Cursor ext (Mem.LLVMPointerType w ': ts) ->
   PtrTarget w tag ->
-  m (PtrTarget w tag)
+  Either ModifyPtrError (PtrTarget w tag)
 bytesToPointers proxy tag path tgt =
   case (path, tgt) of
     -- At the end of the path, grow/initialize the pointer here
     (Here _, _) -> pure (ptrTargetToPtrs proxy tag tgt)
     -- Need to keep dereferencing as specified by the path
-    (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget bid ms) ->
+    (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget _ ms) ->
       case ms Seq.!? idx of
         Just (Pointer tag' off subTgt) -> do
-          C.Refl <- pure $ lastCons (Proxy @(Mem.LLVMPointerType w)) (Proxy @ts')
+          C.Refl <- Right $ lastCons (Proxy @(Mem.LLVMPointerType w)) (Proxy @ts')
           subTgt' <- bytesToPointers proxy tag rest subTgt
-          pure (ptrTarget Nothing (Seq.update idx (Pointer tag' off subTgt') ms))
-        Just Exactly{} -> pure (ptrTargetToPtrs proxy tag tgt)
-        Just Initialized{} -> pure (ptrTargetToPtrs proxy tag tgt)
-        Just Uninitialized{} -> pure (ptrTargetToPtrs proxy tag tgt)
-        -- This panic is not technically unreachable from GREASE's library API,
-        -- but should be unreachable if the 'Cursor' was produced by a working
-        -- heuristic.
-        Nothing ->
-          panic
-            "bytesToPointers"
-            [ "path index out of bounds!"
-            , "upper bound: " ++ show (Seq.length ms)
-            , "index: " ++ show idx
-            ]
+          Right (ptrTarget Nothing (Seq.update idx (Pointer tag' off subTgt') ms))
+        Just Exactly{} -> Right (ptrTargetToPtrs proxy tag tgt)
+        Just Initialized{} -> Right (ptrTargetToPtrs proxy tag tgt)
+        Just Uninitialized{} -> Right (ptrTargetToPtrs proxy tag tgt)
+        Nothing -> Left (ModifyPtrPathOutOfBounds idx (Seq.length ms))
     (CursorExt (DereferenceByte _ _), _) ->
-      panic "bytesToPointers" ["can't have pointer precondition on byte!"]
+      Left ModifyPtrBytePrecondition
 
 modifyPtrTarget ::
-  forall proxy m ext tag w ts.
-  ( MonadIO m
-  , MonadThrow m
-  , Mem.HasPtrWidth w
+  forall proxy ext tag w ts.
+  ( Mem.HasPtrWidth w
   , CursorExt ext ~ Dereference ext w
   , Last ts ~ Mem.LLVMPointerType w
   , Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8)))
@@ -808,10 +814,10 @@ modifyPtrTarget ::
   proxy w ->
   -- | See 'growPtrTarget', 'initializePtrTarget', and
   -- 'initializeOrGrowPtrTarget'
-  (PtrTarget w tag -> m (PtrTarget w tag)) ->
+  (PtrTarget w tag -> Either ModifyPtrError (PtrTarget w tag)) ->
   Cursor ext (Mem.LLVMPointerType w ': ts) ->
   PtrTarget w tag ->
-  m (PtrTarget w tag)
+  Either ModifyPtrError (PtrTarget w tag)
 modifyPtrTarget proxy modify path tgt =
   case (path, tgt) of
     -- At the end of the path, grow/initialize/whatever the pointer here
@@ -822,8 +828,8 @@ modifyPtrTarget proxy modify path tgt =
         Just (Pointer tag off subTgt) -> do
           C.Refl <- pure $ lastCons (Proxy @(Mem.LLVMPointerType w)) (Proxy @ts')
           subTgt' <- modifyPtrTarget proxy modify rest subTgt
-          pure (ptrTarget Nothing (Seq.update idx (Pointer tag off subTgt') ms))
-        Just _ -> throw $ GreaseException $ "Internal error: mismatched selector and pointer target!"
-        Nothing -> throw $ GreaseException $ "Internal error: path index out of bounds!"
+          Right (ptrTarget Nothing (Seq.update idx (Pointer tag off subTgt') ms))
+        Just _ -> Left ModifyPtrMismatchedSelector
+        Nothing -> Left (ModifyPtrPathOutOfBounds idx (Seq.length ms))
     (CursorExt (DereferenceByte _ _), _) ->
-      throw $ GreaseException $ "Internal error: can't have pointer precondition on byte!"
+      Left ModifyPtrBytePrecondition
