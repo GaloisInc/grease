@@ -715,7 +715,13 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
   let skipUnsupportedRelocs = simSkipUnsupportedRelocs simOpts
   let memCfg_ = memConfigInitial bak archCtx memPtrTable skipUnsupportedRelocs relocs
   let userOvPaths = simOverrides simOpts
-  fnOvsMap <- mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg_ fs
+  fnOvsMap_ <- mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg_ fs
+  fnOvsMap <-
+    case fnOvsMap_ of
+      -- See Note [Explicitly listed errors]
+      Left e@GSyn.SExpressionParseError{} -> userError la (PP.pretty e)
+      Left e@GSyn.SyntaxParseError{} -> userError la (PP.pretty e)
+      Right ok -> pure ok
   fnAddrOvsRaw_ <-
     fmap mconcat . Monad.sequence
       <$> traverse parseOverridesYaml (simOverridesYaml simOpts)

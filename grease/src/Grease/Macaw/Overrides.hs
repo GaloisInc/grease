@@ -37,6 +37,7 @@ import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (..), loadOverrides)
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, MacawOverride)
 import Grease.Skip (registerSkipOverride)
+import Grease.Syntax (ParseProgramError)
 import Grease.Syntax.Overrides as SExp
 import Grease.Utility (declaredFunNotFound)
 import Lang.Crucible.Backend qualified as C
@@ -160,34 +161,38 @@ mkMacawOverrideMap ::
   C.HandleAllocator ->
   C.GlobalVar Mem.Mem ->
   ArchContext arch ->
-  IO (Map.Map W4.FunctionName (MacawSExpOverride p sym arch))
+  IO (Either ParseProgramError (Map.Map W4.FunctionName (MacawSExpOverride p sym arch)))
 mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
-  userOvs <- loadOverrides userOvPaths halloc
-  -- Note the order here: due to how Map.fromList works, user-specified
-  -- overrides will take precedence over builtin overrides, since
-  -- Map.fromList favors things that appear later in the list in the event
-  -- that there are duplicate names.
-  let allOvs = builtinOvs <> userOvs
-  Map.fromList . Foldable.toList
-    <$> traverse
-      ( \someFnOv@(Stubs.SomeFunctionOverride fnOv) -> do
-          let macawPublicOv = macawOverride bak mvar archCtx fnOv
-          macawPublicHdl <-
-            liftIO $
-              C.mkHandle'
-                halloc
-                (C.overrideName macawPublicOv)
-                (Ctx.singleton regsRepr)
-                regsRepr
-          let macawFnOv =
-                MacawSExpOverride
-                  { msoPublicFnHandle = macawPublicHdl
-                  , msoPublicOverride = macawPublicOv
-                  , msoSomeFunctionOverride = someFnOv
-                  }
-          pure (Stubs.functionName fnOv, macawFnOv)
-      )
-      allOvs
+  userOvsResult <- loadOverrides userOvPaths halloc
+  case userOvsResult of
+    Left err -> pure $ Left err
+    Right userOvs ->
+      Right <$> do
+        -- Note the order here: due to how Map.fromList works, user-specified
+        -- overrides will take precedence over builtin overrides, since
+        -- Map.fromList favors things that appear later in the list in the event
+        -- that there are duplicate names.
+        let allOvs = builtinOvs <> userOvs
+        Map.fromList . Foldable.toList
+          <$> traverse
+            ( \someFnOv@(Stubs.SomeFunctionOverride fnOv) -> do
+                let macawPublicOv = macawOverride bak mvar archCtx fnOv
+                macawPublicHdl <-
+                  liftIO $
+                    C.mkHandle'
+                      halloc
+                      (C.overrideName macawPublicOv)
+                      (Ctx.singleton regsRepr)
+                      regsRepr
+                let macawFnOv =
+                      MacawSExpOverride
+                        { msoPublicFnHandle = macawPublicHdl
+                        , msoPublicOverride = macawPublicOv
+                        , msoSomeFunctionOverride = someFnOv
+                        }
+                pure (Stubs.functionName fnOv, macawFnOv)
+            )
+            allOvs
  where
   regsRepr :: C.TypeRepr (Symbolic.ArchRegStruct arch)
   regsRepr =
@@ -217,7 +222,7 @@ mkMacawOverrideMapWithBuiltins ::
   ArchContext arch ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
   LLVMFileSystem (MC.ArchAddrWidth arch) ->
-  IO (Map.Map W4.FunctionName (MacawSExpOverride p sym arch))
+  IO (Either ParseProgramError (Map.Map W4.FunctionName (MacawSExpOverride p sym arch)))
 mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg fs = do
   let builtinOvs = builtinStubsOverrides bak mvar memCfg fs
   mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx

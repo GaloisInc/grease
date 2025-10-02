@@ -8,20 +8,16 @@ module Grease.Macaw.Overrides.SExp (
   loadOverrides,
 ) where
 
-import Control.Exception.Safe (throw)
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
 import Data.Proxy (Proxy (..))
 import Data.Sequence qualified as Seq
-import Data.Text qualified as Text
-import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw.SimulatorState (MacawFnHandle, MacawOverride)
-import Grease.Syntax (parseProgram)
+import Grease.Syntax (ParseProgramError, parseProgram)
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.Syntax (emptyParserHooks)
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
-import Prettyprinter qualified as PP
 import Stubs.FunctionOverride qualified as Stubs
 import Stubs.Wrapper qualified as Stubs
 
@@ -47,11 +43,10 @@ loadOverrides ::
   Symbolic.SymArchConstraints arch =>
   [FilePath] ->
   C.HandleAllocator ->
-  IO (Seq.Seq (Stubs.SomeFunctionOverride p sym arch))
-loadOverrides paths halloc =
-  traverse
-    (\path -> loadOverride path halloc)
-    (Seq.fromList paths)
+  IO (Either ParseProgramError (Seq.Seq (Stubs.SomeFunctionOverride p sym arch)))
+loadOverrides paths halloc = do
+  results <- traverse (\path -> loadOverride path halloc) (Seq.fromList paths)
+  pure (sequence results)
 
 -- | Parse an override in the Macaw S-expression syntax. An override
 -- cannot use @extern@.
@@ -60,12 +55,13 @@ loadOverride ::
   Symbolic.SymArchConstraints arch =>
   FilePath ->
   C.HandleAllocator ->
-  IO (Stubs.SomeFunctionOverride p sym arch)
+  IO (Either ParseProgramError (Stubs.SomeFunctionOverride p sym arch))
 loadOverride path halloc = do
   let ?parserHooks = machineCodeParserHooks Proxy emptyParserHooks
   progResult <- parseProgram halloc path
   case progResult of
-    Left err -> throw $ GreaseException $ Text.pack $ show $ PP.pretty err
+    Left err -> pure $ Left err
     Right prog -> do
       CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
-      Stubs.parsedProgToFunctionOverride path prog
+      override <- Stubs.parsedProgToFunctionOverride path prog
+      pure $ Right override
