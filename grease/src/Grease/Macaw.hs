@@ -310,7 +310,10 @@ minimalArgShapes _bak arch mbEntryAddr = do
  where
   symFns = arch ^. archVals . to Symbolic.archFunctions
 
-  mkRegShape :: forall tp. MC.ArchReg arch tp -> m (Shape (Symbolic.MacawExt arch) NoTag (Symbolic.ToCrucibleType tp))
+  mkRegShape ::
+    forall tp.
+    MC.ArchReg arch tp ->
+    m (Shape (Symbolic.MacawExt arch) NoTag (Symbolic.ToCrucibleType tp))
   mkRegShape r =
     if
       | Just Refl <- testEquality r MC.sp_reg ->
@@ -333,7 +336,15 @@ minimalArgShapes _bak arch mbEntryAddr = do
             MT.BoolTypeRepr -> pure (ShapeBool NoTag)
             MT.BVTypeRepr w -> pure $ ShapeExt (ShapePtrBV NoTag w)
             MT.TupleTypeRepr P.List.Nil -> pure $ ShapeStruct NoTag Ctx.empty
-            _ -> throw $ GreaseException "Could not determine minimal shape for register"
+            _ ->
+              -- None of our supported architectures have registers with types
+              -- other than those listed above.
+              panic
+                "minimalArgShapes"
+                [ "Could not determine minimal shape for register"
+                , show (MC.prettyF r)
+                , show (MT.typeRepr r)
+                ]
           pure shape
 
 regStructRepr :: ArchContext arch -> C.TypeRepr (Symbolic.ArchRegStruct arch)

@@ -74,6 +74,7 @@ import GHC.TypeLits (type Natural, type (<=))
 import Grease.Cursor
 import Grease.Cursor.Pointer (Dereference (..))
 import Grease.Error (GreaseException (GreaseException))
+import Grease.Panic (panic)
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (Bytes (..))
@@ -782,9 +783,18 @@ bytesToPointers proxy tag path tgt =
         Just Exactly{} -> pure (ptrTargetToPtrs proxy tag tgt)
         Just Initialized{} -> pure (ptrTargetToPtrs proxy tag tgt)
         Just Uninitialized{} -> pure (ptrTargetToPtrs proxy tag tgt)
-        Nothing -> throw $ GreaseException $ "Internal error: path index out of bounds!"
+        -- This panic is not technically unreachable from GREASE's library API,
+        -- but should be unreachable if the 'Cursor' was produced by a working
+        -- heuristic.
+        Nothing ->
+          panic
+            "bytesToPointers"
+            [ "path index out of bounds!"
+            , "upper bound: " ++ show (Seq.length ms)
+            , "index: " ++ show idx
+            ]
     (CursorExt (DereferenceByte _ _), _) ->
-      throw $ GreaseException $ "Internal error: can't have pointer precondition on byte!"
+      panic "bytesToPointers" ["can't have pointer precondition on byte!"]
 
 modifyPtrTarget ::
   forall proxy m ext tag w ts.
