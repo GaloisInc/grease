@@ -188,6 +188,7 @@ import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import System.Directory (Permissions, getPermissions)
+import System.Exit as Exit
 import System.FilePath (FilePath)
 import System.IO (IO)
 import Text.LLVM qualified as L
@@ -219,12 +220,12 @@ doLog la diag = LJ.writeLog la (MainDiagnostic diag)
 malformedElf :: GreaseLogAction -> PP.Doc Void -> IO a
 malformedElf la doc = do
   doLog la (Diag.MalformedElf doc)
-  throw (GreaseException (Text.pack (show doc)))
+  Exit.exitFailure
 
 userError :: GreaseLogAction -> PP.Doc Void -> IO a
 userError la doc = do
   doLog la (Diag.UserError doc)
-  throw (GreaseException (Text.pack (show ("user error:" PP.<+> doc))))
+  Exit.exitFailure
 
 -- | Read a binary's file permissions and ELF header info.
 readElfHeaderInfo ::

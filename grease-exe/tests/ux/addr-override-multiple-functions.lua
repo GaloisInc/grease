@@ -3,5 +3,4 @@
 path = "tests/ux/extra/addr-override-multiple-functions.x64.cbl"
 flags {"--addr-override", "0x401000:" .. path}
 go "tests/refine/pos/compare_to_null/test.x64.elf" 
-exception()
-check "user error: Override contains multiple 'addr-override-multiple-functions' functions"
+user_error "Override contains multiple 'addr-override-multiple-functions' functions"
