@@ -8,7 +8,7 @@
   (start start:
     (return regs)))
 
-;; check [[
+;; user_error [[
 ;; Unexpected keys in overrides.yaml file:
 ;; - funktion addres overides
 ;; ]]

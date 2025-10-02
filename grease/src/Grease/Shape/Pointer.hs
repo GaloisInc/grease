@@ -73,8 +73,8 @@ import Data.Word (Word8)
 import GHC.TypeLits (type Natural, type (<=))
 import Grease.Cursor
 import Grease.Cursor.Pointer (Dereference (..))
+import Grease.Error (GreaseException (GreaseException))
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Utility
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (Bytes (..))
 import Lang.Crucible.LLVM.Bytes qualified as Bytes

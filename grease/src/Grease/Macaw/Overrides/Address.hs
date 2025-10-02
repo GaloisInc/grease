@@ -34,12 +34,13 @@ import Data.Text qualified as Text
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Void (Void)
 import Grease.Concretize.ToConcretize (HasToConcretize)
+import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw.Arch (ArchContext, archVals)
 import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Overrides (OverrideNameError (..), partitionCfgs)
-import Grease.Syntax (parseProgram)
-import Grease.Utility (GreaseException (GreaseException), tshow)
+import Grease.Syntax (ParseProgramError, parseProgram)
+import Grease.Utility (tshow)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as LCBO
 import Lang.Crucible.CFG.Core qualified as C
@@ -92,6 +93,7 @@ data AddressOverrideError arch
       (C.Some C.CtxRepr)
   | BadAddressOverrideReturn FilePath (C.Some C.TypeRepr)
   | OverrideNameError OverrideNameError
+  | AddressOverrideParseError ParseProgramError
 
 instance PP.Pretty (AddressOverrideError arch) where
   pretty =
@@ -118,6 +120,7 @@ instance PP.Pretty (AddressOverrideError arch) where
             , "See https://galoisinc.github.io/grease/overrides.html#address-overrides"
             ]
       OverrideNameError err -> PP.pretty err
+      AddressOverrideParseError err -> PP.pretty err
 
 ---------------------------------------------------------------------
 
@@ -218,9 +221,12 @@ loadAddressOverride ::
   FilePath ->
   IO (Either (AddressOverrideError arch) (MC.ArchSegmentOff arch, AddressOverride arch))
 loadAddressOverride archRegsType halloc memory addr path = do
-  prog <- parseProgram halloc path
-  CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
-  pure (parsedProgToAddressOverride archRegsType memory addr path prog)
+  progResult <- parseProgram halloc path
+  case progResult of
+    Left err -> pure $ Left $ AddressOverrideParseError err
+    Right prog -> do
+      CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
+      pure $ parsedProgToAddressOverride archRegsType memory addr path prog
 
 -- | Parse and register address overrides in the Macaw S-expression syntax.
 --

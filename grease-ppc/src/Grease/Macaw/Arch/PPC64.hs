@@ -10,7 +10,6 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Arch.PPC64 (ppc64Ctx) where
 
-import Control.Exception.Safe (throw)
 import Data.BitVector.Sized qualified as BV
 import Data.ElfEdit qualified as EE
 import Data.Macaw.BinaryLoader qualified as Loader
@@ -27,8 +26,9 @@ import Grease.Macaw.Arch (ArchContext (..), ArchReloc)
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Macaw.RegName (RegName (..))
 import Grease.Options (ExtraStackSlots)
+import Grease.Panic (panic)
 import Grease.Shape.Pointer (ppcStackPtrShape)
-import Grease.Utility (GreaseException (..), bytes64LE)
+import Grease.Utility (bytes64LE)
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.Simulator.RegValue qualified as C
 import Stubs.FunctionOverride.PPC.Linux qualified as Stubs
@@ -60,7 +60,9 @@ ppc64Ctx ::
 ppc64Ctx mbReturnAddr stackArgSlots loadedBinary = do
   let extOverride = Stubs.ppcLinuxStmtExtensionOverride
   avals <- case Symbolic.genArchVals Proxy Proxy (Just extOverride) of
-    Nothing -> throw $ GreaseException "Failed to generate architecture-specific values"
+    Nothing ->
+      -- `genArchVals` is total: https://github.com/GaloisInc/macaw/issues/231
+      panic "ppc64Ctx" ["Failed to generate architecture-specific values"]
     Just avals -> pure avals
   let regOverrides =
         case mbReturnAddr of

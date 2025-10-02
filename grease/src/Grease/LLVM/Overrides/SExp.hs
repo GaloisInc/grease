@@ -19,7 +19,7 @@ import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Grease.LLVM.Overrides.Declare (mkDeclare)
 import Grease.Overrides (OverrideNameError (..), partitionCfgs)
-import Grease.Syntax (parseProgram)
+import Grease.Syntax (ParseProgramError, parseProgram)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.CFG.SSAConversion qualified as C
@@ -38,6 +38,7 @@ import What4.FunctionName qualified as W4
 data LLVMSExpOverrideError
   = OverrideNameError OverrideNameError
   | UnsupportedType FilePath Text.Text
+  | LLVMSExpOverrideParseError ParseProgramError
 
 instance PP.Pretty LLVMSExpOverrideError where
   pretty =
@@ -49,6 +50,7 @@ instance PP.Pretty LLVMSExpOverrideError where
             [ "Unsupported type in override in file" PP.<+> PP.pretty path
             , PP.pretty err
             ]
+      LLVMSExpOverrideParseError err -> PP.pretty err
 
 -- | A 'CLLVM.SomeLLVMOverride' quantified at a higher rank over @p@ and @sym@.
 newtype AnyLLVMOverride
@@ -130,9 +132,12 @@ loadOverride ::
   IO (Either LLVMSExpOverrideError (W4.FunctionName, LLVMSExpOverride))
 loadOverride path halloc mvar = do
   let ?parserHooks = llvmParserHooks emptyParserHooks mvar
-  prog <- parseProgram halloc path
-  CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
-  pure (parsedProgToLLVMSExpOverride path prog)
+  progResult <- parseProgram halloc path
+  case progResult of
+    Left err -> pure $ Left $ LLVMSExpOverrideParseError err
+    Right prog -> do
+      CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
+      pure $ parsedProgToLLVMSExpOverride path prog
 
 -- | Parse overrides in the Crucible-LLVM S-expression syntax.
 loadOverrides ::

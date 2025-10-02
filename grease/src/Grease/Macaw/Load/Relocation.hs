@@ -18,7 +18,8 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Vector qualified as Vec
 import Data.Word (Word32)
-import Grease.Utility (GreaseException (..), tshow)
+import Grease.Error (GreaseException (GreaseException))
+import Grease.Utility (tshow)
 
 -- | An architecture-independent description of the type of a relocation. When
 -- appropriate, this groups together certain relocation types that have

@@ -10,7 +10,6 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Arch.PPC32 (ppc32Ctx) where
 
-import Control.Exception.Safe (throw)
 import Data.BitVector.Sized qualified as BV
 import Data.ElfEdit qualified as EE
 import Data.Macaw.PPC qualified as PPC
@@ -26,8 +25,9 @@ import Grease.Macaw.Arch (ArchContext (..), ArchReloc)
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Macaw.RegName (RegName (..))
 import Grease.Options (ExtraStackSlots)
+import Grease.Panic (panic)
 import Grease.Shape.Pointer (ppcStackPtrShape)
-import Grease.Utility (GreaseException (..), bytes32LE)
+import Grease.Utility (bytes32LE)
 import Lang.Crucible.LLVM.MemModel qualified as Mem
 import Lang.Crucible.Simulator.RegValue qualified as C
 import Stubs.FunctionOverride.PPC.Linux qualified as Stubs
@@ -53,7 +53,9 @@ ppc32Ctx ::
 ppc32Ctx mbReturnAddr stackArgSlots = do
   let extOverride = Stubs.ppcLinuxStmtExtensionOverride
   avals <- case Symbolic.genArchVals Proxy Proxy (Just extOverride) of
-    Nothing -> throw $ GreaseException "Failed to generate architecture-specific values"
+    Nothing ->
+      -- `genArchVals` is total: https://github.com/GaloisInc/macaw/issues/231
+      panic "ppc32Ctx" ["Failed to generate architecture-specific values"]
     Just avals -> pure avals
   let regOverrides =
         case mbReturnAddr of

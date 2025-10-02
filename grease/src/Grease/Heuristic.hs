@@ -24,7 +24,7 @@ module Grease.Heuristic (
 ) where
 
 import Control.Applicative (Alternative ((<|>)), Const (..))
-import Control.Exception.Safe (MonadThrow, throw)
+import Control.Exception.Safe (MonadThrow)
 import Control.Lens (Lens', (.~), (^.))
 import Data.BitVector.Sized qualified as BV
 import Data.Bool qualified as Bool
@@ -51,13 +51,14 @@ import Grease.Heuristic.Diagnostic qualified as Diag
 import Grease.Heuristic.Result
 import Grease.Macaw.RegName (RegNames, getRegName, mkRegName)
 import Grease.MustFail qualified as MustFail
+import Grease.Panic (panic)
 import Grease.Setup
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer
 import Grease.Shape.Selector
-import Grease.Utility (GreaseException (..), OnlineSolverAndBackend, ppProgramLoc, tshow)
+import Grease.Utility (OnlineSolverAndBackend, ppProgramLoc, tshow)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
@@ -217,7 +218,7 @@ assertPtrWidth ::
   m (w C.:~: wptr)
 assertPtrWidth ptr =
   case testPtrWidth ptr of
-    Nothing -> throw (GreaseException "Non-pointer-width pointer in memory op?")
+    Nothing -> panic "assertPtrWidth" ["Non-pointer-width pointer in memory op?"]
     Just r -> pure r
 
 allocInfoLoc ::

@@ -7,7 +7,6 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Utility (
   OnlineSolverAndBackend,
-  GreaseException (..),
   pshow,
   tshow,
   functionNameFromByteString,
@@ -20,7 +19,7 @@ module Grease.Utility (
   bytes64LE,
 ) where
 
-import Control.Exception.Safe (Exception, MonadThrow)
+import Control.Exception.Safe (MonadThrow)
 import Control.Exception.Safe qualified as X
 import Data.ByteString qualified as BS
 import Data.ByteString.Builder qualified as Builder
@@ -31,6 +30,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Word (Word32, Word64, Word8)
+import Grease.Error (GreaseException (GreaseException))
 import Grease.Panic (panic)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
@@ -50,11 +50,6 @@ type OnlineSolverAndBackend solver sym bak t st fs =
   , sym ~ W4.ExprBuilder t st fs
   , bak ~ C.OnlineBackend solver t st fs
   )
-
-newtype GreaseException = GreaseException Text
-instance Exception GreaseException
-instance Show GreaseException where
-  show (GreaseException msg) = Text.unpack msg
 
 pshow :: PP.Pretty a => a -> Text
 pshow = tshow . PP.pretty

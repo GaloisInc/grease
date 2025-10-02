@@ -123,6 +123,7 @@ import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic
+import Grease.Error (GreaseException (GreaseException))
 import Grease.ExecutionFeatures (boundedExecFeats)
 import Grease.Heuristic
 import Grease.Options (BoundsOpts)

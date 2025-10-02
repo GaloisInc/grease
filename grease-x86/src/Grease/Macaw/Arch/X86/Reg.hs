@@ -14,7 +14,7 @@ import Data.Macaw.X86.Symbolic qualified as X86Sym
 import Data.Macaw.X86.X86Reg qualified as X86
 import Data.Parameterized.Context qualified as Ctx
 import Data.Text qualified as Text
-import Grease.Utility (GreaseException (..))
+import Grease.Error (GreaseException (GreaseException))
 import Prelude hiding (mod)
 
 -- | Retrieve the value of an x86 register, throwing a 'GreaseException' if it

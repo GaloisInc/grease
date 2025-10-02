@@ -79,11 +79,14 @@ withCapturedLogs ::
   IO Text.Text
 withCapturedLogs withLogAction = do
   logRef <- IORef.newIORef []
-  withLogAction (capture logRef)
+  extra <-
+    X.try @X.SomeException (withLogAction (capture logRef))
+      <&> \case
+        Left e -> Text.pack ("Exception: " ++ show e)
+        Right () -> ""
+  logs <- map (Text.pack . show . PP.pretty) <$> IORef.readIORef logRef
   -- Reverse the list so that logs appear chronologically
-  logs <- List.reverse <$> IORef.readIORef logRef
-  let logTxt = Text.unlines (map (Text.pack . show . PP.pretty) logs)
-  pure logTxt
+  pure (Text.unlines (List.reverse (extra : logs)))
 
 go :: String -> Lua ()
 go prog = do
@@ -92,16 +95,11 @@ go prog = do
   Lua.setglobal argsGlobal
 
   opts <- liftIO (optsSimOpts <$> optsFromList (prog : strOpts))
-  let action =
-        withCapturedLogs $ \la' -> do
-          res <- simulateFile opts la'
-          logResults la' res
   logTxt <-
     liftIO $
-      X.try @X.SomeException action
-        <&> \case
-          Left e -> Text.pack ("Exception: " ++ show e)
-          Right t -> t
+      withCapturedLogs $ \la' -> do
+        res <- simulateFile opts la'
+        logResults la' res
   let path = simProgPath opts
   liftIO (Text.IO.writeFile (FilePath.replaceExtension path "out") logTxt)
 

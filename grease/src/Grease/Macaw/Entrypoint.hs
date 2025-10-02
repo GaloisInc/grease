@@ -21,9 +21,9 @@ import Data.Text qualified as Text
 import Data.Traversable (for)
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Grease.Entrypoint qualified as GE
+import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw (regStructRepr)
 import Grease.Macaw.Arch (ArchContext)
-import Grease.Utility (GreaseException (..))
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Types qualified as CT
