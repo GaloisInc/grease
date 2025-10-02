@@ -23,7 +23,7 @@ jobs:
       - uses: haskell-actions/run-fourmolu@v9
         name: Check formatting with fourmolu
         with:
-          version: "0.18.0.0"
+          version: "0.19.0.0"
        
       - name: Setup Ghidra
         uses: ./.github/actions/ghidra-install
