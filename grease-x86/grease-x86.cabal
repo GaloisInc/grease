@@ -155,4 +155,3 @@ library
 
   exposed-modules:
     Grease.Macaw.Arch.X86
-    Grease.Macaw.Arch.X86.Reg

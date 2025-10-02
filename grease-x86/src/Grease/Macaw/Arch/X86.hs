@@ -15,6 +15,7 @@ import Data.BitVector.Sized qualified as BV
 import Data.ElfEdit qualified as EE
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.X86 qualified as X86
+import Data.Macaw.X86.Symbolic qualified as X86Sym
 import Data.Macaw.X86.X86Reg qualified as X86
 import Data.Map qualified as Map
 import Data.Parameterized.NatRepr qualified as NatRepr
@@ -22,7 +23,6 @@ import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
 import Data.Word (Word64)
 import Grease.Macaw.Arch (ArchContext (..), ArchRegs, ArchReloc)
-import Grease.Macaw.Arch.X86.Reg (getX86Reg, modifyX86Reg)
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Options (ExtraStackSlots)
 import Grease.Panic (panic)
@@ -74,7 +74,10 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
       , _archVals = avals
       , _archRelocSupported = x64RelocSupported
       , _archGetIP = \regs -> do
-          C.RV (Mem.LLVMPointer _base off) <- getX86Reg X86.X86_IP regs
+          C.RV (Mem.LLVMPointer _base off) <-
+            case X86Sym.lookupX86Reg X86.X86_IP regs of
+              Just r -> pure r
+              Nothing -> panic "_archGetIP" ["Missing RIP?"]
           pure off
       , _archPcReg = X86.X86_IP
       , _archIntegerArguments = \bak ->
@@ -110,7 +113,14 @@ x64FixupStackPointer ::
   C.OverrideSim p sym ext rtp a r (ArchRegs sym X86.X86_64)
 x64FixupStackPointer regs = do
   sym <- C.getSymInterface
-  modifyX86Reg regs X86.RSP $ \(C.RV rsp) -> liftIO $ do
+  liftIO $ do
+    C.RV rsp <-
+      case X86Sym.lookupX86Reg X86.RSP regs of
+        Just r -> pure r
+        Nothing -> panic "x64FixupStackPointer" ["Missing RSP?"]
     let widthRepr = NatRepr.knownNat @64
     eight <- W4.bvLit sym widthRepr (BV.mkBV widthRepr 8)
-    C.RV <$> Mem.ptrAdd sym widthRepr rsp eight
+    rsp' <- C.RV <$> Mem.ptrAdd sym widthRepr rsp eight
+    case X86Sym.updateX86Reg X86.RSP (\_ -> rsp') regs of
+      Just r -> pure r
+      Nothing -> panic "x64FixupStackPointer" ["Missing RSP?"]
