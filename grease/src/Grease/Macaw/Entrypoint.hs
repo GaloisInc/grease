@@ -12,32 +12,29 @@ module Grease.Macaw.Entrypoint (
 )
 where
 
-import Control.Exception.Safe (throw)
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Some (Some (Some))
 import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Text qualified as Text
-import Data.Traversable (for)
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Grease.Entrypoint qualified as GE
-import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw (regStructRepr)
 import Grease.Macaw.Arch (ArchContext)
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Types qualified as CT
 import Prettyprinter qualified as PP
-import Prettyprinter.Render.Text qualified as PP
 import What4.FunctionName qualified as W4
 
 -- | Check that the CFGs in an 'GE.EntrypointCFGs' have the signatures of valid
 -- Macaw CFGs (i.e., it takes the register struct as its only argument and
--- returns it). Throw 'GreaseException' if not.
+-- returns it). Return 'MacawCfgTypecheckError' if not.
 checkMacawEntrypointCfgsSignatures ::
   ArchContext arch ->
   GE.EntrypointCfgs (C.Reg.AnyCFG (Symbolic.MacawExt arch)) ->
-  IO
+  Either
+    MacawCfgTypecheckError
     ( GE.EntrypointCfgs
         ( C.Reg.SomeCFG
             (Symbolic.MacawExt arch)
@@ -53,41 +50,30 @@ checkMacawEntrypointCfgsSignatures archCtx entrypointCfgs = do
     pure entrypointCfgs
   let entryName = W4.functionName (C.handleName (C.Reg.cfgHandle entrypointCfg0))
   let name = Text.concat ["CFG `", entryName, "`"]
-  C.Reg.SomeCFG entrypointCfg' <-
-    throwMacawCfgTypecheckError $
-      checkMacawCfgSignature archCtx name entrypointCfg0
-  mbStartupOvSome <- for mbStartupOv $ \startupOv -> do
-    GE.StartupOv
-      { GE.startupOvCfg = C.Reg.AnyCFG startupOvCfg0
-      , GE.startupOvForwardDecs = fwdDecs
-      } <-
-      pure startupOv
-    let entryName' = W4.functionName (C.handleName (C.Reg.cfgHandle startupOvCfg0))
-    let name' = Text.concat ["startup override for `", entryName', "`"]
-    C.Reg.SomeCFG startupOvCfg' <-
-      throwMacawCfgTypecheckError $
-        checkMacawCfgSignature archCtx name' startupOvCfg0
-    pure $
-      GE.StartupOv
-        { GE.startupOvCfg = C.Reg.SomeCFG startupOvCfg'
-        , GE.startupOvForwardDecs = fwdDecs
-        }
+  C.Reg.SomeCFG entrypointCfg' <- checkMacawCfgSignature archCtx name entrypointCfg0
+  mbStartupOvSome <-
+    case mbStartupOv of
+      Nothing -> pure Nothing
+      Just startupOv -> do
+        GE.StartupOv
+          { GE.startupOvCfg = C.Reg.AnyCFG startupOvCfg0
+          , GE.startupOvForwardDecs = fwdDecs
+          } <-
+          pure startupOv
+        let entryName' = W4.functionName (C.handleName (C.Reg.cfgHandle startupOvCfg0))
+        let name' = Text.concat ["startup override for `", entryName', "`"]
+        C.Reg.SomeCFG startupOvCfg' <- checkMacawCfgSignature archCtx name' startupOvCfg0
+        pure $
+          Just $
+            GE.StartupOv
+              { GE.startupOvCfg = C.Reg.SomeCFG startupOvCfg'
+              , GE.startupOvForwardDecs = fwdDecs
+              }
   pure $
     GE.EntrypointCfgs
       { GE.entrypointStartupOv = mbStartupOvSome
       , GE.entrypointCfg = C.Reg.SomeCFG entrypointCfg'
       }
-
-throwMacawCfgTypecheckError ::
-  Either MacawCfgTypecheckError a ->
-  IO a
-throwMacawCfgTypecheckError =
-  \case
-    Right ok -> pure ok
-    Left err -> do
-      let url = "https://galoisinc.github.io/grease/sexp-progs.html"
-      let msg = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions (PP.pretty err))
-      throw (GreaseException (msg <> "\n" <> "For more information, see " <> url))
 
 -- | Possible errors resulting from 'checkMacawCfgSignature'.
 data MacawCfgTypecheckError
