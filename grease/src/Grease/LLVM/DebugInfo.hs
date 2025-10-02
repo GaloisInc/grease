@@ -179,16 +179,16 @@ diArgShape ::
   Seq (Maybe DITypeView) ->
   Int ->
   C.TypeRepr t ->
-  IO (Shape ext NoTag t)
+  Either Shape.MinimalShapeError (Shape ext NoTag t)
 diArgShape tyViews i t = do
-  let fallback = Shape.minimalShapeWithPtrs (pure . const NoTag) t
+  let fallback = Shape.minimalShapeWithPtrs (const NoTag) t
   case tyViews Seq.!? i of
     Just (Just tyView) ->
       case (tyView, t) of
-        (Bv, Mem.LLVMPointerRepr w) -> pure (Shape.ShapeExt (ShapePtrBV NoTag w))
+        (Bv, Mem.LLVMPointerRepr w) -> Right (Shape.ShapeExt (ShapePtrBV NoTag w))
         (Ptr tgt, Mem.LLVMPointerRepr w)
           | Just Refl <- testEquality w ?ptrWidth ->
-              pure (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.Offset 0) tgt))
+              Right (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.Offset 0) tgt))
         _ -> fallback
     _ -> fallback
 
@@ -200,9 +200,9 @@ diArgShapes ::
   W4.FunctionName ->
   Ctx.Assignment C.TypeRepr args ->
   L.Module ->
-  IO (Ctx.Assignment (Shape ext NoTag) args)
+  Either Shape.MinimalShapeError (Ctx.Assignment (Shape ext NoTag) args)
 diArgShapes fnName argTys llvmMod = do
-  let defaults = TFC.traverseFC (Shape.minimalShapeWithPtrs (pure . const NoTag)) argTys
+  let defaults = TFC.traverseFC (Shape.minimalShapeWithPtrs (const NoTag)) argTys
   let fnSymb = L.Symbol (Text.unpack (W4.functionName fnName))
   case LDU.computeFunctionTypes llvmMod fnSymb of
     Just (_retTy : argTyInfos) -> do

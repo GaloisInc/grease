@@ -100,7 +100,7 @@ extensionExec la halloc dl errorSymbolicFunCalls baseExt stmt st =
           let funcName = W4.functionNameFromText "_grease_symbolic_fn"
           hdl <- C.mkHandle' halloc funcName args ret
           case createSkipOverride la dl mvar funcName ret of
-            Just ov -> do
+            Right ov -> do
               doLog la Diag.SkippedSymbolicFnHandleCall
               pure
                 ( C.HandleFnVal hdl
@@ -110,7 +110,7 @@ extensionExec la halloc dl errorSymbolicFunCalls baseExt stmt st =
             -- then fall back on the default implementation of
             -- LLVM_LoadHandle. This will ultimately fail when it encounters
             -- the symbolic function pointer.
-            Nothing ->
+            Left _err ->
               defaultExec
     _ ->
       defaultExec

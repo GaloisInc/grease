@@ -223,6 +223,11 @@ malformedElf la doc = do
   doLog la (Diag.MalformedElf doc)
   Exit.exitFailure
 
+unsupported :: GreaseLogAction -> PP.Doc Void -> IO a
+unsupported la doc = do
+  doLog la (Diag.Unsupported doc)
+  Exit.exitFailure
+
 userError :: GreaseLogAction -> PP.Doc Void -> IO a
 userError la doc = do
   doLog la (Diag.UserError doc)
@@ -1488,16 +1493,20 @@ llvmInitArgShapes ::
   IO (ArgShapes CLLVM.LLVM NoTag argTys)
 llvmInitArgShapes la opts llvmMod argNames cfg = do
   let argTys = C.cfgArgTypes cfg
-  initArgs0 <-
-    case llvmMod of
-      Just m
-        | initPrecondUseDebugInfo opts ->
-            GLD.diArgShapes (C.handleName (C.cfgHandle cfg)) argTys m
-      _ -> traverseFC (minimalShapeWithPtrs (pure . const NoTag)) argTys
+  let initArgs0 =
+        case llvmMod of
+          Just m
+            | initPrecondUseDebugInfo opts ->
+                GLD.diArgShapes (C.handleName (C.cfgHandle cfg)) argTys m
+          _ -> traverseFC (minimalShapeWithPtrs (const NoTag)) argTys
   initArgs1 <-
+    case initArgs0 of
+      Left err@Shape.MinimalShapeError{} -> unsupported la (PP.pretty err)
+      Right ok -> pure ok
+  initArgs2 <-
     let path = initPrecondPath opts
-     in loadInitialPreconditions la path argNames (ArgShapes initArgs0)
-  useSimpleShapes la argNames initArgs1 (initPrecondSimpleShapes opts)
+     in loadInitialPreconditions la path argNames (ArgShapes initArgs1)
+  useSimpleShapes la argNames initArgs2 (initPrecondSimpleShapes opts)
 
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.

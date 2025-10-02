@@ -71,6 +71,8 @@ data Diagnostic where
     C.PrettyExt ext => C.CFG ext blocks args ret -> Diagnostic
   TypeContextError ::
     PP.Doc Void -> Diagnostic
+  Unsupported ::
+    PP.Doc Void -> Diagnostic
   UserError ::
     PP.Doc Void -> Diagnostic
 
@@ -123,6 +125,7 @@ instance PP.Pretty Diagnostic where
             , C.ppCFG' True (C.postdomInfo cfg) cfg
             ]
       TypeContextError e -> fmap absurd e
+      Unsupported e -> "Not yet supported:" PP.<+> fmap absurd e
       UserError e -> "User error:" PP.<+> fmap absurd e
    where
     printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w
@@ -147,4 +150,5 @@ severity =
     SimulationGoalsFailed{} -> Info
     TargetCFG{} -> Debug
     TypeContextError{} -> Warn
+    Unsupported{} -> Error
     UserError{} -> Error

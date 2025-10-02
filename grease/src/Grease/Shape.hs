@@ -25,8 +25,8 @@ module Grease.Shape (
   getTag,
   setTag,
   shapeTag,
+  MinimalShapeError (..),
   minimalShapeWithPtrs,
-  minimalShapeWithPtrs',
   traverseShapeWithType,
   tagWithType,
 
@@ -41,8 +41,6 @@ module Grease.Shape (
   parseJsonShapes,
 ) where
 
-import Control.Applicative (Alternative (empty))
-import Control.Exception.Safe (MonadThrow, throw)
 import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
 import Data.Aeson ((.:))
@@ -70,7 +68,6 @@ import Data.Text.Encoding qualified as Text
 import Data.Traversable qualified as Traversable
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import GHC.Show qualified as GShow
-import Grease.Error (GreaseException (GreaseException))
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (PtrShape, minimalPtrShape, parseJsonPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Lang.Crucible.CFG.Core qualified as C
@@ -304,42 +301,28 @@ minimalShape ext mkTag =
     t@C.UnitRepr -> ShapeUnit <$> mkTag t
     repr -> ShapeExt <$> ext repr
 
+data MinimalShapeError = MinimalShapeError (Some C.TypeRepr)
+
+instance PP.Pretty MinimalShapeError where
+  pretty (MinimalShapeError (Some t)) =
+    "Can't make minimal shape for type " <> PP.viaShow t
+
 minimalShapeWithPtrs ::
-  forall t m ext tag w.
-  ( MonadThrow m
-  , ExtShape ext ~ PtrShape ext w
+  forall t ext tag w.
+  ( ExtShape ext ~ PtrShape ext w
   , Mem.HasPtrWidth w
   , Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8)))
   ) =>
-  (forall t'. C.TypeRepr t' -> m (tag t')) ->
+  (forall t'. C.TypeRepr t' -> tag t') ->
   C.TypeRepr t ->
-  m (Shape ext tag t)
+  Either MinimalShapeError (Shape ext tag t)
 minimalShapeWithPtrs mkTag =
   minimalShape
     ( \case
-        Mem.LLVMPointerRepr w -> minimalPtrShape mkTag w
-        t -> throw @m $ GreaseException ("Could not determine minimal shape for argument of type " <> Text.pack (show (PP.pretty t)))
+        Mem.LLVMPointerRepr w -> minimalPtrShape (pure . mkTag) w
+        t -> Left (MinimalShapeError (Some t))
     )
-    mkTag
-
--- | Like 'minimalShapeWithPtrs', but uses 'empty' instead of 'throw'.
-minimalShapeWithPtrs' ::
-  forall t m ext tag w.
-  ( Alternative m
-  , ExtShape ext ~ PtrShape ext w
-  , Mem.HasPtrWidth w
-  , Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8)))
-  ) =>
-  (forall t'. C.TypeRepr t' -> m (tag t')) ->
-  C.TypeRepr t ->
-  m (Shape ext tag t)
-minimalShapeWithPtrs' mkTag =
-  minimalShape
-    ( \case
-        Mem.LLVMPointerRepr w -> minimalPtrShape mkTag w
-        _ -> empty
-    )
-    mkTag
+    (pure . mkTag)
 
 type ArgShapes :: Type -> (C.CrucibleType -> Type) -> Ctx C.CrucibleType -> Type
 newtype ArgShapes ext tag tys = ArgShapes

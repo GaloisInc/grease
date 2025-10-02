@@ -16,7 +16,7 @@ import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic (Diagnostic (SkipDiagnostic), GreaseLogAction)
 import Grease.Setup qualified as Setup
-import Grease.Shape (ExtShape, Shape, minimalShapeWithPtrs')
+import Grease.Shape (ExtShape, Shape, minimalShapeWithPtrs)
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (PtrShape)
@@ -95,15 +95,13 @@ createSkipOverride ::
   C.GlobalVar Mem ->
   W4.FunctionName ->
   C.TypeRepr ret ->
-  Maybe (C.Override p sym ext args ret)
-createSkipOverride la dl memVar funcName retTy =
-  case minimalShapeWithPtrs' (Just . const NoTag) retTy of
-    Nothing -> Nothing
-    Just shape ->
-      let override =
-            C.mkOverride' funcName retTy $
-              skipOverride la dl memVar funcName retTy shape
-       in Just override
+  Either Shape.MinimalShapeError (C.Override p sym ext args ret)
+createSkipOverride la dl memVar funcName retTy = do
+  shape <- minimalShapeWithPtrs (const NoTag) retTy
+  let override =
+        C.mkOverride' funcName retTy $
+          skipOverride la dl memVar funcName retTy shape
+  Right override
 
 -- | Try to create a skip override from a 'L.Declare' and an 'LLVMContext'.
 --
@@ -124,7 +122,10 @@ declSkipOverride ::
 declSkipOverride la llvmCtx decl =
   let ?lc = llvmCtx ^. CLLVM.llvmTypeCtx
    in CLLVM.llvmDeclToFunHandleRepr' decl $ \argTys retTy -> do
-        shape <- minimalShapeWithPtrs' (Just . const NoTag) retTy
+        shape <-
+          case minimalShapeWithPtrs (const NoTag) retTy of
+            Left _err -> Nothing
+            Right shape -> Just shape
         let dl = llvmCtx ^. CLLVM.llvmTypeCtx . to CLLVM.llvmDataLayout
         let L.Symbol name = L.decName decl
         let fnName = W4.functionNameFromText (Text.pack name)
@@ -158,7 +159,7 @@ registerSkipOverride ::
   C.OverrideSim p sym ext r args' ret' ()
 registerSkipOverride la dl memVar funcName hdl =
   case createSkipOverride la dl memVar funcName (C.handleReturnType hdl) of
-    Nothing -> declaredFunNotFound funcName
-    Just ov ->
+    Left{} -> declaredFunNotFound funcName
+    Right ov ->
       let symbol = L.Symbol (Text.unpack (W4.functionName funcName))
        in CLLVM.bindLLVMHandle memVar symbol hdl (C.UseOverride ov)
