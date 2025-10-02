@@ -129,7 +129,7 @@ import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.Dwarf (loadDwarfPreconditions)
 import Grease.Macaw.Entrypoint (checkMacawEntrypointCfgsSignatures)
 import Grease.Macaw.Load qualified as Load
-import Grease.Macaw.Load.Relocation (RelocType (..), elfRelocationMap)
+import Grease.Macaw.Load.Relocation (RelocType (..), RelocationError (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
 import Grease.Macaw.Overrides.Address (AddressOverrides, loadAddressOverrides)
 import Grease.Macaw.Overrides.Address qualified as AddrOv
@@ -1375,7 +1375,10 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
   let symMap = Load.progSymMap loadedProg
   let dynFunMap = Load.progDynFunMap loadedProg
 
-  let relocs = elfRelocationMap (Proxy @(ArchReloc arch)) loadOpts elf
+  relocs <-
+    case elfRelocationMap (Proxy @(ArchReloc arch)) loadOpts elf of
+      Left err@RelocationSymbolNotFound{} -> malformedElf la (PP.pretty err)
+      Right rs -> pure rs
   let symbolRelocs =
         Map.mapMaybe
           ( \(reloc, symb) ->
