@@ -6,10 +6,10 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Load.Relocation (
   RelocType (..),
+  RelocationError (..),
   elfRelocationMap,
 ) where
 
-import Control.Exception (throw)
 import Data.ByteString qualified as BS
 import Data.ElfEdit qualified as EE
 import Data.Macaw.Memory qualified as MM
@@ -17,9 +17,8 @@ import Data.Macaw.Memory.LoadCommon qualified as MML
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Vector qualified as Vec
-import Data.Word (Word32)
-import Grease.Error (GreaseException (GreaseException))
-import Grease.Utility (tshow)
+import Data.Word (Word32, Word64)
+import Prettyprinter qualified as PP
 
 -- | An architecture-independent description of the type of a relocation. When
 -- appropriate, this groups together certain relocation types that have
@@ -34,6 +33,23 @@ data RelocType
     -- libraries (e.g., @R_ARM_GLOB_DAT@).
     SymbolReloc
   deriving Eq
+
+-- | Error type for 'elfRelocationMap'
+data RelocationError
+  = RelocationSymbolNotFound
+  { relocType :: String
+  , relocAddr :: Word64
+  }
+
+instance PP.Pretty RelocationError where
+  pretty (RelocationSymbolNotFound ty addr) =
+    PP.hcat
+      [ "Cannot find "
+      , PP.pretty ty
+      , " relocation (at address "
+      , PP.pretty addr
+      , ") in the dynamic symbol table"
+      ]
 
 -- | Read the @.rela.dyn@ and @.rel.dyn@ sections of an ELF binary (if they
 -- exist) to construct a map of dynamic relocation addresses to their
@@ -53,38 +69,57 @@ elfRelocationMap ::
   MML.LoadOptions ->
   -- | The dynamically linked ELF binary.
   EE.ElfHeaderInfo w ->
-  Map.Map (MM.MemWord w) (reloc, BS.ByteString)
-elfRelocationMap _ loadOpts ehi =
-  let relaDynMap = fromMaybe Map.empty $ do
-        relaDyn <- listToMaybe $ EE.findSectionByName ".rela.dyn" elf
+  Either RelocationError (Map.Map (MM.MemWord w) (reloc, BS.ByteString))
+elfRelocationMap _ loadOpts ehi = do
+  relaDynMap <-
+    case listToMaybe $ EE.findSectionByName ".rela.dyn" elf of
+      Nothing -> Right Map.empty
+      Just relaDyn -> do
         let relaDynBytes = EE.elfSectionData relaDyn
-        relas <- rightToMaybe $ EE.decodeRelaEntries (EE.elfData elf) relaDynBytes
-        Just $ Map.fromList $ map relaAddrType relas
+        case EE.decodeRelaEntries (EE.elfData elf) relaDynBytes of
+          Left _ -> Right Map.empty
+          Right relas -> do
+            let results = map relaAddrType relas
+            case sequence results of
+              Left err -> Left err
+              Right entries -> Right $ Map.fromList entries
 
-      relDynMap = fromMaybe Map.empty $ do
-        relDyn <- listToMaybe $ EE.findSectionByName ".rel.dyn" elf
+  relDynMap <-
+    case listToMaybe $ EE.findSectionByName ".rel.dyn" elf of
+      Nothing -> Right Map.empty
+      Just relDyn -> do
         let relDynBytes = EE.elfSectionData relDyn
-        rels <- rightToMaybe $ EE.decodeRelEntries (EE.elfData elf) relDynBytes
-        Just $ Map.fromList $ map relAddrType rels
-   in Map.union relaDynMap relDynMap
+        case EE.decodeRelEntries (EE.elfData elf) relDynBytes of
+          Left _ -> Right Map.empty
+          Right rels -> do
+            let results = map relAddrType rels
+            case sequence results of
+              Left err -> Left err
+              Right entries -> Right $ Map.fromList entries
+
+  Right $ Map.union relaDynMap relDynMap
  where
   (_, elf) = EE.getElf ehi
   elfClass = EE.elfClass elf
   offset = fromMaybe 0 $ MML.loadOffset loadOpts
 
-  relaAddrType :: EE.RelaEntry reloc -> (MM.MemWord w, (reloc, BS.ByteString))
+  relaAddrType :: EE.RelaEntry reloc -> Either RelocationError (MM.MemWord w, (reloc, BS.ByteString))
   relaAddrType rel =
     EE.elfClassInstances elfClass $
       let addr = MM.memWord (offset + fromIntegral (EE.relaAddr rel))
           relaType = EE.relaType rel
-       in (addr, (relaType, resolveRelocSym relaType addr (EE.relaSym rel)))
+       in case resolveRelocSym relaType addr (EE.relaSym rel) of
+            Left err -> Left err
+            Right symb -> Right (addr, (relaType, symb))
 
-  relAddrType :: EE.RelEntry reloc -> (MM.MemWord w, (reloc, BS.ByteString))
+  relAddrType :: EE.RelEntry reloc -> Either RelocationError (MM.MemWord w, (reloc, BS.ByteString))
   relAddrType rel =
     EE.elfClassInstances elfClass $
       let addr = MM.memWord (offset + fromIntegral (EE.relAddr rel))
           relType = EE.relType rel
-       in (addr, (relType, resolveRelocSym relType addr (EE.relSym rel)))
+       in case resolveRelocSym relType addr (EE.relSym rel) of
+            Left err -> Left err
+            Right symb -> Right (addr, (relType, symb))
 
   -- The dynamic symbol table, which contains the names of dynamic
   -- relocations. If the given binary does not have a symbol table, then this
@@ -109,18 +144,13 @@ elfRelocationMap _ loadOpts ehi =
     MM.MemWord w ->
     -- The relocation symbol's index in the dynamic symbol table.
     Word32 ->
-    BS.ByteString
+    Either RelocationError BS.ByteString
   resolveRelocSym reloc addr idx =
     case dynSymtab Vec.!? fromIntegral idx of
-      Just symb -> EE.steName symb
+      Just symb -> Right (EE.steName symb)
       Nothing ->
-        throw $
-          GreaseException $
-            "Cannot find "
-              <> tshow reloc
-              <> " relocation (at address "
-              <> tshow addr
-              <> ") in the dynamic symbol table"
-
-rightToMaybe :: Either l r -> Maybe r
-rightToMaybe = either (const Nothing) Just
+        Left $
+          RelocationSymbolNotFound
+            { relocType = show reloc
+            , relocAddr = MM.memWordValue addr
+            }
