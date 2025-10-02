@@ -6,17 +6,13 @@ module Grease.Requirement (
   displayReq,
   RequirementParser,
   reqParser,
-  parseReq,
 ) where
 
 import Control.Applicative (Alternative (..))
-import Control.Exception (throw)
 import Data.Aeson qualified as Aeson
 import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Generics (Generic)
-import Grease.Error (GreaseException (GreaseException))
-import Grease.Utility (tshow)
 import Prettyprinter qualified as PP
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
@@ -67,11 +63,3 @@ reqParser = inText <|> noMprotect
  where
   inText = symbol "in-text" *> pure InText
   noMprotect = symbol "no-mprotect" *> pure NoMprotect
-
--- | Parse a 'Requirement' and return the result in 'IO'. Throw an exception if
--- parsing fails.
-parseReq :: Text -> IO Requirement
-parseReq req =
-  case TM.parse reqParser "" req of
-    Left _err -> throw . GreaseException $ "Invalid requirement: " <> tshow req
-    Right val -> return val
