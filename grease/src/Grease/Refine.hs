@@ -104,7 +104,6 @@ import Data.Macaw.Symbolic.Memory qualified as MSM
 import Data.Map.Strict qualified as Map
 import Data.Maybe (Maybe (..), maybeToList)
 import Data.Maybe qualified as Maybe
-import Data.Monoid (mconcat)
 import Data.Ord ((>=))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Nonce (Nonce)
@@ -153,7 +152,6 @@ import Lang.Crucible.Simulator.PathSplitting qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
-import Prettyprinter qualified as PP
 import System.Exit qualified as Exit
 import System.IO (IO)
 import What4.Expr qualified as W4
@@ -356,13 +354,7 @@ consumer bak execResult la bbMap refineData = do
           runHeuristics [] _ =
             pure (ProveNoHeuristic (NE.singleton (NoHeuristic goal cData minfo)))
         runHeuristics heuristics argShapes
-      C.Unknown{} ->
-        throw . GreaseException . tshow $
-          mconcat
-            [ "Received unknown result from solver for goal:"
-            , PP.line
-            , PP.indent 4 (C.ppSimError simErr)
-            ]
+      C.Unknown{} -> pure (ProveCantRefine SolverUnknown)
 
 -- | Data needed to execute Crucible
 data ExecData p sym ext ret
@@ -462,8 +454,7 @@ proveAndRefine bak execResult la bbMap refineData goals = do
     Just goals' ->
       liftIO (runExceptT (C.proveGoals strat goals' cons))
         Monad.>>= \case
-          Left C.TimedOut ->
-            throw (GreaseException "Timeout when solving goal!")
+          Left C.TimedOut -> pure (ProveCantRefine SolverTimeout)
           Right r -> pure r
 
 execAndRefine ::
@@ -545,8 +536,7 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
             mbRefineResult <-
               combine (pure firstResult) (liftIO computeNextResult)
             case mbRefineResult of
-              Left C.TimedOut ->
-                throw (GreaseException "Timeout when solving goal!")
+              Left C.TimedOut -> pure (ProveCantRefine SolverTimeout)
               Right combinedResult -> pure (C.subgoalResult combinedResult)
   liftIO (go refineResult)
  where
@@ -564,6 +554,8 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
       ProveCantRefine (MissingFunc{}) -> "missing function"
       ProveCantRefine (MissingSemantics{}) -> "missing semantics"
       ProveCantRefine (MutableGlobal{}) -> "load from mut global"
+      ProveCantRefine (SolverTimeout{}) -> "solver timeout"
+      ProveCantRefine (SolverUnknown{}) -> "solver unknown"
       ProveCantRefine (Timeout{}) -> "symex timeout"
       ProveCantRefine (Unsupported{}) -> "unsupported feature"
 

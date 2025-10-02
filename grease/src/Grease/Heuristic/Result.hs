@@ -27,6 +27,8 @@ data CantRefine
     MissingFunc (Maybe String)
   | MissingSemantics Text
   | MutableGlobal String
+  | SolverTimeout
+  | SolverUnknown
   | Timeout
   | Unsupported String
   deriving (Generic, Show)
@@ -43,6 +45,8 @@ instance PP.Pretty CantRefine where
       MissingFunc Nothing -> "Missing implementation for function"
       MissingSemantics msg -> PP.pretty msg
       MutableGlobal name -> "Load from mutable global " PP.<> PP.pretty name
+      SolverTimeout -> "Solver timed out"
+      SolverUnknown -> "Solver reported UNKNOWN"
       Timeout -> "Symbolic execution timed out"
       Unsupported msg -> "Unsupported:" PP.<+> PP.pretty msg
 
