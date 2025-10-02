@@ -7,8 +7,8 @@
   (start start:
     (return ())))
 
-;; check [[
-;; Exception: Bad argument types for CFG `bad-args`: [Bool]
+;; user_error [[
+;; Bad argument types for CFG `bad-args`: [Bool]
 ;; Expected a single argument, the struct of register values
 ;; ]]
 
@@ -19,7 +19,7 @@
   (start start:
     (return ())))
 
-;; check [[
-;; Exception: Bad return type for CFG `bad-ret`: Unit
+;; user_error [[
+;; Bad return type for CFG `bad-ret`: Unit
 ;; Expected the struct of register values
 ;; ]]

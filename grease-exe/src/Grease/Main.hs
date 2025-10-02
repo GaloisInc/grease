@@ -128,6 +128,7 @@ import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.Dwarf (loadDwarfPreconditions)
 import Grease.Macaw.Entrypoint (checkMacawEntrypointCfgsSignatures)
+import Grease.Macaw.Entrypoint qualified as GME
 import Grease.Macaw.Load qualified as Load
 import Grease.Macaw.Load.Relocation (RelocType (..), RelocationError (..), elfRelocationMap)
 import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
@@ -1162,8 +1163,15 @@ simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfg
       let nEntries = Map.size cfgs
       iforM (Map.toList cfgs) $ \i (entry, MacawEntrypointCfgs entrypointCfgs mbCfgAddr) ->
         analyzeEntrypoint la entry i nEntries $ do
-          entrypointCfgsSome <-
-            checkMacawEntrypointCfgsSignatures archCtx entrypointCfgs
+          entrypointCfgsSome <- do
+            let usrErr err = do
+                  let url = "https://galoisinc.github.io/grease/sexp-progs.html"
+                  userError la (PP.pretty err <> "\n" <> "For more information, see " <> url)
+            case checkMacawEntrypointCfgsSignatures archCtx entrypointCfgs of
+              -- See Note [Explicitly listed errors]
+              Left err@GME.BadArgs{} -> usrErr err
+              Left err@GME.BadRet{} -> usrErr err
+              Right ok -> pure ok
           status <- simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs mbCfgAddr entrypointCfgsSome
           let result =
                 Batch
