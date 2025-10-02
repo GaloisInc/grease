@@ -74,6 +74,7 @@ import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lumberjack qualified as LJ
 import Numeric.Natural (Natural)
+import Prettyprinter qualified as PP
 import Text.LLVM.AST qualified as L
 import What4.Expr qualified as W4
 import What4.Interface qualified as W4
@@ -129,7 +130,7 @@ refinePtrArg ::
   ) =>
   GreaseLogAction ->
   ArgShapes ext NoTag argTys ->
-  ((regTy ~ Mem.LLVMPointerType w) => PtrTarget w NoTag -> IO (PtrTarget w NoTag)) ->
+  ((regTy ~ Mem.LLVMPointerType w) => PtrTarget w NoTag -> Either ModifyPtrError (PtrTarget w NoTag)) ->
   ArgSelector ext argTys ts regTy ->
   IO (HeuristicResult ext argTys)
 refinePtrArg la args modify sel =
@@ -137,14 +138,22 @@ refinePtrArg la args modify sel =
     ShapeExt (ShapePtrBV _tag w) | Just Refl <- testEquality w ?ptrWidth -> do
       let pt = ptrTarget Nothing Seq.empty
       doLog la $ Diag.HeuristicPtrTarget pt
-      pt' <- modify pt
-      let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (Offset 0) pt')
-      pure $ RefinedPrecondition args'
+      let result = modify pt
+      -- A note on the `panic`s: These errors are impossible, because we always
+      -- use valid `ArgSelector`s in these heuristics.
+      case result of
+        Left err -> panic "refinePtrArg" [show (PP.pretty err)]
+        Right pt' -> do
+          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (Offset 0) pt')
+          pure $ RefinedPrecondition args'
     ShapeExt (ShapePtr _tag offset pt) -> do
       doLog la $ Diag.HeuristicPtrTarget pt
-      pt' <- modify pt
-      let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag offset pt')
-      pure $ RefinedPrecondition args'
+      let result = modify pt
+      case result of
+        Left err -> panic "refinePtrArg" [show (PP.pretty err)]
+        Right pt' -> do
+          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag offset pt')
+          pure $ RefinedPrecondition args'
     _ -> pure Unknown
 
 -- | If a byte was treated as a pointer, turn it into one
@@ -196,7 +205,7 @@ handleMemErr la argNames args err sel =
     _ -> do
       let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
       doLog la $ Diag.DefaultHeuristicsGrowAndInitMem argName sel
-      let modifyInner = pure @IO . initializeOrGrowPtrTarget NoTag
+      let modifyInner = Right . initializeOrGrowPtrTarget NoTag
       let path = sel ^. argSelectorPath
       refinePtrArg la args (modifyPtrTarget ?ptrWidth modifyInner path) sel
 
@@ -257,7 +266,7 @@ modPtr la anns sym args modify ptr = do
   case Anns.lookupPtrAnnotation anns sym ?ptrWidth ptr of
     Just (Anns.SomePtrSelector (SelectArg sel)) -> do
       let path = sel ^. argSelectorPath
-      refinePtrArg la args (modifyPtrTarget ?ptrWidth (pure . modify) path) sel
+      refinePtrArg la args (modifyPtrTarget ?ptrWidth (Right . modify) path) sel
     Just (Anns.SomePtrSelector (SelectRet{})) ->
       pure Unknown
     Nothing ->
