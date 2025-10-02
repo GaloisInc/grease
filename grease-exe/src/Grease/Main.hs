@@ -1260,13 +1260,14 @@ loadAddrOvs ::
   IO (AddressOverrides arch)
 loadAddrOvs la archCtx halloc memory simOpts = do
   mbAddrOvs <- loadAddressOverrides (regStructRepr archCtx) halloc memory (simAddressOverrides simOpts)
+  let usrErr = userError la . PP.pretty
   case mbAddrOvs of
     -- See Note [Explicitly listed errors]
-    Left e@AddrOv.BadAddress{} -> userError la (PP.pretty e)
-    Left e@AddrOv.BadAddressOverrideArgs{} -> userError la (PP.pretty e)
-    Left e@AddrOv.BadAddressOverrideReturn{} -> userError la (PP.pretty e)
-    Left e@AddrOv.OverrideNameError{} -> userError la (PP.pretty e)
-    Left e@AddrOv.AddressOverrideParseError{} -> userError la (PP.pretty e)
+    Left e@AddrOv.BadAddress{} -> usrErr e
+    Left e@AddrOv.BadAddressOverrideArgs{} -> usrErr e
+    Left e@AddrOv.BadAddressOverrideReturn{} -> usrErr e
+    Left e@AddrOv.OverrideNameError{} -> usrErr e
+    Left e@AddrOv.AddressOverrideParseError{} -> usrErr e
     Right addrOvs -> pure addrOvs
 
 loadLLVMSExpOvs ::
@@ -1936,23 +1937,25 @@ doLoad ::
   Permissions ->
   Elf.ElfHeaderInfo (MC.ArchAddrWidth arch) ->
   IO (Load.LoadedProgram arch)
-doLoad la _proxy entries perms elf =
+doLoad la _proxy entries perms elf = do
+  let usrErr = userError la . PP.pretty
+  let badElf = malformedElf la . PP.pretty
   Load.load la entries perms elf
     >>= \case
       Right ok -> pure ok
       -- See Note [Explicitly listed errors]
       -- User errors
-      Left e@Load.UnsupportedObjectFile{} -> userError la (PP.pretty e)
-      Left e@Load.EntrypointNotFound{} -> userError la (PP.pretty e)
-      Left e@Load.InvalidEntrypointAddress{} -> userError la (PP.pretty e)
+      Left e@Load.UnsupportedObjectFile{} -> usrErr e
+      Left e@Load.EntrypointNotFound{} -> usrErr e
+      Left e@Load.InvalidEntrypointAddress{} -> usrErr e
       -- Bad inputs
-      Left e@Load.ElfParseError{} -> malformedElf la (PP.pretty e)
-      Left e@Load.DynamicFunctionAddressUnresolvable{} -> malformedElf la (PP.pretty e)
-      Left e@Load.CoreDumpClassMismatch{} -> malformedElf la (PP.pretty e)
-      Left e@Load.CoreDumpNotesError{} -> malformedElf la (PP.pretty e)
-      Left e@Load.CoreDumpPcError{} -> malformedElf la (PP.pretty e)
-      Left e@Load.CoreDumpAddressUnresolvable{} -> malformedElf la (PP.pretty e)
-      Left e@Load.CoreDumpNoEntrypoint{} -> malformedElf la (PP.pretty e)
+      Left e@Load.ElfParseError{} -> badElf e
+      Left e@Load.DynamicFunctionAddressUnresolvable{} -> badElf e
+      Left e@Load.CoreDumpClassMismatch{} -> badElf e
+      Left e@Load.CoreDumpNotesError{} -> badElf e
+      Left e@Load.CoreDumpPcError{} -> badElf e
+      Left e@Load.CoreDumpAddressUnresolvable{} -> badElf e
+      Left e@Load.CoreDumpNoEntrypoint{} -> badElf e
 
 simulateARM :: SimOpts -> GreaseLogAction -> IO Results
 simulateARM simOpts la = do
