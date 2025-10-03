@@ -95,7 +95,7 @@ cat <<'EOF' > .git/hooks/pre-commit
 
 set -eu
 
-files=$(git diff --name-only --cached -- '*.hs')
+files=$(git diff --diff-filter=d --name-only --cached -- '*.hs')
 if [[ -n "${files}" ]]; then
     fourmolu --mode inplace ${files[@]}
     git add ${files[@]}
