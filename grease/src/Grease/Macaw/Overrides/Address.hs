@@ -32,7 +32,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Void (Void)
-import GHC.Stack (HasCallStack, callStack)
+import GHC.Stack (HasCallStack)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Macaw.Arch (ArchContext, archVals)
 import Grease.Macaw.Overrides qualified as GMO
@@ -61,7 +61,6 @@ import Text.Megaparsec.Char.Lexer qualified as TMCL
 import What4.Expr qualified as W4
 import What4.Expr.Builder qualified as WEB
 import What4.FunctionName qualified as W4
-import What4.Interface qualified as WI
 import What4.Protocol.Online qualified as WPO
 
 -- | Parse a symbol from 'TM.Tokens'.
@@ -361,11 +360,8 @@ runAddressOverride memVar crucState someCfg regs = do
         let ctx = crucState Lens.^. C.stateContext
         C.withBackend ctx $ \bak -> do
           let sym = C.backendGetSym bak
-          loc <- WI.getCurrentProgramLoc sym
           let msg = "Address override did not return a result nor abort"
-          let reason = C.Unsupported callStack msg
-          let simErr = C.SimError loc reason
-          C.abortExecBecause (C.AssertionFailure simErr)
+          C.throwUnsupported sym msg
 
 tryRunAddressOverride ::
   ( sym ~ W4.ExprBuilder t st fs
