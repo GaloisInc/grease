@@ -12,7 +12,7 @@ env:
   # when (for example) the OS version is changed but older .so files are
   # cached, which can have various effects (e.g. cabal complains it can't find
   # a valid version of the "happy" tool).
-  CACHE_VERSION: 2
+  CACHE_VERSION: 0
 
 defaults:
   run:
