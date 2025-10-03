@@ -30,6 +30,7 @@ module Grease.Main (
 import Control.Applicative (pure)
 import Control.Concurrent.Async (Async, cancel)
 import Control.Exception.Safe (Handler (..), MonadThrow, catches, throw)
+import Control.Exception.Safe qualified as X
 import Control.Lens (to, (.~), (^.))
 import Control.Monad (forM, forM_, mapM_, when, (>>=))
 import Control.Monad qualified as Monad
@@ -111,7 +112,6 @@ import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint
-import Grease.Error (GreaseException (GreaseException))
 import Grease.ExecutionFeatures (greaseExecFeats)
 import Grease.Heuristic
 import Grease.LLVM qualified as LLVM
@@ -202,6 +202,12 @@ import What4.Interface qualified as W4
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
 import Prelude (Int, Integer, Integral, Num (..), fromIntegral)
+
+-- TODO(#410): Eliminate this exception type
+newtype GreaseException = GreaseException Text.Text
+instance X.Exception GreaseException
+instance Show GreaseException where
+  show (GreaseException msg) = Text.unpack msg
 
 {- Note [Explicitly listed errors]
 
