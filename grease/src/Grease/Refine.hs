@@ -83,7 +83,6 @@ module Grease.Refine (
 ) where
 
 import Control.Applicative (pure)
-import Control.Exception.Safe (MonadThrow, throw)
 import Control.Exception.Safe qualified as X
 import Control.Lens ((^.))
 import Control.Monad qualified as Monad
@@ -122,7 +121,6 @@ import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic
-import Grease.Error (GreaseException (GreaseException))
 import Grease.ExecutionFeatures (boundedExecFeats)
 import Grease.Heuristic
 import Grease.Options (BoundsOpts)
@@ -325,8 +323,9 @@ consumer bak execResult la bbMap refineData = do
             $ doLog la Diag.NoAnnotationOnPredicate
           pure Nothing
         (ann : _) -> case Map.lookup ann bbMap of
-          Nothing ->
-            throw . GreaseException $ "Predicate annotation was not found in bad behavior map: " <> tshow ann
+          Nothing -> do
+            doLog la Diag.PredNotFound
+            pure Nothing
           info -> pure info
     case result of
       C.Proved{} -> do
@@ -460,7 +459,6 @@ proveAndRefine bak execResult la bbMap refineData goals = do
 execAndRefine ::
   forall ext solver sym bak t st argTys ret w m fm p.
   ( MonadIO m
-  , MonadThrow m
   , C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
   , 16 C.<= w
