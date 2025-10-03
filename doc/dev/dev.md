@@ -79,7 +79,7 @@ This repo enforces Fourmolu formatting based on the committed configuration in `
 [here](https://github.com/fourmolu/fourmolu). In short:
 
 ```sh
-cabal install fourmolu-0.18.0.0
+cabal install fourmolu-0.19.0.0
 fourmolu --mode inplace $(git ls-files '*.hs')
 ```
 
