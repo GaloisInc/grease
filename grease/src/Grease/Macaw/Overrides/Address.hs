@@ -19,7 +19,6 @@ module Grease.Macaw.Overrides.Address (
 ) where
 
 import Control.Applicative (empty)
-import Control.Exception qualified as X
 import Control.Lens qualified as Lens
 import Control.Monad qualified as Monad
 import Data.Macaw.CFG qualified as MC
@@ -33,8 +32,8 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Void (Void)
+import GHC.Stack (HasCallStack, callStack)
 import Grease.Concretize.ToConcretize (HasToConcretize)
-import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw.Arch (ArchContext, archVals)
 import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
@@ -62,6 +61,7 @@ import Text.Megaparsec.Char.Lexer qualified as TMCL
 import What4.Expr qualified as W4
 import What4.Expr.Builder qualified as WEB
 import What4.FunctionName qualified as W4
+import What4.Interface qualified as WI
 import What4.Protocol.Online qualified as WPO
 
 -- | Parse a symbol from 'TM.Tokens'.
@@ -334,6 +334,7 @@ toInitialState memVar crucState retTy action = do
 runAddressOverride ::
   ( sym ~ W4.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
+  , HasCallStack
   ) =>
   C.GlobalVar LCLM.Mem ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
@@ -356,8 +357,15 @@ runAddressOverride memVar crucState someCfg regs = do
           C.assert bak p (C.GenericSimError ("Assertion from address override at " ++ show loc))
           pure ()
       C.AbortedResult _ (C.AbortedExec reason _) -> C.abortExecBecause reason
-      _ ->
-        X.throw (GreaseException "Address override did not return a result nor abort")
+      _ -> do
+        let ctx = crucState Lens.^. C.stateContext
+        C.withBackend ctx $ \bak -> do
+          let sym = C.backendGetSym bak
+          loc <- WI.getCurrentProgramLoc sym
+          let msg = "Address override did not return a result nor abort"
+          let reason = C.Unsupported callStack msg
+          let simErr = C.SimError loc reason
+          C.abortExecBecause (C.AssertionFailure simErr)
 
 tryRunAddressOverride ::
   ( sym ~ W4.ExprBuilder t st fs
