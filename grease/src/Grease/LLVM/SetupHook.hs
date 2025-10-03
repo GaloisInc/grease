@@ -75,8 +75,9 @@ syntaxSetupHook ::
   Seq.Seq (W4.FunctionName, GLOS.LLVMSExpOverride) ->
   CSyn.ParsedProgram LLVM ->
   Map GE.Entrypoint (GE.EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
+  GLO.CantResolveOverrideCallback sym ->
   SetupHook sym arch
-syntaxSetupHook la ovs prog cfgs =
+syntaxSetupHook la ovs prog cfgs errCb =
   SetupHook $ \bak _halloc llvmCtx fs -> do
     let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
     let dl = TCtx.llvmDataLayout typeCtx
@@ -84,7 +85,7 @@ syntaxSetupHook la ovs prog cfgs =
 
     -- Register built-in and user overrides.
     funOvs <-
-      registerLLVMSexpOverrides la (builtinLLVMOverrides fs) ovs bak llvmCtx fs prog
+      registerLLVMSexpOverrides la (builtinLLVMOverrides fs) ovs bak llvmCtx fs prog errCb
 
     -- In addition to binding function handles for the user overrides,
     -- we must also redirect function handles resulting from parsing
@@ -119,8 +120,9 @@ moduleSetupHook ::
   Seq.Seq (W4.FunctionName, GLOS.LLVMSExpOverride) ->
   Trans.ModuleTranslation arch ->
   Map GE.Entrypoint (GE.EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
+  GLO.CantResolveOverrideCallback sym ->
   SetupHook sym arch
-moduleSetupHook la ovs trans cfgs =
+moduleSetupHook la ovs trans cfgs errCb =
   SetupHook $ \bak _halloc llvmCtx fs -> do
     let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
     let dl = TCtx.llvmDataLayout typeCtx
@@ -135,7 +137,7 @@ moduleSetupHook la ovs trans cfgs =
     -- registering defined functions so that overrides take precedence over
     -- defined functions.
     funOvs <-
-      GLO.registerLLVMModuleOverrides la (builtinLLVMOverrides fs) ovs bak llvmCtx fs llvmMod
+      GLO.registerLLVMModuleOverrides la (builtinLLVMOverrides fs) ovs bak llvmCtx fs llvmMod errCb
     -- If a startup override exists and it contains forward declarations,
     -- then we redirect the function handles to actually call the respective
     -- overrides.

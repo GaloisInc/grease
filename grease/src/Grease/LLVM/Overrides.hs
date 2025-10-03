@@ -8,12 +8,12 @@
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.LLVM.Overrides (
+  CantResolveOverrideCallback (..),
   bindLLVMOverrideFnHandle,
   registerLLVMOverrides,
   registerLLVMSexpOverrides,
   registerLLVMModuleOverrides,
   registerLLVMSexpProgForwardDeclarations,
-  registerLLVMOvForwardDeclarations,
 ) where
 
 import Control.Monad (forM, unless)
@@ -32,7 +32,7 @@ import Grease.LLVM.Overrides.SExp (LLVMSExpOverride (..))
 import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.Skip (declSkipOverride, registerSkipOverride)
 import Grease.Syntax.Overrides (freshBytesOverride, tryBindTypedOverride)
-import Grease.Utility (declaredFunNotFound, llvmOverrideName)
+import Grease.Utility (llvmOverrideName)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
@@ -53,6 +53,15 @@ import What4.FunctionName qualified as W4
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMOverridesDiagnostic diag)
+
+newtype CantResolveOverrideCallback sym
+  = CantResolveOverrideCallback
+  { runCantResideOverrideCallback ::
+      forall p args ret rtp as r.
+      W4.FunctionName ->
+      C.FnHandle args ret ->
+      C.OverrideSim p sym CLLVM.LLVM rtp as r ()
+  }
 
 -- | Bind a 'C.FnHandle' to an 'CLLVM.LLVMOverride'. Note that the argument and
 -- result types of the 'C.FnHandle' and the 'CLLVM.LLVMOverride' do not need to
@@ -126,11 +135,12 @@ registerLLVMOverrides ::
   SymIO.LLVMFileSystem 64 ->
   -- | @declare@s in the target program
   [L.Declare] ->
+  CantResolveOverrideCallback sym ->
   -- | Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
   C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
-registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls = do
+registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls errCb = do
   let mvar = CLLVM.llvmMemVar llvmCtx
 
   -- For convenience, we treat all programs and overrides as if they `declare`d
@@ -181,9 +191,9 @@ registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls = do
   -- Next, register the handles for forward declarations in user-defined
   -- overrides. We only do this after registering all of the public functions
   -- so as to ensure that we get the dependencies correct.
-  Foldable.for_ userOvs $ \(_, lso) ->
-    registerLLVMOvForwardDeclarations mvar allOvs $
-      lsoForwardDeclarations lso
+  Foldable.for_ userOvs $ \(_, lso) -> do
+    let fwdDecs = lsoForwardDeclarations lso
+    registerLLVMForwardDeclarations mvar allOvs errCb fwdDecs
   pure allOvs
  where
   registerOv ::
@@ -216,13 +226,15 @@ registerLLVMSexpOverrides ::
   LLVMContext arch ->
   SymIO.LLVMFileSystem 64 ->
   CSyn.ParsedProgram CLLVM.LLVM ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym ->
   -- | Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
   C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
-registerLLVMSexpOverrides la builtinOvs sexpOvs bak llvmCtx fs prog = do
+registerLLVMSexpOverrides la builtinOvs sexpOvs bak llvmCtx fs prog errCb = do
   let decls = forwardDeclDecls (CSyn.parsedProgForwardDecs prog)
-  registerLLVMOverrides la builtinOvs sexpOvs bak llvmCtx fs decls
+  registerLLVMOverrides la builtinOvs sexpOvs bak llvmCtx fs decls errCb
 
 -- | For an LLVM module, register function overrides and return a 'Map.Map' of
 -- override names to their corresponding 'CLLVM.SomeLLVMOverride's, suitable
@@ -248,13 +260,15 @@ registerLLVMModuleOverrides ::
   LLVMContext arch ->
   SymIO.LLVMFileSystem 64 ->
   L.Module ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym ->
   -- | Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
   C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
-registerLLVMModuleOverrides la builtinOvs sexpOvs bak llvmCtx fs llMod = do
+registerLLVMModuleOverrides la builtinOvs sexpOvs bak llvmCtx fs llMod errCb = do
   let decls = L.modDeclares llMod
-  registerLLVMOverrides la builtinOvs sexpOvs bak llvmCtx fs decls
+  registerLLVMOverrides la builtinOvs sexpOvs bak llvmCtx fs decls errCb
 
 -- | Redirect handles for forward declarations in an LLVM S-expression program
 -- to call the corresponding LLVM overrides. Treat any calls to unresolved
@@ -276,27 +290,8 @@ registerLLVMSexpProgForwardDeclarations ::
   C.OverrideSim p sym CLLVM.LLVM rtp as r ()
 registerLLVMSexpProgForwardDeclarations la dl mvar funOvs =
   registerLLVMForwardDeclarations mvar funOvs $
-    registerSkipOverride la dl mvar
-
--- | Redirect handles for forward declarations in an LLVM S-expression override
--- to call the corresponding LLVM overrides. Attempting to call an unresolved
--- forward declaration will raise an error.
-registerLLVMOvForwardDeclarations ::
-  ( C.IsSymInterface sym
-  , Mem.HasPtrWidth w
-  , Mem.HasLLVMAnn sym
-  , ToConc.HasToConcretize p
-  , ?memOpts :: Mem.MemOptions
-  ) =>
-  C.GlobalVar Mem.Mem ->
-  -- | The map of public function names to their overrides.
-  Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM) ->
-  -- | The map of forward declaration names to their handles.
-  Map.Map W4.FunctionName C.SomeHandle ->
-  C.OverrideSim p sym CLLVM.LLVM rtp as r ()
-registerLLVMOvForwardDeclarations mvar funOvs =
-  registerLLVMForwardDeclarations mvar funOvs $ \fwdDecName _ ->
-    declaredFunNotFound fwdDecName
+    CantResolveOverrideCallback $
+      registerSkipOverride la dl mvar
 
 -- | Redirect handles for forward declarations in an S-expression file to
 -- actually call the corresponding LLVM overrides. If a forward declaration
@@ -312,15 +307,12 @@ registerLLVMForwardDeclarations ::
   -- | The map of public function names to their overrides.
   Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM) ->
   -- | What to do when a forward declaration cannot be resolved.
-  ( forall args ret.
-    W4.FunctionName ->
-    C.FnHandle args ret ->
-    C.OverrideSim p sym CLLVM.LLVM rtp as r ()
-  ) ->
+  CantResolveOverrideCallback sym ->
   -- | The map of forward declaration names to their handles.
   Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym CLLVM.LLVM rtp as r ()
-registerLLVMForwardDeclarations mvar funOvs cannotResolve fwdDecs =
+registerLLVMForwardDeclarations mvar funOvs errCb fwdDecs = do
+  let CantResolveOverrideCallback cannotResolve = errCb
   Foldable.for_ (Map.toList fwdDecs) $ \(fwdDecName, C.SomeHandle hdl) ->
     case Map.lookup fwdDecName funOvs of
       Just (CLLVM.SomeLLVMOverride llvmOverride) ->
