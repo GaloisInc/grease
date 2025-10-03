@@ -30,6 +30,7 @@ import Grease.LLVM.Overrides.Declare (mkDeclare)
 import Grease.LLVM.Overrides.Diagnostic as Diag
 import Grease.LLVM.Overrides.SExp (LLVMSExpOverride (..))
 import Grease.LLVM.Overrides.SExp qualified as GLOS
+import Grease.Overrides (CantResolveOverrideCallback (..))
 import Grease.Skip (declSkipOverride, registerSkipOverride)
 import Grease.Syntax.Overrides (freshBytesOverride, tryBindTypedOverride)
 import Grease.Utility (llvmOverrideName)
@@ -53,15 +54,6 @@ import What4.FunctionName qualified as W4
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMOverridesDiagnostic diag)
-
-newtype CantResolveOverrideCallback sym
-  = CantResolveOverrideCallback
-  { runCantResideOverrideCallback ::
-      forall p args ret rtp as r.
-      W4.FunctionName ->
-      C.FnHandle args ret ->
-      C.OverrideSim p sym CLLVM.LLVM rtp as r ()
-  }
 
 -- | Bind a 'C.FnHandle' to an 'CLLVM.LLVMOverride'. Note that the argument and
 -- result types of the 'C.FnHandle' and the 'CLLVM.LLVMOverride' do not need to
@@ -135,7 +127,7 @@ registerLLVMOverrides ::
   SymIO.LLVMFileSystem 64 ->
   -- | @declare@s in the target program
   [L.Declare] ->
-  CantResolveOverrideCallback sym ->
+  CantResolveOverrideCallback sym CLLVM.LLVM ->
   -- | Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
@@ -227,7 +219,7 @@ registerLLVMSexpOverrides ::
   SymIO.LLVMFileSystem 64 ->
   CSyn.ParsedProgram CLLVM.LLVM ->
   -- | What to do when a forward declaration cannot be resolved.
-  CantResolveOverrideCallback sym ->
+  CantResolveOverrideCallback sym CLLVM.LLVM ->
   -- | Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
@@ -261,7 +253,7 @@ registerLLVMModuleOverrides ::
   SymIO.LLVMFileSystem 64 ->
   L.Module ->
   -- | What to do when a forward declaration cannot be resolved.
-  CantResolveOverrideCallback sym ->
+  CantResolveOverrideCallback sym CLLVM.LLVM ->
   -- | Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
@@ -307,7 +299,7 @@ registerLLVMForwardDeclarations ::
   -- | The map of public function names to their overrides.
   Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM) ->
   -- | What to do when a forward declaration cannot be resolved.
-  CantResolveOverrideCallback sym ->
+  CantResolveOverrideCallback sym CLLVM.LLVM ->
   -- | The map of forward declaration names to their handles.
   Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym CLLVM.LLVM rtp as r ()

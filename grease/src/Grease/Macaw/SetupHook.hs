@@ -20,9 +20,10 @@ import Data.Map.Strict qualified as Map
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Entrypoint qualified as GE
-import Grease.Macaw.Overrides as GMO
+import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.Address as GMOA
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
+import Grease.Overrides (CantResolveOverrideCallback (..))
 import Grease.Utility (declaredFunNotFound)
 import Lang.Crucible.Backend qualified as LCB
 import Lang.Crucible.Backend.Online qualified as LCB
@@ -58,14 +59,14 @@ newtype SetupHook sym arch
         bak ->
         LCS.GlobalVar LCLM.Mem ->
         -- Map of names of overridden functions to their implementations
-        Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
+        Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
         LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
       )
 
 -- | Register overrides, both user-defined ones and ones that are hard-coded
 -- into GREASE itself.
 registerOverrideCfgs ::
-  Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideCfgs funOvs =
   Monad.forM_ (Map.elems funOvs) $ \mso -> do
@@ -77,7 +78,7 @@ registerOverrideCfgs funOvs =
     Monad.forM_ auxFns $ \(LCS.FnBinding auxHdl auxSt) -> LCS.bindFnHandle auxHdl auxSt
 
 -- | Redirect function handles from forward declarations appearing in
--- 'MacawSExpOverride's to their implementations.
+-- 'GMO.MacawSExpOverride's to their implementations.
 registerOverrideForwardDeclarations ::
   ( LCLM.HasPtrWidth (ArchAddrWidth arch)
   , LCB.IsSymBackend sym bak
@@ -87,7 +88,7 @@ registerOverrideForwardDeclarations ::
   , HasToConcretize p
   ) =>
   bak ->
-  Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideForwardDeclarations bak funOvs =
   Monad.forM_ (Map.elems funOvs) $ \mso ->
@@ -96,10 +97,10 @@ registerOverrideForwardDeclarations bak funOvs =
         GMO.registerMacawOvForwardDeclarations
           bak
           funOvs
-          (GMO.CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
+          (CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
           (Stubs.functionForwardDeclarations fnOv)
 
--- | Register all handles from a 'MacawSExpOverride'.
+-- | Register all handles from a 'GMO.MacawSExpOverride'.
 --
 -- Calls 'registerOverrides' and 'registerOverrideForwardDeclarations'.
 registerOverrideHandles ::
@@ -111,7 +112,7 @@ registerOverrideHandles ::
   , HasToConcretize p
   ) =>
   bak ->
-  Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideHandles bak funOvs = do
   registerOverrideCfgs funOvs
@@ -146,7 +147,7 @@ registerSyntaxForwardDeclarations ::
   DataLayout ->
   LCS.GlobalVar LCLM.Mem ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerSyntaxForwardDeclarations bak la dl mvar funOvs prog =
@@ -171,7 +172,7 @@ registerSyntaxHandles ::
   DataLayout ->
   LCS.GlobalVar LCLM.Mem ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map WF.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerSyntaxHandles bak la dl mvar funOvs prog = do
@@ -201,7 +202,7 @@ syntaxSetupHook la dl cfgs prog =
         GMO.registerMacawOvForwardDeclarations
           bak
           funOvs
-          (GMO.CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
+          (CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
           startupOvFwdDecs
 
 -- | A 'SetupHook' for Macaw CFGs from binaries.
@@ -236,5 +237,5 @@ binSetupHook addrOvs cfgs =
         GMO.registerMacawOvForwardDeclarations
           bak
           funOvs
-          (GMO.CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
+          (CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
           startupOvFwdDecs

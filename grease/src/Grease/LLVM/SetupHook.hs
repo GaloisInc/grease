@@ -23,6 +23,7 @@ import Grease.LLVM.Overrides qualified as GLO
 import Grease.LLVM.Overrides.Builtin (builtinLLVMOverrides)
 import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.LLVM.SetupHook.Diagnostic qualified as Diag
+import Grease.Overrides (CantResolveOverrideCallback (..))
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
@@ -75,7 +76,7 @@ syntaxSetupHook ::
   Seq.Seq (W4.FunctionName, GLOS.LLVMSExpOverride) ->
   CSyn.ParsedProgram LLVM ->
   Map GE.Entrypoint (GE.EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
-  GLO.CantResolveOverrideCallback sym ->
+  CantResolveOverrideCallback sym CLLVM.LLVM ->
   SetupHook sym arch
 syntaxSetupHook la ovs prog cfgs errCb =
   SetupHook $ \bak _halloc llvmCtx fs -> do
@@ -120,7 +121,7 @@ moduleSetupHook ::
   Seq.Seq (W4.FunctionName, GLOS.LLVMSExpOverride) ->
   Trans.ModuleTranslation arch ->
   Map GE.Entrypoint (GE.EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
-  GLO.CantResolveOverrideCallback sym ->
+  CantResolveOverrideCallback sym CLLVM.LLVM ->
   SetupHook sym arch
 moduleSetupHook la ovs trans cfgs errCb =
   SetupHook $ \bak _halloc llvmCtx fs -> do

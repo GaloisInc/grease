@@ -37,6 +37,7 @@ import Grease.Macaw.Arch
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (..), loadOverrides)
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, MacawOverride)
+import Grease.Overrides (CantResolveOverrideCallback (..))
 import Grease.Skip (registerSkipOverride)
 import Grease.Syntax (ParseProgramError)
 import Grease.Syntax.Overrides as SExp
@@ -54,15 +55,6 @@ import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as W4
 import What4.Protocol.Online qualified as W4
-
-newtype CantResolveOverrideCallback sym arch
-  = CantResolveOverrideCallback
-  { runCantResolveOverrideCallback ::
-      forall p args ret rtp as r.
-      W4.FunctionName ->
-      C.FnHandle args ret ->
-      C.OverrideSim p sym (Symbolic.MacawExt arch) rtp as r ()
-  }
 
 -- | Convert a 'Stubs.FunctionOverride' to a 'MacawOverride'. Really, this
 -- functionality ought to be exposed from @stubs-common@. See
@@ -279,7 +271,7 @@ registerMacawOvForwardDeclarations ::
   -- | The map of public function names to their overrides.
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   -- | What to do when a forward declaration cannot be resolved.
-  CantResolveOverrideCallback sym arch ->
+  CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   -- | The map of forward declaration names to their handles.
   Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
@@ -301,7 +293,7 @@ registerMacawForwardDeclarations ::
   -- | The map of public function names to their overrides.
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   -- | What to do when a forward declaration cannot be resolved.
-  CantResolveOverrideCallback sym arch ->
+  CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   -- | The map of forward declaration names to their handles.
   Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()

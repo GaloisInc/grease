@@ -37,7 +37,7 @@ import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Macaw.Arch (ArchContext, archVals)
 import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
-import Grease.Overrides (OverrideNameError (..), partitionCfgs)
+import Grease.Overrides (CantResolveOverrideCallback (..), OverrideNameError (..), partitionCfgs)
 import Grease.Syntax (ParseProgramError, parseProgram)
 import Grease.Utility (declaredFunNotFound, tshow)
 import Lang.Crucible.Backend qualified as C
@@ -273,7 +273,7 @@ registerAddressOverrideForwardDeclarations bak funOvs addrOvs = do
     GMO.registerMacawOvForwardDeclarations
       bak
       funOvs
-      (GMO.CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
+      (CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
       fwdDecs
 
 -- | Register CFGs appearing an in 'AddressOverride'.
