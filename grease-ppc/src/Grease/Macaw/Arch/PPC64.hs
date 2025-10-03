@@ -10,6 +10,7 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Arch.PPC64 (ppc64Ctx) where
 
+import Control.Lens ((^.))
 import Data.BitVector.Sized qualified as BV
 import Data.ElfEdit qualified as EE
 import Data.Macaw.BinaryLoader qualified as Loader
@@ -17,6 +18,7 @@ import Data.Macaw.PPC qualified as PPC
 import Data.Macaw.PPC.Symbolic.Regs qualified as PPC.Symbolic.Regs
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map qualified as Map
+import Data.Parameterized.Classes (ixF')
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
@@ -75,7 +77,7 @@ ppc64Ctx mbReturnAddr stackArgSlots loadedBinary = do
     ArchContext
       { _archInfo = PPC.ppc64_linux_info loadedBinary
       , _archGetIP = \regs -> do
-          C.RV (Mem.LLVMPointer _base off) <- PPC.Symbolic.Regs.lookupReg PPC.PPC_IP regs
+          let C.RV (Mem.LLVMPointer _base off) = regs ^. ixF' PPC.Symbolic.Regs.ip
           pure off
       , _archPcReg = PPC.PPC_IP
       , _archVals = avals
