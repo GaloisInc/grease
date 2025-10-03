@@ -116,6 +116,7 @@ import Grease.ExecutionFeatures (greaseExecFeats)
 import Grease.Heuristic
 import Grease.LLVM qualified as LLVM
 import Grease.LLVM.DebugInfo qualified as GLD
+import Grease.LLVM.Overrides qualified as GLO
 import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.LLVM.SetupHook qualified as LLVM (SetupHook, moduleSetupHook, syntaxSetupHook)
 import Grease.LLVM.SetupHook.Diagnostic qualified as LDiag (Diagnostic (LLVMTranslationWarning))
@@ -1711,7 +1712,10 @@ simulateLlvmSyntax simOpts la = do
   sexpOvs <- loadLLVMSExpOvs (simOverrides simOpts) halloc mvar
   let llvmMod = Nothing
   let setupHook :: forall sym arch. LLVM.SetupHook sym arch
-      setupHook = LLVM.syntaxSetupHook la sexpOvs prog cfgs
+      setupHook =
+        LLVM.syntaxSetupHook la sexpOvs prog cfgs $
+          GLO.CantResolveOverrideCallback $
+            \nm _hdl -> declaredFunNotFound nm
   simulateLlvmCfgs la simOpts halloc llvmCtx llvmMod mkMem setupHook cfgs
 
 -- | Helper, not exported
@@ -1802,7 +1806,10 @@ simulateLlvm transOpts simOpts la = do
 
     sexpOvs <- loadLLVMSExpOvs (simOverrides simOpts) halloc mvar
     let setupHook :: forall sym. LLVM.SetupHook sym arch
-        setupHook = LLVM.moduleSetupHook la sexpOvs trans cfgs
+        setupHook =
+          LLVM.moduleSetupHook la sexpOvs trans cfgs $
+            GLO.CantResolveOverrideCallback $
+              \nm _hdl -> declaredFunNotFound nm
 
     simulateLlvmCfgs la simOpts halloc llvmCtxt (Just llvmMod) mkMem setupHook cfgs
 
