@@ -10,7 +10,6 @@ module Grease.Utility (
   pshow,
   tshow,
   functionNameFromByteString,
-  declaredFunNotFound,
   llvmOverrideName,
   ppProgramLoc,
   printHandle,
@@ -19,8 +18,6 @@ module Grease.Utility (
   bytes64LE,
 ) where
 
-import Control.Exception.Safe (MonadThrow)
-import Control.Exception.Safe qualified as X
 import Data.ByteString qualified as BS
 import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as BSL
@@ -30,7 +27,6 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Word (Word32, Word64, Word8)
-import Grease.Error (GreaseException (GreaseException))
 import Grease.Panic (panic)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
@@ -61,13 +57,6 @@ tshow = Text.pack . show
 -- 'W4.FunctionName'.
 functionNameFromByteString :: BS.ByteString -> W4.FunctionName
 functionNameFromByteString = W4.functionNameFromText . Text.decodeUtf8
-
--- | GREASE invoked a forward declaration, but it was unable to resolve the
--- 'C.FnHandle' corresponding to the declaration. Throw an exception suggesting
--- that the user try an override.
-declaredFunNotFound :: MonadThrow m => W4.FunctionName -> m a
-declaredFunNotFound decName =
-  X.throw (GreaseException ("Function declared but not defined: " <> W4.functionName decName <> ". Try specifying an override using --overrides."))
 
 llvmOverrideName :: Mem.LLVMOverride p sym ext args ret -> W4.FunctionName
 llvmOverrideName ov =

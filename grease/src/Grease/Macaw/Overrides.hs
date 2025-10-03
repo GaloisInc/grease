@@ -246,15 +246,17 @@ registerMacawSexpProgForwardDeclarations ::
   GreaseLogAction ->
   CLLVM.DataLayout ->
   C.GlobalVar Mem.Mem ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   -- | The map of public function names to their overrides.
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   -- | The map of forward declaration names to their handles.
   Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
-registerMacawSexpProgForwardDeclarations bak la dl mvar funOvs =
+registerMacawSexpProgForwardDeclarations bak la dl mvar errCb funOvs =
   registerMacawForwardDeclarations bak funOvs $
     CantResolveOverrideCallback $
-      registerSkipOverride la dl mvar
+      registerSkipOverride la dl mvar errCb
 
 -- | Redirect handles for forward declarations in an S-expression file to
 -- actually call the corresponding Macaw overrides. Attempting to call an

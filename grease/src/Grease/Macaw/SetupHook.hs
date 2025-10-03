@@ -24,7 +24,6 @@ import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.Address as GMOA
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
 import Grease.Overrides (CantResolveOverrideCallback (..))
-import Grease.Utility (declaredFunNotFound)
 import Lang.Crucible.Backend qualified as LCB
 import Lang.Crucible.Backend.Online qualified as LCB
 import Lang.Crucible.CFG.Core qualified as LCCC
@@ -88,16 +87,18 @@ registerOverrideForwardDeclarations ::
   , HasToConcretize p
   ) =>
   bak ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
-registerOverrideForwardDeclarations bak funOvs =
+registerOverrideForwardDeclarations bak errCb funOvs =
   Monad.forM_ (Map.elems funOvs) $ \mso ->
     case GMO.msoSomeFunctionOverride mso of
       Stubs.SomeFunctionOverride fnOv ->
         GMO.registerMacawOvForwardDeclarations
           bak
           funOvs
-          (CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
+          errCb
           (Stubs.functionForwardDeclarations fnOv)
 
 -- | Register all handles from a 'GMO.MacawSExpOverride'.
@@ -112,11 +113,13 @@ registerOverrideHandles ::
   , HasToConcretize p
   ) =>
   bak ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
-registerOverrideHandles bak funOvs = do
+registerOverrideHandles bak errCb funOvs = do
   registerOverrideCfgs funOvs
-  registerOverrideForwardDeclarations bak funOvs
+  registerOverrideForwardDeclarations bak errCb funOvs
 
 -- | Register defined functions from an S-expression program
 -- ('CSyn.ParsedProgram').
@@ -144,14 +147,16 @@ registerSyntaxForwardDeclarations ::
   ) =>
   bak ->
   GreaseLogAction ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   DataLayout ->
   LCS.GlobalVar LCLM.Mem ->
   -- | Map of names of overridden functions to their implementations
   Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
-registerSyntaxForwardDeclarations bak la dl mvar funOvs prog =
-  GMO.registerMacawSexpProgForwardDeclarations bak la dl mvar funOvs (CSyn.parsedProgForwardDecs prog)
+registerSyntaxForwardDeclarations bak la errCb dl mvar funOvs prog =
+  GMO.registerMacawSexpProgForwardDeclarations bak la dl mvar errCb funOvs (CSyn.parsedProgForwardDecs prog)
 
 -- | Register all handles from a an S-expression program ('CSyn.ParsedProgram').
 --
@@ -169,15 +174,17 @@ registerSyntaxHandles ::
   ) =>
   bak ->
   GreaseLogAction ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   DataLayout ->
   LCS.GlobalVar LCLM.Mem ->
   -- | Map of names of overridden functions to their implementations
   Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
-registerSyntaxHandles bak la dl mvar funOvs prog = do
+registerSyntaxHandles bak la errCb dl mvar funOvs prog = do
   registerSyntaxCfgs prog
-  registerSyntaxForwardDeclarations bak la dl mvar funOvs prog
+  registerSyntaxForwardDeclarations bak la errCb dl mvar funOvs prog
 
 -- | A 'SetupHook' for Macaw CFGs from S-expression programs.
 syntaxSetupHook ::
@@ -186,24 +193,22 @@ syntaxSetupHook ::
   , ?memOpts :: LCLM.MemOptions
   ) =>
   GreaseLogAction ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   DataLayout ->
   Map.Map GE.Entrypoint (GE.EntrypointCfgs (LCCR.AnyCFG (DMS.MacawExt arch))) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   SetupHook sym arch
-syntaxSetupHook la dl cfgs prog =
+syntaxSetupHook la errCb dl cfgs prog =
   SetupHook $ \bak mvar funOvs -> do
-    registerOverrideHandles bak funOvs
-    registerSyntaxHandles bak la dl mvar funOvs prog
+    registerOverrideHandles bak errCb funOvs
+    registerSyntaxHandles bak la errCb dl mvar funOvs prog
 
     -- Redirect function handles resulting from parsing forward declarations
     -- (`declare`s) to their implementations.
     Monad.forM_ (Map.elems cfgs) $ \entrypointCfgs ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-        GMO.registerMacawOvForwardDeclarations
-          bak
-          funOvs
-          (CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
-          startupOvFwdDecs
+        GMO.registerMacawOvForwardDeclarations bak funOvs errCb startupOvFwdDecs
 
 -- | A 'SetupHook' for Macaw CFGs from binaries.
 --
@@ -226,16 +231,14 @@ syntaxSetupHook la dl cfgs prog =
 -- We do the same thing for forward declarations in address overrides.
 binSetupHook ::
   LCLM.HasPtrWidth (ArchAddrWidth arch) =>
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   GMOA.AddressOverrides arch ->
   Map.Map GE.Entrypoint (GE.MacawEntrypointCfgs arch) ->
   SetupHook sym arch
-binSetupHook addrOvs cfgs =
+binSetupHook errCb addrOvs cfgs =
   SetupHook $ \bak _mvar funOvs -> do
-    GMOA.registerAddressOverrideHandles bak funOvs addrOvs
+    GMOA.registerAddressOverrideHandles bak errCb funOvs addrOvs
     Monad.forM_ (Map.elems cfgs) $ \(GE.MacawEntrypointCfgs entrypointCfgs _) ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-        GMO.registerMacawOvForwardDeclarations
-          bak
-          funOvs
-          (CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
-          startupOvFwdDecs
+        GMO.registerMacawOvForwardDeclarations bak funOvs errCb startupOvFwdDecs

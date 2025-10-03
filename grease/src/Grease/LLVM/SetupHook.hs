@@ -91,14 +91,14 @@ syntaxSetupHook la ovs prog cfgs errCb =
     -- In addition to binding function handles for the user overrides,
     -- we must also redirect function handles resulting from parsing
     -- forward declarations (`declare`) to actually call the overrides.
-    GLO.registerLLVMSexpProgForwardDeclarations la dl mvar funOvs (CSyn.parsedProgForwardDecs prog)
+    GLO.registerLLVMSexpProgForwardDeclarations la dl mvar funOvs errCb (CSyn.parsedProgForwardDecs prog)
 
     -- If a startup override exists and it contains forward declarations,
     -- then we redirect the function handles to actually call the respective
     -- overrides.
     Monad.forM_ (Map.elems cfgs) $ \entrypointCfgs ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-        GLO.registerLLVMSexpProgForwardDeclarations la dl mvar funOvs startupOvFwdDecs
+        GLO.registerLLVMSexpProgForwardDeclarations la dl mvar funOvs errCb startupOvFwdDecs
 
     -- Register defined functions. If there is a user override of the same
     -- name, use the override's definition instead so that it takes
@@ -144,4 +144,4 @@ moduleSetupHook la ovs trans cfgs errCb =
     -- overrides.
     Monad.forM_ (Map.elems cfgs) $ \entrypointCfgs ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-        GLO.registerLLVMSexpProgForwardDeclarations la dl mvar funOvs startupOvFwdDecs
+        GLO.registerLLVMSexpProgForwardDeclarations la dl mvar funOvs errCb startupOvFwdDecs

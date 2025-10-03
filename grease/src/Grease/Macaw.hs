@@ -443,15 +443,17 @@ memConfigWithHandles ::
   Opts.ErrorSymbolicFunCalls ->
   Opts.ErrorSymbolicSyscalls ->
   Opts.SkipInvalidCallAddrs ->
+  -- | What to do when a forward declaration cannot be resolved (during symex).
+  (W4.FunctionName -> IO ()) ->
   Symbolic.MemModelConfig p sym arch Mem.Mem ->
   Symbolic.MemModelConfig p sym arch Mem.Mem
-memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddress memCfg =
+memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddress errCb' memCfg =
   memCfg
     { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddress lfhd
     , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd
     }
  where
-  lfhd = ResolveCall.defaultLookupFunctionHandleDispatch bak logAction halloc arch memory funOvs
+  lfhd = ResolveCall.defaultLookupFunctionHandleDispatch bak logAction halloc arch memory funOvs errCb'
   lsd = ResolveCall.defaultLookupSyscallDispatch bak logAction halloc arch
 
 -- | Check whether a pointer points to a relocation address, and if so, assert

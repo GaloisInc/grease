@@ -234,6 +234,18 @@ userError la doc = do
   doLog la (Diag.UserError doc)
   Exit.exitFailure
 
+-- | GREASE invoked a forward declaration, but it was unable to resolve the
+-- 'C.FnHandle' corresponding to the declaration. Throw an exception suggesting
+-- that the user try an override.
+declaredFunNotFound :: GreaseLogAction -> W4.FunctionName -> IO a
+declaredFunNotFound la decName =
+  userError la $
+    PP.hsep
+      [ "Function declared but not defined:"
+      , PP.pretty (W4.functionName decName) <> "."
+      , "Try specifying an override using --overrides."
+      ]
+
 -- | Read a binary's file permissions and ELF header info.
 readElfHeaderInfo ::
   ( MonadIO m
@@ -762,6 +774,7 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
           errorSymbolicFunCalls
           errorSymbolicSyscalls
           skipInvalidCallAddrs
+          (declaredFunNotFound la)
           memCfg_
   pure (memCfg, fnOvsMap)
 
@@ -1349,7 +1362,9 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
   let memory = MC.emptyMemory (archCtx ^. archInfo . to MI.archAddrWidth)
   let dl = macawDataLayout archCtx
   let setupHook :: forall sym. Macaw.SetupHook sym arch
-      setupHook = Macaw.syntaxSetupHook la dl cfgs prog
+      setupHook =
+        let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
+         in Macaw.syntaxSetupHook la errCb dl cfgs prog
   let macawCfgConfig =
         MacawCfgConfig
           { mcDataLayout = dl
@@ -1461,7 +1476,9 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
 
   addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
   let setupHook :: forall sym. SetupHook sym arch
-      setupHook = Macaw.binSetupHook addrOvs cfgs
+      setupHook =
+        let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
+         in Macaw.binSetupHook errCb addrOvs cfgs
 
   let macawCfgConfig =
         MacawCfgConfig
@@ -1715,7 +1732,7 @@ simulateLlvmSyntax simOpts la = do
       setupHook =
         LLVM.syntaxSetupHook la sexpOvs prog cfgs $
           GLO.CantResolveOverrideCallback $
-            \nm _hdl -> declaredFunNotFound nm
+            \nm _hdl -> liftIO (declaredFunNotFound la nm)
   simulateLlvmCfgs la simOpts halloc llvmCtx llvmMod mkMem setupHook cfgs
 
 -- | Helper, not exported
@@ -1809,7 +1826,7 @@ simulateLlvm transOpts simOpts la = do
         setupHook =
           LLVM.moduleSetupHook la sexpOvs trans cfgs $
             GLO.CantResolveOverrideCallback $
-              \nm _hdl -> declaredFunNotFound nm
+              \nm _hdl -> liftIO (declaredFunNotFound la nm)
 
     simulateLlvmCfgs la simOpts halloc llvmCtxt (Just llvmMod) mkMem setupHook cfgs
 
@@ -1884,7 +1901,9 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
           )
     addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
     let setupHook :: forall sym. SetupHook sym arch
-        setupHook = Macaw.binSetupHook addrOvs cfgs
+        setupHook =
+          let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
+           in Macaw.binSetupHook errCb addrOvs cfgs
     let dl = macawDataLayout archCtx
     let macawCfgConfig =
           MacawCfgConfig

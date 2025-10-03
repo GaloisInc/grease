@@ -39,7 +39,7 @@ import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Overrides (CantResolveOverrideCallback (..), OverrideNameError (..), partitionCfgs)
 import Grease.Syntax (ParseProgramError, parseProgram)
-import Grease.Utility (declaredFunNotFound, tshow)
+import Grease.Utility (tshow)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as LCBO
 import Lang.Crucible.CFG.Core qualified as C
@@ -263,18 +263,16 @@ registerAddressOverrideForwardDeclarations ::
   , HasToConcretize p
   ) =>
   bak ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   AddressOverrides arch ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
-registerAddressOverrideForwardDeclarations bak funOvs addrOvs = do
+registerAddressOverrideForwardDeclarations bak errCb funOvs addrOvs = do
   let AddressOverrides addrOvsMap = addrOvs
   Monad.forM_ (Map.elems addrOvsMap) $ \addrOv -> do
     let fwdDecs = aoForwardDeclarations addrOv
-    GMO.registerMacawOvForwardDeclarations
-      bak
-      funOvs
-      (CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
-      fwdDecs
+    GMO.registerMacawOvForwardDeclarations bak funOvs errCb fwdDecs
 
 -- | Register CFGs appearing an in 'AddressOverride'.
 registerAddressOverrideCfgs ::
@@ -300,12 +298,14 @@ registerAddressOverrideHandles ::
   , HasToConcretize p
   ) =>
   bak ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   AddressOverrides arch ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
-registerAddressOverrideHandles bak funOvs addrOvs = do
+registerAddressOverrideHandles bak errCb funOvs addrOvs = do
   registerAddressOverrideCfgs addrOvs
-  registerAddressOverrideForwardDeclarations bak funOvs addrOvs
+  registerAddressOverrideForwardDeclarations bak errCb funOvs addrOvs
 
 ---------------------------------------------------------------------
 

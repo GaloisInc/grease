@@ -277,13 +277,15 @@ registerLLVMSexpProgForwardDeclarations ::
   C.GlobalVar Mem.Mem ->
   -- | The map of public function names to their overrides.
   Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM) ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym CLLVM.LLVM ->
   -- | The map of forward declaration names to their handles.
   Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym CLLVM.LLVM rtp as r ()
-registerLLVMSexpProgForwardDeclarations la dl mvar funOvs =
+registerLLVMSexpProgForwardDeclarations la dl mvar funOvs errCb =
   registerLLVMForwardDeclarations mvar funOvs $
     CantResolveOverrideCallback $
-      registerSkipOverride la dl mvar
+      registerSkipOverride la dl mvar errCb
 
 -- | Redirect handles for forward declarations in an S-expression file to
 -- actually call the corresponding LLVM overrides. If a forward declaration
