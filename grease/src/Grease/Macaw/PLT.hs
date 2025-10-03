@@ -11,11 +11,11 @@ module Grease.Macaw.PLT (
   PltStub (..),
   PltStubParser,
   pltStubParser,
+  CouldNotResolvePltStub (..),
   resolvePltStubs,
 ) where
 
 import Control.Applicative (empty)
-import Control.Exception.Safe (throw)
 import Data.ElfEdit qualified as Elf
 import Data.Foldable qualified as Foldable
 import Data.Macaw.BinaryLoader.ELF as Loader
@@ -29,9 +29,9 @@ import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Void (Void)
 import Data.Word (Word64)
-import Grease.Error (MalformedBinary (MalformedBinary))
 import Grease.Panic (panic)
 import Grease.Utility
+import Prettyprinter qualified as PP
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
 import Text.Megaparsec.Char.Lexer qualified as TMCL
@@ -165,6 +165,18 @@ pltStubParser = do
   name <- TM.takeWhileP (Just "name") (/= ':')
   pure $ PltStub addr name
 
+data CouldNotResolvePltStub
+  = CouldNotResolvePltStub FilePath Word64 W4.FunctionName
+
+instance PP.Pretty CouldNotResolvePltStub where
+  pretty (CouldNotResolvePltStub path addr name) =
+    "Could not resolve PLT stub address "
+      <> PP.viaShow addr
+      <> ": "
+      <> PP.pretty (W4.functionName name)
+      <> " in binary "
+      <> PP.pretty path
+
 -- | Resolve all PLT stubs in a binary, consulting:
 --
 -- * The the @.plt@ or @.plt.sec@ section (see the 'pltStubSymbols' function)
@@ -196,7 +208,7 @@ resolvePltStubs ::
   -- | User-specified PLT stubs.
   [PltStub] ->
   MC.Memory w ->
-  IO (Map.Map (MM.MemSegmentOff w) W4.FunctionName)
+  IO (Either CouldNotResolvePltStub (Map.Map (MM.MemSegmentOff w) W4.FunctionName))
 resolvePltStubs path mbPltStubInfo loadOptions ehi symbolRelocs userPltStubs memory = do
   let
     -- This only contains the PLT stubs located in the @.plt@ section, for
@@ -236,20 +248,18 @@ resolvePltStubs path mbPltStubInfo loadOptions ehi symbolRelocs userPltStubs mem
     traverse
       ( \(addr, name) ->
           case Loader.resolveAbsoluteAddress memory addr of
-            Just so -> pure (so, name)
+            Just so -> pure (Right (so, name))
             Nothing ->
-              throw . MalformedBinary path $
-                "Could not resolve PLT stub address "
-                  <> tshow addr
-                  <> ": "
-                  <> W4.functionName name
+              pure (Left (CouldNotResolvePltStub path (MM.memWordValue addr) name))
       )
       ( pltStubAddrToNameList
           <> userPltStubAddrToNameList
           <> symbolRelocAddrToNameList
       )
 
-  pure $ Map.fromList $ Foldable.toList pltStubSegOffToNameList
+  case sequence pltStubSegOffToNameList of
+    Left err -> pure $ Left err
+    Right segOffToNameList -> pure $ Right $ Map.fromList $ Foldable.toList segOffToNameList
 
 {-
 Note [Subtleties of resolving PLT stubs]
