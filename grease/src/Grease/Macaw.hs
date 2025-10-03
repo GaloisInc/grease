@@ -18,7 +18,7 @@ module Grease.Macaw (
   initState,
 ) where
 
-import Control.Exception.Safe (MonadThrow, throw)
+import Control.Exception.Safe (MonadThrow)
 import Control.Lens (to, (^.))
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO (..))
@@ -49,7 +49,6 @@ import Data.Word (Word64, Word8)
 import GHC.Stack (HasCallStack, callStack)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic
-import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw.Arch
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Macaw.Overrides.Address (AddressOverrides)
@@ -100,23 +99,18 @@ emptyMacawMem ::
   bak ->
   ArchContext arch ->
   EL.Memory (MC.ArchAddrWidth arch) ->
-  Opts.MutableGlobalState ->
+  Symbolic.MemoryModelContents ->
   -- | Map of relocation addresses and types
   Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (ArchReloc arch) ->
   m (InitialMem sym, Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch))
 emptyMacawMem bak arch macawMem mutGlobs relocs = do
-  globs <-
-    case mutGlobs of
-      Opts.Initialized -> pure Symbolic.ConcreteMutable
-      Opts.Symbolic -> pure Symbolic.SymbolicMutable
-      Opts.Uninitialized -> throw (GreaseException "Macaw does not support uninitialized globals (macaw#372)")
   (initMem, ptrTable) <-
     Symbolic.newGlobalMemoryWith
       (globalMemoryHooks arch relocs)
       (Proxy @arch)
       bak
       (arch ^. archInfo . to (Symbolic.toCrucibleEndian . MI.archEndianness))
-      globs
+      mutGlobs
       macawMem
   pure (InitialMem initMem, ptrTable)
 

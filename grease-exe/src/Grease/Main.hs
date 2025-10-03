@@ -933,7 +933,13 @@ simulateMacawCfg ::
   IO BatchStatus
 simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs mbCfgAddr entrypointCfgs = do
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
-  (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory (simMutGlobs simOpts) relocs
+  globs <-
+    case simMutGlobs simOpts of
+      Initialized -> pure Symbolic.ConcreteMutable
+      Symbolic -> pure Symbolic.SymbolicMutable
+      Uninitialized ->
+        throw (GreaseException "Macaw does not support uninitialized globals (macaw#372)")
+  (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory globs relocs
 
   let (tyCtxErrs, tyCtx) = TCtx.mkTypeContext dl IntMap.empty []
   let ?lc = tyCtx
