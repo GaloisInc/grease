@@ -23,6 +23,7 @@ import Grease.Entrypoint qualified as GE
 import Grease.Macaw.Overrides as GMO
 import Grease.Macaw.Overrides.Address as GMOA
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
+import Grease.Utility (declaredFunNotFound)
 import Lang.Crucible.Backend qualified as LCB
 import Lang.Crucible.Backend.Online qualified as LCB
 import Lang.Crucible.CFG.Core qualified as LCCC
@@ -92,7 +93,11 @@ registerOverrideForwardDeclarations bak funOvs =
   Monad.forM_ (Map.elems funOvs) $ \mso ->
     case GMO.msoSomeFunctionOverride mso of
       Stubs.SomeFunctionOverride fnOv ->
-        GMO.registerMacawOvForwardDeclarations bak funOvs (Stubs.functionForwardDeclarations fnOv)
+        GMO.registerMacawOvForwardDeclarations
+          bak
+          funOvs
+          (GMO.CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
+          (Stubs.functionForwardDeclarations fnOv)
 
 -- | Register all handles from a 'MacawSExpOverride'.
 --
@@ -193,7 +198,11 @@ syntaxSetupHook la dl cfgs prog =
     -- (`declare`s) to their implementations.
     Monad.forM_ (Map.elems cfgs) $ \entrypointCfgs ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-        GMO.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
+        GMO.registerMacawOvForwardDeclarations
+          bak
+          funOvs
+          (GMO.CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
+          startupOvFwdDecs
 
 -- | A 'SetupHook' for Macaw CFGs from binaries.
 --
@@ -224,4 +233,8 @@ binSetupHook addrOvs cfgs =
     GMOA.registerAddressOverrideHandles bak funOvs addrOvs
     Monad.forM_ (Map.elems cfgs) $ \(GE.MacawEntrypointCfgs entrypointCfgs _) ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-        GMO.registerMacawOvForwardDeclarations bak funOvs startupOvFwdDecs
+        GMO.registerMacawOvForwardDeclarations
+          bak
+          funOvs
+          (GMO.CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
+          startupOvFwdDecs
