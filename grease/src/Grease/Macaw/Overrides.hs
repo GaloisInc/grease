@@ -9,6 +9,7 @@
 --
 -- Registering Macaw overrides
 module Grease.Macaw.Overrides (
+  CantResolveOverrideCallback (..),
   MacawSExpOverride (..),
   MacawFnHandle,
   MacawOverride,
@@ -39,7 +40,6 @@ import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, Maca
 import Grease.Skip (registerSkipOverride)
 import Grease.Syntax (ParseProgramError)
 import Grease.Syntax.Overrides as SExp
-import Grease.Utility (declaredFunNotFound)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
@@ -54,6 +54,15 @@ import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as W4
 import What4.Protocol.Online qualified as W4
+
+newtype CantResolveOverrideCallback sym arch
+  = CantResolveOverrideCallback
+  { runCantResolveOverrideCallback ::
+      forall p args ret rtp as r.
+      W4.FunctionName ->
+      C.FnHandle args ret ->
+      C.OverrideSim p sym (Symbolic.MacawExt arch) rtp as r ()
+  }
 
 -- | Convert a 'Stubs.FunctionOverride' to a 'MacawOverride'. Really, this
 -- functionality ought to be exposed from @stubs-common@. See
@@ -252,7 +261,8 @@ registerMacawSexpProgForwardDeclarations ::
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerMacawSexpProgForwardDeclarations bak la dl mvar funOvs =
   registerMacawForwardDeclarations bak funOvs $
-    registerSkipOverride la dl mvar
+    CantResolveOverrideCallback $
+      registerSkipOverride la dl mvar
 
 -- | Redirect handles for forward declarations in an S-expression file to
 -- actually call the corresponding Macaw overrides. Attempting to call an
@@ -268,12 +278,13 @@ registerMacawOvForwardDeclarations ::
   bak ->
   -- | The map of public function names to their overrides.
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym arch ->
   -- | The map of forward declaration names to their handles.
   Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
-registerMacawOvForwardDeclarations bak funOvs =
-  registerMacawForwardDeclarations bak funOvs $ \fwdDecName _ ->
-    declaredFunNotFound fwdDecName
+registerMacawOvForwardDeclarations bak funOvs errCb =
+  registerMacawForwardDeclarations bak funOvs errCb
 
 -- | Redirect handles for forward declarations in an S-expression file to
 -- actually call the corresponding Macaw overrides. If a forward declaration
@@ -290,15 +301,12 @@ registerMacawForwardDeclarations ::
   -- | The map of public function names to their overrides.
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   -- | What to do when a forward declaration cannot be resolved.
-  ( forall args ret.
-    W4.FunctionName ->
-    C.FnHandle args ret ->
-    C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
-  ) ->
+  CantResolveOverrideCallback sym arch ->
   -- | The map of forward declaration names to their handles.
   Map.Map W4.FunctionName C.SomeHandle ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
-registerMacawForwardDeclarations bak funOvs cannotResolve fwdDecs =
+registerMacawForwardDeclarations bak funOvs errCb fwdDecs = do
+  let CantResolveOverrideCallback cannotResolve = errCb
   Foldable.forM_ (Map.toList fwdDecs) $ \(decName, C.SomeHandle hdl) ->
     registerMacawForwardDeclaration bak funOvs cannotResolve decName hdl
 

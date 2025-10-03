@@ -39,7 +39,7 @@ import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Overrides (OverrideNameError (..), partitionCfgs)
 import Grease.Syntax (ParseProgramError, parseProgram)
-import Grease.Utility (tshow)
+import Grease.Utility (declaredFunNotFound, tshow)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as LCBO
 import Lang.Crucible.CFG.Core qualified as C
@@ -270,7 +270,11 @@ registerAddressOverrideForwardDeclarations bak funOvs addrOvs = do
   let AddressOverrides addrOvsMap = addrOvs
   Monad.forM_ (Map.elems addrOvsMap) $ \addrOv -> do
     let fwdDecs = aoForwardDeclarations addrOv
-    GMO.registerMacawOvForwardDeclarations bak funOvs fwdDecs
+    GMO.registerMacawOvForwardDeclarations
+      bak
+      funOvs
+      (GMO.CantResolveOverrideCallback $ \nm _hdl -> declaredFunNotFound nm)
+      fwdDecs
 
 -- | Register CFGs appearing an in 'AddressOverride'.
 registerAddressOverrideCfgs ::
