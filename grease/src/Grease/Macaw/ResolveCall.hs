@@ -61,7 +61,7 @@ import Grease.Macaw.SkippedCall (SkippedFunctionCall (..), SkippedSyscall (..))
 import Grease.Macaw.Syscall
 import Grease.Options (ErrorSymbolicFunCalls (..), ErrorSymbolicSyscalls (..), SkipInvalidCallAddrs (..))
 import Grease.Syntax (ResolvedOverridesYaml (..))
-import Grease.Utility (OnlineSolverAndBackend, declaredFunNotFound, segoffToAbsoluteAddr)
+import Grease.Utility (OnlineSolverAndBackend, segoffToAbsoluteAddr)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
@@ -155,8 +155,10 @@ defaultLookupFunctionHandleDispatch ::
   EL.Memory (MC.ArchAddrWidth arch) ->
   -- | Map of names of overridden functions to their implementations
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  -- | What to do when a forward declaration cannot be resolved.
+  (W4.FunctionName -> IO ()) ->
   LookupFunctionHandleDispatch p sym arch
-defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs =
+defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs errCb =
   LookupFunctionHandleDispatch $ \st mem regs lfhr -> do
     let
       -- Call a function handle, unless we have an override in which case call
@@ -164,7 +166,7 @@ defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs =
       callHandle hdl mbOv st' =
         case mbOv of
           Just macawFnOv ->
-            useMacawSExpOverride bak la halloc arch funOvs macawFnOv st'
+            useMacawSExpOverride bak la halloc arch funOvs errCb macawFnOv st'
           Nothing ->
             pure (hdl, st')
 
@@ -193,7 +195,7 @@ defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs =
         callHandle hdl mbOv st
       PltStubOverride pltStubAddrOff pltStubName macawFnOv -> do
         logFunctionCall pltStubName pltStubAddrOff
-        useMacawSExpOverride bak la halloc arch funOvs macawFnOv st
+        useMacawSExpOverride bak la halloc arch funOvs errCb macawFnOv st
 
 -- | The result of looking up a function handle.
 data LookupFunctionHandleResult p sym arch where
@@ -612,10 +614,12 @@ useMacawSExpOverride ::
   ArchContext arch ->
   -- | Map of names of overridden functions to their implementations
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  -- | What to do when a forward declaration cannot be resolved.
+  (W4.FunctionName -> IO ()) ->
   MacawSExpOverride p sym arch ->
   C.SimState p sym (Symbolic.MacawExt arch) r f a ->
   IO (MacawFnHandle arch, C.SimState p sym (Symbolic.MacawExt arch) r f a)
-useMacawSExpOverride bak la halloc arch allOvs mOv st0 =
+useMacawSExpOverride bak la halloc arch allOvs errCb mOv st0 =
   do
     MacawSExpOverride
       { msoPublicFnHandle = publicOvHdl
@@ -626,7 +630,7 @@ useMacawSExpOverride bak la halloc arch allOvs mOv st0 =
     let C.FnBindings fnHdlMap0 = st0 ^. C.stateContext . C.functionBindings
         fnOvName = Stubs.functionName fnOv
     doLog la $ Diag.FunctionOverride fnOvName
-    fnHdlMap1 <- extendHandleMap bak allOvs fnOv fnHdlMap0
+    fnHdlMap1 <- extendHandleMap bak allOvs errCb fnOv fnHdlMap0
     let st1 =
           st0
             & C.stateContext . C.functionBindings
@@ -652,13 +656,15 @@ extendHandleMap ::
   bak ->
   -- | Map of names of overridden functions to their implementations
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  -- | What to do when a forward declaration cannot be resolved.
+  (W4.FunctionName -> IO ()) ->
   -- | The override that needs to be registered
   Stubs.FunctionOverride p sym args arch ret ->
   -- | The initial function handle map
   C.FnHandleMap (C.FnState p sym (Symbolic.MacawExt arch)) ->
   -- | The extended function handle map
   IO (C.FnHandleMap (C.FnState p sym (Symbolic.MacawExt arch)))
-extendHandleMap bak allOvs = go
+extendHandleMap bak allOvs errCb = go
  where
   -- Note the local quantification for @args'@ and @ret'@. Each recursive call
   -- to @go@ may be on a function of a different type.
@@ -694,7 +700,9 @@ extendHandleMap bak allOvs = go
                 Nothing ->
                   case lookupMacawForwardDeclarationOverride bak allOvs fwdDecName fwdDecHdl of
                     Just ov -> pure (C.insertHandleMap fwdDecHdl (C.UseOverride ov) binds)
-                    Nothing -> declaredFunNotFound fwdDecName
+                    Nothing -> do
+                      errCb fwdDecName
+                      pure binds
                 Just
                   ( MacawSExpOverride
                       _
