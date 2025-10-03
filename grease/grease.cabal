@@ -201,7 +201,6 @@ library
     Grease.Cursor.Pointer
     Grease.Diagnostic
     Grease.Diagnostic.Severity
-    Grease.Error
     Grease.ErrorDescription
     Grease.Entrypoint
     Grease.ExecutionFeatures

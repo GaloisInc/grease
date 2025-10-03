@@ -19,7 +19,6 @@ module Grease.Macaw.Overrides.Address (
 ) where
 
 import Control.Applicative (empty)
-import Control.Exception qualified as X
 import Control.Lens qualified as Lens
 import Control.Monad qualified as Monad
 import Data.Macaw.CFG qualified as MC
@@ -33,12 +32,12 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Void (Void)
+import GHC.Stack (HasCallStack)
 import Grease.Concretize.ToConcretize (HasToConcretize)
-import Grease.Error (GreaseException (GreaseException))
 import Grease.Macaw.Arch (ArchContext, archVals)
 import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
-import Grease.Overrides (OverrideNameError (..), partitionCfgs)
+import Grease.Overrides (CantResolveOverrideCallback (..), OverrideNameError (..), partitionCfgs)
 import Grease.Syntax (ParseProgramError, parseProgram)
 import Grease.Utility (tshow)
 import Lang.Crucible.Backend qualified as C
@@ -264,14 +263,16 @@ registerAddressOverrideForwardDeclarations ::
   , HasToConcretize p
   ) =>
   bak ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   AddressOverrides arch ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
-registerAddressOverrideForwardDeclarations bak funOvs addrOvs = do
+registerAddressOverrideForwardDeclarations bak errCb funOvs addrOvs = do
   let AddressOverrides addrOvsMap = addrOvs
   Monad.forM_ (Map.elems addrOvsMap) $ \addrOv -> do
     let fwdDecs = aoForwardDeclarations addrOv
-    GMO.registerMacawOvForwardDeclarations bak funOvs fwdDecs
+    GMO.registerMacawOvForwardDeclarations bak funOvs errCb fwdDecs
 
 -- | Register CFGs appearing an in 'AddressOverride'.
 registerAddressOverrideCfgs ::
@@ -297,12 +298,14 @@ registerAddressOverrideHandles ::
   , HasToConcretize p
   ) =>
   bak ->
+  -- | What to do when a forward declaration cannot be resolved.
+  CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   AddressOverrides arch ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
-registerAddressOverrideHandles bak funOvs addrOvs = do
+registerAddressOverrideHandles bak errCb funOvs addrOvs = do
   registerAddressOverrideCfgs addrOvs
-  registerAddressOverrideForwardDeclarations bak funOvs addrOvs
+  registerAddressOverrideForwardDeclarations bak errCb funOvs addrOvs
 
 ---------------------------------------------------------------------
 
@@ -334,6 +337,7 @@ toInitialState memVar crucState retTy action = do
 runAddressOverride ::
   ( sym ~ W4.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
+  , HasCallStack
   ) =>
   C.GlobalVar LCLM.Mem ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
@@ -356,8 +360,12 @@ runAddressOverride memVar crucState someCfg regs = do
           C.assert bak p (C.GenericSimError ("Assertion from address override at " ++ show loc))
           pure ()
       C.AbortedResult _ (C.AbortedExec reason _) -> C.abortExecBecause reason
-      _ ->
-        X.throw (GreaseException "Address override did not return a result nor abort")
+      _ -> do
+        let ctx = crucState Lens.^. C.stateContext
+        C.withBackend ctx $ \bak -> do
+          let sym = C.backendGetSym bak
+          let msg = "Address override did not return a result nor abort"
+          C.throwUnsupported sym msg
 
 tryRunAddressOverride ::
   ( sym ~ W4.ExprBuilder t st fs

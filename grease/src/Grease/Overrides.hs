@@ -1,12 +1,14 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2025
 -- Description      : Common functionality for parsing overrides
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Overrides (
+  CantResolveOverrideCallback (..),
   OverrideNameError (..),
   partitionCfgs,
   isPublicCblFun,
@@ -15,9 +17,20 @@ module Grease.Overrides (
 import Data.List qualified as List
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Prettyprinter qualified as PP
 import What4.FunctionName qualified as W4
+
+-- | Callback for handling cases where an override cannot be resolved.
+newtype CantResolveOverrideCallback sym arch
+  = CantResolveOverrideCallback
+  { runCantResolveOverrideCallback ::
+      forall p args ret rtp as r.
+      W4.FunctionName ->
+      C.FnHandle args ret ->
+      C.OverrideSim p sym arch rtp as r ()
+  }
 
 -- | Error type for 'partitionCfgs'.
 data OverrideNameError

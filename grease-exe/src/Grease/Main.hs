@@ -30,6 +30,7 @@ module Grease.Main (
 import Control.Applicative (pure)
 import Control.Concurrent.Async (Async, cancel)
 import Control.Exception.Safe (Handler (..), MonadThrow, catches, throw)
+import Control.Exception.Safe qualified as X
 import Control.Lens (to, (.~), (^.))
 import Control.Monad (forM, forM_, mapM_, when, (>>=))
 import Control.Monad qualified as Monad
@@ -111,11 +112,11 @@ import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint
-import Grease.Error (GreaseException (GreaseException))
 import Grease.ExecutionFeatures (greaseExecFeats)
 import Grease.Heuristic
 import Grease.LLVM qualified as LLVM
 import Grease.LLVM.DebugInfo qualified as GLD
+import Grease.LLVM.Overrides qualified as GLO
 import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.LLVM.SetupHook qualified as LLVM (SetupHook, moduleSetupHook, syntaxSetupHook)
 import Grease.LLVM.SetupHook.Diagnostic qualified as LDiag (Diagnostic (LLVMTranslationWarning))
@@ -135,7 +136,7 @@ import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
 import Grease.Macaw.Overrides.Address (AddressOverrides, loadAddressOverrides)
 import Grease.Macaw.Overrides.Address qualified as AddrOv
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
-import Grease.Macaw.PLT
+import Grease.Macaw.PLT qualified as GMPLT
 import Grease.Macaw.RegName (getRegName, mkRegName, regNameToString, regNames)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
 import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, emptyGreaseSimulatorState)
@@ -202,6 +203,12 @@ import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
 import Prelude (Int, Integer, Integral, Num (..), fromIntegral)
 
+-- TODO(#410): Eliminate this exception type
+newtype GreaseException = GreaseException Text.Text
+instance X.Exception GreaseException
+instance Show GreaseException where
+  show (GreaseException msg) = Text.unpack msg
+
 {- Note [Explicitly listed errors]
 
 In this module, we frequently explicitly list all constructors of an error type,
@@ -232,6 +239,18 @@ userError :: GreaseLogAction -> PP.Doc Void -> IO a
 userError la doc = do
   doLog la (Diag.UserError doc)
   Exit.exitFailure
+
+-- | GREASE invoked a forward declaration, but it was unable to resolve the
+-- 'C.FnHandle' corresponding to the declaration. Throw an exception suggesting
+-- that the user try an override.
+declaredFunNotFound :: GreaseLogAction -> W4.FunctionName -> IO a
+declaredFunNotFound la decName =
+  userError la $
+    PP.hsep
+      [ "Function declared but not defined:"
+      , PP.pretty (W4.functionName decName) <> "."
+      , "Try specifying an override using --overrides."
+      ]
 
 -- | Read a binary's file permissions and ELF header info.
 readElfHeaderInfo ::
@@ -761,6 +780,7 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
           errorSymbolicFunCalls
           errorSymbolicSyscalls
           skipInvalidCallAddrs
+          (declaredFunNotFound la)
           memCfg_
   pure (memCfg, fnOvsMap)
 
@@ -933,7 +953,13 @@ simulateMacawCfg ::
   IO BatchStatus
 simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs mbCfgAddr entrypointCfgs = do
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
-  (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory (simMutGlobs simOpts) relocs
+  globs <-
+    case simMutGlobs simOpts of
+      Initialized -> pure Symbolic.ConcreteMutable
+      Symbolic -> pure Symbolic.SymbolicMutable
+      Uninitialized ->
+        throw (GreaseException "Macaw does not support uninitialized globals (macaw#372)")
+  (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory globs relocs
 
   let (tyCtxErrs, tyCtx) = TCtx.mkTypeContext dl IntMap.empty []
   let ?lc = tyCtx
@@ -1342,7 +1368,9 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
   let memory = MC.emptyMemory (archCtx ^. archInfo . to MI.archAddrWidth)
   let dl = macawDataLayout archCtx
   let setupHook :: forall sym. Macaw.SetupHook sym arch
-      setupHook = Macaw.syntaxSetupHook la dl cfgs prog
+      setupHook =
+        let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
+         in Macaw.syntaxSetupHook la errCb dl cfgs prog
   let macawCfgConfig =
         MacawCfgConfig
           { mcDataLayout = dl
@@ -1406,7 +1434,10 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
   -- requirement). This check only applies to dynamically linked binaries, and
   -- for statically linked binaries, this map will be empty.
   pltStubSegOffToNameMap <-
-    resolvePltStubs (simProgPath simOpts) mbPltStubInfo loadOpts elf symbolRelocs (simPltStubs simOpts) memory
+    GMPLT.resolvePltStubs (simProgPath simOpts) mbPltStubInfo loadOpts elf symbolRelocs (simPltStubs simOpts) memory
+      >>= \case
+        Left err@GMPLT.CouldNotResolvePltStub{} -> malformedElf la (PP.pretty err)
+        Right pltStubs -> pure pltStubs
 
   let
     -- The inverse of `pltStubSegOffToNameMap`.
@@ -1454,7 +1485,9 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
 
   addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
   let setupHook :: forall sym. SetupHook sym arch
-      setupHook = Macaw.binSetupHook addrOvs cfgs
+      setupHook =
+        let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
+         in Macaw.binSetupHook errCb addrOvs cfgs
 
   let macawCfgConfig =
         MacawCfgConfig
@@ -1705,7 +1738,10 @@ simulateLlvmSyntax simOpts la = do
   sexpOvs <- loadLLVMSExpOvs (simOverrides simOpts) halloc mvar
   let llvmMod = Nothing
   let setupHook :: forall sym arch. LLVM.SetupHook sym arch
-      setupHook = LLVM.syntaxSetupHook la sexpOvs prog cfgs
+      setupHook =
+        LLVM.syntaxSetupHook la sexpOvs prog cfgs $
+          GLO.CantResolveOverrideCallback $
+            \nm _hdl -> liftIO (declaredFunNotFound la nm)
   simulateLlvmCfgs la simOpts halloc llvmCtx llvmMod mkMem setupHook cfgs
 
 -- | Helper, not exported
@@ -1796,7 +1832,10 @@ simulateLlvm transOpts simOpts la = do
 
     sexpOvs <- loadLLVMSExpOvs (simOverrides simOpts) halloc mvar
     let setupHook :: forall sym. LLVM.SetupHook sym arch
-        setupHook = LLVM.moduleSetupHook la sexpOvs trans cfgs
+        setupHook =
+          LLVM.moduleSetupHook la sexpOvs trans cfgs $
+            GLO.CantResolveOverrideCallback $
+              \nm _hdl -> liftIO (declaredFunNotFound la nm)
 
     simulateLlvmCfgs la simOpts halloc llvmCtxt (Just llvmMod) mkMem setupHook cfgs
 
@@ -1871,7 +1910,9 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
           )
     addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
     let setupHook :: forall sym. SetupHook sym arch
-        setupHook = Macaw.binSetupHook addrOvs cfgs
+        setupHook =
+          let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
+           in Macaw.binSetupHook errCb addrOvs cfgs
     let dl = macawDataLayout archCtx
     let macawCfgConfig =
           MacawCfgConfig

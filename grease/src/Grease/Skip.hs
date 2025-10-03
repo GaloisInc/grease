@@ -15,6 +15,7 @@ import Data.Text qualified as Text
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic (Diagnostic (SkipDiagnostic), GreaseLogAction)
+import Grease.Overrides qualified as GO
 import Grease.Setup qualified as Setup
 import Grease.Shape (ExtShape, Shape, minimalShapeWithPtrs)
 import Grease.Shape qualified as Shape
@@ -23,7 +24,6 @@ import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Grease.Shape.Selector
 import Grease.Skip.Diagnostic qualified as Diag
-import Grease.Utility (declaredFunNotFound)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
@@ -154,12 +154,13 @@ registerSkipOverride ::
   GreaseLogAction ->
   Mem.DataLayout ->
   C.GlobalVar Mem ->
+  GO.CantResolveOverrideCallback sym ext ->
   W4.FunctionName ->
   C.FnHandle args ret ->
   C.OverrideSim p sym ext r args' ret' ()
-registerSkipOverride la dl memVar funcName hdl =
+registerSkipOverride la dl memVar errCb funcName hdl =
   case createSkipOverride la dl memVar funcName (C.handleReturnType hdl) of
-    Left{} -> declaredFunNotFound funcName
+    Left{} -> GO.runCantResolveOverrideCallback errCb funcName hdl
     Right ov ->
       let symbol = L.Symbol (Text.unpack (W4.functionName funcName))
        in CLLVM.bindLLVMHandle memVar symbol hdl (C.UseOverride ov)

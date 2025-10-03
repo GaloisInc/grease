@@ -15,7 +15,7 @@ import Data.Functor.Const (Const (..))
 import Data.Macaw.Memory qualified as MM
 import Data.Parameterized.Context qualified as Ctx
 import Data.Text (Text)
-import Grease.Diagnostic.Severity (Severity (Debug, Info))
+import Grease.Diagnostic.Severity (Severity (Debug, Info, Warn))
 import Grease.ErrorDescription (ErrorDescription)
 import Grease.Heuristic.Result qualified as Heuristic
 import Grease.Shape (ArgShapes (..), ExtShape, PrettyExt)
@@ -43,6 +43,8 @@ data Diagnostic where
   GoalMatchingHeuristic ::
     Diagnostic
   NoAnnotationOnPredicate ::
+    Diagnostic
+  PredNotFound ::
     Diagnostic
   RefinementFinishedPath ::
     W4.ProgramLoc ->
@@ -117,6 +119,8 @@ instance PP.Pretty Diagnostic where
         "Found a matching heuristic and refined configuration"
       NoAnnotationOnPredicate ->
         "No annotation on predicate!"
+      PredNotFound ->
+        "Predicate annotation was not found in bad behavior map"
       RefinementFinalPrecondition w argNames (ArgShapes argShapes) ->
         PP.vcat
           [ "Final refined precondition:"
@@ -171,6 +175,7 @@ severity =
     GoalNoMatchingHeuristic{} -> Debug
     GoalMatchingHeuristic{} -> Debug
     NoAnnotationOnPredicate{} -> Debug
+    PredNotFound{} -> Warn
     RefinementFinalPrecondition{} -> Debug
     RefinementFinishedPath{} -> Info
     RefinementLoopMaximumIterationsExceeded{} -> Info
