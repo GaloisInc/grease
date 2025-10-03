@@ -145,6 +145,7 @@ library
     , crucible
     , crucible-llvm
     , elf-edit
+    , lens
     , macaw-loader
     , macaw-ppc
     , macaw-ppc-symbolic
