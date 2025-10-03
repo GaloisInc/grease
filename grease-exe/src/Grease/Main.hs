@@ -136,7 +136,7 @@ import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
 import Grease.Macaw.Overrides.Address (AddressOverrides, loadAddressOverrides)
 import Grease.Macaw.Overrides.Address qualified as AddrOv
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
-import Grease.Macaw.PLT
+import Grease.Macaw.PLT qualified as GMPLT
 import Grease.Macaw.RegName (getRegName, mkRegName, regNameToString, regNames)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
 import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, emptyGreaseSimulatorState)
@@ -1428,7 +1428,10 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
   -- requirement). This check only applies to dynamically linked binaries, and
   -- for statically linked binaries, this map will be empty.
   pltStubSegOffToNameMap <-
-    resolvePltStubs (simProgPath simOpts) mbPltStubInfo loadOpts elf symbolRelocs (simPltStubs simOpts) memory
+    GMPLT.resolvePltStubs (simProgPath simOpts) mbPltStubInfo loadOpts elf symbolRelocs (simPltStubs simOpts) memory
+      >>= \case
+        Left err@GMPLT.CouldNotResolvePltStub{} -> malformedElf la (PP.pretty err)
+        Right pltStubs -> pure pltStubs
 
   let
     -- The inverse of `pltStubSegOffToNameMap`.
