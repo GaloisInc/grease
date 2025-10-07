@@ -24,7 +24,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Vector qualified as Vec
 import Grease.Macaw.Memory (loadConcreteString)
 import Grease.Utility (OnlineSolverAndBackend)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Intrinsics.Libc qualified as Libc
 import Lang.Crucible.LLVM.MemModel qualified as CLM
@@ -140,15 +140,15 @@ callAssert ::
   C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) r args ret ()
 callAssert bak mvar mmConf _pfn _pfile _pline ptxt = do
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   st0 <- get
   let maxSize = Nothing
   (txt, st1) <- liftIO $ loadConcreteString bak mvar mmConf ptxt maxSize st0
   put st1
   let err = C.AssertFailureSimError "Call to assert()" (BSC.unpack txt)
-  _ <- liftIO $ C.addFailedAssertion bak err
+  _ <- liftIO $ CB.addFailedAssertion bak err
   loc <- liftIO $ W4.getCurrentProgramLoc sym
-  liftIO $ C.abortExecBecause $ C.EarlyExit loc
+  liftIO $ CB.abortExecBecause $ CB.EarlyExit loc
 
 -- | An override for the @printf@ function. This assumes that the first argument
 -- points to an entirely concrete formatting string.
@@ -230,7 +230,7 @@ callPrintf ::
     ret
     (CLM.LLVMPtr sym (MC.ArchAddrWidth arch))
 callPrintf bak mvar mmConf formatStrPtr gva = do
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   st0 <- get
   let maxSize = Nothing
   -- Read format string
@@ -352,7 +352,7 @@ callPuts ::
     ret
     (CLM.LLVMPtr sym (MC.ArchAddrWidth arch))
 callPuts bak mvar mmConf strPtr = do
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   st0 <- get
   let strEntry = C.RegEntry CLM.PtrRepr (C.regValue strPtr)
   let maxSize = Nothing
@@ -361,7 +361,7 @@ callPuts bak mvar mmConf strPtr = do
   h <- C.printHandle <$> C.getContext
   liftIO $ BSC.hPutStrLn h str
   -- return non-negative value on success
-  oneBv <- liftIO $ W4.bvOne (C.backendGetSym bak) MM.memWidthNatRepr
+  oneBv <- liftIO $ W4.bvOne (CB.backendGetSym bak) MM.memWidthNatRepr
   liftIO $ CLM.llvmPointer_bv sym oneBv
 
 -- | An override for @__stack_chk_fail@, which is called by functions that fail
@@ -390,9 +390,9 @@ buildStackChkFailLocalOverride =
 callStackChkFail :: W4.FunctionName -> C.OverrideSim p sym ext r args ret ()
 callStackChkFail fnName =
   C.ovrWithBackend $ \bak -> liftIO $ do
-    let sym = C.backendGetSym bak
+    let sym = CB.backendGetSym bak
     let msg = "Call to " List.++ show fnName
     let err = C.AssertFailureSimError msg ""
-    C.assert bak (W4.falsePred sym) err
+    CB.assert bak (W4.falsePred sym) err
     loc <- W4.getCurrentProgramLoc sym
-    C.abortExecBecause $ C.EarlyExit loc
+    CB.abortExecBecause $ CB.EarlyExit loc

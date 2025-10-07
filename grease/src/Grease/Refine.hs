@@ -135,7 +135,7 @@ import Grease.Shape.Pointer (PtrShape)
 import Grease.Solver (Solver, solverAdapter)
 import Grease.SymIO qualified as GSIO
 import Grease.Utility
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Prove qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
@@ -169,7 +169,7 @@ doLog la diag = LJ.writeLog la (RefineDiagnostic diag)
 -- annotations on predicates.
 findPredAnnotations ::
   forall sym brand st fs t.
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , sym ~ W4.ExprBuilder brand st fs
   ) =>
   sym ->
@@ -196,7 +196,7 @@ findPredAnnotations sym e = case W4.asApp e of
 -- | A proof obligation failed, and no heuristic identified a refinement
 data NoHeuristic sym ext tys
   = NoHeuristic
-  { noHeuristicGoal :: C.ProofObligation sym
+  { noHeuristicGoal :: CB.ProofObligation sym
   , noHeuristicConcretizedData :: ConcretizedData sym ext tys
   , noHeuristicError :: Maybe (ErrorDescription sym)
   }
@@ -305,8 +305,8 @@ consumer bak execResult la bbMap refineData = do
         , refineInitState = initState
         } = refineData
   C.ProofConsumer $ \goal result -> do
-    let sym = C.backendGetSym bak
-    let lp = C.proofGoal goal
+    let sym = CB.backendGetSym bak
+    let lp = CB.proofGoal goal
     let simErr = lp ^. W4.labeledPredMsg
     minfo <-
       case findPredAnnotations sym (lp ^. W4.labeledPred) of
@@ -380,7 +380,7 @@ execCfg ::
   -- paths.
   IO
     ( C.ExecResult p sym ext (C.RegEntry sym ret)
-    , C.ProofObligations sym
+    , CB.ProofObligations sym
     , Seq (C.WorkItem p sym ext (C.RegEntry sym ret))
     )
 execCfg bak execData = do
@@ -390,8 +390,8 @@ execCfg bak execData = do
         , execPathStrat = strat
         } = execData
   let withCleanup action = X.finally action $ do
-        C.resetAssumptionState bak
-        C.clearProofObligations bak
+        CB.resetAssumptionState bak
+        CB.clearProofObligations bak
   withCleanup $
     case strat of
       Opts.Dfs -> do
@@ -403,11 +403,11 @@ execCfg bak execData = do
         case mbResult of
           Nothing -> panic "execCfg" ["executeCrucibleDFSPaths didn't return a result"]
           Just r -> do
-            o <- C.getProofObligations bak
+            o <- CB.getProofObligations bak
             pure (r, o, rest)
       Opts.Sse -> do
         r <- C.executeCrucible feats initialState
-        o <- C.getProofObligations bak
+        o <- CB.getProofObligations bak
         pure (r, o, Seq.empty)
 
 -- | Data needed for refinement
@@ -439,10 +439,10 @@ proveAndRefine ::
   GreaseLogAction ->
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
   RefinementData sym bak ext argTys ->
-  C.ProofObligations sym ->
+  CB.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
 proveAndRefine bak execResult la bbMap refineData goals = do
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   let solver = refineSolver refineData
   let tout = refineSolverTimeout refineData
   let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
@@ -489,18 +489,18 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
               pure (ProveCantRefine (Exit (Just 0)))
             C.AbortedResult _ (C.AbortedExit (Exit.ExitFailure code) _) ->
               pure (ProveCantRefine (Exit (Just code)))
-            C.AbortedResult _ (C.AbortedExec (C.EarlyExit _loc) _gp) ->
+            C.AbortedResult _ (C.AbortedExec (CB.EarlyExit _loc) _gp) ->
               pure (ProveCantRefine (Exit Nothing))
-            C.AbortedResult _ (C.AbortedExec (C.AssertionFailure (C.SimError _loc (C.ResourceExhausted msg))) _gp) ->
+            C.AbortedResult _ (C.AbortedExec (CB.AssertionFailure (C.SimError _loc (C.ResourceExhausted msg))) _gp) ->
               pure (ProveCantRefine (Exhausted msg))
-            C.AbortedResult _ (C.AbortedExec (C.AssertionFailure (C.SimError _loc (C.Unsupported _cs feat))) _gp) ->
+            C.AbortedResult _ (C.AbortedExec (CB.AssertionFailure (C.SimError _loc (C.Unsupported _cs feat))) _gp) ->
               pure (ProveCantRefine (Unsupported feat))
             _ -> do
               bbMap <- readIORef bbMapRef
               proveAndRefine bak execResult la bbMap refineData goals
         case execPathStrat execData of
           Opts.Dfs -> do
-            loc <- W4.getCurrentProgramLoc (C.backendGetSym bak)
+            loc <- W4.getCurrentProgramLoc (CB.backendGetSym bak)
             doLog la (Diag.RefinementFinishedPath loc (shortResult refineResult))
           Opts.Sse -> pure ()
         pure (refineResult, remaining)
@@ -592,7 +592,7 @@ refineOnce ::
   ) ->
   IO (ProveRefineResult sym ext argTys)
 refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem memVar heuristics execFeats mkInitState = do
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   ErrorCallbacks
     { errorMap = bbMapRef
     , llvmErrCallback = recordLLVMAnnotation

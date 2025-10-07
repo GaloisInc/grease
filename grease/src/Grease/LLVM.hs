@@ -22,7 +22,7 @@ import Grease.Options (ErrorSymbolicFunCalls)
 import Grease.Setup (SetupMem (getSetupMem))
 import Grease.Utility (printHandle)
 import Lang.Crucible.Analysis.Postdom qualified as C
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.Extension (ArchWidth, LLVM)
@@ -39,7 +39,7 @@ initState ::
   forall p sym bak arch m t st fs argTys retTy.
   ( MonadIO m
   , MonadThrow m
-  , C.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder t st fs
   , 16 C.<= ArchWidth arch
   , ArchWidth arch ~ 64

@@ -59,7 +59,7 @@ import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer
 import Grease.Shape.Selector
 import Grease.Utility (OnlineSolverAndBackend, ppProgramLoc, tshow)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
@@ -96,7 +96,7 @@ type RefineHeuristic sym bak ext tys =
   bak ->
   Anns.Annotations sym ext tys ->
   InitialMem sym ->
-  C.ProofObligation sym ->
+  CB.ProofObligation sym ->
   Maybe (ErrorDescription sym) ->
   -- Argument names
   Ctx.Assignment (Const String) tys ->
@@ -109,7 +109,7 @@ selectArg sel = argShapes . ixF' (sel ^. argSelectorIndex)
 newtype MemoryErrorHeuristic sym ext w argTys
   = MemoryErrorHeuristic
       ( forall ts t.
-        ( C.IsSymInterface sym
+        ( CB.IsSymInterface sym
         , Cursor.Last ts ~ Mem.LLVMPointerType w
         ) =>
         sym ->
@@ -211,7 +211,7 @@ handleMemErr la argNames args err sel =
 
 testPtrWidth ::
   ( Mem.HasPtrWidth wptr
-  , C.IsSymInterface sym
+  , CB.IsSymInterface sym
   ) =>
   Mem.LLVMPtr sym w ->
   Maybe (w C.:~: wptr)
@@ -221,7 +221,7 @@ assertPtrWidth ::
   forall sym wptr w m.
   ( MonadThrow m
   , Mem.HasPtrWidth wptr
-  , C.IsSymInterface sym
+  , CB.IsSymInterface sym
   ) =>
   Mem.LLVMPtr sym w ->
   m (w C.:~: wptr)
@@ -249,7 +249,7 @@ allocInfoLoc sym mem ptr = do
 modPtr ::
   forall sym ext t st fs w w0 argTys.
   ( ExtShape ext ~ PtrShape ext w
-  , C.IsSymInterface sym
+  , CB.IsSymInterface sym
   , sym ~ W4.ExprBuilder t st fs
   , Cursor.CursorExt ext ~ Dereference ext w
   , Mem.HasPtrWidth w
@@ -298,7 +298,7 @@ ptrBytes = Bytes.toBytes (NatRepr.widthVal ?ptrWidth `div` 8)
 handleUB ::
   forall sym ext t st fs w argTys.
   ( ExtShape ext ~ PtrShape ext w
-  , C.IsSymInterface sym
+  , CB.IsSymInterface sym
   , sym ~ W4.ExprBuilder t st fs
   , Cursor.CursorExt ext ~ Dereference ext w
   , Mem.HasPtrWidth w
@@ -343,7 +343,7 @@ handleUB la anns sym _loc args =
 
 -- | Apply some heuristics to a single pointer.
 applyMemoryHeuristics ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , C.IsSyntaxExtension ext
   , ExtShape ext ~ PtrShape ext wptr
   , Cursor.CursorExt ext ~ Dereference ext wptr
@@ -429,7 +429,7 @@ mustFailHeuristic bak _anns _initMem obligation minfo _argNames _args =
     then pure Unknown
     else do
       mustFail <- MustFail.oneMustFail bak [obligation]
-      let lp = C.proofGoal obligation
+      let lp = CB.proofGoal obligation
       let simError = lp ^. W4.labeledPredMsg
       let loc = C.simErrorLoc simError
       let bug =
@@ -496,8 +496,8 @@ pointerHeuristic la ptrHeuristic byteHeuristic bak anns initMem obligation minfo
       applyToErr (AnyMemErrorMacaw mmErr) ptr
     Nothing -> pure Unknown
  where
-  sym = C.backendGetSym bak
-  labeledPred = C.proofGoal obligation
+  sym = CB.backendGetSym bak
+  labeledPred = CB.proofGoal obligation
   loc = C.simErrorLoc (labeledPred ^. W4.labeledPredMsg)
   applyToErr :: AnyMemError sym -> Mem.LLVMPtr sym w -> IO (HeuristicResult ext argTys)
   applyToErr e ptr = applyMemoryHeuristics la anns sym ptrHeuristic byteHeuristic loc initMem e argNames args ptr
@@ -540,7 +540,7 @@ allocInfoFromPtr sym mem ptr = do
 -- return the name of the associated global variable. Returns 'Nothing' if the
 -- mutability is wrong, if the pointer is not a global, or if the pointer\'s
 -- block or offset aren\'t concrete.
-globalPtrName :: C.IsSymInterface sym => sym -> CLM.MemImpl sym -> Mem.Mutability -> Mem.LLVMPtr sym w -> Maybe String
+globalPtrName :: CB.IsSymInterface sym => sym -> CLM.MemImpl sym -> Mem.Mutability -> Mem.LLVMPtr sym w -> Maybe String
 globalPtrName sym mem mut ptr =
   case allocInfoFromPtr sym (CLM.memImplHeap mem) ptr of
     Just (Mem.AllocInfo Mem.GlobalAlloc _sz actualMut _align _loc) | mut == actualMut -> do

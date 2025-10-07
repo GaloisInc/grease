@@ -29,7 +29,7 @@ import Grease.Macaw.Overrides.Networking (networkOverrides)
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
 import Grease.Panic qualified as Panic
 import Grease.Utility (llvmOverrideName)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.Intrinsics.Cast qualified as Cast
@@ -45,7 +45,7 @@ import Text.LLVM.AST qualified as L
 -- from libc) and then some (i.e., LLVM intrinsics).
 builtinStubsOverrides ::
   forall sym bak p arch.
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
   , CLM.HasLLVMAnn sym
@@ -133,7 +133,7 @@ bvToPointer =
 -- function, as the approach that 'Mem.LLVMOverride' uses to represent varargs
 -- is not easily convertible to the approach that @stubs@ uses.
 llvmToStubsOverride ::
-  C.IsSymBackend sym bak =>
+  CB.IsSymBackend sym bak =>
   CLM.HasLLVMAnn sym =>
   bak ->
   C.GlobalVar CLM.Mem ->

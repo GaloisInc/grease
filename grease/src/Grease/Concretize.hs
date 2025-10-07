@@ -47,7 +47,7 @@ import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Grease.Shape.Print qualified as ShapePP
 import Grease.Utility (OnlineSolverAndBackend)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Concretize qualified as Conc
 import Lang.Crucible.LLVM.MemModel qualified as CLM
@@ -85,7 +85,7 @@ newtype ConcArgs sym ext argTys
 -- a CFG.
 concArgsToSym ::
   forall sym ext brand st fm wptr argTys.
-  C.IsSymInterface sym =>
+  CB.IsSymInterface sym =>
   (sym ~ W4.ExprBuilder brand st (W4.Flags fm)) =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   sym ->
@@ -153,7 +153,7 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
         , initStateFs = initFs
         , initStateMem = InitialMem initMem
         } = initState
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   let ctx = Conc.ConcCtx @sym @t groundEvalFn Mem.concPtrFnMap
   let concRV :: forall tp. C.TypeRepr tp -> C.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)
       concRV t = fmap (Conc.ConcRV' @sym) . Conc.concRegValue @sym @t ctx t . C.unRV

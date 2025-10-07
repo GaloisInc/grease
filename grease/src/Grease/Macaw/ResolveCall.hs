@@ -63,7 +63,7 @@ import Grease.Options (ErrorSymbolicFunCalls (..), ErrorSymbolicSyscalls (..), S
 import Grease.Syntax (ResolvedOverridesYaml (..))
 import Grease.Utility (OnlineSolverAndBackend, segoffToAbsoluteAddr)
 import Lang.Crucible.Analysis.Postdom qualified as C
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
@@ -290,7 +290,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
     Nothing ->
       if getErrorSymbolicFunCalls errorSymbolicFunCalls
         then
-          C.addFailedAssertion bak $
+          CB.addFailedAssertion bak $
             C.AssertFailureSimError
               "Failed to call function"
               "Cannot resolve a symbolic function address"
@@ -308,7 +308,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
                   then
                     pure (SkippedFunctionCall (InvalidAddress addrString), st)
                   else
-                    C.addFailedAssertion bak $ C.AssertFailureSimError "Failed to call function" ("Invalid address: " ++ addrString)
+                    CB.addFailedAssertion bak $ C.AssertFailureSimError "Failed to call function" ("Invalid address: " ++ addrString)
           Just funcAddrOff -> go funcAddrOff
  where
   lookupOv ::
@@ -500,7 +500,7 @@ data LookupSyscallResult p sym arch atps rtps where
 --
 -- The behavior of this function is documented in @doc/syscalls.md@.
 lookupSyscallResult ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , HasGreaseSimulatorState p sym arch
   ) =>
   bak ->
@@ -521,7 +521,7 @@ lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs 
     Nothing ->
       if getErrorSymbolicSyscalls errorSymbolicSyscalls
         then
-          C.addFailedAssertion bak $
+          CB.addFailedAssertion bak $
             C.AssertFailureSimError
               "Failed to execute syscall"
               "Cannot resolve a symbolic syscall number"
@@ -547,7 +547,7 @@ lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs 
 -- | An implementation of 'Symbolic.LookupSyscallHandle' that attempts to look
 -- up a syscall override and dispatches on the result.
 lookupSyscallHandle ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , HasGreaseSimulatorState p sym arch
   ) =>
   bak ->
@@ -601,7 +601,7 @@ discoverFuncAddr logAction halloc arch memory symMap pltStubs addr st0 = do
 -- 'MacawOverride', bind the auxiliary functions to their corresponding CFGs,
 -- and redirect any forward declarations to their corresponding overrides.
 useMacawSExpOverride ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , W4.OnlineSolver solver
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
@@ -646,7 +646,7 @@ useMacawSExpOverride bak la halloc arch allOvs errCb mOv st0 =
 -- beforehand.
 extendHandleMap ::
   forall sym bak arch args ret solver scope st fs p.
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , W4.OnlineSolver solver
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs

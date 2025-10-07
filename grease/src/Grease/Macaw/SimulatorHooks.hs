@@ -21,7 +21,7 @@ import Grease.Macaw.Arch (ArchContext)
 import Grease.Macaw.Overrides.Address (AddressOverrides, maybeRunAddressOverride)
 import Grease.Macaw.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Panic (panic)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
@@ -54,7 +54,7 @@ doLog la diag = LJ.writeLog la (SimulatorHooksDiagnostic diag)
 -- bitvector (via 'Mem.projectLLVM_bv'). However, 'Grease.Setup.setupPtr'
 -- currently uses symbolic block numbers, which causes this assertion to fail.
 greaseMacawExtImpl ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   , sym ~ W4.ExprBuilder t st fs
@@ -76,7 +76,7 @@ greaseMacawExtImpl archCtx bak la tgtOvs memVar macawExtImpl =
 
 -- | This evaluates a Macaw statement extension in the simulator.
 extensionEval ::
-  C.IsSymBackend sym bak =>
+  CB.IsSymBackend sym bak =>
   C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   bak ->
   C.IntrinsicTypes sym ->
@@ -98,14 +98,14 @@ extensionEval baseExt bak iTypes logFn cst evalFn =
 -- that one of the pointers is actually a bitvector, OR the pointers point to
 -- the same allocation.
 ptrAnd ::
-  C.IsSymBackend sym bak =>
+  CB.IsSymBackend sym bak =>
   (1 C.<= w) =>
   bak ->
   CLM.LLVMPtr sym w ->
   CLM.LLVMPtr sym w ->
   IO (CLM.LLVMPtr sym w)
 ptrAnd bak x y = do
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   CLM.LLVMPointer xblk xoff <- pure x
   CLM.LLVMPointer yblk yoff <- pure y
   natZero <- W4.natLit sym 0
@@ -115,14 +115,14 @@ ptrAnd bak x y = do
   oneBv <- W4.orPred sym xbv ybv
   ok <- W4.orPred sym sameBlk oneBv
   let msg = "Invalid AND of two pointers"
-  C.assert bak ok (C.AssertFailureSimError msg "")
+  CB.assert bak ok (C.AssertFailureSimError msg "")
   xptr <- W4.notPred sym xbv
   blk <- W4.natIte sym xptr xblk yblk
   off <- W4.bvAndBits sym xoff yoff
   pure (CLM.LLVMPointer blk off)
 
 extensionExec ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   , sym ~ W4.ExprBuilder t st fs
@@ -137,7 +137,7 @@ extensionExec ::
   C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   Symbolic.MacawEvalStmtFunc (C.StmtExtension (Symbolic.MacawExt arch)) p sym (Symbolic.MacawExt arch)
 extensionExec archCtx bak la tgtOvs memVar baseExt stmt crucState = do
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   case stmt of
     Symbolic.PtrAnd _w (C.RegEntry _ x) (C.RegEntry _ y) -> do
       p <- ptrAnd bak x y

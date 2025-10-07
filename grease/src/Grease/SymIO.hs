@@ -14,7 +14,7 @@ import Data.Map.Strict qualified as Map
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Text qualified as Text
 import Grease.Options qualified as GO
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as CLLVM.SymIO
@@ -33,7 +33,7 @@ data InitializedFs sym ptrW
 
 -- | Initialize the symbolic file system.
 initialLlvmFileSystem ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , CLM.HasPtrWidth ptrW
   ) =>
   C.HandleAllocator ->

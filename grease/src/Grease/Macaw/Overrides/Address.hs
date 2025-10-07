@@ -40,7 +40,7 @@ import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Overrides (CantResolveOverrideCallback (..), OverrideNameError (..), partitionCfgs)
 import Grease.Syntax (ParseProgramError, parseProgram)
 import Grease.Utility (tshow)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as LCBO
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as LCCR
@@ -256,7 +256,7 @@ loadAddressOverrides archRegsType halloc memory paths = do
 -- 'AddressOverride's to their implementations.
 registerAddressOverrideForwardDeclarations ::
   ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
-  , C.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ LCBO.OnlineBackend solver scope st fs
@@ -291,7 +291,7 @@ registerAddressOverrideCfgs addrOvs = do
 -- forwaAddressrd declarations.
 registerAddressOverrideHandles ::
   ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
-  , C.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ LCBO.OnlineBackend solver scope st fs
@@ -357,15 +357,15 @@ runAddressOverride memVar crucState someCfg regs = do
       C.FinishedResult _ (C.PartialRes loc p _gp _aborted) -> do
         let ctx = crucState Lens.^. C.stateContext
         C.withBackend ctx $ \bak -> do
-          C.assert bak p (C.GenericSimError ("Assertion from address override at " ++ show loc))
+          CB.assert bak p (C.GenericSimError ("Assertion from address override at " ++ show loc))
           pure ()
-      C.AbortedResult _ (C.AbortedExec reason _) -> C.abortExecBecause reason
+      C.AbortedResult _ (C.AbortedExec reason _) -> CB.abortExecBecause reason
       _ -> do
         let ctx = crucState Lens.^. C.stateContext
         C.withBackend ctx $ \bak -> do
-          let sym = C.backendGetSym bak
+          let sym = CB.backendGetSym bak
           let msg = "Address override did not return a result nor abort"
-          C.throwUnsupported sym msg
+          CB.throwUnsupported sym msg
 
 tryRunAddressOverride ::
   ( sym ~ W4.ExprBuilder t st fs

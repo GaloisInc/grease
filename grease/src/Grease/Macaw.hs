@@ -66,8 +66,8 @@ import Grease.Shape.Pointer
 import Grease.Syntax (ResolvedOverridesYaml)
 import Grease.Utility
 import Lang.Crucible.Analysis.Postdom qualified as C
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.Backend.Online qualified as C
+import Lang.Crucible.Backend qualified as CB
+import Lang.Crucible.Backend.Online qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
@@ -88,7 +88,7 @@ emptyMacawMem ::
   forall (arch :: Type) (sym :: Type) (bak :: Type) (m :: Type -> Type) t st fs.
   ( MonadIO m
   , MonadThrow m
-  , C.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
   , 16 C.<= MC.ArchAddrWidth arch
@@ -135,7 +135,7 @@ globalMemoryHooks arch relocs =
         -- instead of a constant value so that if we ever read from the middle
         -- of a relocation by mistake, we are more likely to trigger assertion
         -- failures elsewhere.
-        let sym = C.backendGetSym bak
+        let sym = CB.backendGetSym bak
         let relocAbsBaseAddr = relocAddrToAbsAddr relocMem relocSeg relocBaseAddr reloc
         case Map.lookup relocAbsBaseAddr relocs of
           Just relocType
@@ -154,7 +154,7 @@ globalMemoryHooks arch relocs =
   -- relocation types we don't yet support.
   symbolicRelocation ::
     forall sym.
-    C.IsSymInterface sym =>
+    CB.IsSymInterface sym =>
     sym ->
     MM.Relocation (MC.ArchAddrWidth arch) ->
     Maybe String ->
@@ -166,7 +166,7 @@ globalMemoryHooks arch relocs =
   -- Construct a symbolic byte.
   symbolicByte ::
     forall sym.
-    C.IsSymInterface sym =>
+    CB.IsSymInterface sym =>
     sym ->
     -- The prefix to use in the symbolic byte's name.
     String ->
@@ -199,7 +199,7 @@ globalMemoryHooks arch relocs =
   -- list of bytes.
   relocAddrBV ::
     forall sym.
-    C.IsSymInterface sym =>
+    CB.IsSymInterface sym =>
     sym ->
     MM.Relocation (MC.ArchAddrWidth arch) ->
     MM.MemWord (MC.ArchAddrWidth arch) ->
@@ -227,7 +227,7 @@ globalMemoryHooks arch relocs =
   -- All we have to do is compute the address that the relocation references.
   relativeRelocHook ::
     forall sym.
-    C.IsSymInterface sym =>
+    CB.IsSymInterface sym =>
     sym ->
     MM.Relocation (MC.ArchAddrWidth arch) ->
     MM.MemWord (MC.ArchAddrWidth arch) ->
@@ -243,7 +243,7 @@ globalMemoryHooks arch relocs =
   -- PLT stubs] (Wrinkle 1: .plt.got) in Grease.Macaw.PLT.
   symbolRelocHook ::
     forall sym.
-    C.IsSymInterface sym =>
+    CB.IsSymInterface sym =>
     sym ->
     MM.Relocation (MC.ArchAddrWidth arch) ->
     MM.MemWord (MC.ArchAddrWidth arch) ->
@@ -287,7 +287,7 @@ minimalArgShapes ::
   forall arch sym bak m wptr.
   ( MonadIO m
   , MonadThrow m
-  , C.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , CLM.HasPtrWidth wptr
   , Symbolic.SymArchConstraints arch
@@ -353,11 +353,11 @@ regStructRepr arch = C.StructRepr . Symbolic.crucArchRegTypes $ arch ^. archVals
 memConfigInitial ::
   forall arch sym bak solver scope st fs p.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
-  , C.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , Symbolic.SymArchConstraints arch
   , W4.OnlineSolver solver
   , sym ~ W4.ExprBuilder scope st fs
-  , bak ~ C.OnlineBackend solver scope st fs
+  , bak ~ CB.OnlineBackend solver scope st fs
   , 16 C.<= MC.ArchAddrWidth arch
   , Show (ArchReloc arch)
   , ?memOpts :: CLM.MemOptions
@@ -386,7 +386,7 @@ memConfigInitial bak arch ptrTable skipUnsupportedRelocs relocs =
       -- for MacawReadMem/MacawCondReadMem, which is quite involved.
       Symbolic.concreteImmutableGlobalRead = \memRep ptr -> do
         Monad.unless (Opts.getSkipUnsupportedRelocs skipUnsupportedRelocs) $ do
-          loc <- W4.getCurrentProgramLoc (C.backendGetSym bak)
+          loc <- W4.getCurrentProgramLoc (CB.backendGetSym bak)
           assertRelocSupported arch loc ptr relocs
         Symbolic.concreteImmutableGlobalRead lazyMemModelConfig memRep ptr
     }
@@ -411,11 +411,11 @@ memConfigInitial bak arch ptrTable skipUnsupportedRelocs relocs =
 memConfigWithHandles ::
   forall arch sym bak solver scope st fs p.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
-  , C.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , Symbolic.SymArchConstraints arch
   , W4.OnlineSolver solver
   , sym ~ W4.ExprBuilder scope st fs
-  , bak ~ C.OnlineBackend solver scope st fs
+  , bak ~ CB.OnlineBackend solver scope st fs
   , 16 C.<= MC.ArchAddrWidth arch
   , Show (ArchReloc arch)
   , ?memOpts :: CLM.MemOptions
@@ -460,7 +460,7 @@ memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap 
 -- that the underlying relocation type is supported. If not, throw an exception.
 -- This is a best effort attempt: if the read is symbolic, the check is skipped.
 assertRelocSupported ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , Show (ArchReloc arch)
   , HasCallStack
@@ -497,7 +497,7 @@ assertRelocSupported arch loc (CLM.LLVMPointer _base offset) relocs =
                       ]
               let reason = C.Unsupported callStack msg
               let simErr = C.SimError loc reason
-              C.abortExecBecause (C.AssertionFailure simErr)
+              CB.abortExecBecause (CB.AssertionFailure simErr)
         _ ->
           pure ()
 
@@ -505,9 +505,9 @@ initState ::
   forall arch sym bak m t solver scope st fs p.
   ( MonadIO m
   , MonadThrow m
-  , C.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st fs
-  , bak ~ C.OnlineBackend solver scope st fs
+  , bak ~ CB.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , sym ~ W4.ExprBuilder t st fs
@@ -543,7 +543,7 @@ initState ::
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch) ->
   m (C.ExecState p sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch))))
 initState bak la macawExtImpl halloc mvar mem0 globs0 (SymIO.SomeOverrideSim initFsOv) arch setupHook tgtOvs initialPersonality initialRegs funOvs mbStartupOvCfg (C.SomeCFG cfg) = do
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   (mem1, globs1) <- liftIO $ (arch ^. archInitGlobals) (Stubs.Sym sym bak) (getSetupMem mem0) globs0
   let globs2 = C.insertGlobal mvar mem1 globs1
   let extImpl = greaseMacawExtImpl arch bak la tgtOvs mvar macawExtImpl

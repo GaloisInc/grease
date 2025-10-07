@@ -48,7 +48,7 @@ import Grease.Macaw.Load.Relocation (RelocType)
 import Grease.Macaw.RegName (RegName)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrShape)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
@@ -93,7 +93,7 @@ data ArchContext arch = ArchContext
   { _archInfo :: MI.ArchitectureInfo arch
   , _archGetIP ::
       forall sym.
-      C.IsSymInterface sym =>
+      CB.IsSymInterface sym =>
       ArchRegs sym arch ->
       IO (W4.SymExpr sym (W4.BaseBVType (MC.ArchAddrWidth arch)))
   , _archPcReg :: MC.ArchReg arch (BVType (MC.ArchAddrWidth arch))
@@ -105,7 +105,7 @@ data ArchContext arch = ArchContext
     -- function call.
     _archIntegerArguments ::
       forall sym bak atps.
-      ( C.IsSymBackend sym bak
+      ( CB.IsSymBackend sym bak
       , CLM.HasLLVMAnn sym
       ) =>
       bak ->
@@ -121,7 +121,7 @@ data ArchContext arch = ArchContext
     -- Build an OverrideSim action with appropriate return register types.
     _archIntegerReturnRegisters ::
       forall sym bak p t r args rtp mem.
-      C.IsSymBackend sym bak =>
+      CB.IsSymBackend sym bak =>
       bak ->
       Symbolic.GenArchVals mem arch ->
       {- Architecture-specific information -}
@@ -140,7 +140,7 @@ data ArchContext arch = ArchContext
     -- as arguments.
     _archFunctionReturnAddr ::
       forall sym bak solver scope st fs mem.
-      ( C.IsSymBackend sym bak
+      ( CB.IsSymBackend sym bak
       , sym ~ W4.ExprBuilder scope st fs
       , bak ~ C.OnlineBackend solver scope st fs
       , W4.OnlineSolver solver
@@ -157,7 +157,7 @@ data ArchContext arch = ArchContext
     -- the system call.
     _archSyscallArgumentRegisters ::
       forall sym bak args atps.
-      C.IsSymBackend sym bak =>
+      CB.IsSymBackend sym bak =>
       bak ->
       C.CtxRepr atps ->
       {- Types of argument registers -}
@@ -170,7 +170,7 @@ data ArchContext arch = ArchContext
     -- Extract the syscall number from the register state.
     _archSyscallNumberRegister ::
       forall sym bak atps.
-      C.IsSymBackend sym bak =>
+      CB.IsSymBackend sym bak =>
       bak ->
       Ctx.Assignment C.TypeRepr atps ->
       {- Types of argument registers -}
@@ -234,7 +234,7 @@ data ArchContext arch = ArchContext
   -- @in-text@ requirement.
   , _archOffsetStackPointerPostCall ::
       forall sym p ext rtp a r.
-      C.IsSymInterface sym =>
+      CB.IsSymInterface sym =>
       ArchRegs sym arch ->
       C.OverrideSim p sym ext rtp a r (ArchRegs sym arch)
   -- ^ On certain architectures, invoking a function will push the return

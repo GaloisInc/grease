@@ -19,7 +19,7 @@ import Grease.LLVM.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Options (ErrorSymbolicFunCalls (..))
 import Grease.Panic (panic)
 import Grease.Skip (createSkipOverride)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
 import Lang.Crucible.LLVM.Extension (LLVM)
@@ -37,7 +37,7 @@ doLog la diag = LJ.writeLog la (LLVMSimulatorHooksDiagnostic diag)
 -- | An 'C.ExtensionImpl' with overrides for the semantics of some
 -- @crucible-llvm@ operations.
 greaseLlvmExtImpl ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   ) =>
@@ -56,7 +56,7 @@ greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls llvmExtImpl =
 -- | This evaluates an LLVM statement extension in the simulator, but with
 -- overrides for the semantics of certain statements.
 extensionExec ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   ) =>

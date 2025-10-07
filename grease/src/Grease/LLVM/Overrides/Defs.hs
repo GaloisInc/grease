@@ -17,7 +17,7 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.BitVector.Sized qualified as BV
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as CLM
@@ -27,7 +27,7 @@ import What4.Interface qualified as W4
 
 -- | Custom libc overrides.
 customLLVMOverrides ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , ?memOpts :: CLM.MemOptions
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth wptr
@@ -40,7 +40,7 @@ customLLVMOverrides =
 -- | Override for @getopt_long@ that always returns @-1@, indicating that the
 -- arguments have been exhausted.
 getoptLong ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , CLM.HasPtrWidth wptr
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions

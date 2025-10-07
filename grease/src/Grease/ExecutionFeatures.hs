@@ -14,7 +14,7 @@ import Grease.Diagnostic (GreaseLogAction)
 import Grease.Options qualified as GO
 import Grease.Panic (panic)
 import Grease.Pretty (prettyPtrFnMap)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.Debug qualified as Dbg
@@ -46,7 +46,7 @@ boundedExecFeats boundsOpts = do
 
 -- | Path satisfiability feature, plus enables 'C.assertThenAssumeConfigOption'
 pathSatFeat ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , bak ~ C.OnlineBackend solver scope st fs
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
   , WPO.OnlineSolver solver
@@ -54,10 +54,10 @@ pathSatFeat ::
   bak ->
   IO (C.GenericExecutionFeature sym)
 pathSatFeat bak = do
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   pathSat <- C.pathSatisfiabilityFeature sym (C.considerSatisfiability bak)
   let cfg = W4I.getConfiguration sym
-  assertThenAssume <- W4C.getOptionSetting C.assertThenAssumeConfigOption cfg
+  assertThenAssume <- W4C.getOptionSetting CB.assertThenAssumeConfigOption cfg
   -- This can technically return warnings/errors, but seems unlikely in this
   -- case...
   warns <- W4C.setOpt assertThenAssume True
@@ -68,7 +68,7 @@ pathSatFeat bak = do
 
 -- | Debugger, path satisfiability, and branch tracing features
 greaseExecFeats ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
   , ?parserHooks :: CSyn.ParserHooks ext

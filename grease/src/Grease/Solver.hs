@@ -13,7 +13,7 @@ module Grease.Solver (
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Parameterized.Nonce (NonceGenerator)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import What4.Expr qualified as W4
 import What4.ProblemFeatures qualified as W4
@@ -47,7 +47,7 @@ withSolverOnlineBackend ::
   ( forall sym bak solver st.
     ( sym ~ W4.ExprBuilder scope st (W4.Flags fm)
     , bak ~ C.OnlineBackend solver scope st (W4.Flags fm)
-    , C.IsSymBackend sym bak
+    , CB.IsSymBackend sym bak
     , W4.OnlineSolver solver
     ) =>
     bak ->
@@ -72,7 +72,7 @@ withSolverOnlineBackend solver fm ng bakAction =
   withSym ::
     ( forall sym st.
       ( sym ~ W4.ExprBuilder scope st (W4.Flags fm)
-      , C.IsSymInterface sym
+      , CB.IsSymInterface sym
       ) =>
       sym ->
       m a

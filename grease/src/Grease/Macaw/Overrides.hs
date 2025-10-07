@@ -41,7 +41,7 @@ import Grease.Overrides (CantResolveOverrideCallback (..))
 import Grease.Skip (registerSkipOverride)
 import Grease.Syntax (ParseProgramError)
 import Grease.Syntax.Overrides as SExp
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
@@ -61,7 +61,7 @@ import What4.Protocol.Online qualified as W4
 -- <https://github.com/GaloisInc/stubs/issues/16>.
 macawOverride ::
   forall sym bak p arch args ret solver scope st fs.
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , CLM.HasLLVMAnn sym
   , -- For silly reasons, `stubs` requires the use of an online SMT solver
     -- connection in order to call `functionOverride`. See
@@ -144,7 +144,7 @@ massageRegAssignment = C.unRV . Ctx.last . fmapFC (C.RV . C.regValue)
 -- * User-defined overrides from S-expressions (see 'loadOverrides')
 mkMacawOverrideMap ::
   forall sym bak arch solver scope st fs p.
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , W4.OnlineSolver solver
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
@@ -204,7 +204,7 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
 
 -- | Like 'mkMacawOverrideMap', with 'builtinStubsOverrides'.
 mkMacawOverrideMapWithBuiltins ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , W4.OnlineSolver solver
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
@@ -232,7 +232,7 @@ mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg fs = d
 -- actually call the corresponding Macaw overrides. Treat any calls to unresolved
 -- forward declarations as though the functions were skipped.
 registerMacawSexpProgForwardDeclarations ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
@@ -262,7 +262,7 @@ registerMacawSexpProgForwardDeclarations bak la dl mvar errCb funOvs =
 -- actually call the corresponding Macaw overrides. Attempting to call an
 -- unresolved forward declaration will raise an error.
 registerMacawOvForwardDeclarations ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
@@ -284,7 +284,7 @@ registerMacawOvForwardDeclarations bak funOvs errCb =
 -- actually call the corresponding Macaw overrides. If a forward declaration
 -- name cannot be resolved to an override, then perform the supplied action.
 registerMacawForwardDeclarations ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
@@ -308,7 +308,7 @@ registerMacawForwardDeclarations bak funOvs errCb fwdDecs = do
 -- actually call the corresponding Macaw override. If the forward declaration
 -- name cannot be resolved to an override, then perform the supplied action.
 registerMacawForwardDeclaration ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
@@ -337,7 +337,7 @@ registerMacawForwardDeclaration bak funOvs cannotResolve decName hdl =
 -- | Lookup an override for a function handle from a forward declaration.
 lookupMacawForwardDeclarationOverride ::
   forall p sym bak arch scope st fs solver args ret.
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver

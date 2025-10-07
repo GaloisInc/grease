@@ -30,7 +30,7 @@ import Grease.Options (ExtraStackSlots)
 import Grease.Panic (panic)
 import Grease.Shape.Pointer (x64StackPtrShape)
 import Grease.Utility (bytes64LE)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as C
@@ -107,7 +107,7 @@ x64RelocSupported _ = Nothing
 -- pop the return address (and increment the stack pointer accordingly), so we
 -- simulate that effect here.
 x64FixupStackPointer ::
-  C.IsSymInterface sym =>
+  CB.IsSymInterface sym =>
   ArchRegs sym X86.X86_64 ->
   C.OverrideSim p sym ext rtp a r (ArchRegs sym X86.X86_64)
 x64FixupStackPointer regs = do
