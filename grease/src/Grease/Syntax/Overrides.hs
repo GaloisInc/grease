@@ -22,7 +22,7 @@ import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Type.Ord (type (<=))
 import Data.Vector qualified as Vec
 import Grease.Concretize.ToConcretize qualified as ToConc
-import Lang.Crucible.Backend qualified as LCB
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.FunctionHandle qualified as LCF
 import Lang.Crucible.Simulator qualified as LCS
 import Lang.Crucible.Types qualified as LCT
@@ -60,7 +60,7 @@ tryBindTypedOverride hdl ov =
 freshBytesOverride ::
   ( 1 <= w
   , ToConc.HasToConcretize p
-  , LCB.IsSymInterface sym
+  , CB.IsSymInterface sym
   ) =>
   NatRepr.NatRepr w ->
   LCS.TypedOverride p sym ext (Ctx.EmptyCtx Ctx.::> LCT.StringType WI.Unicode Ctx.::> LCT.BVType w) (LCT.VectorType (LCT.BVType 8))
@@ -78,7 +78,7 @@ freshBytesOverride w =
 freshBytes ::
   ( 1 <= w
   , ToConc.HasToConcretize p
-  , LCB.IsSymInterface sym
+  , CB.IsSymInterface sym
   ) =>
   LCS.RegValue' sym (LCT.StringType WI.Unicode) ->
   LCS.RegValue' sym (LCT.BVType w) ->
@@ -97,14 +97,14 @@ freshBytes name0 bv0 =
 
 doFreshBytes ::
   ( ToConc.HasToConcretize p
-  , LCB.IsSymInterface sym
+  , CB.IsSymInterface sym
   ) =>
   Text ->
   Integer ->
   LCS.OverrideSim p sym ext r args ret (LCS.RegValue sym (LCT.VectorType (LCT.BVType 8)))
 doFreshBytes name len =
   LCS.ovrWithBackend $ \bak -> do
-    let sym = LCB.backendGetSym bak
+    let sym = CB.backendGetSym bak
     v <-
       fmap Vec.fromList $
         liftIO $

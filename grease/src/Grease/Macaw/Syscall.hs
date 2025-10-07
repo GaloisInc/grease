@@ -15,7 +15,7 @@ import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC)
 import Grease.Macaw.Arch
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Simulator qualified as C
@@ -28,7 +28,7 @@ import What4.Protocol.Online qualified as W4
 -- <https://github.com/GaloisInc/stubs/issues/16>.
 macawSyscallOverride ::
   forall sym bak p arch syscallArgs syscallRet regArgs regRets solver scope st fs.
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , -- For silly reasons, `stubs` requires the use of an online SMT solver
     -- connection in order to call `syscallOverride`. See
     -- https://github.com/GaloisInc/stubs/issues/28.

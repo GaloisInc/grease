@@ -24,7 +24,7 @@ import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Grease.Shape.Selector
 import Grease.Skip.Diagnostic qualified as Diag
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout as Mem
@@ -83,7 +83,7 @@ skipOverride la dl memVar funcName valTy shape = do
 -- making it unsound to use for verification.
 createSkipOverride ::
   ( C.IsSyntaxExtension ext
-  , C.IsSymInterface sym
+  , CB.IsSymInterface sym
   , CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
@@ -108,7 +108,7 @@ createSkipOverride la dl memVar funcName retTy = do
 -- See 'createSkipOverride' for details.
 declSkipOverride ::
   ( C.IsSyntaxExtension ext
-  , C.IsSymInterface sym
+  , CB.IsSymInterface sym
   , CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
@@ -144,7 +144,7 @@ declSkipOverride la llvmCtx decl =
 -- See 'createSkipOverride' for details.
 registerSkipOverride ::
   ( C.IsSyntaxExtension ext
-  , C.IsSymInterface sym
+  , CB.IsSymInterface sym
   , CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions

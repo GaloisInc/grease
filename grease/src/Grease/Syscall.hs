@@ -14,7 +14,7 @@ module Grease.Syscall (
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as C
 import Stubs.Syscall qualified as Stubs
@@ -56,13 +56,13 @@ buildGetppidOverride =
 --
 -- The behavior of this override is documented in @doc/syscalls.md@.
 callGetppid ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , CLM.HasPtrWidth w
   ) =>
   bak ->
   C.OverrideSim p sym ext r args ret (CLM.LLVMPtr sym w)
 callGetppid bak = liftIO $ do
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   -- The parent PID can change at any time due to reparenting, so this override
   -- always returns a new fresh value.
   symbolicResult <-

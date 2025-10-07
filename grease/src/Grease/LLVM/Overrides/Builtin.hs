@@ -12,7 +12,7 @@ module Grease.LLVM.Overrides.Builtin (
 import Data.List qualified as List
 import Data.Sequence qualified as Seq
 import Grease.LLVM.Overrides.Defs (customLLVMOverrides)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.Intrinsics.LLVM qualified as LLVM
 import Lang.Crucible.LLVM.Intrinsics.Libc qualified as Libc
@@ -27,7 +27,7 @@ import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 -- for those.
 basicLLVMOverrides ::
   forall p sym ext w.
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , ?lc :: TCtx.TypeContext
   , ?memOpts :: CLM.MemOptions
   , CLM.HasLLVMAnn sym
@@ -49,7 +49,7 @@ basicLLVMOverrides fs =
 -- LLVM overrides corresponding to functions defined in @libc@.
 libcOverrides ::
   forall p sym ext w.
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , ?lc :: TCtx.TypeContext
   , ?memOpts :: CLM.MemOptions
   , ?intrinsicsOpts :: CLI.IntrinsicsOptions
@@ -79,7 +79,7 @@ libcOverrides fs =
 -- c.f. 'builtinStubsOverrides', which includes a subset of the functions here
 -- (i.e., the ones from libc, but not the LLVM intrinsics).
 builtinLLVMOverrides ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , ?lc :: TCtx.TypeContext
   , ?memOpts :: CLM.MemOptions
   , CLM.HasLLVMAnn sym

@@ -34,7 +34,7 @@ import Grease.Overrides (CantResolveOverrideCallback (..))
 import Grease.Skip (declSkipOverride, registerSkipOverride)
 import Grease.Syntax.Overrides (freshBytesOverride, tryBindTypedOverride)
 import Grease.Utility (llvmOverrideName)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout as CLLVM
@@ -112,7 +112,7 @@ forwardDeclDecls m =
 -- * User-defined overrides from S-expressions (see 'loadOverrides')
 registerLLVMOverrides ::
   forall sym bak arch p rtp as r.
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth 64
   , ToConc.HasToConcretize p
@@ -204,7 +204,7 @@ registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls errCb = do
 -- * User-defined overrides from S-expressions (see 'loadOverrides')
 registerLLVMSexpOverrides ::
   forall sym bak arch p rtp as r.
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth 64
   , ToConc.HasToConcretize p
@@ -238,7 +238,7 @@ registerLLVMSexpOverrides la builtinOvs sexpOvs bak llvmCtx fs prog errCb = do
 -- * User-defined overrides from S-expressions (see 'loadOverrides')
 registerLLVMModuleOverrides ::
   forall sym bak arch p rtp as r.
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth 64
   , ToConc.HasToConcretize p
@@ -266,7 +266,7 @@ registerLLVMModuleOverrides la builtinOvs sexpOvs bak llvmCtx fs llMod errCb = d
 -- to call the corresponding LLVM overrides. Treat any calls to unresolved
 -- forward declarations as though the functions were skipped.
 registerLLVMSexpProgForwardDeclarations ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth 64
   , ToConc.HasToConcretize p
@@ -291,7 +291,7 @@ registerLLVMSexpProgForwardDeclarations la dl mvar funOvs errCb =
 -- actually call the corresponding LLVM overrides. If a forward declaration
 -- name cannot be resolved to an override, then perform the supplied action.
 registerLLVMForwardDeclarations ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
   , ToConc.HasToConcretize p

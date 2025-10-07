@@ -36,7 +36,7 @@ import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Shape.Selector
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Types qualified as C
 import What4.Expr.Builder qualified as W4
@@ -112,7 +112,7 @@ empty =
 annotate ::
   ( MonadIO m
   , MonadState (Annotations sym ext argTys) m
-  , C.IsSymInterface sym
+  , CB.IsSymInterface sym
   , Cursor.Last ts ~ C.BaseToType t
   ) =>
   sym ->
@@ -130,7 +130,7 @@ annotatePtr ::
   forall m sym ext argTys ts regTy w.
   ( MonadIO m
   , MonadState (Annotations sym ext argTys) m
-  , C.IsSymInterface sym
+  , CB.IsSymInterface sym
   , Cursor.Last (regTy ': ts) ~ CLMP.LLVMPointerType w
   , 1 C.<= w
   ) =>
@@ -158,7 +158,7 @@ annotatePtr sym sel ptr = do
 
 findAnnotations ::
   forall sym brand st fs t t'.
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , sym ~ W4.ExprBuilder brand st fs
   ) =>
   sym ->
@@ -184,7 +184,7 @@ findAnnotations sym repr e = case W4.asApp e of
       _ -> Nothing
 
 lookupSomePtrBlockAnnotation ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , sym ~ W4.ExprBuilder brand st fs
   ) =>
   Annotations sym ext argTys ->
@@ -201,7 +201,7 @@ lookupSomePtrBlockAnnotation anns sym ptr = do
   Map.lookup (IntegerAnn ann) (_blockAnns anns)
 
 lookupPtrBlockAnnotation ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , sym ~ W4.ExprBuilder brand st fs
   , 1 C.<= w
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w'
@@ -221,7 +221,7 @@ lookupPtrBlockAnnotation anns sym w ptr = do
   pure $ SomePtrSelector sel
 
 lookupPtrOffsetAnnotation ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , sym ~ W4.ExprBuilder brand st fs
   , 1 C.<= w
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w'
@@ -242,7 +242,7 @@ lookupPtrOffsetAnnotation anns sym w ptr =
       MapF.lookup (BVAnn ann) (_offsetAnns anns)
 
 lookupPtrAnnotation ::
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , sym ~ W4.ExprBuilder brand st fs
   , 1 C.<= w
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w'

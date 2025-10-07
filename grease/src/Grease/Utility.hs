@@ -28,7 +28,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Word (Word32, Word64, Word8)
 import Grease.Panic (panic)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.LLVM.Intrinsics qualified as Mem
 import Prettyprinter qualified as PP
@@ -42,7 +42,7 @@ import What4.Protocol.Online qualified as W4
 -- | Constraint synonym for using online solver features, e.g. 'W4.checkSatisfiable'
 type OnlineSolverAndBackend solver sym bak t st fs =
   ( W4.OnlineSolver solver
-  , C.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder t st fs
   , bak ~ C.OnlineBackend solver t st fs
   )

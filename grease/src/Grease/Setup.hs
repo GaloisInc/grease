@@ -56,7 +56,7 @@ import Grease.Setup.Diagnostic qualified as Diag
 import Grease.Shape
 import Grease.Shape.Pointer
 import Grease.Shape.Selector
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.LLVM.Bytes (Bytes)
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
@@ -113,7 +113,7 @@ type Setup sym ext argTys w a = StateT (SetupState sym ext argTys w) IO a
 
 annotatePtrBv ::
   forall sym ext argTys ts regTy w w'.
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , Cursor.Last (regTy ': ts) ~ CLM.LLVMPointerType w
   , 1 C.<= w
   ) =>
@@ -127,7 +127,7 @@ annotatePtrBv sym sel bv = do
 
 freshPtrBv ::
   forall sym ext argTys ts regTy w w'.
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , Cursor.Last (regTy ': ts) ~ CLM.LLVMPointerType w
   , 1 C.<= w
   ) =>
@@ -145,7 +145,7 @@ freshPtrBv sym sel nm w =
 -- shape.
 setupPtrMem ::
   forall sym bak ext tag w argTys ts regTy.
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
   , CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
@@ -178,7 +178,7 @@ setupPtrMem la bak dl nm sel tgt@(PtrTarget bid _) =
 -- | Ignores tags.
 setupPtr ::
   forall sym bak ext tag w argTys ts regTy.
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
   , CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
@@ -195,7 +195,7 @@ setupPtr ::
   Setup sym ext argTys w (C.RegValue sym (CLM.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
 setupPtr la bak layout nm sel target = do
   let align = Mem.maxAlignment layout
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   case target of
     PtrTarget bid Seq.Empty -> do
       -- See Note [Initializing empty pointer shapes]
@@ -238,7 +238,7 @@ setupPtr la bak layout nm sel target = do
   writeKnownBytes ::
     forall ts'.
     Cursor.Last (regTy ': ts') ~ CLM.LLVMPointerType w =>
-    C.IsSymBackend sym bak =>
+    CB.IsSymBackend sym bak =>
     sym ->
     CLM.MemImpl sym ->
     Selector ext argTys ts' regTy ->
@@ -273,7 +273,7 @@ setupPtr la bak layout nm sel target = do
   writeFreshBytes ::
     forall ts'.
     Cursor.Last (regTy ': ts') ~ CLM.LLVMPointerType w =>
-    C.IsSymBackend sym bak =>
+    CB.IsSymBackend sym bak =>
     sym ->
     CLM.MemImpl sym ->
     Selector ext argTys ts' regTy ->
@@ -302,7 +302,7 @@ setupPtr la bak layout nm sel target = do
     MemShape w tag ->
     Setup sym ext argTys w (Int, C.RegValue sym (CLM.LLVMPointerType w), Seq.Seq (MemShape w (C.RegValue' sym)))
   go (idx, ptr, written) memShape = do
-    let sym = C.backendGetSym bak
+    let sym = CB.backendGetSym bak
     let sel' = sel & selectorPath %~ PtrCursor.addIndex idx
     Refl <- pure $ Cursor.lastSnoc (Proxy @(CLM.LLVMPointerType w)) (Proxy @(regTy ': ts))
     memShape' <-
@@ -382,7 +382,7 @@ of MemShapes exactly because their treatment is ambiguous in this way.
 -- Ignores @tag@s.
 setupShape ::
   forall sym bak ext tag w argTys ts regTy t.
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
   , CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
@@ -400,7 +400,7 @@ setupShape ::
   Shape ext tag t ->
   Setup sym ext argTys w (Shape ext (C.RegValue' sym) t)
 setupShape la bak layout nm tRepr sel s = do
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @ts)
   case s of
     ShapeBool _tag -> do
@@ -441,7 +441,7 @@ setupShape la bak layout nm tRepr sel s = do
 -- Ignores @tag@s.
 setupArgs ::
   forall sym bak ext tag argTys w.
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
   , CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
@@ -529,7 +529,7 @@ runSetup mem act =
 setup ::
   ( MonadIO m
   , MonadCatch m
-  , C.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
   , CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym

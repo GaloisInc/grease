@@ -25,7 +25,7 @@ import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.LLVM.SetupHook.Diagnostic qualified as Diag
 import Grease.Overrides (CantResolveOverrideCallback (..))
 import Lang.Crucible.Analysis.Postdom qualified as C
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.CFG.SSAConversion qualified as C
@@ -54,7 +54,7 @@ doLog la diag = LJ.writeLog la (LLVMSetupHookDiagnostic diag)
 newtype SetupHook sym arch
   = SetupHook
       ( forall p bak rtp a r.
-        ( C.IsSymBackend sym bak
+        ( CB.IsSymBackend sym bak
         , ArchWidth arch ~ 64
         , CLM.HasPtrWidth (ArchWidth arch)
         , CLM.HasLLVMAnn sym

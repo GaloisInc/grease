@@ -164,8 +164,8 @@ import Grease.Syntax qualified as GSyn
 import Grease.Syscall
 import Grease.Time (time)
 import Grease.Utility
-import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.Backend.Online qualified as C
+import Lang.Crucible.Backend qualified as CB
+import Lang.Crucible.Backend.Online qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
@@ -415,8 +415,8 @@ toFailedPredicate fm addrWidth argNames argTys initArgs (NoHeuristic goal cData 
   let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
       interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (Conc.concArgs cData)
       prettyConc = Conc.printConcData addrWidth argNames interestingShapes cData
-      lp = C.proofGoal goal
-      simErr = lp ^. C.labeledPredMsg
+      lp = CB.proofGoal goal
+      simErr = lp ^. CB.labeledPredMsg
       -- We inline and modify 'ppSimError', because we don't need to repeat the
       -- function name nor location.
       msg =
@@ -438,9 +438,9 @@ toFailedPredicate fm addrWidth argNames argTys initArgs (NoHeuristic goal cData 
         }
 
 checkMustFail ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
-  , bak ~ C.OnlineBackend solver scope st (W4.Flags fm)
+  , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
   , W4.OnlineSolver solver
   ) =>
   bak ->
@@ -457,8 +457,8 @@ checkMustFail bak errs = do
           , Bug.bugDetails =
               let goals = NE.toList (NE.map noHeuristicGoal errs)
                   print o =
-                    let lp = C.proofGoal o
-                     in let simError = lp ^. C.labeledPredMsg
+                    let lp = CB.proofGoal o
+                     in let simError = lp ^. CB.labeledPredMsg
                          in tshow (C.ppSimError simError)
                in Just $ Text.unlines (List.map print goals)
           , Bug.bugUb = Nothing -- TODO: check if they are all the same?
@@ -573,7 +573,7 @@ interestingConcretizedShapes names initArgs (ConcArgs cArgs) =
 --
 -- Later steps override earlier ones.
 macawInitArgShapes ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
@@ -618,7 +618,7 @@ macawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr = do
 -- | Implement 'archRegOverrides'
 overrideRegs ::
   forall sym arch.
-  ( C.IsSymInterface sym
+  ( CB.IsSymInterface sym
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
@@ -704,9 +704,9 @@ macawMemConfig ::
   ( Symbolic.SymArchConstraints arch
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
-  , C.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
-  , bak ~ C.OnlineBackend solver scope st (W4.Flags fm)
+  , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
   , W4.OnlineSolver solver
   , Show (ArchReloc arch)
   , CLM.HasLLVMAnn sym
@@ -785,7 +785,7 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
   pure (memCfg, fnOvsMap)
 
 macawInitState ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , Symbolic.SymArchConstraints arch
   , CLM.HasPtrWidth wptr
   , MM.MemWidth wptr
@@ -822,7 +822,7 @@ macawInitState ::
   Args sym ext (Symbolic.MacawCrucibleRegTypes arch) ->
   IO (C.ExecState p sym ext (C.RegEntry sym ret))
 macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConcVar setupMem initFs args = do
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   regs <- liftIO (overrideRegs archCtx sym (argVals args))
   EntrypointCfgs
     { entrypointStartupOv = mbStartupOvSsa
@@ -849,7 +849,7 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable s
   initState bak la macawExtImpl halloc memVar setupMem globals initFsOv archCtx setupHook addrOvs personality regs fnOvsMap mbStartupOvSsaCfg ssa
 
 macawRefineOnce ::
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , Symbolic.SymArchConstraints arch
   , CLM.HasPtrWidth wptr
   , MM.MemWidth wptr
@@ -923,9 +923,9 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable setupHook a
 
 simulateMacawCfg ::
   forall sym bak arch solver scope st fm.
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
-  , bak ~ C.OnlineBackend solver scope st (W4.Flags fm)
+  , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
   , W4.OnlineSolver solver
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
@@ -1042,9 +1042,9 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
 -- | See @doc/requirements.md@.
 simulateRewrittenCfg ::
   forall sym bak arch solver scope st fm.
-  ( C.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
-  , bak ~ C.OnlineBackend solver scope st (W4.Flags fm)
+  , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
   , W4.OnlineSolver solver
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
@@ -1119,7 +1119,7 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
       fmap BatchChecks . forM asserts $ \assert -> do
         assertingCfg <- pure $ assert $ entrypointCfg entrypointCfgs
         let entrypointCfgsSsa' = entrypointCfgsSsa{entrypointCfg = toSsaSomeCfg assertingCfg}
-        C.resetAssumptionState bak
+        CB.resetAssumptionState bak
         memVar <- CLM.mkMemVar "grease:memmodel" halloc
         let heuristics = macawHeuristics la rNames
         new <-
@@ -1654,7 +1654,7 @@ simulateLlvmCfgs ::
   C.HandleAllocator ->
   Trans.LLVMContext arch ->
   Maybe L.Module ->
-  (forall sym bak. C.IsSymBackend sym bak => bak -> IO (InitialMem sym)) ->
+  (forall sym bak. CB.IsSymBackend sym bak => bak -> IO (InitialMem sym)) ->
   (forall sym. LLVM.SetupHook sym arch) ->
   Map Entrypoint (EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
   IO Results
@@ -1781,7 +1781,7 @@ simulateLlvm transOpts simOpts la = do
 
   let llvmCtxt = trans ^. Trans.transContext
   Trans.llvmPtrWidth llvmCtxt $ \ptrW -> CLM.withPtrWidth ptrW $ do
-    let mkMem :: forall sym bak. C.IsSymBackend sym bak => bak -> IO (InitialMem sym)
+    let mkMem :: forall sym bak. CB.IsSymBackend sym bak => bak -> IO (InitialMem sym)
         mkMem bak =
           let ?lc = llvmCtxt ^. Trans.llvmTypeCtx
               ?recordLLVMAnnotation = \_ _ _ -> pure ()

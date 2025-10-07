@@ -28,7 +28,7 @@ import Data.Macaw.Symbolic.Memory.Strings qualified as DMSMS
 import Data.Word (Word8)
 import GHC.Stack qualified as Stack
 import Grease.Utility (OnlineSolverAndBackend)
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as C
@@ -109,7 +109,7 @@ loadConcreteString bak mvar mmConf ptr maxChars st0 = do
       Just byte -> pure $ fromInteger byte
       Nothing ->
         liftIO $
-          C.addFailedAssertion bak $
+          CB.addFailedAssertion bak $
             C.Unsupported
               Stack.callStack
               "Symbolic value encountered when loading a string"

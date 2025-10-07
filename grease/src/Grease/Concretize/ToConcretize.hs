@@ -30,7 +30,7 @@ import Data.Maybe qualified as Maybe
 import Data.Parameterized.Classes (knownRepr)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Text (Text)
-import Lang.Crucible.Backend qualified as LCB
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Generator qualified as LCCG
 import Lang.Crucible.FunctionHandle qualified as LCF
 import Lang.Crucible.Simulator qualified as LCS
@@ -70,7 +70,7 @@ newToConcretize halloc globals = do
 
 -- | Extract the 'LCSG.SymGlobalState' from an 'LCSE.ExecResult'.
 execResultGroundGlobals ::
-  LCB.IsSymInterface sym =>
+  CB.IsSymInterface sym =>
   (sym ~ WEB.ExprBuilder t st fs) =>
   WEG.GroundEvalFn t ->
   LCSE.ExecResult p sym ext rtp ->
@@ -85,7 +85,7 @@ execResultGroundGlobals groundFn =
 --
 -- If the global is not present, returns 'C.SymSequenceNil'.
 readToConcretize ::
-  LCB.IsSymInterface sym =>
+  CB.IsSymInterface sym =>
   (sym ~ WEB.ExprBuilder t st fs) =>
   HasToConcretize p =>
   WEG.GroundEvalFn t ->
@@ -109,7 +109,7 @@ stateToConcretize =
 -- 'C.SimState'.
 addToConcretize ::
   forall p sym ext rtp args ret ty.
-  LCB.IsSymInterface sym =>
+  CB.IsSymInterface sym =>
   HasToConcretize p =>
   -- | Name to be displayed when pretty-printing
   Text ->
@@ -118,13 +118,13 @@ addToConcretize ::
 addToConcretize name0 ent = do
   concVar <- State.gets stateToConcretize
   LCS.ovrWithBackend $ \bak -> do
-    let sym = LCB.backendGetSym bak
+    let sym = CB.backendGetSym bak
     name <- liftIO (WI.stringLit sym (WI.UnicodeLiteral name0))
     let LCS.RegEntry ty val = ent
     let anyVal = LCS.AnyValue ty val
     LCS.modifyGlobal concVar $ \toConc -> liftIO $ do
       let struct = Ctx.Empty Ctx.:> LCS.RV anyVal Ctx.:> LCS.RV name
       toConc' <- LCSS.consSymSequence sym struct toConc
-      p <- LCB.getPathCondition bak
+      p <- CB.getPathCondition bak
       toConc'' <- liftIO (LCSS.muxSymSequence sym p toConc' toConc)
       pure ((), toConc'')

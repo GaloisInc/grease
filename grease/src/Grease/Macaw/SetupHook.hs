@@ -24,7 +24,7 @@ import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.Address as GMOA
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
 import Grease.Overrides (CantResolveOverrideCallback (..))
-import Lang.Crucible.Backend qualified as LCB
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as LCB
 import Lang.Crucible.CFG.Core qualified as LCCC
 import Lang.Crucible.CFG.Reg qualified as LCCR
@@ -47,7 +47,7 @@ import What4.Protocol.Online qualified as WPO
 newtype SetupHook sym arch
   = SetupHook
       ( forall bak rtp a r solver scope st fs p.
-        ( LCB.IsSymBackend sym bak
+        ( CB.IsSymBackend sym bak
         , sym ~ WEB.ExprBuilder scope st fs
         , bak ~ LCB.OnlineBackend solver scope st fs
         , WPO.OnlineSolver solver
@@ -80,7 +80,7 @@ registerOverrideCfgs funOvs =
 -- 'GMO.MacawSExpOverride's to their implementations.
 registerOverrideForwardDeclarations ::
   ( CLM.HasPtrWidth (ArchAddrWidth arch)
-  , LCB.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ LCB.OnlineBackend solver scope st fs
@@ -106,7 +106,7 @@ registerOverrideForwardDeclarations bak errCb funOvs =
 -- Calls 'registerOverrides' and 'registerOverrideForwardDeclarations'.
 registerOverrideHandles ::
   ( CLM.HasPtrWidth (ArchAddrWidth arch)
-  , LCB.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ LCB.OnlineBackend solver scope st fs
@@ -140,7 +140,7 @@ registerSyntaxForwardDeclarations ::
   , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ LCB.OnlineBackend solver scope st fs
   , CLM.HasLLVMAnn sym
-  , LCB.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , HasToConcretize p
   , ?memOpts :: CLM.MemOptions
@@ -167,7 +167,7 @@ registerSyntaxHandles ::
   , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ LCB.OnlineBackend solver scope st fs
   , CLM.HasLLVMAnn sym
-  , LCB.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , HasToConcretize p
   , ?memOpts :: CLM.MemOptions

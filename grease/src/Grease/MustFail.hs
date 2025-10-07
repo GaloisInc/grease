@@ -15,7 +15,7 @@ import Data.Macaw.Symbolic.Memory (MacawError (UnmappedGlobalMemoryAccess))
 import Data.Traversable qualified as Traversable
 import Data.Tuple qualified as Tuple
 import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
-import Lang.Crucible.Backend qualified as C
+import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online (OnlineBackend, withSolverProcess)
 import Lang.Crucible.Backend.Simple (Flags)
 import Lang.Crucible.LLVM.Errors qualified as Mem
@@ -31,11 +31,11 @@ import What4.SatResult qualified as W4
 -- fail heuristic?
 excludeMustFail ::
   W4.IsExprBuilder sym =>
-  C.ProofObligation sym ->
+  CB.ProofObligation sym ->
   Maybe (ErrorDescription sym) ->
   Bool
 excludeMustFail obligation minfo =
-  let reason = C.simErrorReason (obligation ^. Lens.to C.proofGoal ^. W4.labeledPredMsg)
+  let reason = C.simErrorReason (obligation ^. Lens.to CB.proofGoal ^. W4.labeledPredMsg)
    in List.or @[]
         [ case minfo of
             -- Symbolic function pointers may arise from calling function pointers that
@@ -59,16 +59,16 @@ excludeMustFail obligation minfo =
 -- the obligation \"must fail\", i.e., it is satisfiable when either the goal
 -- is satisfiable, or the program is able to take another path.
 mustFailPred ::
-  C.IsSymBackend sym bak =>
+  CB.IsSymBackend sym bak =>
   bak ->
-  C.ProofObligation sym ->
+  CB.ProofObligation sym ->
   IO (W4.Pred sym)
 mustFailPred bak obligation = do
-  let sym = C.backendGetSym bak
-  let lp = C.proofGoal obligation
+  let sym = CB.backendGetSym bak
+  let lp = CB.proofGoal obligation
 
   -- If `notAssumps` is unsat, then the program must take this path.
-  assumps <- C.assumptionsPred sym (C.proofAssumptions obligation)
+  assumps <- CB.assumptionsPred sym (CB.proofAssumptions obligation)
   notAssumps <- W4.notPred sym assumps
 
   -- If the safety predicate is unsatisfiable and we necessarily took this
@@ -81,15 +81,15 @@ mustFailPred bak obligation = do
 -- fail, i.e., if the conjunction of their 'mustFailPred's is unsatisfiable.
 oneMustFail ::
   ( W4.OnlineSolver solver
-  , C.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder t st (Flags fm)
   , bak ~ OnlineBackend solver t st (Flags fm)
   ) =>
   bak ->
-  [C.ProofObligation sym] ->
+  [CB.ProofObligation sym] ->
   IO Bool
 oneMustFail bak obligations = do
-  let sym = C.backendGetSym bak
+  let sym = CB.backendGetSym bak
   mustFail <-
     W4.andAllOf sym Lens.folded
       Monad.=<< Traversable.traverse (mustFailPred bak) obligations
@@ -106,13 +106,13 @@ oneMustFail bak obligations = do
 -- guaranteed to fail?
 checkOneMustFail ::
   ( W4.OnlineSolver solver
-  , C.IsSymBackend sym bak
+  , CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder t st (Flags fm)
   , bak ~ OnlineBackend solver t st (Flags fm)
   ) =>
   bak ->
   -- | Predicates for which no heuristic succeeded
-  [(C.ProofObligation sym, Maybe (ErrorDescription sym))] ->
+  [(CB.ProofObligation sym, Maybe (ErrorDescription sym))] ->
   IO Bool
 checkOneMustFail bak failed =
   if List.any (Tuple.uncurry excludeMustFail) failed
