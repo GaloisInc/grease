@@ -40,7 +40,7 @@ import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Types qualified as C
 import What4.Expr.Builder qualified as W4
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 
 data SomeBaseSelector ext argTys t
   = forall ts regTy.
@@ -52,16 +52,16 @@ data SomePtrSelector ext argTys w
     Cursor.Last ts ~ CLMP.LLVMPointerType w =>
     SomePtrSelector (Selector ext argTys ts regTy)
 
-newtype BVAnn sym w = BVAnn (W4.SymAnnotation sym (W4.BaseBVType w))
+newtype BVAnn sym w = BVAnn (WI.SymAnnotation sym (WI.BaseBVType w))
 
-instance C.TestEquality (W4.SymAnnotation sym) => C.TestEquality (BVAnn sym) where
+instance C.TestEquality (WI.SymAnnotation sym) => C.TestEquality (BVAnn sym) where
   testEquality (BVAnn ann1) (BVAnn ann2) =
     case C.testEquality ann1 ann2 of
       Just C.Refl -> Just C.Refl
       Nothing -> Nothing
   {-# INLINE testEquality #-}
 
-instance MapF.OrdF (W4.SymAnnotation sym) => MapF.OrdF (BVAnn sym) where
+instance MapF.OrdF (WI.SymAnnotation sym) => MapF.OrdF (BVAnn sym) where
   compareF (BVAnn ann1) (BVAnn ann2) =
     case MapF.compareF ann1 ann2 of
       MapF.LTF -> MapF.LTF
@@ -69,17 +69,17 @@ instance MapF.OrdF (W4.SymAnnotation sym) => MapF.OrdF (BVAnn sym) where
       MapF.GTF -> MapF.GTF
   {-# INLINE compareF #-}
 
--- | A newtype around @'W4.SymAnnotation' sym 'W4.BaseIntegerType'@. This is
+-- | A newtype around @'WI.SymAnnotation' sym 'WI.BaseIntegerType'@. This is
 -- done so that the 'Ord' instance can be defined in terms of the underlying
--- `W4.SymAnnotation`'s 'OrdF' instance.
-newtype IntegerAnn sym = IntegerAnn (W4.SymAnnotation sym W4.BaseIntegerType)
+-- `WI.SymAnnotation`'s 'OrdF' instance.
+newtype IntegerAnn sym = IntegerAnn (WI.SymAnnotation sym WI.BaseIntegerType)
 
-instance C.TestEquality (W4.SymAnnotation sym) => Eq (IntegerAnn sym) where
+instance C.TestEquality (WI.SymAnnotation sym) => Eq (IntegerAnn sym) where
   IntegerAnn ann1 == IntegerAnn ann2 =
     Maybe.isJust (C.testEquality ann1 ann2)
   {-# INLINE (==) #-}
 
-instance MapF.OrdF (W4.SymAnnotation sym) => Ord (IntegerAnn sym) where
+instance MapF.OrdF (WI.SymAnnotation sym) => Ord (IntegerAnn sym) where
   compare (IntegerAnn ann1) (IntegerAnn ann2) =
     case MapF.compareF ann1 ann2 of
       MapF.LTF -> LT
@@ -87,10 +87,10 @@ instance MapF.OrdF (W4.SymAnnotation sym) => Ord (IntegerAnn sym) where
       MapF.GTF -> GT
   {-# INLINE compare #-}
 
--- | Track the provenance of symbolic values using 'W4.SymAnnotation's.
+-- | Track the provenance of symbolic values using 'WI.SymAnnotation's.
 data Annotations sym ext argTys
   = Annotations
-  { _baseAnns :: MapF.MapF (W4.SymAnnotation sym) (SomeBaseSelector ext argTys)
+  { _baseAnns :: MapF.MapF (WI.SymAnnotation sym) (SomeBaseSelector ext argTys)
   , _blockAnns :: Map (IntegerAnn sym) (Some (SomePtrSelector ext argTys))
   , _offsetAnns :: MapF.MapF (BVAnn sym) (SomePtrSelector ext argTys)
   }
@@ -117,12 +117,12 @@ annotate ::
   ) =>
   sym ->
   Selector ext argTys ts regTy ->
-  W4.SymExpr sym t ->
-  m (W4.SymExpr sym t)
+  WI.SymExpr sym t ->
+  m (WI.SymExpr sym t)
 annotate sym sel e = do
-  (ann, e') <- case W4.getAnnotation sym e of
+  (ann, e') <- case WI.getAnnotation sym e of
     Just ann -> pure (ann, e)
-    Nothing -> liftIO $ W4.annotateTerm sym e
+    Nothing -> liftIO $ WI.annotateTerm sym e
   baseAnns %= MapF.insert ann (SomeBaseSelector sel)
   pure e'
 
@@ -139,14 +139,14 @@ annotatePtr ::
   CLMP.LLVMPtr sym w ->
   m (CLMP.LLVMPtr sym w)
 annotatePtr sym sel ptr = do
-  block <- liftIO $ W4.natToInteger sym (CLMP.llvmPointerBlock ptr)
-  (blockann, ptr') <- case W4.getAnnotation sym block of
+  block <- liftIO $ WI.natToInteger sym (CLMP.llvmPointerBlock ptr)
+  (blockann, ptr') <- case WI.getAnnotation sym block of
     Just ann -> pure (ann, ptr)
     Nothing -> liftIO $ CLMP.annotatePointerBlock sym ptr
   Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @ts)
   blockAnns %= Map.insert (IntegerAnn blockann) (Some (SomePtrSelector sel))
   let offset = CLMP.llvmPointerOffset ptr'
-  (offann, ptr'') <- case W4.getAnnotation sym offset of
+  (offann, ptr'') <- case WI.getAnnotation sym offset of
     Just ann -> pure (ann, ptr')
     Nothing -> liftIO $ CLMP.annotatePointerOffset sym ptr'
   offsetAnns %= MapF.insert (BVAnn offann) (SomePtrSelector sel)
@@ -162,12 +162,12 @@ findAnnotations ::
   , sym ~ W4.ExprBuilder brand st fs
   ) =>
   sym ->
-  W4.BaseTypeRepr t' ->
-  W4.SymExpr sym t ->
-  [W4.SymAnnotation sym t']
+  WI.BaseTypeRepr t' ->
+  WI.SymExpr sym t ->
+  [WI.SymAnnotation sym t']
 findAnnotations sym repr e = case W4.asApp e of
   Just app -> do
-    let anns :: [W4.SymAnnotation sym t']
+    let anns :: [WI.SymAnnotation sym t']
         anns = MC.foldMapFC (Maybe.maybeToList . getAnn) app
     case getAnn e of
       Nothing -> anns
@@ -177,10 +177,10 @@ findAnnotations sym repr e = case W4.asApp e of
   getAnn ::
     forall tp.
     W4.Expr brand tp ->
-    Maybe (W4.SymAnnotation sym t')
+    Maybe (WI.SymAnnotation sym t')
   getAnn expr =
-    case W4.exprType expr of
-      repr' | Just C.Refl <- C.testEquality repr repr' -> W4.getAnnotation sym expr
+    case WI.exprType expr of
+      repr' | Just C.Refl <- C.testEquality repr repr' -> WI.getAnnotation sym expr
       _ -> Nothing
 
 lookupSomePtrBlockAnnotation ::
@@ -192,8 +192,8 @@ lookupSomePtrBlockAnnotation ::
   CLMP.LLVMPtr sym w ->
   Maybe (Some (SomePtrSelector ext argTys))
 lookupSomePtrBlockAnnotation anns sym ptr = do
-  let block = W4.natToIntegerPure (CLMP.llvmPointerBlock ptr)
-  ann <- Maybe.listToMaybe (findAnnotations sym W4.BaseIntegerRepr block)
+  let block = WI.natToIntegerPure (CLMP.llvmPointerBlock ptr)
+  ann <- Maybe.listToMaybe (findAnnotations sym WI.BaseIntegerRepr block)
   -- In this lookup, 'Nothing' may arise if this pointer was created by a
   -- "skip" override (see "Grease.Skip"), because such overrides use the
   -- "setup" machinery, but discard the map that tracks the annotations on
@@ -232,7 +232,7 @@ lookupPtrOffsetAnnotation ::
   CLMP.LLVMPtr sym w' ->
   Maybe (SomePtrSelector ext argTys w)
 lookupPtrOffsetAnnotation anns sym w ptr =
-  case findAnnotations sym (W4.BaseBVRepr w) (CLMP.llvmPointerOffset ptr) of
+  case findAnnotations sym (WI.BaseBVRepr w) (CLMP.llvmPointerOffset ptr) of
     [] -> Nothing
     (ann : _) ->
       -- In this lookup, 'Nothing' may arise if this pointer was created by a

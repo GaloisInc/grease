@@ -57,7 +57,7 @@ import Lang.Crucible.Simulator qualified as CS
 import Stubs.Common qualified as Stubs
 import Stubs.FunctionOverride qualified as Stubs
 import What4.Expr qualified as W4
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 import What4.Protocol.Online qualified as W4
 
 type ArchRegs sym arch = Ctx.Assignment (CS.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch)
@@ -95,7 +95,7 @@ data ArchContext arch = ArchContext
       forall sym.
       CB.IsSymInterface sym =>
       ArchRegs sym arch ->
-      IO (W4.SymExpr sym (W4.BaseBVType (MC.ArchAddrWidth arch)))
+      IO (WI.SymExpr sym (WI.BaseBVType (MC.ArchAddrWidth arch)))
   , _archPcReg :: MC.ArchReg arch (BVType (MC.ArchAddrWidth arch))
   , _archVals :: Symbolic.GenArchVals Symbolic.LLVMMemory arch
   , -- Check if @grease@ supports a particular relocation type. This should

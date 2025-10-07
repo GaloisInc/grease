@@ -198,7 +198,7 @@ import Text.Read (readMaybe)
 import Text.Show (Show (..))
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as W4
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
 import Prelude (Int, Integer, Integral, Num (..), fromIntegral)
@@ -641,8 +641,8 @@ overrideRegs archCtx sym =
                 | CLM.LLVMPointerRepr w <- regTypes ^. ixF' idx
                 , Just C.Refl <- C.testEquality w ?ptrWidth -> do
                     let macawGlobalMemBlock = 1 -- TODO: don't hardcode this
-                    blk <- liftIO $ W4.natLit sym macawGlobalMemBlock
-                    off <- liftIO (W4.bvLit sym ?ptrWidth i)
+                    blk <- liftIO $ WI.natLit sym macawGlobalMemBlock
+                    off <- liftIO (WI.bvLit sym ?ptrWidth i)
                     let ptr = CLM.LLVMPointer blk off
                     pure $ CS.RV $ ptr
                 | otherwise ->

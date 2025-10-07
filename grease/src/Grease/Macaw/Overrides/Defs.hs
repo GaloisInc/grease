@@ -32,7 +32,7 @@ import Lang.Crucible.LLVM.Printf qualified as Printf
 import Lang.Crucible.Simulator qualified as CS
 import Stubs.FunctionOverride qualified as Stubs
 import What4.FunctionName qualified as W4
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 
 -- | Custom overrides that are only applicable at the machine code level (and
 -- therefore do not belong in crucible-llvm).
@@ -85,7 +85,7 @@ buildAssertFailOverride ::
     arch
     C.UnitType
 buildAssertFailOverride mvar mmConf =
-  W4.withKnownNat ?ptrWidth $
+  WI.withKnownNat ?ptrWidth $
     Stubs.mkFunctionOverride "__assert_fail" $ \bak args ->
       Ctx.uncurryAssignment (callAssert bak mvar mmConf) args
 
@@ -115,7 +115,7 @@ buildAssertRtnOverride ::
     arch
     C.UnitType
 buildAssertRtnOverride mvar mmConf =
-  W4.withKnownNat ?ptrWidth $
+  WI.withKnownNat ?ptrWidth $
     Stubs.mkFunctionOverride "__assert_rtn" $ \bak args ->
       Ctx.uncurryAssignment (callAssert bak mvar mmConf) args
 
@@ -147,7 +147,7 @@ callAssert bak mvar mmConf _pfn _pfile _pline ptxt = do
   put st1
   let err = CS.AssertFailureSimError "Call to assert()" (BSC.unpack txt)
   _ <- liftIO $ CB.addFailedAssertion bak err
-  loc <- liftIO $ W4.getCurrentProgramLoc sym
+  loc <- liftIO $ WI.getCurrentProgramLoc sym
   liftIO $ CB.abortExecBecause $ CB.EarlyExit loc
 
 -- | An override for the @printf@ function. This assumes that the first argument
@@ -171,7 +171,7 @@ buildPrintfOverride ::
     arch
     (CLM.LLVMPointerType (MC.ArchAddrWidth arch))
 buildPrintfOverride mvar mmConf =
-  W4.withKnownNat ?ptrWidth $
+  WI.withKnownNat ?ptrWidth $
     Stubs.mkVariadicFunctionOverride "printf" $ \bak args gva ->
       Ctx.uncurryAssignment
         (\formatStrPtr -> callPrintf bak mvar mmConf formatStrPtr gva)
@@ -201,7 +201,7 @@ buildPrintfChkOverride ::
     arch
     (CLM.LLVMPointerType (MC.ArchAddrWidth arch))
 buildPrintfChkOverride mvar mmConf =
-  W4.withKnownNat ?ptrWidth $
+  WI.withKnownNat ?ptrWidth $
     Stubs.mkVariadicFunctionOverride "__printf_chk" $ \bak args gva ->
       Ctx.uncurryAssignment
         (\_flg formatStrPtr -> callPrintf bak mvar mmConf formatStrPtr gva)
@@ -258,7 +258,7 @@ callPrintf bak mvar mmConf formatStrPtr gva = do
       h <- CS.printHandle <$> CS.getContext
       liftIO $ BSC.hPutStrLn h str
       -- Return the number of characters printed
-      nBv <- liftIO $ W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (toInteger n))
+      nBv <- liftIO $ WI.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (toInteger n))
       liftIO $ CLM.llvmPointer_bv sym nBv
 
 -- | Given the directives in a @printf@-style format string, retrieve the
@@ -326,7 +326,7 @@ buildPutsOverride ::
     arch
     (CLM.LLVMPointerType (MC.ArchAddrWidth arch))
 buildPutsOverride mvar mmConf =
-  W4.withKnownNat ?ptrWidth $
+  WI.withKnownNat ?ptrWidth $
     Stubs.mkFunctionOverride "puts" $ \bak args ->
       Ctx.uncurryAssignment (callPuts bak mvar mmConf) args
 
@@ -361,7 +361,7 @@ callPuts bak mvar mmConf strPtr = do
   h <- CS.printHandle <$> CS.getContext
   liftIO $ BSC.hPutStrLn h str
   -- return non-negative value on success
-  oneBv <- liftIO $ W4.bvOne (CB.backendGetSym bak) MM.memWidthNatRepr
+  oneBv <- liftIO $ WI.bvOne (CB.backendGetSym bak) MM.memWidthNatRepr
   liftIO $ CLM.llvmPointer_bv sym oneBv
 
 -- | An override for @__stack_chk_fail@, which is called by functions that fail
@@ -393,6 +393,6 @@ callStackChkFail fnName =
     let sym = CB.backendGetSym bak
     let msg = "Call to " List.++ show fnName
     let err = CS.AssertFailureSimError msg ""
-    CB.assert bak (W4.falsePred sym) err
-    loc <- W4.getCurrentProgramLoc sym
+    CB.assert bak (WI.falsePred sym) err
+    loc <- WI.getCurrentProgramLoc sym
     CB.abortExecBecause $ CB.EarlyExit loc

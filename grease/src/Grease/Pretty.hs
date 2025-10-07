@@ -16,12 +16,12 @@ import Grease.Panic (panic)
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Pretty as P
 import Lang.Crucible.Types qualified as C
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 
 -- | A 'IntrinsicPrettyFn' for LLVM pointers
 --
 -- TODO: Upstream to Crucible-LLVM
-prettyPtrFn :: W4.IsExpr (W4.SymExpr sym) => IntrinsicPrettyFn sym "LLVM_pointer"
+prettyPtrFn :: WI.IsExpr (WI.SymExpr sym) => IntrinsicPrettyFn sym "LLVM_pointer"
 prettyPtrFn = IntrinsicPrettyFn $ \tyCtx ptr ->
   case Ctx.viewAssign tyCtx of
     Ctx.AssignExtend (Ctx.viewAssign -> Ctx.AssignEmpty) (C.BVRepr _) ->
@@ -40,5 +40,5 @@ prettyPtrFn = IntrinsicPrettyFn $ \tyCtx ptr ->
 -- only intrinsic type in use
 --
 -- TODO: Upstream to Crucible-LLVM
-prettyPtrFnMap :: W4.IsExpr (W4.SymExpr sym) => IntrinsicPrinters sym
+prettyPtrFnMap :: WI.IsExpr (WI.SymExpr sym) => IntrinsicPrinters sym
 prettyPtrFnMap = IntrinsicPrinters (MapF.singleton (C.knownSymbol @"LLVM_pointer") prettyPtrFn)

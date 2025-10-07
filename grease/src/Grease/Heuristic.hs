@@ -77,7 +77,7 @@ import Numeric.Natural (Natural)
 import Prettyprinter qualified as PP
 import Text.LLVM.AST qualified as L
 import What4.Expr qualified as W4
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4
 import What4.ProgramLoc qualified as W4
 
@@ -231,7 +231,7 @@ assertPtrWidth ptr =
     Just r -> pure r
 
 allocInfoLoc ::
-  W4.IsExprBuilder sym =>
+  WI.IsExprBuilder sym =>
   sym ->
   Mem.Mem sym ->
   Mem.LLVMPtr sym w ->
@@ -274,15 +274,15 @@ modPtr la anns sym args modify ptr = do
 
 -- | Helper, not exported
 growPtrTargetUpToBv ::
-  W4.IsExprBuilder sym =>
+  WI.IsExprBuilder sym =>
   Mem.HasPtrWidth w =>
   Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
   sym ->
-  W4.SymBV sym w' ->
+  WI.SymBV sym w' ->
   PtrTarget w tag ->
   PtrTarget w tag
 growPtrTargetUpToBv sym symBv =
-  case W4.asBV (Maybe.fromMaybe symBv (W4.getUnannotatedTerm sym symBv)) of
+  case WI.asBV (Maybe.fromMaybe symBv (WI.getUnannotatedTerm sym symBv)) of
     Nothing -> growPtrTarget
     Just bv ->
       let minSz = Bytes.toBytes (BV.asUnsigned bv)
@@ -522,16 +522,16 @@ pointerHeuristics la ptrHeuristic byteHeuristic =
   ]
  where
 
-getConcretePointerBlock :: W4.IsExprBuilder sym => sym -> Mem.LLVMPtr sym w -> Maybe Natural
+getConcretePointerBlock :: WI.IsExprBuilder sym => sym -> Mem.LLVMPtr sym w -> Maybe Natural
 getConcretePointerBlock sym ptr = tryAnnotated <|> tryUnannotated
  where
-  int = W4.natToIntegerPure (Mem.llvmPointerBlock ptr)
-  tryAnnotated = fromIntegral <$> W4.asInteger int
+  int = WI.natToIntegerPure (Mem.llvmPointerBlock ptr)
+  tryAnnotated = fromIntegral <$> WI.asInteger int
   tryUnannotated = do
-    term <- W4.getUnannotatedTerm sym int
-    fromIntegral <$> W4.asInteger term
+    term <- WI.getUnannotatedTerm sym int
+    fromIntegral <$> WI.asInteger term
 
-allocInfoFromPtr :: W4.IsExprBuilder sym => sym -> Mem.Mem sym -> Mem.LLVMPtr sym w -> Maybe (Mem.AllocInfo sym)
+allocInfoFromPtr :: WI.IsExprBuilder sym => sym -> Mem.Mem sym -> Mem.LLVMPtr sym w -> Maybe (Mem.AllocInfo sym)
 allocInfoFromPtr sym mem ptr = do
   int <- getConcretePointerBlock sym ptr
   Mem.possibleAllocInfo int (Mem.memAllocs mem)

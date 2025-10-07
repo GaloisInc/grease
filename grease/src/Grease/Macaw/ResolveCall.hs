@@ -79,7 +79,7 @@ import Stubs.Syscall qualified as Stubs
 import System.IO (IO)
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as W4
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 import What4.Protocol.Online qualified as W4
 import Prelude (Integer, fromIntegral, otherwise, toInteger, (++))
 
@@ -282,7 +282,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
   -- https://github.com/GaloisInc/what4/issues/259.
   symAddr1 <- Symbolic.resolveSymBV bak C.knownNat symAddr0
 
-  case W4.asBV symAddr1 of
+  case WI.asBV symAddr1 of
     -- If asBV returns Nothing here, despite the call to resolveSymBV above,
     -- then the address is truly symbolic. By default, we skip the call
     -- entirely, but if the user passes --error-symbolic-fun-calls, then this is
@@ -517,7 +517,7 @@ lookupSyscallResult ::
   IO (LookupSyscallResult p sym arch atps rtps)
 lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs = do
   symSyscallBV <- (arch ^. archSyscallNumberRegister) bak atps regs
-  case W4.asBV (CS.regValue symSyscallBV) of
+  case WI.asBV (CS.regValue symSyscallBV) of
     Nothing ->
       if getErrorSymbolicSyscalls errorSymbolicSyscalls
         then

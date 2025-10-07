@@ -32,7 +32,7 @@ import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 
 -- | Load a null-terminated string from memory.
 --
@@ -62,7 +62,7 @@ loadString ::
   -- | The loaded bytes from the string (excluding the null terminator) and the
   -- updated Crucible state.
   IO
-    ( [W4.SymBV sym 8]
+    ( [WI.SymBV sym 8]
     , CS.SimState p sym (Symbolic.MacawExt arch) rtp f args
     )
 loadString bak mvar mmConf ptr0 maxChars st = do
@@ -103,9 +103,9 @@ loadConcreteString bak mvar mmConf ptr maxChars st0 = do
   bytes <- traverse concretizeByte symBytes
   pure (BS.pack bytes, st1)
  where
-  concretizeByte :: W4.SymBV sym 8 -> IO Word8
+  concretizeByte :: WI.SymBV sym 8 -> IO Word8
   concretizeByte symByte =
-    case BV.asUnsigned <$> W4.asBV symByte of
+    case BV.asUnsigned <$> WI.asBV symByte of
       Just byte -> pure $ fromInteger byte
       Nothing ->
         liftIO $

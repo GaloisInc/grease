@@ -18,7 +18,6 @@ import Lang.Crucible.LLVM.MemModel.CallStack qualified as CLM
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Prettyprinter qualified as PP
 import What4.Expr qualified as W4
-import What4.Interface qualified as W4
 import What4.Interface qualified as WI
 
 concretizeErrorDescription ::
@@ -46,10 +45,10 @@ data ErrorDescription sym
 
 -- | Pretty print a 'MSM.MacawError'
 -- TODO(#310) Pretty print macaw error using a macaw implementation
-ppMacawError :: W4.IsExpr (W4.SymExpr sym) => MSM.MacawError sym -> PP.Doc a
+ppMacawError :: WI.IsExpr (WI.SymExpr sym) => MSM.MacawError sym -> PP.Doc a
 ppMacawError (MSM.UnmappedGlobalMemoryAccess ptrVal) = "Read or write of an unmapped pointer:" PP.<+> CLM.ppPtr ptrVal
 
-ppErrorDesc :: W4.IsExpr (W4.SymExpr sym) => ErrorDescription sym -> PP.Doc a
+ppErrorDesc :: WI.IsExpr (WI.SymExpr sym) => ErrorDescription sym -> PP.Doc a
 ppErrorDesc =
   \case
     MacawMemError mmErr -> ppMacawError mmErr
@@ -61,6 +60,6 @@ ppErrorDesc =
                 then []
                 else ["in context:", PP.indent 2 ppCs]
 
-instance W4.IsExpr (W4.SymExpr sym) => PP.Pretty (ErrorDescription sym) where
+instance WI.IsExpr (WI.SymExpr sym) => PP.Pretty (ErrorDescription sym) where
   pretty :: WI.IsExpr (WI.SymExpr sym) => ErrorDescription sym -> PP.Doc ann
   pretty = ppErrorDesc

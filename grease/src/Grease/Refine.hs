@@ -155,7 +155,7 @@ import System.IO (IO)
 import What4.Expr qualified as W4
 import What4.Expr.App qualified as W4
 import What4.FloatMode qualified as W4FM
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4
 import What4.Solver qualified as W4
 import Prelude (Num (..))
@@ -163,7 +163,7 @@ import Prelude (Num (..))
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (RefineDiagnostic diag)
 
--- | Find annotations on a term and its subterms, all of type 'W4.BaseBoolType'.
+-- | Find annotations on a term and its subterms, all of type 'WI.BaseBoolType'.
 --
 -- Similar to 'Grease.Setup.Annotations.findAnnotation', but only for
 -- annotations on predicates.
@@ -173,11 +173,11 @@ findPredAnnotations ::
   , sym ~ W4.ExprBuilder brand st fs
   ) =>
   sym ->
-  W4.SymExpr sym t ->
-  [W4.SymAnnotation sym W4.BaseBoolType]
+  WI.SymExpr sym t ->
+  [WI.SymAnnotation sym WI.BaseBoolType]
 findPredAnnotations sym e = case W4.asApp e of
   Just app -> do
-    let anns :: [W4.SymAnnotation sym W4.BaseBoolType]
+    let anns :: [WI.SymAnnotation sym WI.BaseBoolType]
         anns = MC.foldMapFC (maybeToList . getPredAnn) app
     case getPredAnn e of
       Nothing -> anns
@@ -187,10 +187,10 @@ findPredAnnotations sym e = case W4.asApp e of
   getPredAnn ::
     forall tp.
     W4.Expr brand tp ->
-    Maybe (W4.SymAnnotation sym W4.BaseBoolType)
+    Maybe (WI.SymAnnotation sym WI.BaseBoolType)
   getPredAnn expr =
-    case W4.exprType expr of
-      W4.BaseBoolRepr -> W4.getAnnotation sym expr
+    case WI.exprType expr of
+      WI.BaseBoolRepr -> WI.getAnnotation sym expr
       _ -> Nothing
 
 -- | A proof obligation failed, and no heuristic identified a refinement
@@ -249,7 +249,7 @@ combiner = C.Combiner $ \mr1 mr2 -> do
 data ErrorCallbacks sym t
   = ErrorCallbacks
   { llvmErrCallback :: LLCS.CallStack -> Mem.BoolAnn sym -> CLLVM.BadBehavior sym -> IO ()
-  , macawAssertionCallback :: sym -> W4.Pred sym -> MSM.MacawError sym -> IO (W4.Pred sym)
+  , macawAssertionCallback :: sym -> WI.Pred sym -> MSM.MacawError sym -> IO (WI.Pred sym)
   , errorMap :: IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym))
   }
 
@@ -268,7 +268,7 @@ buildErrMaps = do
   let recordLLVMAnnotation = \callStack (Mem.BoolAnn ann) bb ->
         modifyIORef bbMapRef $ Map.insert ann (CrucibleLLVMError bb callStack)
   let processMacawAssert = \sym p err -> do
-        (ann, p') <- W4.annotateTerm sym p
+        (ann, p') <- WI.annotateTerm sym p
         _ <- modifyIORef bbMapRef $ Map.insert ann (MacawMemError err)
         pure p'
   pure
@@ -500,7 +500,7 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
               proveAndRefine bak execResult la bbMap refineData goals
         case execPathStrat execData of
           Opts.Dfs -> do
-            loc <- W4.getCurrentProgramLoc (CB.backendGetSym bak)
+            loc <- WI.getCurrentProgramLoc (CB.backendGetSym bak)
             doLog la (Diag.RefinementFinishedPath loc (shortResult refineResult))
           Opts.Sse -> pure ()
         pure (refineResult, remaining)

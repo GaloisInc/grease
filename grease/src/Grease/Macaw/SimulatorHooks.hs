@@ -30,7 +30,7 @@ import Lang.Crucible.Simulator.Evaluation qualified as C
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import What4.Expr qualified as W4
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (SimulatorHooksDiagnostic diag)
@@ -43,7 +43,7 @@ doLog la diag = LJ.writeLog la (SimulatorHooksDiagnostic diag)
 --
 -- We override several pointer operations because their implementations
 -- in "Data.Macaw.Symbolic.MemOps" invent fresh symbolic constants via
--- 'W4.freshConstant'. These fresh constants are unsuitable for use with
+-- 'WI.freshConstant'. These fresh constants are unsuitable for use with
 -- concretization, because they are unconstrained. Thus, when asked for a
 -- model, the solver can choose arbitrary values for pointers that would result
 -- in such constants being created, then choose arbitrary values for the
@@ -108,17 +108,17 @@ ptrAnd bak x y = do
   let sym = CB.backendGetSym bak
   CLM.LLVMPointer xblk xoff <- pure x
   CLM.LLVMPointer yblk yoff <- pure y
-  natZero <- W4.natLit sym 0
-  xbv <- W4.natEq sym natZero xblk
-  ybv <- W4.natEq sym natZero yblk
-  sameBlk <- W4.natEq sym xblk yblk
-  oneBv <- W4.orPred sym xbv ybv
-  ok <- W4.orPred sym sameBlk oneBv
+  natZero <- WI.natLit sym 0
+  xbv <- WI.natEq sym natZero xblk
+  ybv <- WI.natEq sym natZero yblk
+  sameBlk <- WI.natEq sym xblk yblk
+  oneBv <- WI.orPred sym xbv ybv
+  ok <- WI.orPred sym sameBlk oneBv
   let msg = "Invalid AND of two pointers"
   CB.assert bak ok (CS.AssertFailureSimError msg "")
-  xptr <- W4.notPred sym xbv
-  blk <- W4.natIte sym xptr xblk yblk
-  off <- W4.bvAndBits sym xoff yoff
+  xptr <- WI.notPred sym xbv
+  blk <- WI.natIte sym xptr xblk yblk
+  off <- WI.bvAndBits sym xoff yoff
   pure (CLM.LLVMPointer blk off)
 
 extensionExec ::
@@ -148,12 +148,12 @@ extensionExec archCtx bak la tgtOvs memVar baseExt stmt crucState = do
     Symbolic.PtrLeq _w (CS.RegEntry _ x) (CS.RegEntry _ y) -> do
       CLM.LLVMPointer _xblk xoff <- pure x
       CLM.LLVMPointer _yblk yoff <- pure y
-      p <- W4.bvUle sym xoff yoff
+      p <- WI.bvUle sym xoff yoff
       pure (p, crucState)
     Symbolic.PtrLt _w (CS.RegEntry _ x) (CS.RegEntry _ y) -> do
       CLM.LLVMPointer _xblk xoff <- pure x
       CLM.LLVMPointer _yblk yoff <- pure y
-      p <- W4.bvUlt sym xoff yoff
+      p <- WI.bvUlt sym xoff yoff
       pure (p, crucState)
     Symbolic.PtrMux _w (CS.RegEntry _ cond) (CS.RegEntry _ x) (CS.RegEntry _ y) -> do
       p <- CLM.muxLLVMPtr sym cond x y

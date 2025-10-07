@@ -26,7 +26,7 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.ExecutionTree qualified as ET
 import Lang.Crucible.Simulator.GlobalState qualified as GS
 import Prettyprinter qualified as PP
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4
 import What4.ProgramLoc qualified as W4
 
@@ -34,7 +34,7 @@ data Diagnostic where
   CantRefine ::
     Heuristic.CantRefine -> Diagnostic
   ExecutionResult ::
-    W4.IsExpr (W4.SymExpr sym) =>
+    WI.IsExpr (WI.SymExpr sym) =>
     CS.GlobalVar CLM.Mem ->
     CS.ExecResult p sym ext (CS.RegEntry sym ret) ->
     Diagnostic
@@ -83,11 +83,11 @@ data Diagnostic where
   SolverGoalPassed ::
     W4.ProgramLoc -> Diagnostic
   SolverGoalFailed ::
-    W4.IsExpr (W4.SymExpr sym) =>
+    WI.IsExpr (WI.SymExpr sym) =>
     -- | Symbolic backend
     sym ->
     -- | Goal that failed (the negation of this predicate was satisfiable)
-    W4.LabeledPred (W4.Pred sym) CS.SimError ->
+    W4.LabeledPred (WI.Pred sym) CS.SimError ->
     -- | Description of the problem, if available
     Maybe (ErrorDescription sym) ->
     Diagnostic

@@ -149,6 +149,7 @@
     - { name: Lang.Crucible.Simulator, as: CS }
     - { name: Lang.Crucible.LLVM.MemModel, as: CLM }
     - { name: Lumberjack, as: LJ }
+    - { name: What4.Interface, as: WI }
 
     # parameterized-utils
     - { name: Data.Parameterized.Context, as: Ctx }
