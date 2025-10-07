@@ -32,7 +32,7 @@ import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Prettyprinter qualified as PP
 import System.FilePath (dropExtensions, takeBaseName)
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 
 -- | Error type for 'loadOverrides'.
 data LLVMSExpOverrideError
@@ -64,7 +64,7 @@ data LLVMSExpOverride
   -- S-expression file.
   , lsoAuxiliaryOverrides :: [AnyLLVMOverride]
   -- ^ Overrides for the auxiliary functions in the S-expression file.
-  , lsoForwardDeclarations :: Map.Map W4.FunctionName C.SomeHandle
+  , lsoForwardDeclarations :: Map.Map WFN.FunctionName C.SomeHandle
   -- ^ The map of names of forward declarations in the S-expression file to
   -- their handles.
   }
@@ -82,7 +82,7 @@ acfgToAnyLLVMOverride path (C.Reg.AnyCFG cfg) = do
   let retTy = C.Reg.cfgReturnType cfg
   C.SomeCFG ssa <- pure $ C.toSSA cfg
   let fnName = C.handleName (C.cfgHandle ssa)
-  let name = Text.unpack (W4.functionName fnName)
+  let name = Text.unpack (WFN.functionName fnName)
   case mkDeclare name argTys retTy of
     Left err -> Left (UnsupportedType path err)
     Right decl ->
@@ -103,10 +103,10 @@ parsedProgToLLVMSExpOverride ::
   CLM.HasPtrWidth w =>
   FilePath ->
   CSyn.ParsedProgram CLLVM.LLVM ->
-  Either LLVMSExpOverrideError (W4.FunctionName, LLVMSExpOverride)
+  Either LLVMSExpOverrideError (WFN.FunctionName, LLVMSExpOverride)
 parsedProgToLLVMSExpOverride path prog = do
   let fnNameText = Text.pack $ dropExtensions $ takeBaseName path
-  let fnName = W4.functionNameFromText fnNameText
+  let fnName = WFN.functionNameFromText fnNameText
   (publicCfg, auxCfgs) <-
     case partitionCfgs fnName path prog of
       Left err -> Left (OverrideNameError err)
@@ -129,7 +129,7 @@ loadOverride ::
   FilePath ->
   C.HandleAllocator ->
   C.GlobalVar CLM.Mem ->
-  IO (Either LLVMSExpOverrideError (W4.FunctionName, LLVMSExpOverride))
+  IO (Either LLVMSExpOverrideError (WFN.FunctionName, LLVMSExpOverride))
 loadOverride path halloc mvar = do
   let ?parserHooks = llvmParserHooks emptyParserHooks mvar
   progResult <- parseProgram halloc path
@@ -145,7 +145,7 @@ loadOverrides ::
   [FilePath] ->
   C.HandleAllocator ->
   C.GlobalVar CLM.Mem ->
-  IO (Either LLVMSExpOverrideError (Seq.Seq (W4.FunctionName, LLVMSExpOverride)))
+  IO (Either LLVMSExpOverrideError (Seq.Seq (WFN.FunctionName, LLVMSExpOverride)))
 loadOverrides paths halloc mvar = do
   results <- traverse (\path -> loadOverride path halloc mvar) paths
   pure (Seq.fromList <$> sequence results)

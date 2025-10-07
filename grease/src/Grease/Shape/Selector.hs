@@ -30,7 +30,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Grease.Cursor (Cursor (..), CursorExt, ppCursor)
 import Grease.Cursor.Pointer (ppDereference)
 import Prettyprinter qualified as PP
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 
 -- | A pointer to a part of a symbolic value inside the arguments of a CFG
 --
@@ -56,7 +56,7 @@ makeLenses ''ArgSelector
 -- * @ts@: See 'Cursor'
 -- * @t@: The particular element of @argTys@ this selector points to
 data RetSelector ext ts t = RetSelector
-  { _retSelectorFunc :: W4.FunctionName
+  { _retSelectorFunc :: WFN.FunctionName
   , _retSelectorPath :: Cursor ext (t ': ts)
   }
 
@@ -103,7 +103,7 @@ ppRetSelector ::
   RetSelector ext ts t ->
   PP.Doc ann
 ppRetSelector ppExt (RetSelector func path) =
-  let top = PP.pretty (W4.functionName func <> "Return")
+  let top = PP.pretty (WFN.functionName func <> "Return")
    in ppCursor top ppExt path
 
 ppMacawRetSelector :: RetSelector (Symbolic.MacawExt arch) ts t -> PP.Doc ann

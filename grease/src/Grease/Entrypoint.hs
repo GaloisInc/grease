@@ -52,7 +52,7 @@ import Prettyprinter qualified as PP
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
 import Text.Megaparsec.Char.Lexer qualified as TMCL
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 
 -- | An 'EntrypointLocation' and its optional startup override.
 data Entrypoint
@@ -165,7 +165,7 @@ data StartupOv cfg
   = StartupOv
   { startupOvCfg :: cfg
   -- ^ The CFG of the startup override's @startup@ function.
-  , startupOvForwardDecs :: Map W4.FunctionName C.SomeHandle
+  , startupOvForwardDecs :: Map WFN.FunctionName C.SomeHandle
   -- ^ Forward declarations declared in the startup override file.
   }
   deriving Functor

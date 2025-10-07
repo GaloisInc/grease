@@ -36,7 +36,7 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Types as C
 import Text.LLVM.AST as L
 import Text.LLVM.DebugUtils qualified as LDU
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 
 -- | A view of a 'LDU.Info'
 data DITypeView
@@ -197,13 +197,13 @@ diArgShapes ::
   ( ExtShape ext ~ PtrShape ext 64
   , CLM.HasPtrWidth 64
   ) =>
-  W4.FunctionName ->
+  WFN.FunctionName ->
   Ctx.Assignment C.TypeRepr args ->
   L.Module ->
   Either Shape.MinimalShapeError (Ctx.Assignment (Shape ext NoTag) args)
 diArgShapes fnName argTys llvmMod = do
   let defaults = TFC.traverseFC (Shape.minimalShapeWithPtrs (const NoTag)) argTys
-  let fnSymb = L.Symbol (Text.unpack (W4.functionName fnName))
+  let fnSymb = L.Symbol (Text.unpack (WFN.functionName fnName))
   case LDU.computeFunctionTypes llvmMod fnSymb of
     Just (_retTy : argTyInfos) -> do
       let argTyViews = Seq.fromList (List.map (decodeType =<<) argTyInfos)

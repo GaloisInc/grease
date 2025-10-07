@@ -18,7 +18,7 @@ import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
 import Stubs.Syscall qualified as Stubs
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 
 -- | All of the overrides that work across all supported configurations.
@@ -26,7 +26,7 @@ import What4.Interface qualified as WI
 -- This list is documented in @doc/syscalls.md@.
 builtinGenericSyscalls ::
   CLM.HasPtrWidth w =>
-  Map.Map W4.FunctionName (Stubs.SomeSyscall p sym arch)
+  Map.Map WFN.FunctionName (Stubs.SomeSyscall p sym arch)
 builtinGenericSyscalls =
   Map.fromList $
     map

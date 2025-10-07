@@ -57,7 +57,7 @@ import Lang.Crucible.Syntax.SExpr qualified as SExpr
 import Prettyprinter qualified as PP
 import Text.Megaparsec qualified as MP
 import Text.Read qualified as Read
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 
 -----
 -- Error types
@@ -149,7 +149,7 @@ parsedProgramCfgMap ::
   CSyn.ParsedProgram ext ->
   Map Text (C.Reg.AnyCFG ext)
 parsedProgramCfgMap prog =
-  let cfgName cfg = W4.functionName (C.handleName (C.Reg.cfgHandle cfg))
+  let cfgName cfg = WFN.functionName (C.handleName (C.Reg.cfgHandle cfg))
       cfgWithName c@(C.Reg.AnyCFG cfg) = (cfgName cfg, c)
    in Map.fromList (List.map cfgWithName (CSyn.parsedProgCFGs prog))
 
@@ -161,7 +161,7 @@ parsedProgramCfgMap prog =
 -- have not yet been checked for validity. For the validated version, see
 -- 'ResolvedOverridesYaml'.
 newtype ParsedOverridesYaml = ParsedOverridesYaml
-  {getParsedOverridesYaml :: Map.Map Word64 W4.FunctionName}
+  {getParsedOverridesYaml :: Map.Map Word64 WFN.FunctionName}
   deriving stock Show
   deriving newtype (Semigroup, Monoid)
 
@@ -170,7 +170,7 @@ newtype ParsedOverridesYaml = ParsedOverridesYaml
 -- that all of the override names actually exist. For the pre-validated version,
 -- see 'ParsedOverridesYaml'.
 newtype ResolvedOverridesYaml w = ResolvedOverridesYaml
-  {getResolvedOverridesYaml :: Map.Map (MM.MemSegmentOff w) W4.FunctionName}
+  {getResolvedOverridesYaml :: Map.Map (MM.MemSegmentOff w) WFN.FunctionName}
   deriving stock Show
   deriving newtype (Semigroup, Monoid)
 
@@ -192,7 +192,7 @@ resolveOverridesYaml ::
   MML.LoadOptions ->
   MM.Memory w ->
   -- | The set of override names.
-  Set W4.FunctionName ->
+  Set WFN.FunctionName ->
   ParsedOverridesYaml ->
   IO (Either ResolveOverridesYamlError (ResolvedOverridesYaml w))
 resolveOverridesYaml loadOpts mem fnOvNames (ParsedOverridesYaml parsedFunAddrs) = runExceptT $ do
@@ -207,7 +207,7 @@ resolveOverridesYaml loadOpts mem fnOvNames (ParsedOverridesYaml parsedFunAddrs)
                 throwE $ AddressUnresolvable (MM.memWordValue addrWord)
           unless (Set.member funName fnOvNames) $
             throwE $
-              FunctionNameNotFound (W4.functionName funName)
+              FunctionNameNotFound (WFN.functionName funName)
           pure (addrSegOff, funName)
       )
       (Map.toList parsedFunAddrs)
@@ -246,7 +246,7 @@ parseFunctionAddressOverrides val = do
                       Nothing ->
                         throwE $ InvalidAddress (Key.toText addrKey)
                   funNameText <- asString funName
-                  pure (addr, W4.functionNameFromText funNameText)
+                  pure (addr, WFN.functionNameFromText funNameText)
               )
               (KeyMap.toList funAddrOvsObj)
           pure $ ParsedOverridesYaml $ Map.fromList funAddrOvPairs

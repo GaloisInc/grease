@@ -14,13 +14,13 @@ import Data.Text (Text)
 import Grease.Diagnostic.Severity (Severity (Debug, Info))
 import Grease.Macaw.SkippedCall qualified as Skip
 import Prettyprinter qualified as PP
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 
 data Diagnostic where
   PltCall ::
     MM.MemWidth w =>
     -- | The name of the PLT stub
-    W4.FunctionName ->
+    WFN.FunctionName ->
     -- | The address of the PLT stub
     MM.MemSegmentOff w ->
     -- | The address that the PLT call jumps to
@@ -29,7 +29,7 @@ data Diagnostic where
   FunctionCall ::
     MM.MemWidth w =>
     -- | The function name
-    W4.FunctionName ->
+    WFN.FunctionName ->
     -- | The address where the function is defined
     MM.MemWord w ->
     -- | The address that the function returns to (if known)
@@ -37,7 +37,7 @@ data Diagnostic where
     Diagnostic
   FunctionOverride ::
     -- | The overridden function's name
-    W4.FunctionName ->
+    WFN.FunctionName ->
     Diagnostic
   SyscallOverride ::
     -- | Syscall name

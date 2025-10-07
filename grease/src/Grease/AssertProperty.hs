@@ -26,7 +26,7 @@ import Lang.Crucible.CFG.Expr qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Utils.RegRewrite qualified as C
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 import What4.ProgramLoc qualified as W4
 
@@ -141,7 +141,7 @@ addPCBoundAssertion ::
   MC.MemWord (MC.ArchAddrWidth arch) ->
   MC.MemWord (MC.ArchAddrWidth arch) ->
   -- | Map of addresses to PLT stub names
-  Map.Map (MC.ArchSegmentOff arch) W4.FunctionName ->
+  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
   ArchRegCFG arch ->
   ArchRegCFG arch
 addPCBoundAssertion w pcreg mem lower upper pltStubs =

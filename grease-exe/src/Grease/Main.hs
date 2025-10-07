@@ -197,7 +197,7 @@ import Text.LLVM qualified as L
 import Text.Read (readMaybe)
 import Text.Show (Show (..))
 import What4.Expr qualified as W4
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
@@ -243,12 +243,12 @@ userError la doc = do
 -- | GREASE invoked a forward declaration, but it was unable to resolve the
 -- 'C.FnHandle' corresponding to the declaration. Throw an exception suggesting
 -- that the user try an override.
-declaredFunNotFound :: GreaseLogAction -> W4.FunctionName -> IO a
+declaredFunNotFound :: GreaseLogAction -> WFN.FunctionName -> IO a
 declaredFunNotFound la decName =
   userError la $
     PP.hsep
       [ "Function declared but not defined:"
-      , PP.pretty (W4.functionName decName) <> "."
+      , PP.pretty (WFN.functionName decName) <> "."
       , "Try specifying an override using --overrides."
       ]
 
@@ -482,9 +482,9 @@ data MacawCfgConfig arch = MacawCfgConfig
   -- ^ The load options used to load addresses in the binary.
   , mcSymMap :: Discovery.AddrSymMap (MC.ArchAddrWidth arch)
   -- ^ Map of entrypoint addresses to their names.
-  , mcPltStubs :: Map.Map (MC.ArchSegmentOff arch) W4.FunctionName
+  , mcPltStubs :: Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName
   -- ^ Map of addresses to PLT stub names.
-  , mcDynFunMap :: Map.Map W4.FunctionName (MC.ArchSegmentOff arch)
+  , mcDynFunMap :: Map.Map WFN.FunctionName (MC.ArchSegmentOff arch)
   -- ^ Map of dynamic function names to their addresses.
   , mcRelocs :: Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (ArchReloc arch)
   -- ^ Map of relocation addresses and types.
@@ -726,7 +726,7 @@ macawMemConfig ::
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   IO
     ( Symbolic.MemModelConfig p sym arch CLM.Mem
-    , Map W4.FunctionName (MacawSExpOverride p sym arch)
+    , Map WFN.FunctionName (MacawSExpOverride p sym arch)
     )
 macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable = do
   let MacawCfgConfig
@@ -1320,7 +1320,7 @@ loadLLVMSExpOvs ::
   [FilePath] ->
   C.HandleAllocator ->
   C.GlobalVar CLM.Mem ->
-  IO (Seq.Seq (W4.FunctionName, GLOS.LLVMSExpOverride))
+  IO (Seq.Seq (WFN.FunctionName, GLOS.LLVMSExpOverride))
 loadLLVMSExpOvs sexpOvPaths halloc mvar = do
   mbOvs <- liftIO (GLOS.loadOverrides sexpOvPaths halloc mvar)
   case mbOvs of
@@ -1441,7 +1441,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
 
   let
     -- The inverse of `pltStubSegOffToNameMap`.
-    pltStubNameToSegOffMap :: Map.Map W4.FunctionName (MC.ArchSegmentOff arch)
+    pltStubNameToSegOffMap :: Map.Map WFN.FunctionName (MC.ArchSegmentOff arch)
     pltStubNameToSegOffMap =
       Map.foldrWithKey
         (\addr name -> Map.insert name addr)

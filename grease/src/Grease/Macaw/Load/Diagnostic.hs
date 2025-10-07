@@ -17,7 +17,7 @@ import Data.Macaw.Memory qualified as MM
 import Data.Map qualified as Map
 import Grease.Diagnostic.Severity (Severity (Debug, Info))
 import Prettyprinter qualified as PP
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 
 data Diagnostic where
   DiscoveryEvent ::
@@ -32,7 +32,7 @@ data Diagnostic where
     -- | The address of the entrypoint function.
     MM.MemSegmentOff w ->
     -- | The name of the entrypoint function.
-    W4.FunctionName ->
+    WFN.FunctionName ->
     -- | The address where the core was dumped.
     MM.MemWord w ->
     Diagnostic

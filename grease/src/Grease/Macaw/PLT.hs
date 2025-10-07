@@ -35,7 +35,7 @@ import Prettyprinter qualified as PP
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
 import Text.Megaparsec.Char.Lexer qualified as TMCL
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 
 -- | A variant of 'PLT.pltStubSymbols' that performs some experimental hacks to
 -- obtain more reliable results. In particular:
@@ -166,14 +166,14 @@ pltStubParser = do
   pure $ PltStub addr name
 
 data CouldNotResolvePltStub
-  = CouldNotResolvePltStub FilePath Word64 W4.FunctionName
+  = CouldNotResolvePltStub FilePath Word64 WFN.FunctionName
 
 instance PP.Pretty CouldNotResolvePltStub where
   pretty (CouldNotResolvePltStub path addr name) =
     "Could not resolve PLT stub address "
       <> PP.viaShow addr
       <> ": "
-      <> PP.pretty (W4.functionName name)
+      <> PP.pretty (WFN.functionName name)
       <> " in binary "
       <> PP.pretty path
 
@@ -204,16 +204,16 @@ resolvePltStubs ::
   -- | The dynamically linked ELF binary.
   Elf.ElfHeaderInfo w ->
   -- | Map of @SymbolReloc@ relocation addresses to their symbols.
-  Map.Map (MM.MemWord w) W4.FunctionName ->
+  Map.Map (MM.MemWord w) WFN.FunctionName ->
   -- | User-specified PLT stubs.
   [PltStub] ->
   MC.Memory w ->
-  IO (Either CouldNotResolvePltStub (Map.Map (MM.MemSegmentOff w) W4.FunctionName))
+  IO (Either CouldNotResolvePltStub (Map.Map (MM.MemSegmentOff w) WFN.FunctionName))
 resolvePltStubs path mbPltStubInfo loadOptions ehi symbolRelocs userPltStubs memory = do
   let
     -- This only contains the PLT stubs located in the @.plt@ section, for
     -- which Macaw's heuristics are somewhat reliable.
-    pltStubAddrToNameMap :: Map.Map (MM.MemWord w) W4.FunctionName
+    pltStubAddrToNameMap :: Map.Map (MM.MemWord w) WFN.FunctionName
     pltStubAddrToNameMap =
       case mbPltStubInfo of
         Just pltStubInfo ->
@@ -222,26 +222,26 @@ resolvePltStubs path mbPltStubInfo loadOptions ehi symbolRelocs userPltStubs mem
         Nothing ->
           Map.empty
 
-  let pltStubAddrToNameList :: Seq.Seq (MM.MemWord w, W4.FunctionName)
+  let pltStubAddrToNameList :: Seq.Seq (MM.MemWord w, WFN.FunctionName)
       pltStubAddrToNameList = Seq.fromList $ Map.toList pltStubAddrToNameMap
 
   let offset :: Word64
       offset = fromMaybe 0 (LC.loadOffset loadOptions)
 
   -- This contains PLT stubs that the user specified on the command line.
-  let userPltStubAddrToNameList :: Seq.Seq (MM.MemWord w, W4.FunctionName)
+  let userPltStubAddrToNameList :: Seq.Seq (MM.MemWord w, WFN.FunctionName)
       userPltStubAddrToNameList =
         Seq.fromList $
           map
             ( \(PltStub addr name) ->
-                (MM.memWord (addr + offset), W4.functionNameFromText name)
+                (MM.memWord (addr + offset), WFN.functionNameFromText name)
             )
             userPltStubs
 
   -- This contains SymbolReloc relocations.
   -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 1: .plt.got) for why
   -- we do this.
-  let symbolRelocAddrToNameList :: Seq.Seq (MM.MemWord w, W4.FunctionName)
+  let symbolRelocAddrToNameList :: Seq.Seq (MM.MemWord w, WFN.FunctionName)
       symbolRelocAddrToNameList = Seq.fromList $ Map.toList symbolRelocs
 
   pltStubSegOffToNameList <-

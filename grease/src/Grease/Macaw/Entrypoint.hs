@@ -25,7 +25,7 @@ import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Types qualified as CT
 import Prettyprinter qualified as PP
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 
 -- | Check that the CFGs in an 'GE.EntrypointCFGs' have the signatures of valid
 -- Macaw CFGs (i.e., it takes the register struct as its only argument and
@@ -48,7 +48,7 @@ checkMacawEntrypointCfgsSignatures archCtx entrypointCfgs = do
     , GE.entrypointCfg = C.Reg.AnyCFG entrypointCfg0
     } <-
     pure entrypointCfgs
-  let entryName = W4.functionName (C.handleName (C.Reg.cfgHandle entrypointCfg0))
+  let entryName = WFN.functionName (C.handleName (C.Reg.cfgHandle entrypointCfg0))
   let name = Text.concat ["CFG `", entryName, "`"]
   C.Reg.SomeCFG entrypointCfg' <- checkMacawCfgSignature archCtx name entrypointCfg0
   mbStartupOvSome <-
@@ -60,7 +60,7 @@ checkMacawEntrypointCfgsSignatures archCtx entrypointCfgs = do
           , GE.startupOvForwardDecs = fwdDecs
           } <-
           pure startupOv
-        let entryName' = W4.functionName (C.handleName (C.Reg.cfgHandle startupOvCfg0))
+        let entryName' = WFN.functionName (C.handleName (C.Reg.cfgHandle startupOvCfg0))
         let name' = Text.concat ["startup override for `", entryName', "`"]
         C.Reg.SomeCFG startupOvCfg' <- checkMacawCfgSignature archCtx name' startupOvCfg0
         pure $

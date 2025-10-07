@@ -78,7 +78,7 @@ import Stubs.Memory.Common qualified as Stubs
 import Stubs.Syscall qualified as Stubs
 import System.IO (IO)
 import What4.Expr qualified as W4
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 import What4.Protocol.Online qualified as W4
 import Prelude (Integer, fromIntegral, otherwise, toInteger, (++))
@@ -100,7 +100,7 @@ useComposedOverride ::
   -- | Simulator state
   CS.SimState p sym (Symbolic.MacawExt arch) r f a ->
   -- | Name for new override
-  W4.FunctionName ->
+  WFN.FunctionName ->
   -- | New action to take
   ( forall r'.
     CS.RegValue sym (Symbolic.ArchRegStruct arch) ->
@@ -154,9 +154,9 @@ defaultLookupFunctionHandleDispatch ::
   ArchContext arch ->
   EL.Memory (MC.ArchAddrWidth arch) ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   -- | What to do when a forward declaration cannot be resolved.
-  (W4.FunctionName -> IO ()) ->
+  (WFN.FunctionName -> IO ()) ->
   LookupFunctionHandleDispatch p sym arch
 defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs errCb =
   LookupFunctionHandleDispatch $ \st mem regs lfhr -> do
@@ -180,7 +180,7 @@ defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs errCb =
     case lfhr of
       SkippedFunctionCall reason -> do
         doLog la $ Diag.SkippedFunctionCall reason
-        let funcName = W4.functionNameFromText "_grease_external"
+        let funcName = WFN.functionNameFromText "_grease_external"
         handle <- C.mkHandle' halloc funcName (Ctx.Empty Ctx.:> regStructRepr arch) (regStructRepr arch)
         let override = CS.mkOverride' funcName (regStructRepr arch) $ do
               args <- CS.getOverrideArgs
@@ -227,7 +227,7 @@ data LookupFunctionHandleResult p sym arch where
     -- | The PLT stub's resolved address.
     MC.ArchSegmentOff arch ->
     -- | The PLT stub's name.
-    W4.FunctionName ->
+    WFN.FunctionName ->
     -- | The PLT stub's override.
     MacawSExpOverride p sym arch ->
     LookupFunctionHandleResult p sym arch
@@ -249,11 +249,11 @@ lookupFunctionHandleResult ::
   -- | Map of entrypoint addresses to their names
   Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
   -- | Map of addresses to PLT stub names
-  Map.Map (MC.ArchSegmentOff arch) W4.FunctionName ->
+  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
   -- | Map of dynamic function names to their addresses
-  Map.Map W4.FunctionName (MC.ArchSegmentOff arch) ->
+  Map.Map WFN.FunctionName (MC.ArchSegmentOff arch) ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
   ErrorSymbolicFunCalls ->
   SkipInvalidCallAddrs ->
@@ -312,7 +312,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
           Just funcAddrOff -> go funcAddrOff
  where
   lookupOv ::
-    W4.FunctionName ->
+    WFN.FunctionName ->
     MC.ArchSegmentOff arch ->
     Maybe (MacawSExpOverride p sym arch)
   lookupOv funcName funcAddrOff =
@@ -399,11 +399,11 @@ lookupFunctionHandle ::
   -- | Map of entrypoint addresses to their names
   Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
   -- | Map of addresses to PLT stub names
-  Map.Map (MC.ArchSegmentOff arch) W4.FunctionName ->
+  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
   -- | Map of dynamic function names to their addresses
-  Map.Map W4.FunctionName (MC.ArchSegmentOff arch) ->
+  Map.Map WFN.FunctionName (MC.ArchSegmentOff arch) ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
   ErrorSymbolicFunCalls ->
   SkipInvalidCallAddrs ->
@@ -450,7 +450,7 @@ defaultLookupSyscallDispatch bak la halloc arch =
       SkippedSyscall reason -> do
         -- Treat this syscall as a no-op during simulation.
         doLog la $ Diag.SkippedSyscall reason
-        let funcName = W4.functionNameFromText "_grease_syscall"
+        let funcName = WFN.functionNameFromText "_grease_syscall"
         handle <- C.mkHandle' halloc funcName atps (C.StructRepr rtps)
         let override =
               CS.mkOverride'
@@ -468,7 +468,7 @@ defaultLookupSyscallDispatch bak la halloc arch =
         pure (syscallHdl, st)
       NewSyscall syscallName syscallNum (Stubs.SomeSyscall syscallOv) -> do
         doLog la $ Diag.SyscallOverride syscallName syscallNum
-        let syscallFnName = W4.functionNameFromText syscallName
+        let syscallFnName = WFN.functionNameFromText syscallName
         macawSyscallHdl <- C.mkHandle' halloc syscallFnName atps (C.StructRepr rtps)
         let macawSyscallOv = macawSyscallOverride bak arch atps rtps syscallOv
         pure $ useFnHandleAndState macawSyscallHdl (CS.UseOverride macawSyscallOv) st
@@ -507,7 +507,7 @@ lookupSyscallResult ::
   ArchContext arch ->
   -- | Map of names of overridden syscalls to their implementations
   Map.Map
-    W4.FunctionName
+    WFN.FunctionName
     (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
   ErrorSymbolicSyscalls ->
   Ctx.Assignment C.TypeRepr atps ->
@@ -537,7 +537,7 @@ lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs 
                     Just syscallFnHandle ->
                       pure $ CachedSyscallFnHandle syscallFnHandle
                     Nothing ->
-                      let syscallFnName = W4.functionNameFromText syscallName
+                      let syscallFnName = WFN.functionNameFromText syscallName
                        in case Map.lookup syscallFnName syscallOvs of
                             Just someSyscall ->
                               pure $ NewSyscall syscallName syscallNum someSyscall
@@ -554,7 +554,7 @@ lookupSyscallHandle ::
   ArchContext arch ->
   -- | Map of names of overridden syscalls to their implementations
   Map.Map
-    W4.FunctionName
+    WFN.FunctionName
     (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
   ErrorSymbolicSyscalls ->
   -- | Dispatch on the result of looking up a syscall override.
@@ -580,7 +580,7 @@ discoverFuncAddr ::
   -- | Map of entrypoint addresses to their names
   Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
   -- | Map of addresses to PLT stub names
-  Map.Map (MC.ArchSegmentOff arch) W4.FunctionName ->
+  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
   -- | The function address
   MC.ArchSegmentOff arch ->
   -- | The current Crucible state
@@ -613,9 +613,9 @@ useMacawSExpOverride ::
   C.HandleAllocator ->
   ArchContext arch ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   -- | What to do when a forward declaration cannot be resolved.
-  (W4.FunctionName -> IO ()) ->
+  (WFN.FunctionName -> IO ()) ->
   MacawSExpOverride p sym arch ->
   CS.SimState p sym (Symbolic.MacawExt arch) r f a ->
   IO (MacawFnHandle arch, CS.SimState p sym (Symbolic.MacawExt arch) r f a)
@@ -635,7 +635,7 @@ useMacawSExpOverride bak la halloc arch allOvs errCb mOv st0 =
           st0
             & CS.stateContext . CS.functionBindings
               .~ CS.FnBindings fnHdlMap1
-        funcName = W4.functionNameFromText "_grease_fix_stack_ptr"
+        funcName = WFN.functionNameFromText "_grease_fix_stack_ptr"
     useComposedOverride halloc arch publicOvHdl publicOv st1 funcName (arch ^. archOffsetStackPointerPostCall)
 
 -- | Register the 'C.FnHandle's of any Macaw functions that this override may
@@ -655,9 +655,9 @@ extendHandleMap ::
   ) =>
   bak ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   -- | What to do when a forward declaration cannot be resolved.
-  (W4.FunctionName -> IO ()) ->
+  (WFN.FunctionName -> IO ()) ->
   -- | The override that needs to be registered
   Stubs.FunctionOverride p sym args arch ret ->
   -- | The initial function handle map
@@ -686,7 +686,7 @@ extendHandleMap bak allOvs errCb = go
 
         extendFwdDec ::
           C.FnHandleMap (CS.FnState p sym (Symbolic.MacawExt arch)) ->
-          (W4.FunctionName, C.SomeHandle) ->
+          (WFN.FunctionName, C.SomeHandle) ->
           IO (C.FnHandleMap (CS.FnState p sym (Symbolic.MacawExt arch)))
         extendFwdDec binds (fwdDecName, C.SomeHandle fwdDecHdl) =
           -- If the handle is already in the HandleMap, don't bother

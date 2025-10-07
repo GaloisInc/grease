@@ -40,7 +40,7 @@ import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lumberjack qualified as LJ
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMSetupHookDiagnostic diag)
@@ -73,7 +73,7 @@ newtype SetupHook sym arch
 -- | A 'SetupHook' for LLVM CFGs from S-expression programs.
 syntaxSetupHook ::
   GreaseLogAction ->
-  Seq.Seq (W4.FunctionName, GLOS.LLVMSExpOverride) ->
+  Seq.Seq (WFN.FunctionName, GLOS.LLVMSExpOverride) ->
   CSyn.ParsedProgram LLVM ->
   Map GE.Entrypoint (GE.EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
   CantResolveOverrideCallback sym CLLVM.LLVM ->
@@ -118,7 +118,7 @@ syntaxSetupHook la ovs prog cfgs errCb =
 -- | A 'SetupHook' for LLVM CFGs from IR modules.
 moduleSetupHook ::
   GreaseLogAction ->
-  Seq.Seq (W4.FunctionName, GLOS.LLVMSExpOverride) ->
+  Seq.Seq (WFN.FunctionName, GLOS.LLVMSExpOverride) ->
   Trans.ModuleTranslation arch ->
   Map GE.Entrypoint (GE.EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
   CantResolveOverrideCallback sym CLLVM.LLVM ->

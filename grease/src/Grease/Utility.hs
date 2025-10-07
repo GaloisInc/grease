@@ -35,7 +35,7 @@ import Prettyprinter qualified as PP
 import System.IO (Handle, stderr)
 import Text.LLVM.AST qualified as L
 import What4.Expr qualified as W4
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
 
@@ -54,14 +54,14 @@ tshow :: Show a => a -> Text
 tshow = Text.pack . show
 
 -- | Decode a 'BS.ByteString' containing UTF-8–encoded text into a
--- 'W4.FunctionName'.
-functionNameFromByteString :: BS.ByteString -> W4.FunctionName
-functionNameFromByteString = W4.functionNameFromText . Text.decodeUtf8
+-- 'WFN.FunctionName'.
+functionNameFromByteString :: BS.ByteString -> WFN.FunctionName
+functionNameFromByteString = WFN.functionNameFromText . Text.decodeUtf8
 
-llvmOverrideName :: Mem.LLVMOverride p sym ext args ret -> W4.FunctionName
+llvmOverrideName :: Mem.LLVMOverride p sym ext args ret -> WFN.FunctionName
 llvmOverrideName ov =
   let L.Symbol nm = L.decName (Mem.llvmOverride_declare ov)
-   in W4.functionNameFromText (Text.pack nm)
+   in WFN.functionNameFromText (Text.pack nm)
 
 -- TODO(lb): Also print the function name?
 ppProgramLoc :: W4.ProgramLoc -> Text

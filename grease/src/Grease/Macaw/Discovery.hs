@@ -22,7 +22,7 @@ import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Utility
 import Lang.Crucible.FunctionHandle qualified as C
 import Lumberjack qualified as LJ
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 import What4.ProgramLoc qualified as W4
 
 -- | We pass this log function to @macaw@ to wrap discovery events in a custom
@@ -62,7 +62,7 @@ discoverFunction ::
   -- | Map of addresses to PLT stub names. We must mark these as trusted
   -- function entry points—see @Note [Mark PLT stubs as trusted function
   -- entry points]@ for an explanation.
-  Map.Map (MC.ArchSegmentOff arch) W4.FunctionName ->
+  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
   -- | The function address to discover.
   MC.ArchSegmentOff arch ->
   m (ArchRegCFG arch)
