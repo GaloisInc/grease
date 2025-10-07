@@ -10,7 +10,7 @@ import Control.Concurrent.Async (Async, async)
 import Data.ByteString qualified as BS
 import Data.Foldable qualified as Foldable
 import Grease.Profiler.EmbeddedData (profilerDataFiles)
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.Profiling qualified as C
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory, (</>))
@@ -20,7 +20,7 @@ import System.FilePath (takeDirectory, (</>))
 -- periodic intervals.
 greaseProfilerFeature ::
   FilePath ->
-  IO (C.GenericExecutionFeature sym, Async ())
+  IO (CS.GenericExecutionFeature sym, Async ())
 greaseProfilerFeature dir = do
   Foldable.for_ profilerDataFiles $ \(fp, contents) ->
     createDirectoriesAndWriteFile (dir </> fp) contents

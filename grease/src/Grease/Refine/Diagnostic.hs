@@ -22,7 +22,7 @@ import Grease.Shape (ArgShapes (..), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Print qualified as ShapePP
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.ExecutionTree qualified as ET
 import Lang.Crucible.Simulator.GlobalState qualified as GS
 import Prettyprinter qualified as PP
@@ -35,8 +35,8 @@ data Diagnostic where
     Heuristic.CantRefine -> Diagnostic
   ExecutionResult ::
     W4.IsExpr (W4.SymExpr sym) =>
-    C.GlobalVar CLM.Mem ->
-    C.ExecResult p sym ext (C.RegEntry sym ret) ->
+    CS.GlobalVar CLM.Mem ->
+    CS.ExecResult p sym ext (CS.RegEntry sym ret) ->
     Diagnostic
   GoalNoMatchingHeuristic ::
     Diagnostic
@@ -87,7 +87,7 @@ data Diagnostic where
     -- | Symbolic backend
     sym ->
     -- | Goal that failed (the negation of this predicate was satisfiable)
-    W4.LabeledPred (W4.Pred sym) C.SimError ->
+    W4.LabeledPred (W4.Pred sym) CS.SimError ->
     -- | Description of the problem, if available
     Maybe (ErrorDescription sym) ->
     Diagnostic
@@ -103,16 +103,16 @@ instance PP.Pretty Diagnostic where
               memImpl <- GS.lookupGlobal memVar globs
               pure (CLM.ppMem (CLM.memImplHeap memImpl))
          in case execRes of
-              C.FinishedResult _ partRes ->
+              CS.FinishedResult _ partRes ->
                 let base =
                       case partRes of
-                        C.TotalRes{} -> "All execution paths returned a result"
-                        C.PartialRes{} -> "At least one execution path returned a result"
+                        CS.TotalRes{} -> "All execution paths returned a result"
+                        CS.PartialRes{} -> "At least one execution path returned a result"
                  in maybe base (\d -> PP.vcat [base, "Post-simulation memory", d]) memDoc
-              C.AbortedResult{} ->
+              CS.AbortedResult{} ->
                 let base = "All execution paths aborted"
                  in maybe base (\d -> PP.vcat [base, "Post-simulation memory", d]) memDoc
-              C.TimeoutResult{} -> "Symbolic execution timed out!"
+              CS.TimeoutResult{} -> "Symbolic execution timed out!"
       GoalNoMatchingHeuristic ->
         "Could not identify heuristic for goal, skipping"
       GoalMatchingHeuristic ->
@@ -153,7 +153,7 @@ instance PP.Pretty Diagnostic where
       SolverGoalFailed _sym lp minfo ->
         PP.vcat $
           [ "Goal failed:"
-          , PP.indent 4 (C.ppSimError $ lp ^. W4.labeledPredMsg)
+          , PP.indent 4 (CS.ppSimError $ lp ^. W4.labeledPredMsg)
           , -- , PP.indent 4 (W4.ppExpr $ lp ^. W4.labeledPred)
             case minfo of
               Nothing -> "<no details available>"

@@ -31,7 +31,7 @@ import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import What4.Interface qualified as W4
 
 -- | Load a null-terminated string from memory.
@@ -53,17 +53,17 @@ loadString ::
   -- | The @macaw-symbolic@ memory model configuration.
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
   -- | The pointer to the string.
-  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  CS.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   -- | If @'Just' n@, read a maximum of @n@ characters. If 'Nothing', read until
   -- a concrete null terminator character is encountered.
   Maybe Int ->
   -- | The initial Crucible state.
-  C.SimState p sym (Symbolic.MacawExt arch) rtp f args ->
+  CS.SimState p sym (Symbolic.MacawExt arch) rtp f args ->
   -- | The loaded bytes from the string (excluding the null terminator) and the
   -- updated Crucible state.
   IO
     ( [W4.SymBV sym 8]
-    , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
+    , CS.SimState p sym (Symbolic.MacawExt arch) rtp f args
     )
 loadString bak mvar mmConf ptr0 maxChars st = do
   -- Normally, the lazy `macaw-symbolic` memory model would resolve all pointer
@@ -73,7 +73,7 @@ loadString bak mvar mmConf ptr0 maxChars st = do
   -- this, the `tests/refine/pos/excluded_overrides/test.ppc32.elf` test case
   -- would not succeed, as `grease` would be unable to conclude that the loaded
   -- string ends with a concrete null terminator character.
-  ptr1 <- Symbolic.resolveLLVMPtr bak (C.regValue ptr0)
+  ptr1 <- Symbolic.resolveLLVMPtr bak (CS.regValue ptr0)
   DMSMS.loadConcretelyNullTerminatedString mvar mmConf st ptr1 maxChars
 
 -- | Like 'loadString', except that each character read is asserted to be
@@ -91,12 +91,12 @@ loadConcreteString ::
   bak ->
   C.GlobalVar CLM.Mem ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
-  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  CS.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   Maybe Int ->
-  C.SimState p sym (Symbolic.MacawExt arch) rtp f args ->
+  CS.SimState p sym (Symbolic.MacawExt arch) rtp f args ->
   IO
     ( BS.ByteString
-    , C.SimState p sym (Symbolic.MacawExt arch) rtp f args
+    , CS.SimState p sym (Symbolic.MacawExt arch) rtp f args
     )
 loadConcreteString bak mvar mmConf ptr maxChars st0 = do
   (symBytes, st1) <- loadString bak mvar mmConf ptr maxChars st0
@@ -110,6 +110,6 @@ loadConcreteString bak mvar mmConf ptr maxChars st0 = do
       Nothing ->
         liftIO $
           CB.addFailedAssertion bak $
-            C.Unsupported
+            CS.Unsupported
               Stack.callStack
               "Symbolic value encountered when loading a string"

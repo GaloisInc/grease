@@ -46,7 +46,7 @@ import Lang.Crucible.LLVM.Syntax.Overrides.String qualified as StrOv
 import Lang.Crucible.LLVM.Translation (LLVMContext)
 import Lang.Crucible.LLVM.Translation qualified as CLLVM
 import Lang.Crucible.LLVM.TypeContext (TypeContext (..))
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lumberjack qualified as LJ
 import Text.LLVM.AST qualified as L
@@ -64,7 +64,7 @@ bindLLVMOverrideFnHandle ::
   C.GlobalVar CLM.Mem ->
   C.FnHandle fnArgs fnRet ->
   CLLVM.LLVMOverride p sym CLLVM.LLVM ovrArgs ovrRet ->
-  C.OverrideSim p sym CLLVM.LLVM rtp as r ()
+  CS.OverrideSim p sym CLLVM.LLVM rtp as r ()
 bindLLVMOverrideFnHandle mvar hdl llvmOverride = do
   let name = C.handleName hdl
   let overrideArgs = CLLVM.llvmOverride_args llvmOverride
@@ -77,7 +77,7 @@ bindLLVMOverrideFnHandle mvar hdl llvmOverride = do
       (C.handleArgTypes hdl)
       (C.handleReturnType hdl)
       (\asgn -> CLLVM.llvmOverride_def llvmOverride mvar asgn)
-  C.bindFnHandle hdl (C.UseOverride o)
+  CS.bindFnHandle hdl (CS.UseOverride o)
 
 -- Private helper, not exported
 mapRights :: (a -> Either l r) -> [a] -> [r]
@@ -131,7 +131,7 @@ registerLLVMOverrides ::
   -- | Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
-  C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
+  CS.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
 registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls errCb = do
   let mvar = CLLVM.llvmMemVar llvmCtx
 
@@ -150,7 +150,7 @@ registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls errCb = do
     let aliases = []
     -- See the module comment on "Lang.Crucible.LLVM.Functions" for why this
     -- part is necessary.
-    C.modifyGlobal mvar $ \mem ->
+    CS.modifyGlobal mvar $ \mem ->
       liftIO (CLLVM.registerFunPtr bak mem name (L.decName decl) aliases)
 
   -- Note the order here: we register "skip" overrides *first*, so that built-in
@@ -190,7 +190,7 @@ registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls errCb = do
  where
   registerOv ::
     CLLVM.SomeLLVMOverride p sym CLLVM.LLVM ->
-    C.OverrideSim p sym CLLVM.LLVM rtp as r ()
+    CS.OverrideSim p sym CLLVM.LLVM rtp as r ()
   registerOv (CLLVM.SomeLLVMOverride ov) =
     CLLVM.alloc_and_register_override bak llvmCtx ov []
 
@@ -223,7 +223,7 @@ registerLLVMSexpOverrides ::
   -- | Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
-  C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
+  CS.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
 registerLLVMSexpOverrides la builtinOvs sexpOvs bak llvmCtx fs prog errCb = do
   let decls = forwardDeclDecls (CSyn.parsedProgForwardDecs prog)
   registerLLVMOverrides la builtinOvs sexpOvs bak llvmCtx fs decls errCb
@@ -257,7 +257,7 @@ registerLLVMModuleOverrides ::
   -- | Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
-  C.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
+  CS.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
 registerLLVMModuleOverrides la builtinOvs sexpOvs bak llvmCtx fs llMod errCb = do
   let decls = L.modDeclares llMod
   registerLLVMOverrides la builtinOvs sexpOvs bak llvmCtx fs decls errCb
@@ -281,7 +281,7 @@ registerLLVMSexpProgForwardDeclarations ::
   CantResolveOverrideCallback sym CLLVM.LLVM ->
   -- | The map of forward declaration names to their handles.
   Map.Map W4.FunctionName C.SomeHandle ->
-  C.OverrideSim p sym CLLVM.LLVM rtp as r ()
+  CS.OverrideSim p sym CLLVM.LLVM rtp as r ()
 registerLLVMSexpProgForwardDeclarations la dl mvar funOvs errCb =
   registerLLVMForwardDeclarations mvar funOvs $
     CantResolveOverrideCallback $
@@ -304,7 +304,7 @@ registerLLVMForwardDeclarations ::
   CantResolveOverrideCallback sym CLLVM.LLVM ->
   -- | The map of forward declaration names to their handles.
   Map.Map W4.FunctionName C.SomeHandle ->
-  C.OverrideSim p sym CLLVM.LLVM rtp as r ()
+  CS.OverrideSim p sym CLLVM.LLVM rtp as r ()
 registerLLVMForwardDeclarations mvar funOvs errCb fwdDecs = do
   let CantResolveOverrideCallback cannotResolve = errCb
   Foldable.for_ (Map.toList fwdDecs) $ \(fwdDecName, C.SomeHandle hdl) ->

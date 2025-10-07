@@ -17,7 +17,7 @@ module Grease.Overrides (
 import Data.List qualified as List
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Prettyprinter qualified as PP
 import What4.FunctionName qualified as W4
@@ -29,7 +29,7 @@ newtype CantResolveOverrideCallback sym arch
       forall p args ret rtp as r.
       W4.FunctionName ->
       C.FnHandle args ret ->
-      C.OverrideSim p sym arch rtp as r ()
+      CS.OverrideSim p sym arch rtp as r ()
   }
 
 -- | Error type for 'partitionCfgs'.

@@ -18,7 +18,7 @@ import Grease.Macaw.Arch
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Stubs.Syscall qualified as Stubs
 import What4.Expr qualified as W4
 import What4.Protocol.Online qualified as W4
@@ -41,24 +41,24 @@ macawSyscallOverride ::
   C.CtxRepr regArgs ->
   C.CtxRepr regRets ->
   Stubs.Syscall p sym syscallArgs (Symbolic.MacawExt arch) syscallRet ->
-  C.Override p sym (Symbolic.MacawExt arch) regArgs (C.StructType regRets)
+  CS.Override p sym (Symbolic.MacawExt arch) regArgs (C.StructType regRets)
 macawSyscallOverride bak archCtx regArgTps regRetTps syscallOv =
-  C.mkOverride' (Stubs.syscallName syscallOv) (C.StructRepr regRetTps) ov
+  CS.mkOverride' (Stubs.syscallName syscallOv) (C.StructRepr regRetTps) ov
  where
   ov ::
     forall r'.
-    C.OverrideSim
+    CS.OverrideSim
       p
       sym
       (Symbolic.MacawExt arch)
       r'
       regArgs
       (C.StructType regRets)
-      (Ctx.Assignment (C.RegValue' sym) regRets)
+      (Ctx.Assignment (CS.RegValue' sym) regRets)
   ov = do
     -- Construct the arguments
-    argMap <- C.getOverrideArgs
-    let argReg = massageRegAssignment $ C.regMap argMap
+    argMap <- CS.getOverrideArgs
+    let argReg = massageRegAssignment $ CS.regMap argMap
     args <-
       liftIO $
         (archCtx ^. archSyscallArgumentRegisters)
@@ -79,9 +79,9 @@ macawSyscallOverride bak archCtx regArgTps regRetTps syscallOv =
 -- | Massage the 'C.RegEntry' 'Ctx.Assignment' that 'C.getOverrideArgs'
 -- provides into the form that 'archSyscallArgumentRegisters' expects.
 massageRegAssignment ::
-  Ctx.Assignment (C.RegEntry sym) ctx ->
-  C.RegEntry sym (C.StructType ctx)
+  Ctx.Assignment (CS.RegEntry sym) ctx ->
+  CS.RegEntry sym (C.StructType ctx)
 massageRegAssignment assn =
-  C.RegEntry
-    (C.StructRepr (fmapFC C.regType assn))
-    (fmapFC (C.RV . C.regValue) assn)
+  CS.RegEntry
+    (C.StructRepr (fmapFC CS.regType assn))
+    (fmapFC (CS.RV . CS.regValue) assn)

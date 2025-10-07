@@ -145,7 +145,7 @@ import Lang.Crucible.LLVM.Errors qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.PathSplitting qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
@@ -291,7 +291,7 @@ consumer ::
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
-  C.ExecResult p sym ext r ->
+  CS.ExecResult p sym ext r ->
   GreaseLogAction ->
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
   RefinementData sym bak ext argTys ->
@@ -358,8 +358,8 @@ consumer bak execResult la bbMap refineData = do
 -- | Data needed to execute Crucible
 data ExecData p sym ext ret
   = ExecData
-  { execFeats :: [C.ExecutionFeature p sym ext (C.RegEntry sym ret)]
-  , execInitState :: C.ExecState p sym ext (C.RegEntry sym ret)
+  { execFeats :: [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)]
+  , execInitState :: CS.ExecState p sym ext (CS.RegEntry sym ret)
   , execPathStrat :: Opts.PathStrategy
   }
 
@@ -379,9 +379,9 @@ execCfg ::
   -- the proof obligations resulting from that execution, and any suspended
   -- paths.
   IO
-    ( C.ExecResult p sym ext (C.RegEntry sym ret)
+    ( CS.ExecResult p sym ext (CS.RegEntry sym ret)
     , CB.ProofObligations sym
-    , Seq (C.WorkItem p sym ext (C.RegEntry sym ret))
+    , Seq (C.WorkItem p sym ext (CS.RegEntry sym ret))
     )
 execCfg bak execData = do
   let ExecData
@@ -406,7 +406,7 @@ execCfg bak execData = do
             o <- CB.getProofObligations bak
             pure (r, o, rest)
       Opts.Sse -> do
-        r <- C.executeCrucible feats initialState
+        r <- CS.executeCrucible feats initialState
         o <- CB.getProofObligations bak
         pure (r, o, Seq.empty)
 
@@ -435,7 +435,7 @@ proveAndRefine ::
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
-  C.ExecResult p sym ext r ->
+  CS.ExecResult p sym ext r ->
   GreaseLogAction ->
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
   RefinementData sym bak ext argTys ->
@@ -483,17 +483,17 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
         doLog la (Diag.ExecutionResult memVar execResult)
         refineResult <-
           case execResult of
-            C.TimeoutResult _execState ->
+            CS.TimeoutResult _execState ->
               pure (ProveCantRefine Timeout)
-            C.AbortedResult _ (C.AbortedExit Exit.ExitSuccess _) ->
+            CS.AbortedResult _ (CS.AbortedExit Exit.ExitSuccess _) ->
               pure (ProveCantRefine (Exit (Just 0)))
-            C.AbortedResult _ (C.AbortedExit (Exit.ExitFailure code) _) ->
+            CS.AbortedResult _ (CS.AbortedExit (Exit.ExitFailure code) _) ->
               pure (ProveCantRefine (Exit (Just code)))
-            C.AbortedResult _ (C.AbortedExec (CB.EarlyExit _loc) _gp) ->
+            CS.AbortedResult _ (CS.AbortedExec (CB.EarlyExit _loc) _gp) ->
               pure (ProveCantRefine (Exit Nothing))
-            C.AbortedResult _ (C.AbortedExec (CB.AssertionFailure (C.SimError _loc (C.ResourceExhausted msg))) _gp) ->
+            CS.AbortedResult _ (CS.AbortedExec (CB.AssertionFailure (C.SimError _loc (C.ResourceExhausted msg))) _gp) ->
               pure (ProveCantRefine (Exhausted msg))
-            C.AbortedResult _ (C.AbortedExec (CB.AssertionFailure (C.SimError _loc (C.Unsupported _cs feat))) _gp) ->
+            CS.AbortedResult _ (CS.AbortedExec (CB.AssertionFailure (C.SimError _loc (C.Unsupported _cs feat))) _gp) ->
               pure (ProveCantRefine (Unsupported feat))
             _ -> do
               bbMap <- readIORef bbMapRef
@@ -580,7 +580,7 @@ refineOnce ::
   InitialMem sym ->
   C.GlobalVar CLM.Mem ->
   [RefineHeuristic sym bak ext argTys] ->
-  [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
+  [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
   ( ( MSM.MacawProcessAssertion sym
     , Mem.HasLLVMAnn sym
     ) =>
@@ -588,7 +588,7 @@ refineOnce ::
     Setup.SetupMem sym ->
     GSIO.InitializedFs sym wptr ->
     Setup.Args sym ext argTys ->
-    IO (C.ExecState p sym ext (C.RegEntry sym ret))
+    IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
   ) ->
   IO (ProveRefineResult sym ext argTys)
 refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem memVar heuristics execFeats mkInitState = do
@@ -615,7 +615,7 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
           }
   let boundsOpts = Opts.simBoundsOpts simOpts
   boundsFeats_ <- boundedExecFeats boundsOpts
-  let boundsFeats = List.map C.genericToExecutionFeature boundsFeats_
+  let boundsFeats = List.map CS.genericToExecutionFeature boundsFeats_
   let execData =
         ExecData
           { execFeats = execFeats List.++ boundsFeats

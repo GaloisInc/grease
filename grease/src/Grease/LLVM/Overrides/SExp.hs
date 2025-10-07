@@ -27,7 +27,7 @@ import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.Syntax (emptyParserHooks, llvmParserHooks)
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Prettyprinter qualified as PP
@@ -95,7 +95,7 @@ acfgToAnyLLVMOverride path (C.Reg.AnyCFG cfg) = do
               , CLLVM.llvmOverride_ret = retTy
               , CLLVM.llvmOverride_def =
                   \_mvar args ->
-                    C.regValue <$> C.callCFG ssa (C.RegMap args)
+                    CS.regValue <$> CS.callCFG ssa (CS.RegMap args)
               }
 
 -- | Convert a parsed program to an LLVM S-expression override.

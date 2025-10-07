@@ -18,7 +18,7 @@ import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as CLLVM.SymIO
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.SymIO qualified as SymIO
 import Lang.Crucible.SymIO.Loader qualified as SymIO.Loader
 import What4.Interface qualified as W4
@@ -27,7 +27,7 @@ data InitializedFs sym ptrW
   = InitializedFs
   { initFsContents :: SymIO.InitialFileSystemContents sym
   , initFs :: CLLVM.SymIO.LLVMFileSystem ptrW
-  , initFsGlobals :: C.SymGlobalState sym
+  , initFsGlobals :: CS.SymGlobalState sym
   , initFsOverride :: CLLVM.SymIO.SomeOverrideSim sym ()
   }
 
@@ -58,7 +58,7 @@ initialLlvmFileSystem halloc sym fsOpts = do
       ?ptrWidth
       fileContentsWithFiles
       mirroredOutputs
-      C.emptyGlobals
+      CS.emptyGlobals
   pure $
     InitializedFs
       { initFsContents = fileContentsWithFiles

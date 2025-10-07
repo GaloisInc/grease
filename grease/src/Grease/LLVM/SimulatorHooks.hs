@@ -26,7 +26,7 @@ import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.Extension qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lumberjack qualified as LJ
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
@@ -45,11 +45,11 @@ greaseLlvmExtImpl ::
   C.HandleAllocator ->
   CLLVM.DataLayout ->
   ErrorSymbolicFunCalls ->
-  C.ExtensionImpl p sym LLVM ->
-  C.ExtensionImpl p sym LLVM
+  CS.ExtensionImpl p sym LLVM ->
+  CS.ExtensionImpl p sym LLVM
 greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls llvmExtImpl =
   llvmExtImpl
-    { C.extensionExec =
+    { CS.extensionExec =
         extensionExec la halloc dl errorSymbolicFunCalls llvmExtImpl
     }
 
@@ -64,8 +64,8 @@ extensionExec ::
   C.HandleAllocator ->
   CLLVM.DataLayout ->
   ErrorSymbolicFunCalls ->
-  C.ExtensionImpl p sym LLVM ->
-  C.EvalStmtFunc p sym LLVM
+  CS.ExtensionImpl p sym LLVM ->
+  CS.EvalStmtFunc p sym LLVM
 extensionExec la halloc dl errorSymbolicFunCalls baseExt stmt st =
   case stmt of
     -- LLVM_LoadHandle: This statement is invoked any time a function handle
@@ -77,7 +77,7 @@ extensionExec la halloc dl errorSymbolicFunCalls baseExt stmt st =
     -- this with --error-symbolic-fun-calls, in which case we fall back to
     -- crucible-llvm's default behavior).
     CLLVM.LLVM_LoadHandle mvar _ltp ptrReg args ret
-      | let ptr = C.regValue ptrReg
+      | let ptr = CS.regValue ptrReg
       , not (getErrorSymbolicFunCalls errorSymbolicFunCalls)
       , Nothing <- W4.asNat (Mem.llvmPointerBlock ptr) -> do
           let ptrWidth = Mem.ptrWidth ptr
@@ -103,8 +103,8 @@ extensionExec la halloc dl errorSymbolicFunCalls baseExt stmt st =
             Right ov -> do
               doLog la Diag.SkippedSymbolicFnHandleCall
               pure
-                ( C.HandleFnVal hdl
-                , insertFunctionHandle st hdl (C.UseOverride ov)
+                ( CS.HandleFnVal hdl
+                , insertFunctionHandle st hdl (CS.UseOverride ov)
                 )
             -- If we cannot create an LLVM skip override for the given types,
             -- then fall back on the default implementation of
@@ -115,22 +115,22 @@ extensionExec la halloc dl errorSymbolicFunCalls baseExt stmt st =
     _ ->
       defaultExec
  where
-  defaultExec = C.extensionExec baseExt stmt st
+  defaultExec = CS.extensionExec baseExt stmt st
 
 -- Helper, not exported
 --
 -- Insert a function handle into a state's function bindings
 insertFunctionHandle ::
   -- | State to update
-  C.SimState p sym ext r f a ->
+  CS.SimState p sym ext r f a ->
   -- | Handle to bind and insert
   C.FnHandle args ret ->
   -- | Function state to bind handle to
-  C.FnState p sym ext args ret ->
-  C.SimState p sym ext r f a
+  CS.FnState p sym ext args ret ->
+  CS.SimState p sym ext r f a
 insertFunctionHandle state handle fnState =
-  let C.FnBindings curHandles = state ^. C.stateContext ^. C.functionBindings
+  let CS.FnBindings curHandles = state ^. CS.stateContext ^. CS.functionBindings
    in let newHandles =
-            C.FnBindings $
+            CS.FnBindings $
               C.insertHandleMap handle fnState curHandles
-       in set (C.stateContext . C.functionBindings) newHandles state
+       in set (CS.stateContext . CS.functionBindings) newHandles state

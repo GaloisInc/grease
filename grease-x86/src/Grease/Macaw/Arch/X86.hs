@@ -33,7 +33,7 @@ import Grease.Utility (bytes64LE)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Stubs.FunctionOverride.X86_64.Linux qualified as Stubs
 import Stubs.Memory.X86_64.Linux qualified as Stubs
 import Stubs.Syscall.Names.X86_64.Linux qualified as Stubs
@@ -76,7 +76,7 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
       , _archVals = avals
       , _archRelocSupported = x64RelocSupported
       , _archGetIP = \regs -> do
-          let C.RV (CLM.LLVMPointer _base off) = regs ^. ixF' X86SymRegs.rip
+          let CS.RV (CLM.LLVMPointer _base off) = regs ^. ixF' X86SymRegs.rip
           pure off
       , _archPcReg = X86.X86_IP
       , _archIntegerArguments = \bak ->
@@ -109,12 +109,12 @@ x64RelocSupported _ = Nothing
 x64FixupStackPointer ::
   CB.IsSymInterface sym =>
   ArchRegs sym X86.X86_64 ->
-  C.OverrideSim p sym ext rtp a r (ArchRegs sym X86.X86_64)
+  CS.OverrideSim p sym ext rtp a r (ArchRegs sym X86.X86_64)
 x64FixupStackPointer regs = do
-  sym <- C.getSymInterface
+  sym <- CS.getSymInterface
   liftIO $ do
-    let C.RV rsp = regs ^. ixF' X86SymRegs.rsp
+    let CS.RV rsp = regs ^. ixF' X86SymRegs.rsp
     let widthRepr = NatRepr.knownNat @64
     eight <- W4.bvLit sym widthRepr (BV.mkBV widthRepr 8)
-    rsp' <- C.RV <$> CLM.ptrAdd sym widthRepr rsp eight
+    rsp' <- CS.RV <$> CLM.ptrAdd sym widthRepr rsp eight
     pure (regs & ixF' X86SymRegs.rsp .~ rsp')
