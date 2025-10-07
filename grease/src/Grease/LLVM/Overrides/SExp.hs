@@ -25,7 +25,7 @@ import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.CFG.SSAConversion qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.Syntax (emptyParserHooks, llvmParserHooks)
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
@@ -72,7 +72,7 @@ data LLVMSExpOverride
 -- | Convert an 'C.Reg.AnyCFG' for a function defined in a Crucible-LLVM
 -- S-expression program to a 'CLLVM.SomeLLVMOverride' value.
 acfgToAnyLLVMOverride ::
-  Mem.HasPtrWidth w =>
+  CLM.HasPtrWidth w =>
   FilePath {- The file which defines the CFG's function.
               This is only used for error messages. -} ->
   C.Reg.AnyCFG CLLVM.LLVM ->
@@ -100,7 +100,7 @@ acfgToAnyLLVMOverride path (C.Reg.AnyCFG cfg) = do
 
 -- | Convert a parsed program to an LLVM S-expression override.
 parsedProgToLLVMSExpOverride ::
-  Mem.HasPtrWidth w =>
+  CLM.HasPtrWidth w =>
   FilePath ->
   CSyn.ParsedProgram CLLVM.LLVM ->
   Either LLVMSExpOverrideError (W4.FunctionName, LLVMSExpOverride)
@@ -125,10 +125,10 @@ parsedProgToLLVMSExpOverride path prog = do
 -- | Parse an override in the Crucible-LLVM S-expression syntax. An override
 -- cannot use @extern@.
 loadOverride ::
-  Mem.HasPtrWidth w =>
+  CLM.HasPtrWidth w =>
   FilePath ->
   C.HandleAllocator ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   IO (Either LLVMSExpOverrideError (W4.FunctionName, LLVMSExpOverride))
 loadOverride path halloc mvar = do
   let ?parserHooks = llvmParserHooks emptyParserHooks mvar
@@ -141,10 +141,10 @@ loadOverride path halloc mvar = do
 
 -- | Parse overrides in the Crucible-LLVM S-expression syntax.
 loadOverrides ::
-  Mem.HasPtrWidth w =>
+  CLM.HasPtrWidth w =>
   [FilePath] ->
   C.HandleAllocator ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   IO (Either LLVMSExpOverrideError (Seq.Seq (W4.FunctionName, LLVMSExpOverride)))
 loadOverrides paths halloc mvar = do
   results <- traverse (\path -> loadOverride path halloc mvar) paths

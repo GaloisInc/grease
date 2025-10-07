@@ -37,8 +37,7 @@ import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Shape.Selector
 import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.LLVM.MemModel qualified as Mem
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Types qualified as C
 import What4.Expr.Builder qualified as W4
 import What4.Interface qualified as W4
@@ -50,7 +49,7 @@ data SomeBaseSelector ext argTys t
 
 data SomePtrSelector ext argTys w
   = forall ts regTy.
-    Cursor.Last ts ~ Mem.LLVMPointerType w =>
+    Cursor.Last ts ~ CLMP.LLVMPointerType w =>
     SomePtrSelector (Selector ext argTys ts regTy)
 
 newtype BVAnn sym w = BVAnn (W4.SymAnnotation sym (W4.BaseBVType w))
@@ -132,24 +131,24 @@ annotatePtr ::
   ( MonadIO m
   , MonadState (Annotations sym ext argTys) m
   , C.IsSymInterface sym
-  , Cursor.Last (regTy ': ts) ~ Mem.LLVMPointerType w
+  , Cursor.Last (regTy ': ts) ~ CLMP.LLVMPointerType w
   , 1 C.<= w
   ) =>
   sym ->
   Selector ext argTys ts regTy ->
-  Mem.LLVMPtr sym w ->
-  m (Mem.LLVMPtr sym w)
+  CLMP.LLVMPtr sym w ->
+  m (CLMP.LLVMPtr sym w)
 annotatePtr sym sel ptr = do
-  block <- liftIO $ W4.natToInteger sym (Mem.llvmPointerBlock ptr)
+  block <- liftIO $ W4.natToInteger sym (CLMP.llvmPointerBlock ptr)
   (blockann, ptr') <- case W4.getAnnotation sym block of
     Just ann -> pure (ann, ptr)
-    Nothing -> liftIO $ Mem.annotatePointerBlock sym ptr
+    Nothing -> liftIO $ CLMP.annotatePointerBlock sym ptr
   Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @ts)
   blockAnns %= Map.insert (IntegerAnn blockann) (Some (SomePtrSelector sel))
-  let offset = Mem.llvmPointerOffset ptr'
+  let offset = CLMP.llvmPointerOffset ptr'
   (offann, ptr'') <- case W4.getAnnotation sym offset of
     Just ann -> pure (ann, ptr')
-    Nothing -> liftIO $ Mem.annotatePointerOffset sym ptr'
+    Nothing -> liftIO $ CLMP.annotatePointerOffset sym ptr'
   offsetAnns %= MapF.insert (BVAnn offann) (SomePtrSelector sel)
   pure ptr''
 
@@ -190,10 +189,10 @@ lookupSomePtrBlockAnnotation ::
   ) =>
   Annotations sym ext argTys ->
   sym ->
-  Mem.LLVMPtr sym w ->
+  CLMP.LLVMPtr sym w ->
   Maybe (Some (SomePtrSelector ext argTys))
 lookupSomePtrBlockAnnotation anns sym ptr = do
-  let block = W4.natToIntegerPure (Mem.llvmPointerBlock ptr)
+  let block = W4.natToIntegerPure (CLMP.llvmPointerBlock ptr)
   ann <- Maybe.listToMaybe (findAnnotations sym W4.BaseIntegerRepr block)
   -- In this lookup, 'Nothing' may arise if this pointer was created by a
   -- "skip" override (see "Grease.Skip"), because such overrides use the
@@ -210,13 +209,13 @@ lookupPtrBlockAnnotation ::
   Annotations sym ext argTys ->
   sym ->
   C.NatRepr w ->
-  Mem.LLVMPtr sym w' ->
+  CLMP.LLVMPtr sym w' ->
   Maybe (SomePtrSelector ext argTys w)
 lookupPtrBlockAnnotation anns sym w ptr = do
   Some (SomePtrSelector @_ @_ @_ @ts @regTy sel) <-
     lookupSomePtrBlockAnnotation anns sym ptr
   let cursor = sel ^. selectorPath
-  Mem.LLVMPointerRepr w' <- pure $ PtrCursor.cursorRepr cursor
+  CLMP.LLVMPointerRepr w' <- pure $ PtrCursor.cursorRepr cursor
   Refl <- C.testEquality w w'
   Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @ts)
   pure $ SomePtrSelector sel
@@ -230,10 +229,10 @@ lookupPtrOffsetAnnotation ::
   Annotations sym ext argTys ->
   sym ->
   C.NatRepr w ->
-  Mem.LLVMPtr sym w' ->
+  CLMP.LLVMPtr sym w' ->
   Maybe (SomePtrSelector ext argTys w)
 lookupPtrOffsetAnnotation anns sym w ptr =
-  case findAnnotations sym (W4.BaseBVRepr w) (Mem.llvmPointerOffset ptr) of
+  case findAnnotations sym (W4.BaseBVRepr w) (CLMP.llvmPointerOffset ptr) of
     [] -> Nothing
     (ann : _) ->
       -- In this lookup, 'Nothing' may arise if this pointer was created by a
@@ -251,7 +250,7 @@ lookupPtrAnnotation ::
   Annotations sym ext argTys ->
   sym ->
   C.NatRepr w ->
-  Mem.LLVMPtr sym w' ->
+  CLMP.LLVMPtr sym w' ->
   Maybe (SomePtrSelector ext argTys w)
 lookupPtrAnnotation anns sym w p = do
   let blockAnn = lookupPtrBlockAnnotation anns sym w p

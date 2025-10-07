@@ -46,7 +46,7 @@ import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO (LLVMFileSystem)
 import Lang.Crucible.LLVM.TypeContext (TypeContext)
 import Lang.Crucible.Simulator qualified as C
@@ -62,7 +62,7 @@ import What4.Protocol.Online qualified as W4
 macawOverride ::
   forall sym bak p arch args ret solver scope st fs.
   ( C.IsSymInterface sym
-  , Mem.HasLLVMAnn sym
+  , CLM.HasLLVMAnn sym
   , -- For silly reasons, `stubs` requires the use of an online SMT solver
     -- connection in order to call `functionOverride`. See
     -- https://github.com/GaloisInc/stubs/issues/28.
@@ -71,7 +71,7 @@ macawOverride ::
   , bak ~ C.OnlineBackend solver scope st fs
   ) =>
   bak ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   ArchContext arch ->
   Stubs.FunctionOverride p sym args arch ret ->
   MacawOverride p sym arch
@@ -146,10 +146,10 @@ mkMacawOverrideMap ::
   forall sym bak arch solver scope st fs p.
   ( C.IsSymInterface sym
   , W4.OnlineSolver solver
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
@@ -160,7 +160,7 @@ mkMacawOverrideMap ::
   -- | The paths of each user-supplied override file.
   [FilePath] ->
   C.HandleAllocator ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   ArchContext arch ->
   IO (Either ParseProgramError (Map.Map W4.FunctionName (MacawSExpOverride p sym arch)))
 mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
@@ -206,10 +206,10 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
 mkMacawOverrideMapWithBuiltins ::
   ( C.IsSymInterface sym
   , W4.OnlineSolver solver
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
@@ -219,9 +219,9 @@ mkMacawOverrideMapWithBuiltins ::
   -- | The paths of each user-supplied override file.
   [FilePath] ->
   C.HandleAllocator ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   ArchContext arch ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
   LLVMFileSystem (MC.ArchAddrWidth arch) ->
   IO (Either ParseProgramError (Map.Map W4.FunctionName (MacawSExpOverride p sym arch)))
 mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg fs = do
@@ -236,16 +236,16 @@ registerMacawSexpProgForwardDeclarations ::
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
   , ToConc.HasToConcretize p
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   GreaseLogAction ->
   CLLVM.DataLayout ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   -- | The map of public function names to their overrides.
@@ -266,7 +266,7 @@ registerMacawOvForwardDeclarations ::
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
   ) =>
   bak ->
@@ -288,7 +288,7 @@ registerMacawForwardDeclarations ::
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
   ) =>
   bak ->
@@ -312,7 +312,7 @@ registerMacawForwardDeclaration ::
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
   ) =>
   bak ->
@@ -341,7 +341,7 @@ lookupMacawForwardDeclarationOverride ::
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
   ) =>
   bak ->

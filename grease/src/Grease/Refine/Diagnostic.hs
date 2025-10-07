@@ -21,7 +21,7 @@ import Grease.Heuristic.Result qualified as Heuristic
 import Grease.Shape (ArgShapes (..), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Print qualified as ShapePP
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as ET
 import Lang.Crucible.Simulator.GlobalState qualified as GS
@@ -35,7 +35,7 @@ data Diagnostic where
     Heuristic.CantRefine -> Diagnostic
   ExecutionResult ::
     W4.IsExpr (W4.SymExpr sym) =>
-    C.GlobalVar Mem.Mem ->
+    C.GlobalVar CLM.Mem ->
     C.ExecResult p sym ext (C.RegEntry sym ret) ->
     Diagnostic
   GoalNoMatchingHeuristic ::
@@ -101,7 +101,7 @@ instance PP.Pretty Diagnostic where
         let memDoc = do
               globs <- ET.execResultGlobals (\_ctx _loc _p _l _r -> Nothing) execRes
               memImpl <- GS.lookupGlobal memVar globs
-              pure (Mem.ppMem (Mem.memImplHeap memImpl))
+              pure (CLM.ppMem (CLM.memImplHeap memImpl))
          in case execRes of
               C.FinishedResult _ partRes ->
                 let base =

@@ -31,7 +31,7 @@ import Grease.Options (ExtraStackSlots)
 import Grease.Panic (panic)
 import Grease.Shape.Pointer (ppcStackPtrShape)
 import Grease.Utility (bytes64LE)
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator.RegValue qualified as C
 import Stubs.FunctionOverride.PPC.Linux qualified as Stubs
 import Stubs.Memory.PPC.Linux qualified as Stubs
@@ -46,8 +46,8 @@ type instance ArchReloc PPC.PPC64 = EE.PPC64_RelocationType
 -- making it unsuited for Crucible S-expression contexts. (See
 -- <https://github.com/GaloisInc/macaw/issues/415>.)
 ppc64Ctx ::
-  ( ?memOpts :: Mem.MemOptions
-  , Mem.HasPtrWidth 64
+  ( ?memOpts :: CLM.MemOptions
+  , CLM.HasPtrWidth 64
   ) =>
   -- | Initialize the end of the stack to a 'Word64' value (which is split into
   -- a little-endian sequence of 8 concrete bytes) if the value is @Just@.
@@ -77,7 +77,7 @@ ppc64Ctx mbReturnAddr stackArgSlots loadedBinary = do
     ArchContext
       { _archInfo = PPC.ppc64_linux_info loadedBinary
       , _archGetIP = \regs -> do
-          let C.RV (Mem.LLVMPointer _base off) = regs ^. ixF' PPC.Symbolic.Regs.ip
+          let C.RV (CLM.LLVMPointer _base off) = regs ^. ixF' PPC.Symbolic.Regs.ip
           pure off
       , _archPcReg = PPC.PPC_IP
       , _archVals = avals

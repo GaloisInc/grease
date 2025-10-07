@@ -177,7 +177,7 @@ import Lang.Crucible.LLVM.DataLayout qualified as DataLayout
 import Lang.Crucible.LLVM.Debug qualified as Debug
 import Lang.Crucible.LLVM.Extension qualified as CLLVM
 import Lang.Crucible.LLVM.Globals qualified as CLLVM
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as CLLVM.SymIO
 import Lang.Crucible.LLVM.Syntax (emptyParserHooks, llvmParserHooks)
 import Lang.Crucible.LLVM.Translation qualified as Trans
@@ -256,7 +256,7 @@ declaredFunNotFound la decName =
 readElfHeaderInfo ::
   ( MonadIO m
   , MonadThrow m
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   ) =>
   GreaseLogAction ->
   proxy arch ->
@@ -303,12 +303,12 @@ textBounds loadOpts elf =
            in let sWithOffset = Elf.shdrAddr s + loadOffset
                in pure (sWithOffset, sWithOffset + Elf.shdrSize s)
 
--- | Define @?memOpts@ in a continuation, setting the 'Mem.laxLoadsAndStores'
+-- | Define @?memOpts@ in a continuation, setting the 'CLM.laxLoadsAndStores'
 -- option according to whether the user set the @--rust@ flag.
-withMemOptions :: SimOpts -> ((?memOpts :: Mem.MemOptions) => r) -> r
+withMemOptions :: SimOpts -> ((?memOpts :: CLM.MemOptions) => r) -> r
 withMemOptions opts k =
   let ?memOpts =
-        Mem.defaultMemOptions
+        CLM.defaultMemOptions
           { -- If @--rust@ is enabled, then we enable lax loads and stores so
             -- that reading from uninitialized memory returns symbolic data
             -- rather than failing. This is a common pattern observed with the
@@ -316,20 +316,20 @@ withMemOptions opts k =
             -- a @None@ value requires allocating space for a payload (but not
             -- writing to it), and reading the payload's memory later should not
             -- induce failure on its own. See gitlab#177.
-            Mem.laxLoadsAndStores = simRust opts
+            CLM.laxLoadsAndStores = simRust opts
           , -- This option tells Crucible-LLVM to invent a fresh boolean
             -- constant to use as a proof obligation when certain reads fail.
             -- This interacts poorly with the must-fail heuristic, as this proof
             -- obligation semantically should always fail, but as it is a fresh
             -- constant, there is no way for the heuristic to see that.
             -- See gitlab#256.
-            Mem.noSatisfyingWriteFreshConstant = False
+            CLM.noSatisfyingWriteFreshConstant = False
           }
    in k
 
 loadInitialPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
-  Mem.HasPtrWidth w =>
+  CLM.HasPtrWidth w =>
   MM.MemWidth w =>
   GreaseLogAction ->
   Maybe FilePath ->
@@ -362,7 +362,7 @@ loadInitialPreconditions la preconds names initArgs =
 -- | Override 'Shape.ArgShapes' using 'Simple.SimpleShape's from the CLI
 useSimpleShapes ::
   ExtShape ext ~ PtrShape ext w =>
-  Mem.HasPtrWidth w =>
+  CLM.HasPtrWidth w =>
   MM.MemWidth w =>
   GreaseLogAction ->
   -- | Argument names
@@ -378,7 +378,7 @@ useSimpleShapes la argNames initArgs simpleShapes = do
     Right shapes -> pure shapes
 
 toBatchBug ::
-  Mem.HasPtrWidth wptr =>
+  CLM.HasPtrWidth wptr =>
   (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   W4.FloatModeRepr fm ->
@@ -401,7 +401,7 @@ toBatchBug fm addrWidth argNames argTys initArgs b cData =
                     }
 
 toFailedPredicate ::
-  Mem.HasPtrWidth wptr =>
+  CLM.HasPtrWidth wptr =>
   (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   W4.FloatModeRepr fm ->
@@ -542,7 +542,7 @@ interestingRegs =
 --
 -- This is clearly a bit of a hack, but leads to concise and readable output.
 interestingConcretizedShapes ::
-  Mem.HasPtrWidth wptr =>
+  CLM.HasPtrWidth wptr =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
@@ -576,11 +576,11 @@ macawInitArgShapes ::
   ( C.IsSymBackend sym bak
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , Show (ArchReloc arch)
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
   ) =>
   GreaseLogAction ->
@@ -619,7 +619,7 @@ macawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr = do
 overrideRegs ::
   forall sym arch.
   ( C.IsSymInterface sym
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
   ) =>
@@ -638,12 +638,12 @@ overrideRegs archCtx sym =
               Just i
                 | isStackPointer ->
                     throw $ GreaseException "Can't override stack pointer"
-                | Mem.LLVMPointerRepr w <- regTypes ^. ixF' idx
+                | CLM.LLVMPointerRepr w <- regTypes ^. ixF' idx
                 , Just C.Refl <- C.testEquality w ?ptrWidth -> do
                     let macawGlobalMemBlock = 1 -- TODO: don't hardcode this
                     blk <- liftIO $ W4.natLit sym macawGlobalMemBlock
                     off <- liftIO (W4.bvLit sym ?ptrWidth i)
-                    let ptr = Mem.LLVMPointer blk off
+                    let ptr = CLM.LLVMPointer blk off
                     pure $ C.RV $ ptr
                 | otherwise ->
                     throw $ GreaseException "Can't override non-pointer register"
@@ -683,7 +683,7 @@ llvmExecFeats ::
   GreaseLogAction ->
   bak ->
   SimOpts ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   C.TypeRepr ret ->
   IO ([C.ExecutionFeature p sym ext (C.RegEntry sym ret)], Maybe (Async ()))
 llvmExecFeats la bak simOpts memVar ret = do
@@ -703,20 +703,20 @@ llvmExecFeats la bak simOpts memVar ret = do
 macawMemConfig ::
   ( Symbolic.SymArchConstraints arch
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , C.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
   , bak ~ C.OnlineBackend solver scope st (W4.Flags fm)
   , W4.OnlineSolver solver
   , Show (ArchReloc arch)
-  , Mem.HasLLVMAnn sym
+  , CLM.HasLLVMAnn sym
   , MSM.MacawProcessAssertion sym
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
   , p ~ GreaseSimulatorState sym arch
   ) =>
   GreaseLogAction ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   CLLVM.SymIO.LLVMFileSystem (MC.ArchAddrWidth arch) ->
   bak ->
   C.HandleAllocator ->
@@ -725,7 +725,7 @@ macawMemConfig ::
   SimOpts ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   IO
-    ( Symbolic.MemModelConfig p sym arch Mem.Mem
+    ( Symbolic.MemModelConfig p sym arch CLM.Mem
     , Map W4.FunctionName (MacawSExpOverride p sym arch)
     )
 macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable = do
@@ -787,7 +787,7 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
 macawInitState ::
   ( C.IsSymBackend sym bak
   , Symbolic.SymArchConstraints arch
-  , Mem.HasPtrWidth wptr
+  , CLM.HasPtrWidth wptr
   , MM.MemWidth wptr
   , Symbolic.SymArchConstraints arch
   , MSM.MacawProcessAssertion sym
@@ -798,8 +798,8 @@ macawInitState ::
   , ext ~ Symbolic.MacawExt arch
   , ret ~ Symbolic.ArchRegStruct arch
   , p ~ GreaseSimulatorState sym arch
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
   ) =>
   GreaseLogAction ->
@@ -808,7 +808,7 @@ macawInitState ::
   MacawCfgConfig arch ->
   SimOpts ->
   bak ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   Symbolic.MemPtrTable sym wptr ->
   Macaw.SetupHook sym arch ->
   AddressOverrides arch ->
@@ -851,7 +851,7 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable s
 macawRefineOnce ::
   ( C.IsSymBackend sym bak
   , Symbolic.SymArchConstraints arch
-  , Mem.HasPtrWidth wptr
+  , CLM.HasPtrWidth wptr
   , MM.MemWidth wptr
   , Symbolic.SymArchConstraints arch
   , OnlineSolverAndBackend solver sym bak scope st (W4.Flags fm)
@@ -861,8 +861,8 @@ macawRefineOnce ::
   , ext ~ Symbolic.MacawExt arch
   , ret ~ Symbolic.ArchRegStruct arch
   , p ~ GreaseSimulatorState sym arch
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
   ) =>
   GreaseLogAction ->
@@ -877,7 +877,7 @@ macawRefineOnce ::
   W4.FloatModeRepr fm ->
   ArgShapes ext NoTag argTys ->
   InitialMem sym ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   [RefineHeuristic sym bak ext argTys] ->
   [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
@@ -929,11 +929,11 @@ simulateMacawCfg ::
   , W4.OnlineSolver solver
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , Show (ArchReloc arch)
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
   ) =>
   GreaseLogAction ->
@@ -982,7 +982,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
   doLog la (Diag.TargetCFG ssaCfg)
 
   let bounds = simBoundsOpts simOpts
-  memVar <- Mem.mkMemVar "grease:memmodel" halloc
+  memVar <- CLM.mkMemVar "grease:memmodel" halloc
   -- The order of the heuristics is significant, the 'macawHeuristics'
   -- find a sensible initial memory layout, which is necessary before
   -- applying the 'mustFailHeuristic' (which would otherwise report many
@@ -1048,12 +1048,12 @@ simulateRewrittenCfg ::
   , W4.OnlineSolver solver
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , Show (ArchReloc arch)
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
   ) =>
@@ -1120,7 +1120,7 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
         assertingCfg <- pure $ assert $ entrypointCfg entrypointCfgs
         let entrypointCfgsSsa' = entrypointCfgsSsa{entrypointCfg = toSsaSomeCfg assertingCfg}
         C.resetAssumptionState bak
-        memVar <- Mem.mkMemVar "grease:memmodel" halloc
+        memVar <- CLM.mkMemVar "grease:memmodel" halloc
         let heuristics = macawHeuristics la rNames
         new <-
           macawRefineOnce
@@ -1172,10 +1172,10 @@ simulateMacawCfgs ::
   forall arch.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , Show (ArchReloc arch)
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
   ) =>
   GreaseLogAction ->
@@ -1316,10 +1316,10 @@ loadAddrOvs la archCtx halloc memory simOpts = do
     Right addrOvs -> pure addrOvs
 
 loadLLVMSExpOvs ::
-  Mem.HasPtrWidth w =>
+  CLM.HasPtrWidth w =>
   [FilePath] ->
   C.HandleAllocator ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   IO (Seq.Seq (W4.FunctionName, GLOS.LLVMSExpOverride))
 loadLLVMSExpOvs sexpOvPaths halloc mvar = do
   mbOvs <- liftIO (GLOS.loadOverrides sexpOvPaths halloc mvar)
@@ -1347,11 +1347,11 @@ simulateMacawSyntax ::
   forall arch.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , Show (ArchReloc arch)
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   C.HandleAllocator ->
@@ -1391,12 +1391,12 @@ simulateMacaw ::
   forall arch.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Elf.IsRelocationType (ArchReloc arch)
   , Elf.RelocationWidth (ArchReloc arch) ~ MC.ArchAddrWidth arch
   , BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   C.HandleAllocator ->
@@ -1516,7 +1516,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
 --
 -- Later steps override earlier ones.
 llvmInitArgShapes ::
-  Mem.HasPtrWidth 64 =>
+  CLM.HasPtrWidth 64 =>
   GreaseLogAction ->
   InitialPreconditionOpts ->
   Maybe L.Module ->
@@ -1543,7 +1543,7 @@ llvmInitArgShapes la opts llvmMod argNames cfg = do
 
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.
-  ( Mem.HasPtrWidth (CLLVM.ArchWidth arch)
+  ( CLM.HasPtrWidth (CLLVM.ArchWidth arch)
   , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
   , ?parserHooks :: CSyn.ParserHooks CLLVM.LLVM
   ) =>
@@ -1647,7 +1647,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
   pure res
 
 simulateLlvmCfgs ::
-  Mem.HasPtrWidth (CLLVM.ArchWidth arch) =>
+  CLM.HasPtrWidth (CLLVM.ArchWidth arch) =>
   (?parserHooks :: CSyn.ParserHooks CLLVM.LLVM) =>
   GreaseLogAction ->
   SimOpts ->
@@ -1716,8 +1716,8 @@ simulateLlvmSyntax ::
   IO Results
 simulateLlvmSyntax simOpts la = do
   halloc <- C.newHandleAllocator
-  mvar <- Mem.mkMemVar "grease:memmodel" halloc
-  let mkMem = \_ -> InitialMem <$> Mem.emptyMem DataLayout.LittleEndian
+  mvar <- CLM.mkMemVar "grease:memmodel" halloc
+  let mkMem = \_ -> InitialMem <$> CLM.emptyMem DataLayout.LittleEndian
   let ?ptrWidth = knownNat @64
   let ?parserHooks = llvmParserHooks emptyParserHooks mvar
   prog <- doParse la halloc (simProgPath simOpts)
@@ -1765,7 +1765,7 @@ simulateLlvm ::
 simulateLlvm transOpts simOpts la = do
   llvmMod <- parseBitcode la (simProgPath simOpts)
   halloc <- C.newHandleAllocator
-  mvar <- liftIO $ Mem.mkMemVar "grease:memmodel" halloc
+  mvar <- liftIO $ CLM.mkMemVar "grease:memmodel" halloc
   C.Some @_ @_ @arch trans <- do
     let ?transOpts = transOpts
     Trans.translateModule halloc mvar llvmMod
@@ -1780,7 +1780,7 @@ simulateLlvm transOpts simOpts la = do
       else pure (simEntryPoints simOpts)
 
   let llvmCtxt = trans ^. Trans.transContext
-  Trans.llvmPtrWidth llvmCtxt $ \ptrW -> Mem.withPtrWidth ptrW $ do
+  Trans.llvmPtrWidth llvmCtxt $ \ptrW -> CLM.withPtrWidth ptrW $ do
     let mkMem :: forall sym bak. C.IsSymBackend sym bak => bak -> IO (InitialMem sym)
         mkMem bak =
           let ?lc = llvmCtxt ^. Trans.llvmTypeCtx
@@ -1859,10 +1859,10 @@ simulateMacawRaw ::
   forall arch.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , Show (ArchReloc arch)
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   MM.Memory (MC.ArchAddrWidth arch) ->
@@ -1941,7 +1941,7 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
 -- loading a binary in a single segment at a fixed offset
 simulateRawArch ::
   forall arch.
-  ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth
       (MC.RegAddrWidth (MC.ArchReg arch))
   , KnownNat
@@ -1951,7 +1951,7 @@ simulateRawArch ::
   , Integral
       (Elf.ElfWordType (MC.RegAddrWidth (MC.ArchReg arch)))
   , Show (ArchReloc arch)
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   SimOpts ->
   GreaseLogAction ->
@@ -1995,8 +1995,8 @@ doLoad ::
   ( 16 C.<= MC.ArchAddrWidth arch
   , Symbolic.SymArchConstraints arch
   , Loader.BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
-  , ?memOpts :: Mem.MemOptions
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , ?memOpts :: CLM.MemOptions
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   ) =>
   GreaseLogAction ->
   proxy arch ->

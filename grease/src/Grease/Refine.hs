@@ -142,7 +142,7 @@ import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout (DataLayout)
 import Lang.Crucible.LLVM.Errors qualified as CLLVM
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.Simulator qualified as C
@@ -285,9 +285,9 @@ consumer ::
   , OnlineSolverAndBackend solver sym bak t st fm
   , 16 C.<= w
   , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth w
+  , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
@@ -369,9 +369,9 @@ execCfg ::
   , OnlineSolverAndBackend solver sym bak t st fm
   , 16 C.<= w
   , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth w
+  , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   ExecData p sym ext ret ->
@@ -429,9 +429,9 @@ proveAndRefine ::
   , OnlineSolverAndBackend solver sym bak t st fm
   , 16 C.<= w
   , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth w
+  , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
@@ -463,15 +463,15 @@ execAndRefine ::
   , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
   , 16 C.<= w
   , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth w
+  , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
   W4FM.FloatModeRepr fm ->
   GreaseLogAction ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   RefinementData sym bak ext argTys ->
   IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
   ExecData p sym ext ret ->
@@ -559,11 +559,11 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
 
 -- | Run 'Setup.setup' then 'execAndRefine'. Usually passed to 'refinementLoop'.
 refineOnce ::
-  ( Mem.HasPtrWidth wptr
+  ( CLM.HasPtrWidth wptr
   , C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
   , ToConc.HasToConcretize p
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext wptr
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext wptr
   ) =>
@@ -578,7 +578,7 @@ refineOnce ::
   Ctx.Assignment C.TypeRepr argTys ->
   ArgShapes ext NoTag argTys ->
   InitialMem sym ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   [RefineHeuristic sym bak ext argTys] ->
   [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
   ( ( MSM.MacawProcessAssertion sym
@@ -645,7 +645,7 @@ refinementLoop ::
   forall sym ext argTys w.
   ( C.IsSyntaxExtension ext
   , 16 C.<= w
-  , Mem.HasPtrWidth w
+  , CLM.HasPtrWidth w
   , MC.MemWidth w
   , ExtShape ext ~ PtrShape ext w
   , PrettyExt ext NoTag

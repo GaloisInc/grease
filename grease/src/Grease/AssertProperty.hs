@@ -24,7 +24,7 @@ import Grease.Utility (segoffToAbsoluteAddr)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Expr qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Utils.RegRewrite qualified as C
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
@@ -41,25 +41,25 @@ def repr expr = do
 
 -- | Convert a bitvector 'C.Reg.Atom' to a pointer using 'Symbolic.BitsToPtr'.
 defBitsToPtr ::
-  ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MC.MemWidth (MC.ArchAddrWidth arch)
   ) =>
   MT.NatRepr (MC.ArchAddrWidth arch) ->
   C.Reg.Atom src (C.BVType (MC.ArchAddrWidth arch)) ->
-  C.Rewriter (Symbolic.MacawExt arch) s src tgt a (C.Reg.Atom src (Mem.LLVMPointerType (MC.ArchAddrWidth arch)))
+  C.Rewriter (Symbolic.MacawExt arch) s src tgt a (C.Reg.Atom src (CLM.LLVMPointerType (MC.ArchAddrWidth arch)))
 defBitsToPtr w bits =
-  def Mem.PtrRepr $
+  def CLM.PtrRepr $
     C.Reg.EvalApp $
       C.ExtensionApp $
         Symbolic.BitsToPtr w bits
 
 -- | Convert a pointer 'C.Reg.Atom' to a bitvector using 'Symbolic.PtrToBits'.
 defPtrToBits ::
-  ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MC.MemWidth (MC.ArchAddrWidth arch)
   ) =>
   MT.NatRepr (MC.ArchAddrWidth arch) ->
-  C.Reg.Atom src (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  C.Reg.Atom src (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   C.Rewriter (Symbolic.MacawExt arch) s src tgt a (C.Reg.Atom src (C.BVType (MC.ArchAddrWidth arch)))
 defPtrToBits w ptr =
   def (C.BVRepr w) $
@@ -73,13 +73,13 @@ defPtrToBits w ptr =
 -- whenever making comparisons against other absolute addresses. See
 -- @Note [Comparing the current program counter value]@.
 defPcAbsAddr ::
-  ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MC.MemWidth (MC.ArchAddrWidth arch)
   ) =>
   MT.NatRepr (MC.ArchAddrWidth arch) ->
   -- | The current program counter value
-  C.Reg.Atom src (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
-  C.Rewriter (Symbolic.MacawExt arch) s src tgt a (C.Reg.Atom src (Mem.LLVMPointerType (MC.ArchAddrWidth arch)))
+  C.Reg.Atom src (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  C.Rewriter (Symbolic.MacawExt arch) s src tgt a (C.Reg.Atom src (CLM.LLVMPointerType (MC.ArchAddrWidth arch)))
 defPcAbsAddr w pc = do
   pcAbsAddr <- defPtrToBits w pc
   defBitsToPtr w pcAbsAddr
@@ -87,17 +87,17 @@ defPcAbsAddr w pc = do
 -- | Define an 'C.Reg.Atom' by converting an absolute address (represented as a
 -- 'MC.MemWord') to a pointer using 'Symbolic.BitsToPtr'.
 --
--- This is useful for constructing 'Mem.LLVMPtr's that you want to check for
+-- This is useful for constructing 'CLM.LLVMPtr's that you want to check for
 -- equality against the current value of the program counter. See
 -- @Note [Comparing the current program counter value]@.
 defMemWordAbsAddr ::
-  ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MC.MemWidth (MC.ArchAddrWidth arch)
   ) =>
   MT.NatRepr (MC.ArchAddrWidth arch) ->
   -- | The absolute address
   MC.MemWord (MC.ArchAddrWidth arch) ->
-  C.Rewriter (Symbolic.MacawExt arch) s src tgt a (C.Reg.Atom src (Mem.LLVMPointerType (MC.ArchAddrWidth arch)))
+  C.Rewriter (Symbolic.MacawExt arch) s src tgt a (C.Reg.Atom src (CLM.LLVMPointerType (MC.ArchAddrWidth arch)))
 defMemWordAbsAddr w absAddr = do
   absAddrBV <-
     def (C.BVRepr w) $
@@ -132,7 +132,7 @@ addPCBoundAssertion ::
   forall arch.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , C.OrdF (MC.ArchReg arch)
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MC.MemWidth (MC.ArchAddrWidth arch)
   ) =>
   MT.NatRepr (MC.ArchAddrWidth arch) ->
@@ -207,7 +207,7 @@ addNoDynJumpAssertion ::
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , C.OrdF (MC.ArchReg arch)
   , 1 C.<= MC.ArchAddrWidth arch
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MC.MemWidth (MC.ArchAddrWidth arch)
   ) =>
   MT.NatRepr (MC.ArchAddrWidth arch) ->

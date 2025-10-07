@@ -69,7 +69,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.CFG.SSAConversion qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as C
 import Lumberjack qualified as LJ
 import Stubs.FunctionOverride qualified as Stubs
@@ -127,7 +127,7 @@ newtype LookupFunctionHandleDispatch p sym arch
   = LookupFunctionHandleDispatch
       ( forall rtp blocks r ctx.
         C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
-        Mem.MemImpl sym ->
+        CLM.MemImpl sym ->
         Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
         LookupFunctionHandleResult p sym arch ->
         IO
@@ -143,8 +143,8 @@ newtype LookupFunctionHandleDispatch p sym arch
 defaultLookupFunctionHandleDispatch ::
   ( OnlineSolverAndBackend solver sym bak t st fs
   , Symbolic.SymArchConstraints arch
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , HasToConcretize p
   , HasGreaseSimulatorState p sym arch
   ) =>
@@ -605,7 +605,7 @@ useMacawSExpOverride ::
   , W4.OnlineSolver solver
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , HasToConcretize p
   ) =>
   bak ->
@@ -650,7 +650,7 @@ extendHandleMap ::
   , W4.OnlineSolver solver
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , HasToConcretize p
   ) =>
   bak ->

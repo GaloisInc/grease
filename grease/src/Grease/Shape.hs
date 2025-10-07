@@ -73,7 +73,7 @@ import Grease.Shape.Pointer (PtrShape, minimalPtrShape, parseJsonPtrShape, ptrSh
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel (HasPtrWidth)
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Types qualified as CT
 import Prettyprinter qualified as PP
 import Text.Show qualified as Show
@@ -210,7 +210,7 @@ instance TFC.TraversableFC (ExtShape ext) => TFC.TraversableFC (Shape ext) where
       ShapeExt ext -> ShapeExt <$> traverseFC f ext
 
 traverseShapeWithType ::
-  Mem.HasPtrWidth wptr =>
+  CLM.HasPtrWidth wptr =>
   Applicative m =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   (forall x. C.TypeRepr x -> tag x -> m (tag' x)) ->
@@ -229,7 +229,7 @@ traverseShapeWithType f =
     ShapeExt ext -> ShapeExt <$> traversePtrShapeWithType f ext
 
 tagWithType ::
-  Mem.HasPtrWidth wptr =>
+  CLM.HasPtrWidth wptr =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   Shape ext tag t ->
   Shape ext C.TypeRepr t
@@ -310,8 +310,8 @@ instance PP.Pretty MinimalShapeError where
 minimalShapeWithPtrs ::
   forall t ext tag w.
   ( ExtShape ext ~ PtrShape ext w
-  , Mem.HasPtrWidth w
-  , Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8)))
+  , CLM.HasPtrWidth w
+  , Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8)))
   ) =>
   (forall t'. C.TypeRepr t' -> tag t') ->
   C.TypeRepr t ->
@@ -319,7 +319,7 @@ minimalShapeWithPtrs ::
 minimalShapeWithPtrs mkTag =
   minimalShape
     ( \case
-        Mem.LLVMPointerRepr w -> minimalPtrShape (pure . mkTag) w
+        CLM.LLVMPointerRepr w -> minimalPtrShape (pure . mkTag) w
         t -> Left (MinimalShapeError (Some t))
     )
     (pure . mkTag)
@@ -443,7 +443,7 @@ parseJsonShape parseTag parseExt =
 
 -- | Given a parser for @tag@s, parse 'Shape's containing 'PtrShape's from JSON
 parseJsonShapeWithPtrs ::
-  Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
+  Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8))) =>
   ExtShape ext ~ PtrShape ext w =>
   -- | Parser for @tag@s
   (forall t. Aeson.KeyMap Aeson.Value -> Aeson.Parser (tag t)) ->

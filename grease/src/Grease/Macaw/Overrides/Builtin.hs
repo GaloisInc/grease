@@ -31,9 +31,9 @@ import Grease.Panic qualified as Panic
 import Grease.Utility (llvmOverrideName)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.LLVM.Intrinsics qualified as Mem
+import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.Intrinsics.Cast qualified as Cast
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Stubs.FunctionOverride qualified as Stubs
@@ -46,16 +46,16 @@ import Text.LLVM.AST qualified as L
 builtinStubsOverrides ::
   forall sym bak p arch.
   ( C.IsSymBackend sym bak
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , HasGreaseSimulatorState p sym arch
   ) =>
   bak ->
-  C.GlobalVar Mem.Mem ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
   SymIO.LLVMFileSystem (MC.ArchAddrWidth arch) ->
   Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
 builtinStubsOverrides bak mvar mmConf fs =
@@ -70,13 +70,13 @@ builtinStubsOverrides bak mvar mmConf fs =
   fromLlvmOvs :: Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
   fromLlvmOvs =
     -- We never need to make use of any non-standard IntrinsicsOptions.
-    let ?intrinsicsOpts = Mem.defaultIntrinsicsOptions
+    let ?intrinsicsOpts = CLI.defaultIntrinsicsOptions
      in Seq.fromList
           $ mapMaybe
-            (\(Mem.SomeLLVMOverride ov) -> llvmToStubsOverride bak mvar ov)
+            (\(CLI.SomeLLVMOverride ov) -> llvmToStubsOverride bak mvar ov)
           $ List.filter
-            ( \(Mem.SomeLLVMOverride ov) ->
-                L.decName (Mem.llvmOverride_declare ov)
+            ( \(CLI.SomeLLVMOverride ov) ->
+                L.decName (CLI.llvmOverride_declare ov)
                   `Set.notMember` excludedLibcOverrides
             )
             (libcOverrides fs)
@@ -114,7 +114,7 @@ bvToPointer ::
   C.Some C.TypeRepr
 bvToPointer =
   \case
-    C.BVRepr w -> C.Some (Mem.LLVMPointerRepr w)
+    C.BVRepr w -> C.Some (CLM.LLVMPointerRepr w)
     t -> C.Some t
 
 -- | Transform an 'Mem.LLVMOverride' into a 'Stubs.SomeFunctionOverride'.
@@ -134,10 +134,10 @@ bvToPointer =
 -- is not easily convertible to the approach that @stubs@ uses.
 llvmToStubsOverride ::
   C.IsSymBackend sym bak =>
-  Mem.HasLLVMAnn sym =>
+  CLM.HasLLVMAnn sym =>
   bak ->
-  C.GlobalVar Mem.Mem ->
-  Mem.LLVMOverride p sym (Symbolic.MacawExt arch) args ret ->
+  C.GlobalVar CLM.Mem ->
+  CLI.LLVMOverride p sym (Symbolic.MacawExt arch) args ret ->
   Maybe (Stubs.SomeFunctionOverride p sym arch)
 llvmToStubsOverride bak mvar llvmOv
   | isVariadic =
@@ -173,14 +173,14 @@ llvmToStubsOverride bak mvar llvmOv
                             Right f -> f
 
                     argVals' <- Cast.applyArgCast fargs argVals
-                    retVal <- Mem.llvmOverride_def llvmOv mvar argVals'
+                    retVal <- CLI.llvmOverride_def llvmOv mvar argVals'
                     retVal' <- Cast.applyValCast fret retVal
                     let regChanges = [] -- TODO: havoc registers?
                     pure (Stubs.OverrideResult regChanges retVal')
               }
  where
-  args0 = Mem.llvmOverride_args llvmOv
-  ret0 = Mem.llvmOverride_ret llvmOv
+  args0 = CLI.llvmOverride_args llvmOv
+  ret0 = CLI.llvmOverride_ret llvmOv
 
   -- crucible-llvm maintains the convention that any LLVMOverride for a
   -- variadic function (e.g., `printf`) will use `VectorRepr AnyRepr` as the

@@ -40,7 +40,7 @@ import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout as CLLVM
 import Lang.Crucible.LLVM.Functions qualified as CLLVM
 import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.LLVM.Syntax.Overrides.String qualified as StrOv
 import Lang.Crucible.LLVM.Translation (LLVMContext)
@@ -60,8 +60,8 @@ doLog la diag = LJ.writeLog la (LLVMOverridesDiagnostic diag)
 -- be exactly the same, as 'CLLVM.build_llvm_override' handles any necessary
 -- type conversions (e.g., converting from bitvectors to pointers).
 bindLLVMOverrideFnHandle ::
-  Mem.HasLLVMAnn sym =>
-  C.GlobalVar Mem.Mem ->
+  CLM.HasLLVMAnn sym =>
+  C.GlobalVar CLM.Mem ->
   C.FnHandle fnArgs fnRet ->
   CLLVM.LLVMOverride p sym CLLVM.LLVM ovrArgs ovrRet ->
   C.OverrideSim p sym CLLVM.LLVM rtp as r ()
@@ -93,7 +93,7 @@ mapRights f =
 -- an S-expression file. Such declarations are used by the Crucible-LLVM override
 -- matching machinery ('CLLVM.register_llvm_overrides_').
 forwardDeclDecls ::
-  Mem.HasPtrWidth 64 =>
+  CLM.HasPtrWidth 64 =>
   Map.Map W4.FunctionName C.SomeHandle ->
   [L.Declare]
 forwardDeclDecls m =
@@ -113,11 +113,11 @@ forwardDeclDecls m =
 registerLLVMOverrides ::
   forall sym bak arch p rtp as r.
   ( C.IsSymBackend sym bak
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth 64
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth 64
   , ToConc.HasToConcretize p
   , ?lc :: TypeContext
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
@@ -205,11 +205,11 @@ registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls errCb = do
 registerLLVMSexpOverrides ::
   forall sym bak arch p rtp as r.
   ( C.IsSymBackend sym bak
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth 64
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth 64
   , ToConc.HasToConcretize p
   , ?lc :: TypeContext
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
@@ -239,11 +239,11 @@ registerLLVMSexpOverrides la builtinOvs sexpOvs bak llvmCtx fs prog errCb = do
 registerLLVMModuleOverrides ::
   forall sym bak arch p rtp as r.
   ( C.IsSymBackend sym bak
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth 64
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth 64
   , ToConc.HasToConcretize p
   , ?lc :: TypeContext
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
@@ -267,14 +267,14 @@ registerLLVMModuleOverrides la builtinOvs sexpOvs bak llvmCtx fs llMod errCb = d
 -- forward declarations as though the functions were skipped.
 registerLLVMSexpProgForwardDeclarations ::
   ( C.IsSymInterface sym
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth 64
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth 64
   , ToConc.HasToConcretize p
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   CLLVM.DataLayout ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   -- | The map of public function names to their overrides.
   Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM) ->
   -- | What to do when a forward declaration cannot be resolved.
@@ -292,12 +292,12 @@ registerLLVMSexpProgForwardDeclarations la dl mvar funOvs errCb =
 -- name cannot be resolved to an override, then perform the supplied action.
 registerLLVMForwardDeclarations ::
   ( C.IsSymInterface sym
-  , Mem.HasPtrWidth w
-  , Mem.HasLLVMAnn sym
+  , CLM.HasPtrWidth w
+  , CLM.HasLLVMAnn sym
   , ToConc.HasToConcretize p
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   -- | The map of public function names to their overrides.
   Map.Map W4.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM) ->
   -- | What to do when a forward declaration cannot be resolved.

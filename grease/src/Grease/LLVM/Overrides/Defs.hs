@@ -20,7 +20,7 @@ import Data.Parameterized.NatRepr (knownNat)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.QQ (llvmOvr)
 import Lang.Crucible.Simulator.OverrideSim qualified as C
 import What4.Interface qualified as W4
@@ -28,9 +28,9 @@ import What4.Interface qualified as W4
 -- | Custom libc overrides.
 customLLVMOverrides ::
   ( C.IsSymInterface sym
-  , ?memOpts :: Mem.MemOptions
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth wptr
+  , ?memOpts :: CLM.MemOptions
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth wptr
   ) =>
   [CLLVM.SomeLLVMOverride p sym ext]
 customLLVMOverrides =
@@ -41,9 +41,9 @@ customLLVMOverrides =
 -- arguments have been exhausted.
 getoptLong ::
   ( C.IsSymInterface sym
-  , Mem.HasPtrWidth wptr
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasPtrWidth wptr
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   CLLVM.LLVMOverride
     p
@@ -51,10 +51,10 @@ getoptLong ::
     ext
     ( Ctx.EmptyCtx
         Ctx.::> C.BVType 32
-        Ctx.::> Mem.LLVMPointerType wptr
-        Ctx.::> Mem.LLVMPointerType wptr
-        Ctx.::> Mem.LLVMPointerType wptr
-        Ctx.::> Mem.LLVMPointerType wptr
+        Ctx.::> CLM.LLVMPointerType wptr
+        Ctx.::> CLM.LLVMPointerType wptr
+        Ctx.::> CLM.LLVMPointerType wptr
+        Ctx.::> CLM.LLVMPointerType wptr
     )
     (C.BVType 32)
 getoptLong =

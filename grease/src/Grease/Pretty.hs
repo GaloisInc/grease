@@ -13,7 +13,7 @@ module Grease.Pretty (
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
 import Grease.Panic (panic)
-import Lang.Crucible.LLVM.MemModel (ppPtr)
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Pretty as P
 import Lang.Crucible.Types qualified as C
 import What4.Interface qualified as W4
@@ -25,7 +25,7 @@ prettyPtrFn :: W4.IsExpr (W4.SymExpr sym) => IntrinsicPrettyFn sym "LLVM_pointer
 prettyPtrFn = IntrinsicPrettyFn $ \tyCtx ptr ->
   case Ctx.viewAssign tyCtx of
     Ctx.AssignExtend (Ctx.viewAssign -> Ctx.AssignEmpty) (C.BVRepr _) ->
-      ppPtr ptr
+      CLM.ppPtr ptr
     -- These are impossible by the definition of LLVMPointerImpl
     Ctx.AssignEmpty ->
       panic
