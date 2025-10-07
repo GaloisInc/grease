@@ -14,7 +14,7 @@ import Data.Macaw.CFG.Core qualified as MC
 import Data.Macaw.Memory (MemSegmentOff, MemWidth)
 import Data.Text (Text)
 import Prettyprinter qualified as PP
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 
 -- | The reasons that GREASE might skip a function call
@@ -28,7 +28,7 @@ data SkippedFunctionCall arch where
   PltNoOverride ::
     (1 WI.<= MC.ArchAddrWidth arch, MemWidth (MC.ArchAddrWidth arch)) =>
     MemSegmentOff (MC.ArchAddrWidth arch) ->
-    W4.FunctionName ->
+    WFN.FunctionName ->
     SkippedFunctionCall arch
   NotExecutable ::
     (1 WI.<= MC.ArchAddrWidth arch, MemWidth (MC.ArchAddrWidth arch)) =>

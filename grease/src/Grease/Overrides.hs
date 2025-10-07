@@ -20,22 +20,22 @@ import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Prettyprinter qualified as PP
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 
 -- | Callback for handling cases where an override cannot be resolved.
 newtype CantResolveOverrideCallback sym arch
   = CantResolveOverrideCallback
   { runCantResolveOverrideCallback ::
       forall p args ret rtp as r.
-      W4.FunctionName ->
+      WFN.FunctionName ->
       C.FnHandle args ret ->
       CS.OverrideSim p sym arch rtp as r ()
   }
 
 -- | Error type for 'partitionCfgs'.
 data OverrideNameError
-  = ExpectedFunctionNotFound W4.FunctionName FilePath
-  | MultipleFunctionsFound W4.FunctionName FilePath
+  = ExpectedFunctionNotFound WFN.FunctionName FilePath
+  | MultipleFunctionsFound WFN.FunctionName FilePath
 
 instance PP.Pretty OverrideNameError where
   pretty =
@@ -63,7 +63,7 @@ instance PP.Pretty OverrideNameError where
 -- | Partition CFGs from a parsed program into public and auxiliary functions.
 -- The public function is the one whose name matches the function name.
 partitionCfgs ::
-  W4.FunctionName ->
+  WFN.FunctionName ->
   FilePath ->
   CSyn.ParsedProgram ext ->
   Either
@@ -79,6 +79,6 @@ partitionCfgs fnName path prog = do
 
 -- | Does a function have the same name as the @.cbl@ file in which it is
 -- defined? That is, is a function publicly visible from the @.cbl@ file?
-isPublicCblFun :: W4.FunctionName -> C.Reg.AnyCFG ext -> Bool
+isPublicCblFun :: WFN.FunctionName -> C.Reg.AnyCFG ext -> Bool
 isPublicCblFun fnName (C.Reg.AnyCFG cfg) =
   C.handleName (C.Reg.cfgHandle cfg) == fnName

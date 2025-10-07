@@ -28,7 +28,7 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as CS
 import Lumberjack qualified as LJ
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
@@ -97,7 +97,7 @@ extensionExec la halloc dl errorSymbolicFunCalls baseExt stmt st =
                   [ "LLVM frontend with non-64-bit pointer size"
                   , show ptrWidth
                   ]
-          let funcName = W4.functionNameFromText "_grease_symbolic_fn"
+          let funcName = WFN.functionNameFromText "_grease_symbolic_fn"
           hdl <- C.mkHandle' halloc funcName args ret
           case createSkipOverride la dl mvar funcName ret of
             Right ov -> do

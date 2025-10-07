@@ -31,7 +31,7 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.Printf qualified as Printf
 import Lang.Crucible.Simulator qualified as CS
 import Stubs.FunctionOverride qualified as Stubs
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 
 -- | Custom overrides that are only applicable at the machine code level (and
@@ -387,7 +387,7 @@ buildStackChkFailLocalOverride =
         callStackChkFail fnName
 
 -- | Call a function in the @__stack_chk_fail@ family.
-callStackChkFail :: W4.FunctionName -> CS.OverrideSim p sym ext r args ret ()
+callStackChkFail :: WFN.FunctionName -> CS.OverrideSim p sym ext r args ret ()
 callStackChkFail fnName =
   CS.ovrWithBackend $ \bak -> liftIO $ do
     let sym = CB.backendGetSym bak

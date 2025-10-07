@@ -35,7 +35,7 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Stubs.FunctionOverride qualified as Stubs
 import What4.Expr.Builder qualified as WEB
-import What4.FunctionName qualified as WF
+import What4.FunctionName qualified as WFN
 import What4.Protocol.Online qualified as WPO
 
 -- | Hook to run before executing a CFG.
@@ -58,14 +58,14 @@ newtype SetupHook sym arch
         bak ->
         CS.GlobalVar CLM.Mem ->
         -- Map of names of overridden functions to their implementations
-        Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
+        Map.Map WFN.FunctionName (GMO.MacawSExpOverride p sym arch) ->
         CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
       )
 
 -- | Register overrides, both user-defined ones and ones that are hard-coded
 -- into GREASE itself.
 registerOverrideCfgs ::
-  Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideCfgs funOvs =
   Monad.forM_ (Map.elems funOvs) $ \mso -> do
@@ -89,7 +89,7 @@ registerOverrideForwardDeclarations ::
   bak ->
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
-  Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideForwardDeclarations bak errCb funOvs =
   Monad.forM_ (Map.elems funOvs) $ \mso ->
@@ -115,7 +115,7 @@ registerOverrideHandles ::
   bak ->
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
-  Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideHandles bak errCb funOvs = do
   registerOverrideCfgs funOvs
@@ -152,7 +152,7 @@ registerSyntaxForwardDeclarations ::
   DataLayout ->
   CS.GlobalVar CLM.Mem ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerSyntaxForwardDeclarations bak la errCb dl mvar funOvs prog =
@@ -179,7 +179,7 @@ registerSyntaxHandles ::
   DataLayout ->
   CS.GlobalVar CLM.Mem ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerSyntaxHandles bak la errCb dl mvar funOvs prog = do

@@ -11,12 +11,12 @@ module Grease.Skip.Diagnostic (
 
 import Grease.Diagnostic.Severity (Severity (Debug))
 import Prettyprinter qualified as PP
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 
 data Diagnostic where
   FunctionCall ::
     -- | The function name
-    W4.FunctionName ->
+    WFN.FunctionName ->
     Diagnostic
 
 instance PP.Pretty Diagnostic where

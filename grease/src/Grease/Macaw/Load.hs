@@ -48,7 +48,7 @@ import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import System.Directory (Permissions)
 import Text.Read (readMaybe)
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LoadDiagnostic diag)
@@ -62,7 +62,7 @@ data LoadedProgram arch
   -- is possible for a single function address to have multiple function
   -- symbols (https://github.com/GaloisInc/macaw-loader/issues/25), so this
   -- map will arbitrarily pick one of the symbol names.
-  , progDynFunMap :: Map.Map W4.FunctionName (MC.ArchSegmentOff arch)
+  , progDynFunMap :: Map.Map WFN.FunctionName (MC.ArchSegmentOff arch)
   -- ^ A map of visible, dynamic function symbol names (UTF-8–encoded) to
   -- their corresponding function addresses.
   , progEntrypointAddrs :: Map Entrypoint (MC.ArchSegmentOff arch)
@@ -233,7 +233,7 @@ dynamicFunAddrs ::
   MM.MemWidth w =>
   LC.LoadOptions ->
   Elf.ElfHeaderInfo w ->
-  [(W4.FunctionName, (Elf.SymtabEntry BS.ByteString (Elf.ElfWordType w), MM.MemWord w))]
+  [(WFN.FunctionName, (Elf.SymtabEntry BS.ByteString (Elf.ElfWordType w), MM.MemWord w))]
 dynamicFunAddrs loadOpts ehi =
   case Elf.decodeHeaderDynsymLenient ehi of
     Right (Just symtab) ->
@@ -245,7 +245,7 @@ dynamicFunAddrs loadOpts ehi =
   funAddrs ::
     Integral (Elf.ElfWordType w) =>
     Elf.Symtab w ->
-    [(W4.FunctionName, (Elf.SymtabEntry BS.ByteString (Elf.ElfWordType w), MM.MemWord w))]
+    [(WFN.FunctionName, (Elf.SymtabEntry BS.ByteString (Elf.ElfWordType w), MM.MemWord w))]
   funAddrs symtab =
     Elf.symtabEntries symtab
       & Vec.filter isFuncSymbol

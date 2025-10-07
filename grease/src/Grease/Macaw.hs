@@ -79,7 +79,7 @@ import Lang.Crucible.Simulator.GlobalState qualified as CS
 import Stubs.Common qualified as Stubs
 import Stubs.Syscall qualified as Stubs
 import What4.Expr qualified as W4
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 import What4.ProgramLoc as W4PL
 import What4.Protocol.Online qualified as W4
@@ -432,19 +432,19 @@ memConfigWithHandles ::
   -- | Map of entrypoint addresses to their names
   Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
   -- | Map of addresses to PLT stub names
-  Map.Map (MC.ArchSegmentOff arch) W4.FunctionName ->
+  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
   -- | Map of dynamic function names to their addresses
-  Map.Map W4.FunctionName (MC.ArchSegmentOff arch) ->
+  Map.Map WFN.FunctionName (MC.ArchSegmentOff arch) ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
   -- | Map of names of overridden syscalls to their implementations
-  Map.Map W4.FunctionName (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
+  Map.Map WFN.FunctionName (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
   Opts.ErrorSymbolicFunCalls ->
   Opts.ErrorSymbolicSyscalls ->
   Opts.SkipInvalidCallAddrs ->
   -- | What to do when a forward declaration cannot be resolved (during symex).
-  (W4.FunctionName -> IO ()) ->
+  (WFN.FunctionName -> IO ()) ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
   Symbolic.MemModelConfig p sym arch CLM.Mem
 memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddress errCb' memCfg =
@@ -536,7 +536,7 @@ initState ::
   -- | The initial register state.
   ArchRegs sym arch ->
   -- | Map of names of overridden functions to their implementations
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   -- | An optional startup override to run just before the entrypoint function.
   Maybe (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   -- | The 'C.CFG' of the user-requested entrypoint function.

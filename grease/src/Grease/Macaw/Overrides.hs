@@ -53,7 +53,7 @@ import Lang.Crucible.Simulator qualified as CS
 import Stubs.FunctionOverride qualified as Stubs
 import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
 import What4.Expr qualified as W4
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 import What4.Protocol.Online qualified as W4
 
 -- | Convert a 'Stubs.FunctionOverride' to a 'MacawOverride'. Really, this
@@ -162,7 +162,7 @@ mkMacawOverrideMap ::
   C.HandleAllocator ->
   C.GlobalVar CLM.Mem ->
   ArchContext arch ->
-  IO (Either ParseProgramError (Map.Map W4.FunctionName (MacawSExpOverride p sym arch)))
+  IO (Either ParseProgramError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
 mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
   userOvsResult <- loadOverrides userOvPaths halloc
   case userOvsResult of
@@ -223,7 +223,7 @@ mkMacawOverrideMapWithBuiltins ::
   ArchContext arch ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
   LLVMFileSystem (MC.ArchAddrWidth arch) ->
-  IO (Either ParseProgramError (Map.Map W4.FunctionName (MacawSExpOverride p sym arch)))
+  IO (Either ParseProgramError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
 mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg fs = do
   let builtinOvs = builtinStubsOverrides bak mvar memCfg fs
   mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
@@ -249,9 +249,9 @@ registerMacawSexpProgForwardDeclarations ::
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   -- | The map of public function names to their overrides.
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   -- | The map of forward declaration names to their handles.
-  Map.Map W4.FunctionName C.SomeHandle ->
+  Map.Map WFN.FunctionName C.SomeHandle ->
   CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerMacawSexpProgForwardDeclarations bak la dl mvar errCb funOvs =
   registerMacawForwardDeclarations bak funOvs $
@@ -271,11 +271,11 @@ registerMacawOvForwardDeclarations ::
   ) =>
   bak ->
   -- | The map of public function names to their overrides.
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   -- | The map of forward declaration names to their handles.
-  Map.Map W4.FunctionName C.SomeHandle ->
+  Map.Map WFN.FunctionName C.SomeHandle ->
   CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerMacawOvForwardDeclarations bak funOvs errCb =
   registerMacawForwardDeclarations bak funOvs errCb
@@ -293,11 +293,11 @@ registerMacawForwardDeclarations ::
   ) =>
   bak ->
   -- | The map of public function names to their overrides.
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   -- | The map of forward declaration names to their handles.
-  Map.Map W4.FunctionName C.SomeHandle ->
+  Map.Map WFN.FunctionName C.SomeHandle ->
   CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerMacawForwardDeclarations bak funOvs errCb fwdDecs = do
   let CantResolveOverrideCallback cannotResolve = errCb
@@ -317,15 +317,15 @@ registerMacawForwardDeclaration ::
   ) =>
   bak ->
   -- | The map of public function names to their overrides.
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   -- | What to do when a forward declaration cannot be resolved.
   ( forall args ret.
-    W4.FunctionName ->
+    WFN.FunctionName ->
     C.FnHandle args ret ->
     CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
   ) ->
   -- | Name of the forward declaration
-  W4.FunctionName ->
+  WFN.FunctionName ->
   -- | Handle to bind
   C.FnHandle args' ret' ->
   CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
@@ -346,9 +346,9 @@ lookupMacawForwardDeclarationOverride ::
   ) =>
   bak ->
   -- | The map of public function names to their overrides.
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   -- | Name of the forward declaration
-  W4.FunctionName ->
+  WFN.FunctionName ->
   -- | Handle to bind
   C.FnHandle args ret ->
   Maybe (CS.Override p sym (Symbolic.MacawExt arch) args ret)

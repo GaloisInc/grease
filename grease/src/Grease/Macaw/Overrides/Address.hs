@@ -60,7 +60,7 @@ import Text.Megaparsec.Char qualified as TMC
 import Text.Megaparsec.Char.Lexer qualified as TMCL
 import What4.Expr qualified as W4
 import What4.Expr.Builder qualified as WEB
-import What4.FunctionName qualified as W4
+import What4.FunctionName qualified as WFN
 import What4.Protocol.Online qualified as WPO
 
 -- | Parse a symbol from 'TM.Tokens'.
@@ -135,7 +135,7 @@ data AddressOverride arch
   -- S-expression file.
   , aoAuxiliaryOverrides :: [C.AnyCFG (Symbolic.MacawExt arch)]
   -- ^ Overrides for the auxiliary functions in the S-expression file.
-  , aoForwardDeclarations :: Map.Map W4.FunctionName C.SomeHandle
+  , aoForwardDeclarations :: Map.Map WFN.FunctionName C.SomeHandle
   -- ^ The map of names of forward declarations in the S-expression file to
   -- their handles.
   }
@@ -186,7 +186,7 @@ parsedProgToAddressOverride archRegsType memory addr path prog = do
 
   let fnNameText =
         Text.pack $ FilePath.dropExtensions $ FilePath.takeBaseName path
-  let fnName = W4.functionNameFromText fnNameText
+  let fnName = WFN.functionNameFromText fnNameText
 
   (LCCR.AnyCFG mainCfg, auxRegCfgs) <-
     case partitionCfgs fnName path prog of
@@ -265,7 +265,7 @@ registerAddressOverrideForwardDeclarations ::
   bak ->
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   AddressOverrides arch ->
   CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerAddressOverrideForwardDeclarations bak errCb funOvs addrOvs = do
@@ -300,7 +300,7 @@ registerAddressOverrideHandles ::
   bak ->
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
-  Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
+  Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   AddressOverrides arch ->
   CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerAddressOverrideHandles bak errCb funOvs addrOvs = do
