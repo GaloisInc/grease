@@ -27,7 +27,7 @@ import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Utils.RegRewrite qualified as C
 import What4.FunctionName qualified as W4
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 import What4.ProgramLoc qualified as W4
 
 def ::
@@ -110,8 +110,8 @@ defMemWordAbsAddr w absAddr = do
 strLit :: Text -> C.Rewriter ext s src tgt a (C.Reg.Atom src (C.StringType C.Unicode))
 strLit lit =
   def
-    (C.StringRepr W4.UnicodeRepr)
-    (C.Reg.EvalApp $ C.StringLit $ W4.UnicodeLiteral lit)
+    (C.StringRepr WI.UnicodeRepr)
+    (C.Reg.EvalApp $ C.StringLit $ WI.UnicodeLiteral lit)
 
 addAssert ::
   W4.Position ->

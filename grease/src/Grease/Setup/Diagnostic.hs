@@ -11,12 +11,12 @@ module Grease.Setup.Diagnostic (
 import Grease.Diagnostic.Severity (Severity (Trace))
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Prettyprinter qualified as PP
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 
 data Diagnostic where
   SetupMem ::
     forall sym.
-    W4.IsExpr (W4.SymExpr sym) =>
+    WI.IsExpr (WI.SymExpr sym) =>
     CLM.MemImpl sym ->
     Diagnostic
 

@@ -29,7 +29,7 @@ import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as CS
 import Lumberjack qualified as LJ
 import What4.FunctionName qualified as W4
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMSimulatorHooksDiagnostic diag)
@@ -79,7 +79,7 @@ extensionExec la halloc dl errorSymbolicFunCalls baseExt stmt st =
     CLLVM.LLVM_LoadHandle mvar _ltp ptrReg args ret
       | let ptr = CS.regValue ptrReg
       , not (getErrorSymbolicFunCalls errorSymbolicFunCalls)
-      , Nothing <- W4.asNat (Mem.llvmPointerBlock ptr) -> do
+      , Nothing <- WI.asNat (Mem.llvmPointerBlock ptr) -> do
           let ptrWidth = Mem.ptrWidth ptr
           Refl <-
             -- LLVM_LoadHandle binds an existentially quantified type variable

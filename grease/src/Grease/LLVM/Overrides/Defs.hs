@@ -23,7 +23,7 @@ import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.QQ (llvmOvr)
 import Lang.Crucible.Simulator.OverrideSim qualified as C
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 
 -- | Custom libc overrides.
 customLLVMOverrides ::
@@ -62,5 +62,5 @@ getoptLong =
     ( \_memOps _args -> do
         sym <- C.getSymInterface
         let i32 = knownNat @32
-        liftIO (W4.bvLit sym i32 (BV.mkBV i32 (-1)))
+        liftIO (WI.bvLit sym i32 (BV.mkBV i32 (-1)))
     )

@@ -19,7 +19,7 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
 import Stubs.Syscall qualified as Stubs
 import What4.FunctionName qualified as W4
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 
 -- | All of the overrides that work across all supported configurations.
 --
@@ -44,7 +44,7 @@ buildGetppidOverride ::
   CLM.HasPtrWidth w =>
   Stubs.Syscall p sym Ctx.EmptyCtx ext (CLM.LLVMPointerType w)
 buildGetppidOverride =
-  W4.withKnownNat ?ptrWidth $
+  WI.withKnownNat ?ptrWidth $
     Stubs.mkSyscall "getppid" $
       \bak _args -> callGetppid bak
 
@@ -66,5 +66,5 @@ callGetppid bak = liftIO $ do
   -- The parent PID can change at any time due to reparenting, so this override
   -- always returns a new fresh value.
   symbolicResult <-
-    W4.freshConstant sym (W4.safeSymbol "getppid") (W4.BaseBVRepr ?ptrWidth)
+    WI.freshConstant sym (WI.safeSymbol "getppid") (WI.BaseBVRepr ?ptrWidth)
   CLM.llvmPointer_bv sym symbolicResult

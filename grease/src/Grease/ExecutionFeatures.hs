@@ -28,7 +28,7 @@ import Lang.Crucible.Utils.Seconds qualified as C
 import Prettyprinter qualified as PP
 import What4.Config qualified as W4C
 import What4.Expr qualified as W4
-import What4.Interface qualified as W4I
+import What4.Interface qualified as WI
 import What4.Protocol.Online qualified as WPO
 
 -- | Execution features related to bounding and timeouts
@@ -56,7 +56,7 @@ pathSatFeat ::
 pathSatFeat bak = do
   let sym = CB.backendGetSym bak
   pathSat <- C.pathSatisfiabilityFeature sym (C.considerSatisfiability bak)
-  let cfg = W4I.getConfiguration sym
+  let cfg = WI.getConfiguration sym
   assertThenAssume <- W4C.getOptionSetting CB.assertThenAssumeConfigOption cfg
   -- This can technically return warnings/errors, but seems unlikely in this
   -- case...

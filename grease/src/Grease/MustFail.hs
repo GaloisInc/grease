@@ -22,7 +22,7 @@ import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.Errors.MemoryError qualified as Mem
 import Lang.Crucible.Simulator.SimError qualified as C
 import What4.Expr.Builder qualified as W4
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4
 import What4.Protocol.Online qualified as W4
 import What4.SatResult qualified as W4
@@ -30,7 +30,7 @@ import What4.SatResult qualified as W4
 -- | Should this proof obligation be excluded from consideration by the must-
 -- fail heuristic?
 excludeMustFail ::
-  W4.IsExprBuilder sym =>
+  WI.IsExprBuilder sym =>
   CB.ProofObligation sym ->
   Maybe (ErrorDescription sym) ->
   Bool
@@ -55,27 +55,27 @@ excludeMustFail obligation minfo =
             _ -> False
         ]
 
--- | Given a 'C.ProofObligation', produce a 'W4.Pred' that is unsatisfiable when
+-- | Given a 'C.ProofObligation', produce a 'WI.Pred' that is unsatisfiable when
 -- the obligation \"must fail\", i.e., it is satisfiable when either the goal
 -- is satisfiable, or the program is able to take another path.
 mustFailPred ::
   CB.IsSymBackend sym bak =>
   bak ->
   CB.ProofObligation sym ->
-  IO (W4.Pred sym)
+  IO (WI.Pred sym)
 mustFailPred bak obligation = do
   let sym = CB.backendGetSym bak
   let lp = CB.proofGoal obligation
 
   -- If `notAssumps` is unsat, then the program must take this path.
   assumps <- CB.assumptionsPred sym (CB.proofAssumptions obligation)
-  notAssumps <- W4.notPred sym assumps
+  notAssumps <- WI.notPred sym assumps
 
   -- If the safety predicate is unsatisfiable and we necessarily took this
   -- path, then the predicate fails regardless of any data GREASE invented
   -- (e.g., argument values), and we report it.
   let goal = lp Lens.^. W4.labeledPred
-  W4.orPred sym goal notAssumps
+  WI.orPred sym goal notAssumps
 
 -- | Check if at least one of the given 'C.ProofObligation's is guaranteed to
 -- fail, i.e., if the conjunction of their 'mustFailPred's is unsatisfiable.
@@ -91,7 +91,7 @@ oneMustFail ::
 oneMustFail bak obligations = do
   let sym = CB.backendGetSym bak
   mustFail <-
-    W4.andAllOf sym Lens.folded
+    WI.andAllOf sym Lens.folded
       Monad.=<< Traversable.traverse (mustFailPred bak) obligations
   let onlineDisabled = Monad.fail "`must-fail` requires online solving to be enabled"
   withSolverProcess bak onlineDisabled Function.$ \solverProc ->

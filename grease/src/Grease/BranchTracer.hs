@@ -18,14 +18,14 @@ import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.EvalStmt qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
 import Lumberjack qualified as LJ
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 
 -- | 'IO' action to run upon reaching a symbolic branch.
 newtype BranchTracer p sym ext
   = BranchTracer
   { getBranchTracer ::
       forall rtp f args postdom_args.
-      W4.Pred sym {- predicate to branch on -} ->
+      WI.Pred sym {- predicate to branch on -} ->
       C.PausedFrame p sym ext rtp f {- true path -} ->
       C.PausedFrame p sym ext rtp f {- false path -} ->
       C.CrucibleBranchTarget f postdom_args {- merge point -} ->

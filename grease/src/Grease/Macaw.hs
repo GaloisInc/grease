@@ -80,7 +80,7 @@ import Stubs.Common qualified as Stubs
 import Stubs.Syscall qualified as Stubs
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as W4
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 import What4.ProgramLoc as W4PL
 import What4.Protocol.Online qualified as W4
 
@@ -158,7 +158,7 @@ globalMemoryHooks arch relocs =
     sym ->
     MM.Relocation (MC.ArchAddrWidth arch) ->
     Maybe String ->
-    IO [W4.SymBV sym 8]
+    IO [WI.SymBV sym 8]
   symbolicRelocation sym reloc mName = do
     let name = fromMaybe "unknown" mName ++ "-reloc"
     traverse (symbolicByte sym name) [0 .. MM.relocationSize reloc - 1]
@@ -172,10 +172,10 @@ globalMemoryHooks arch relocs =
     String ->
     -- The index to use as a suffix symbolic byte's name (zero-indexed).
     Int ->
-    IO (W4.SymBV sym 8)
+    IO (WI.SymBV sym 8)
   symbolicByte sym name idx = do
-    let symbol = W4.safeSymbol $ name ++ "-byte" ++ show idx
-    W4.freshConstant sym symbol W4.knownRepr
+    let symbol = WI.safeSymbol $ name ++ "-byte" ++ show idx
+    WI.freshConstant sym symbol WI.knownRepr
 
   -- Convert a MemAddr to an absolute address.
   relocAddrToAbsAddr ::
@@ -203,7 +203,7 @@ globalMemoryHooks arch relocs =
     sym ->
     MM.Relocation (MC.ArchAddrWidth arch) ->
     MM.MemWord (MC.ArchAddrWidth arch) ->
-    IO [W4.SymBV sym 8]
+    IO [WI.SymBV sym 8]
   relocAddrBV sym reloc relocAbsBaseAddr = do
     -- First, compute the address by adding the offset...
     let relocAddr = relocAbsBaseAddr + MM.relocationOffset reloc
@@ -220,7 +220,7 @@ globalMemoryHooks arch relocs =
             (BV.asBytesLE archAddrWidth bv)
 
     --- ...finally, convert each byte to a SymBV.
-    traverse (W4.bvLit sym (W4.knownNat @8) . BV.word8) bytesLE
+    traverse (WI.bvLit sym (WI.knownNat @8) . BV.word8) bytesLE
 
   -- Handle a RelativeReloc relocation. This is perhaps the simplest type of
   -- relocation to handle, as there are no symbol names to cross-reference.
@@ -231,7 +231,7 @@ globalMemoryHooks arch relocs =
     sym ->
     MM.Relocation (MC.ArchAddrWidth arch) ->
     MM.MemWord (MC.ArchAddrWidth arch) ->
-    IO [W4.SymBV sym 8]
+    IO [WI.SymBV sym 8]
   relativeRelocHook = relocAddrBV
 
   -- Handle a SymbolReloc relocation (e.g., GLOB_DAT). We populate
@@ -247,7 +247,7 @@ globalMemoryHooks arch relocs =
     sym ->
     MM.Relocation (MC.ArchAddrWidth arch) ->
     MM.MemWord (MC.ArchAddrWidth arch) ->
-    IO [W4.SymBV sym 8]
+    IO [WI.SymBV sym 8]
   symbolRelocHook sym reloc relocAbsBaseAddr =
     let
       -- First, convert the relocation address to a Word64. Note that the
@@ -281,7 +281,7 @@ globalMemoryHooks arch relocs =
       relocAbsBaseAddrWord8s :: [Word8]
       relocAbsBaseAddrWord8s = BSL.unpack relocAbsBaseAddrBs
      in
-      traverse (W4.bvLit sym W4.knownRepr . BV.word8) relocAbsBaseAddrWord8s
+      traverse (WI.bvLit sym WI.knownRepr . BV.word8) relocAbsBaseAddrWord8s
 
 minimalArgShapes ::
   forall arch sym bak m wptr.
@@ -386,7 +386,7 @@ memConfigInitial bak arch ptrTable skipUnsupportedRelocs relocs =
       -- for MacawReadMem/MacawCondReadMem, which is quite involved.
       Symbolic.concreteImmutableGlobalRead = \memRep ptr -> do
         Monad.unless (Opts.getSkipUnsupportedRelocs skipUnsupportedRelocs) $ do
-          loc <- W4.getCurrentProgramLoc (CB.backendGetSym bak)
+          loc <- WI.getCurrentProgramLoc (CB.backendGetSym bak)
           assertRelocSupported arch loc ptr relocs
         Symbolic.concreteImmutableGlobalRead lazyMemModelConfig memRep ptr
     }
@@ -472,7 +472,7 @@ assertRelocSupported ::
   Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (ArchReloc arch) ->
   IO ()
 assertRelocSupported arch loc (CLM.LLVMPointer _base offset) relocs =
-  case W4.asBV offset of
+  case WI.asBV offset of
     Nothing ->
       -- Symbolic read. Cannot check whether this is an unsupported relocation.
       return ()

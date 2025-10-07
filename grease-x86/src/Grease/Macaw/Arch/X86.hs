@@ -38,7 +38,7 @@ import Stubs.FunctionOverride.X86_64.Linux qualified as Stubs
 import Stubs.Memory.X86_64.Linux qualified as Stubs
 import Stubs.Syscall.Names.X86_64.Linux qualified as Stubs
 import Stubs.Syscall.X86_64.Linux qualified as Stubs
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 
 type instance ArchReloc X86.X86_64 = EE.X86_64_RelocationType
 
@@ -115,6 +115,6 @@ x64FixupStackPointer regs = do
   liftIO $ do
     let CS.RV rsp = regs ^. ixF' X86SymRegs.rsp
     let widthRepr = NatRepr.knownNat @64
-    eight <- W4.bvLit sym widthRepr (BV.mkBV widthRepr 8)
+    eight <- WI.bvLit sym widthRepr (BV.mkBV widthRepr 8)
     rsp' <- CS.RV <$> CLM.ptrAdd sym widthRepr rsp eight
     pure (regs & ixF' X86SymRegs.rsp .~ rsp')

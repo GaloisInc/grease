@@ -21,7 +21,7 @@ import Lang.Crucible.LLVM.SymIO qualified as CLLVM.SymIO
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.SymIO qualified as SymIO
 import Lang.Crucible.SymIO.Loader qualified as SymIO.Loader
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 
 data InitializedFs sym ptrW
   = InitializedFs
@@ -68,18 +68,18 @@ initialLlvmFileSystem halloc sym fsOpts = do
       }
  where
   mkBytes symb nBytes =
-    let mkByte = W4.freshConstant sym symb (W4.BaseBVRepr (knownNat @8))
+    let mkByte = WI.freshConstant sym symb (WI.BaseBVRepr (knownNat @8))
      in Monad.replicateM (fromIntegral nBytes) mkByte
 
   withSymFile fs (path, nBytes) = do
     let pathStr = Text.unpack path
-    symFile <- mkBytes (W4.safeSymbol pathStr) nBytes
+    symFile <- mkBytes (WI.safeSymbol pathStr) nBytes
     let symFiles_ = SymIO.symbolicFiles fs
     let symFiles = Map.insert (SymIO.FileTarget pathStr) symFile symFiles_
     pure (fs{SymIO.symbolicFiles = symFiles})
 
   withSymStdin nBytes fs = do
-    symStdin <- mkBytes (W4.safeSymbol "stdin") nBytes
+    symStdin <- mkBytes (WI.safeSymbol "stdin") nBytes
     let symFiles_ = SymIO.symbolicFiles fs
     let symFiles = Map.insert SymIO.StdinTarget symStdin symFiles_
     pure (fs{SymIO.symbolicFiles = symFiles})

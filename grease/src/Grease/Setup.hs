@@ -68,10 +68,10 @@ import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
 import System.IO (IO)
 import Text.Show (show)
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 import Prelude (Int, Num (..), fromIntegral)
 
--- | Name for fresh symbolic values, passed to 'W4.safeSymbol'. The phantom
+-- | Name for fresh symbolic values, passed to 'WI.safeSymbol'. The phantom
 -- type parameter prevents making recursive calls without changing the name.
 newtype ValueName (t :: C.CrucibleType) = ValueName {getValueName :: String}
 
@@ -88,8 +88,8 @@ addSuffix (ValueName nm) suf = ValueName (nm <> suf)
 addIndex :: ValueName t -> Int -> ValueName t'
 addIndex (ValueName nm) i = ValueName (nm <> "_" <> show i)
 
-safeSymbol :: ValueName t -> W4.SolverSymbol
-safeSymbol = W4.safeSymbol . getValueName
+safeSymbol :: ValueName t -> WI.SolverSymbol
+safeSymbol = WI.safeSymbol . getValueName
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (SetupDiagnostic diag)
@@ -138,7 +138,7 @@ freshPtrBv ::
   Setup sym ext argTys w' (Mem.LLVMPtr sym w)
 freshPtrBv sym sel nm w =
   annotatePtrBv sym sel
-    =<< liftIO (W4.freshConstant sym (safeSymbol nm) (W4.BaseBVRepr w))
+    =<< liftIO (WI.freshConstant sym (safeSymbol nm) (WI.BaseBVRepr w))
 
 -- | Memoizes calls to `setupPtr`. Results are stored in the `SetupState` based on the `BlockId`.
 -- Only a single runtime value is produced per `BlockId` allowing for mutliple pointers to the same block in a
@@ -200,14 +200,14 @@ setupPtr la bak layout nm sel target = do
     PtrTarget bid Seq.Empty -> do
       -- See Note [Initializing empty pointer shapes]
       ptr <- liftIO $ do
-        offset <- W4.freshConstant sym (safeSymbol (addSuffix nm "_offset")) (W4.BaseBVRepr ?ptrWidth)
+        offset <- WI.freshConstant sym (safeSymbol (addSuffix nm "_offset")) (WI.BaseBVRepr ?ptrWidth)
         Mem.llvmPointer_bv sym offset
       p <- zoom setupAnns (Anns.annotatePtr sym sel ptr)
       pure (p, PtrTarget bid Seq.Empty)
     PtrTarget bid ms -> do
       mem <- use setupMem
       let bytes = ptrTargetSize ?ptrWidth target
-      sz <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral bytes)))
+      sz <- liftIO (WI.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral bytes)))
       let loc = "grease setup (" <> show (ppSelector (PtrCursor.ppDereference @ext) sel) <> ")"
       (ptr, mem') <- liftIO $ CLM.doMalloc bak CLM.HeapAlloc CLM.Mutable loc mem sz align
       setupMem .= mem'
@@ -231,7 +231,7 @@ setupPtr la bak layout nm sel target = do
           let sel'' = sel' & selectorPath %~ PtrCursor.addByteIndex i
           Refl <- pure $ Cursor.lastSnoc (Proxy @(CLM.LLVMPointerType 8)) (Proxy @ts')
           Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @(Cursor.Snoc ts' (CLM.LLVMPointerType 8)))
-          bv <- liftIO (W4.bvLit sym (C.knownNat @8) (BV.mkBV (C.knownNat @8) (fromIntegral b)))
+          bv <- liftIO (WI.bvLit sym (C.knownNat @8) (BV.mkBV (C.knownNat @8) (fromIntegral b)))
           bv' <- annotatePtrBv sym sel'' bv
           pure (Just (bv', rest))
 
@@ -268,7 +268,7 @@ setupPtr la bak layout nm sel target = do
       Refl <- pure $ Cursor.lastSnoc (Proxy @(CLM.LLVMPointerType 8)) (Proxy @ts')
       Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @(Cursor.Snoc ts' (CLM.LLVMPointerType 8)))
       let nm' = addIndex nm i
-      freshPtrBv sym sel'' nm' (W4.knownNat @8)
+      freshPtrBv sym sel'' nm' (WI.knownNat @8)
 
   writeFreshBytes ::
     forall ts'.
@@ -328,14 +328,14 @@ setupPtr la bak layout nm sel target = do
           (val, tgt') <- setupPtrMem la bak layout nm' sel' tgt
           let storTy = CLM.bitvectorType (Bytes.bitsToBytes (natValue ?ptrWidth))
           m <- use setupMem
-          offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset off))))
+          offsetBv <- liftIO (WI.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset off))))
           val' <- liftIO $ Mem.ptrAdd sym ?ptrWidth val offsetBv
           m' <- liftIO $ CLM.doStore bak m ptr (CLM.LLVMPointerRepr ?ptrWidth) storTy Mem.noAlignment val'
           setupMem .= m'
           pure (Pointer (CS.RV val) off tgt')
 
     let offset = memShapeSize ?ptrWidth memShape
-    offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral offset)))
+    offsetBv <- liftIO (WI.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral offset)))
     ptr' <- liftIO $ Mem.ptrAdd sym ?ptrWidth ptr offsetBv
     pure (idx + 1, ptr', memShape' Seq.<| written)
 
@@ -404,7 +404,7 @@ setupShape la bak layout nm tRepr sel s = do
   Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @ts)
   case s of
     ShapeBool _tag -> do
-      b <- liftIO (W4.freshConstant sym (safeSymbol nm) W4.BaseBoolRepr)
+      b <- liftIO (WI.freshConstant sym (safeSymbol nm) WI.BaseBoolRepr)
       b' <- zoom setupAnns (Anns.annotate sym sel b)
       pure (ShapeBool (CS.RV b'))
     ShapeFloat _tag fi -> do
@@ -414,11 +414,11 @@ setupShape la bak layout nm tRepr sel s = do
       bv <- freshPtrBv sym sel nm w
       pure (ShapeExt (ShapePtrBV (CS.RV bv) w))
     ShapeExt (ShapePtrBVLit _tag w bv) -> do
-      bv' <- liftIO (Mem.llvmPointer_bv sym =<< W4.bvLit sym w bv)
+      bv' <- liftIO (Mem.llvmPointer_bv sym =<< WI.bvLit sym w bv)
       pure (ShapeExt (ShapePtrBV (CS.RV bv') w))
     ShapeExt (ShapePtr _tag offset target) -> do
       (basePtr, target') <- setupPtrMem la bak layout nm sel target
-      offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset offset))))
+      offsetBv <- liftIO (WI.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset offset))))
       p <- liftIO (Mem.ptrAdd sym ?ptrWidth basePtr offsetBv)
       pure (ShapeExt (ShapePtr (CS.RV p) offset target'))
     ShapeStruct _tag fs -> do

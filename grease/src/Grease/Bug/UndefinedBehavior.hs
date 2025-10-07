@@ -24,7 +24,7 @@ import Lang.Crucible.LLVM.Errors.UndefinedBehavior qualified as UB
 import Lang.Crucible.Simulator.RegValue qualified as C
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
-import What4.Interface qualified as W4
+import What4.Interface qualified as WI
 
 -- | A simplified, serializable version of 'UndefinedBehavior'
 data UB
@@ -139,7 +139,7 @@ getPoisonType =
     Poison.LLVMAbsIntMin{} -> LLVMAbsIntMin
 
 makeUb ::
-  W4.IsExpr (W4.SymExpr sym) =>
+  WI.IsExpr (WI.SymExpr sym) =>
   UndefinedBehavior (C.RegValue' sym) ->
   UB
 makeUb ub =
