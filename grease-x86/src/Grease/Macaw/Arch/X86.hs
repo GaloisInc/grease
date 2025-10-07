@@ -32,7 +32,7 @@ import Grease.Shape.Pointer (x64StackPtrShape)
 import Grease.Utility (bytes64LE)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as C
 import Stubs.FunctionOverride.X86_64.Linux qualified as Stubs
 import Stubs.Memory.X86_64.Linux qualified as Stubs
@@ -47,7 +47,7 @@ regList :: [Some.Some X86.X86Reg]
 regList = Some.Some <$> X86.x86ArgumentRegs
 
 x86Ctx ::
-  (?memOpts :: Mem.MemOptions) =>
+  (?memOpts :: CLM.MemOptions) =>
   C.HandleAllocator ->
   -- | Initialize the end of the stack to a 'Word64' value (which is split into
   -- a little-endian sequence of 8 concrete bytes) if the value is @Just@.
@@ -76,7 +76,7 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
       , _archVals = avals
       , _archRelocSupported = x64RelocSupported
       , _archGetIP = \regs -> do
-          let C.RV (Mem.LLVMPointer _base off) = regs ^. ixF' X86SymRegs.rip
+          let C.RV (CLM.LLVMPointer _base off) = regs ^. ixF' X86SymRegs.rip
           pure off
       , _archPcReg = X86.X86_IP
       , _archIntegerArguments = \bak ->
@@ -116,5 +116,5 @@ x64FixupStackPointer regs = do
     let C.RV rsp = regs ^. ixF' X86SymRegs.rsp
     let widthRepr = NatRepr.knownNat @64
     eight <- W4.bvLit sym widthRepr (BV.mkBV widthRepr 8)
-    rsp' <- C.RV <$> Mem.ptrAdd sym widthRepr rsp eight
+    rsp' <- C.RV <$> CLM.ptrAdd sym widthRepr rsp eight
     pure (regs & ixF' X86SymRegs.rsp .~ rsp')

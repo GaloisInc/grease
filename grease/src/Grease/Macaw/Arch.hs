@@ -52,7 +52,7 @@ import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as C
 import Stubs.Common qualified as Stubs
 import Stubs.FunctionOverride qualified as Stubs
@@ -106,14 +106,14 @@ data ArchContext arch = ArchContext
     _archIntegerArguments ::
       forall sym bak atps.
       ( C.IsSymBackend sym bak
-      , Mem.HasLLVMAnn sym
+      , CLM.HasLLVMAnn sym
       ) =>
       bak ->
       C.CtxRepr atps ->
       {- Types of arguments -}
       Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
       {- Argument register values -}
-      Mem.MemImpl sym ->
+      CLM.MemImpl sym ->
       {- The memory state at the time of the function call -}
       IO (Ctx.Assignment (C.RegEntry sym) atps, Stubs.GetVarArg sym)
   , {- A pair containing the function argument values and a callback for
@@ -144,13 +144,13 @@ data ArchContext arch = ArchContext
       , sym ~ W4.ExprBuilder scope st fs
       , bak ~ C.OnlineBackend solver scope st fs
       , W4.OnlineSolver solver
-      , Mem.HasLLVMAnn sym
+      , CLM.HasLLVMAnn sym
       ) =>
       bak ->
       Symbolic.GenArchVals mem arch ->
       Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
       {- Registers for the given architecture -}
-      Mem.MemImpl sym ->
+      CLM.MemImpl sym ->
       {- The memory state at the time of the function call -}
       IO (Maybe (MC.MemWord (MC.ArchAddrWidth arch)))
   , -- Given a full register state, extract all of the arguments we need for
@@ -197,7 +197,7 @@ data ArchContext arch = ArchContext
        type -}
     -- A mapping from syscall numbers to names.
     _archSyscallCodeMapping :: IntMap Text
-  , _archStackPtrShape :: PtrShape (Symbolic.MacawExt arch) (MC.ArchAddrWidth arch) NoTag (Mem.LLVMPointerType (MC.ArchAddrWidth arch))
+  , _archStackPtrShape :: PtrShape (Symbolic.MacawExt arch) (MC.ArchAddrWidth arch) NoTag (CLM.LLVMPointerType (MC.ArchAddrWidth arch))
   -- ^ Shape of the stack pointer
   --
   -- A function that writes to the stack on architectures where it grows down
@@ -217,13 +217,13 @@ data ArchContext arch = ArchContext
     -- See Note [Coping with stack protection] for how this is used.
     _archInitGlobals ::
       forall sym.
-      ( Mem.HasLLVMAnn sym
+      ( CLM.HasLLVMAnn sym
       , SymbolicMemory.MacawProcessAssertion sym
       ) =>
       Stubs.Sym sym ->
-      Mem.MemImpl sym ->
+      CLM.MemImpl sym ->
       C.SymGlobalState sym ->
-      IO (Mem.MemImpl sym, C.SymGlobalState sym)
+      IO (CLM.MemImpl sym, C.SymGlobalState sym)
   , _archRegOverrides :: Map RegName (BV.BV (MC.ArchAddrWidth arch))
   -- ^ When setting up the initial register values just before starting
   -- simulation, override the default values for the following registers and

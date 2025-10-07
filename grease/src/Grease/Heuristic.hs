@@ -67,7 +67,7 @@ import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.Errors.MemoryError qualified as Mem
 import Lang.Crucible.LLVM.Errors.UndefinedBehavior qualified as Mem
 import Lang.Crucible.LLVM.Extension (LLVM)
-import Lang.Crucible.LLVM.MemModel qualified as Mem hiding (Mem)
+import Lang.Crucible.LLVM.MemModel qualified as CLM hiding (Mem)
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Generic qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
@@ -419,8 +419,8 @@ mustFailHeuristic ::
   ( OnlineSolverAndBackend solver sym bak t st fs
   , 16 C.<= wptr
   , Mem.HasPtrWidth wptr
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , fs ~ W4.Flags fm
   ) =>
   RefineHeuristic sym bak ext argTys
@@ -464,8 +464,8 @@ pointerHeuristic ::
   , OnlineSolverAndBackend solver sym bak t st fs
   , 16 C.<= wptr
   , Mem.HasPtrWidth wptr
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   MemoryErrorHeuristic sym ext wptr argTys ->
@@ -510,8 +510,8 @@ pointerHeuristics ::
   , OnlineSolverAndBackend solver sym bak t st fs
   , 16 C.<= wptr
   , Mem.HasPtrWidth wptr
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   MemoryErrorHeuristic sym ext wptr argTys ->
@@ -540,11 +540,11 @@ allocInfoFromPtr sym mem ptr = do
 -- return the name of the associated global variable. Returns 'Nothing' if the
 -- mutability is wrong, if the pointer is not a global, or if the pointer\'s
 -- block or offset aren\'t concrete.
-globalPtrName :: C.IsSymInterface sym => sym -> Mem.MemImpl sym -> Mem.Mutability -> Mem.LLVMPtr sym w -> Maybe String
+globalPtrName :: C.IsSymInterface sym => sym -> CLM.MemImpl sym -> Mem.Mutability -> Mem.LLVMPtr sym w -> Maybe String
 globalPtrName sym mem mut ptr =
-  case allocInfoFromPtr sym (Mem.memImplHeap mem) ptr of
+  case allocInfoFromPtr sym (CLM.memImplHeap mem) ptr of
     Just (Mem.AllocInfo Mem.GlobalAlloc _sz actualMut _align _loc) | mut == actualMut -> do
-      L.Symbol nm <- Mem.isGlobalPointer (Mem.memImplSymbolMap mem) ptr
+      L.Symbol nm <- Mem.isGlobalPointer (CLM.memImplSymbolMap mem) ptr
       Just nm
     _ -> Nothing
 
@@ -562,8 +562,8 @@ llvmHeuristics ::
   forall solver sym bak t st fs wptr argTys.
   ( OnlineSolverAndBackend solver sym bak t st fs
   , Mem.HasPtrWidth wptr
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , wptr ~ 64 -- TODO(lb): Why is this necessary?
   ) =>
   GreaseLogAction ->
@@ -584,8 +584,8 @@ macawHeuristics ::
   , Symbolic.SymArchConstraints arch
   , 16 C.<= MC.ArchAddrWidth arch
   , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   RegNames arch ->

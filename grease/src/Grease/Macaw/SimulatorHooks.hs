@@ -24,7 +24,7 @@ import Grease.Panic (panic)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.Evaluation qualified as C
 import Lumberjack qualified as LJ
@@ -55,8 +55,8 @@ doLog la diag = LJ.writeLog la (SimulatorHooksDiagnostic diag)
 -- currently uses symbolic block numbers, which causes this assertion to fail.
 greaseMacawExtImpl ::
   ( C.IsSymBackend sym bak
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , sym ~ W4.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
   , 16 C.<= MC.ArchAddrWidth arch
@@ -65,7 +65,7 @@ greaseMacawExtImpl ::
   bak ->
   GreaseLogAction ->
   AddressOverrides arch ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   C.ExtensionImpl p sym (Symbolic.MacawExt arch)
 greaseMacawExtImpl archCtx bak la tgtOvs memVar macawExtImpl =
@@ -86,7 +86,7 @@ extensionEval ::
 extensionEval baseExt bak iTypes logFn cst evalFn =
   \case
     Symbolic.PtrToBits _w ptr -> do
-      Mem.LLVMPointer _blk off <- evalFn ptr
+      CLM.LLVMPointer _blk off <- evalFn ptr
       pure off
     e -> defaultExec e
  where
@@ -101,13 +101,13 @@ ptrAnd ::
   C.IsSymBackend sym bak =>
   (1 C.<= w) =>
   bak ->
-  Mem.LLVMPtr sym w ->
-  Mem.LLVMPtr sym w ->
-  IO (Mem.LLVMPtr sym w)
+  CLM.LLVMPtr sym w ->
+  CLM.LLVMPtr sym w ->
+  IO (CLM.LLVMPtr sym w)
 ptrAnd bak x y = do
   let sym = C.backendGetSym bak
-  Mem.LLVMPointer xblk xoff <- pure x
-  Mem.LLVMPointer yblk yoff <- pure y
+  CLM.LLVMPointer xblk xoff <- pure x
+  CLM.LLVMPointer yblk yoff <- pure y
   natZero <- W4.natLit sym 0
   xbv <- W4.natEq sym natZero xblk
   ybv <- W4.natEq sym natZero yblk
@@ -119,12 +119,12 @@ ptrAnd bak x y = do
   xptr <- W4.notPred sym xbv
   blk <- W4.natIte sym xptr xblk yblk
   off <- W4.bvAndBits sym xoff yoff
-  pure (Mem.LLVMPointer blk off)
+  pure (CLM.LLVMPointer blk off)
 
 extensionExec ::
   ( C.IsSymBackend sym bak
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , sym ~ W4.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
   , 16 C.<= MC.ArchAddrWidth arch
@@ -133,7 +133,7 @@ extensionExec ::
   bak ->
   GreaseLogAction ->
   AddressOverrides arch ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   Symbolic.MacawEvalStmtFunc (C.StmtExtension (Symbolic.MacawExt arch)) p sym (Symbolic.MacawExt arch)
 extensionExec archCtx bak la tgtOvs memVar baseExt stmt crucState = do
@@ -143,20 +143,20 @@ extensionExec archCtx bak la tgtOvs memVar baseExt stmt crucState = do
       p <- ptrAnd bak x y
       pure (p, crucState)
     Symbolic.PtrEq _w (C.RegEntry _ x) (C.RegEntry _ y) -> do
-      p <- Mem.ptrEq sym (Mem.ptrWidth x) x y
+      p <- CLM.ptrEq sym (CLM.ptrWidth x) x y
       pure (p, crucState)
     Symbolic.PtrLeq _w (C.RegEntry _ x) (C.RegEntry _ y) -> do
-      Mem.LLVMPointer _xblk xoff <- pure x
-      Mem.LLVMPointer _yblk yoff <- pure y
+      CLM.LLVMPointer _xblk xoff <- pure x
+      CLM.LLVMPointer _yblk yoff <- pure y
       p <- W4.bvUle sym xoff yoff
       pure (p, crucState)
     Symbolic.PtrLt _w (C.RegEntry _ x) (C.RegEntry _ y) -> do
-      Mem.LLVMPointer _xblk xoff <- pure x
-      Mem.LLVMPointer _yblk yoff <- pure y
+      CLM.LLVMPointer _xblk xoff <- pure x
+      CLM.LLVMPointer _yblk yoff <- pure y
       p <- W4.bvUlt sym xoff yoff
       pure (p, crucState)
     Symbolic.PtrMux _w (C.RegEntry _ cond) (C.RegEntry _ x) (C.RegEntry _ y) -> do
-      p <- Mem.muxLLVMPtr sym cond x y
+      p <- CLM.muxLLVMPtr sym cond x y
       pure (p, crucState)
     Symbolic.MacawInstructionStart baddr iaddr dis ->
       -- Lifted from PATE...

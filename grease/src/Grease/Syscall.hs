@@ -15,7 +15,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as C
 import Stubs.Syscall qualified as Stubs
 import What4.FunctionName qualified as W4
@@ -25,7 +25,7 @@ import What4.Interface qualified as W4
 --
 -- This list is documented in @doc/syscalls.md@.
 builtinGenericSyscalls ::
-  Mem.HasPtrWidth w =>
+  CLM.HasPtrWidth w =>
   Map.Map W4.FunctionName (Stubs.SomeSyscall p sym arch)
 builtinGenericSyscalls =
   Map.fromList $
@@ -41,8 +41,8 @@ builtinGenericSyscalls =
 -----
 
 buildGetppidOverride ::
-  Mem.HasPtrWidth w =>
-  Stubs.Syscall p sym Ctx.EmptyCtx ext (Mem.LLVMPointerType w)
+  CLM.HasPtrWidth w =>
+  Stubs.Syscall p sym Ctx.EmptyCtx ext (CLM.LLVMPointerType w)
 buildGetppidOverride =
   W4.withKnownNat ?ptrWidth $
     Stubs.mkSyscall "getppid" $
@@ -57,14 +57,14 @@ buildGetppidOverride =
 -- The behavior of this override is documented in @doc/syscalls.md@.
 callGetppid ::
   ( C.IsSymBackend sym bak
-  , Mem.HasPtrWidth w
+  , CLM.HasPtrWidth w
   ) =>
   bak ->
-  C.OverrideSim p sym ext r args ret (Mem.LLVMPtr sym w)
+  C.OverrideSim p sym ext r args ret (CLM.LLVMPtr sym w)
 callGetppid bak = liftIO $ do
   let sym = C.backendGetSym bak
   -- The parent PID can change at any time due to reparenting, so this override
   -- always returns a new fresh value.
   symbolicResult <-
     W4.freshConstant sym (W4.safeSymbol "getppid") (W4.BaseBVRepr ?ptrWidth)
-  Mem.llvmPointer_bv sym symbolicResult
+  CLM.llvmPointer_bv sym symbolicResult

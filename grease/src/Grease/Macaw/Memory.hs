@@ -30,7 +30,7 @@ import GHC.Stack qualified as Stack
 import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as C
 import What4.Interface qualified as W4
 
@@ -42,18 +42,18 @@ import What4.Interface qualified as W4
 loadString ::
   forall sym bak p arch rtp f args solver t st fm.
   ( OnlineSolverAndBackend solver sym bak t st fm
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   -- | The global variable to the LLVM memory.
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   -- | The @macaw-symbolic@ memory model configuration.
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
   -- | The pointer to the string.
-  C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   -- | If @'Just' n@, read a maximum of @n@ characters. If 'Nothing', read until
   -- a concrete null terminator character is encountered.
   Maybe Int ->
@@ -83,15 +83,15 @@ loadString bak mvar mmConf ptr0 maxChars st = do
 loadConcreteString ::
   forall sym bak p arch rtp f args solver t st fm.
   ( OnlineSolverAndBackend solver sym bak t st fm
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
-  C.GlobalVar Mem.Mem ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  C.GlobalVar CLM.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
+  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   Maybe Int ->
   C.SimState p sym (Symbolic.MacawExt arch) rtp f args ->
   IO

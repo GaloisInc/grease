@@ -30,7 +30,7 @@ import Grease.Options (ExtraStackSlots)
 import Grease.Panic (panic)
 import Grease.Shape.Pointer (ppcStackPtrShape)
 import Grease.Utility (bytes32LE)
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator.RegValue qualified as C
 import Stubs.FunctionOverride.PPC.Linux qualified as Stubs
 import Stubs.Memory.PPC.Linux qualified as Stubs
@@ -40,8 +40,8 @@ import Stubs.Syscall.PPC.Linux qualified as Stubs
 type instance ArchReloc PPC.PPC32 = EE.PPC32_RelocationType
 
 ppc32Ctx ::
-  ( ?memOpts :: Mem.MemOptions
-  , Mem.HasPtrWidth 32
+  ( ?memOpts :: CLM.MemOptions
+  , CLM.HasPtrWidth 32
   ) =>
   -- | Initialize the end of the stack to a 'Word32' value (which is split into
   -- a little-endian sequence of 4 concrete bytes) if the value is @Just@.
@@ -70,7 +70,7 @@ ppc32Ctx mbReturnAddr stackArgSlots = do
     ArchContext
       { _archInfo = PPC.ppc32_linux_info
       , _archGetIP = \regs -> do
-          let C.RV (Mem.LLVMPointer _base off) = regs ^. ixF' PPC.Symbolic.Regs.ip
+          let C.RV (CLM.LLVMPointer _base off) = regs ^. ixF' PPC.Symbolic.Regs.ip
           pure off
       , _archPcReg = PPC.PPC_IP
       , _archVals = avals

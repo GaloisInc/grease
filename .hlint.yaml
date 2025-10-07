@@ -145,6 +145,7 @@
 
     # galois packages
     - { name: Data.BitVector.Sized, as: BV }
+    - { name: Lang.Crucible.LLVM.MemModel, as: CLM }
     - { name: Lumberjack, as: LJ }
 
     # parameterized-utils

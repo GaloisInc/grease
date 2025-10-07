@@ -32,7 +32,7 @@ import Grease.Shape.Pointer (PtrShape (ShapePtrBV))
 import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes (Bytes)
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Types as C
 import Text.LLVM.AST as L
 import Text.LLVM.DebugUtils qualified as LDU
@@ -61,7 +61,7 @@ decodeBasicTypeName =
 
 -- It is acceptable for this function to under-estimate the size of a type:
 -- GREASE's heuristics will expand the allocation as necessary.
-minTypeSize :: Mem.HasPtrWidth w => LDU.Info -> Bytes
+minTypeSize :: CLM.HasPtrWidth w => LDU.Info -> Bytes
 minTypeSize =
   \case
     LDU.ArrInfo _elemTy -> 0 -- arrays can be empty
@@ -92,7 +92,7 @@ minTypeSize =
 --
 -- It is acceptable for this function to under-estimate the size of a type:
 -- GREASE's heuristics will expand the allocation as necessary.
-asPtrTarget :: Mem.HasPtrWidth 64 => LDU.Info -> PtrShape.PtrTarget 64 NoTag
+asPtrTarget :: CLM.HasPtrWidth 64 => LDU.Info -> PtrShape.PtrTarget 64 NoTag
 asPtrTarget =
   \case
     LDU.ArrInfo _elemTy -> PtrShape.PtrTarget Nothing Seq.empty
@@ -160,7 +160,7 @@ asPtrTarget =
               ]
 
 -- Only supports simple pointer- and integer-like types at the moment.
-decodeType :: Mem.HasPtrWidth 64 => LDU.Info -> Maybe DITypeView
+decodeType :: CLM.HasPtrWidth 64 => LDU.Info -> Maybe DITypeView
 decodeType =
   \case
     LDU.ArrInfo _elemTy -> Nothing
@@ -174,7 +174,7 @@ decodeType =
 -- | Infer the 'Shape' of a single argument from debug information
 diArgShape ::
   ( ExtShape ext ~ PtrShape ext 64
-  , Mem.HasPtrWidth 64
+  , CLM.HasPtrWidth 64
   ) =>
   Seq (Maybe DITypeView) ->
   Int ->
@@ -185,8 +185,8 @@ diArgShape tyViews i t = do
   case tyViews Seq.!? i of
     Just (Just tyView) ->
       case (tyView, t) of
-        (Bv, Mem.LLVMPointerRepr w) -> Right (Shape.ShapeExt (ShapePtrBV NoTag w))
-        (Ptr tgt, Mem.LLVMPointerRepr w)
+        (Bv, CLM.LLVMPointerRepr w) -> Right (Shape.ShapeExt (ShapePtrBV NoTag w))
+        (Ptr tgt, CLM.LLVMPointerRepr w)
           | Just Refl <- testEquality w ?ptrWidth ->
               Right (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.Offset 0) tgt))
         _ -> fallback
@@ -195,7 +195,7 @@ diArgShape tyViews i t = do
 -- | Deduce initial argument shapes from types contained in LLVM debug info.
 diArgShapes ::
   ( ExtShape ext ~ PtrShape ext 64
-  , Mem.HasPtrWidth 64
+  , CLM.HasPtrWidth 64
   ) =>
   W4.FunctionName ->
   Ctx.Assignment C.TypeRepr args ->

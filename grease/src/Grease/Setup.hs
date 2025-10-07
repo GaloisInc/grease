@@ -61,7 +61,7 @@ import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.LLVM.Bytes (Bytes)
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.DataLayout qualified as Mem
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Types qualified as C
@@ -98,10 +98,10 @@ doLog la diag = LJ.writeLog la (SetupDiagnostic diag)
 -- `setupResTgt` stores the runtime representation of what is stored in that pointer. These
 -- results are memoized during setup based on `BlockId` so that a given block is only given
 -- one runtime value.
-data SetupRes sym w = SetupRes {setupResPtr :: C.RegValue sym (Mem.LLVMPointerType w), setupResTgt :: PtrTarget w (C.RegValue' sym)}
+data SetupRes sym w = SetupRes {setupResPtr :: C.RegValue sym (CLM.LLVMPointerType w), setupResTgt :: PtrTarget w (C.RegValue' sym)}
 
 data SetupState sym ext argTys w = SetupState
-  { _setupMem :: Mem.MemImpl sym
+  { _setupMem :: CLM.MemImpl sym
   , _setupAnns :: Anns.Annotations sym ext argTys
   , _setupRes :: Map.Map BlockId (SetupRes sym w)
   -- ^ Memoization table that maps observed 'BlockId's from 'setupPtrMem' to observed 'SetupRes' results.
@@ -114,7 +114,7 @@ type Setup sym ext argTys w a = StateT (SetupState sym ext argTys w) IO a
 annotatePtrBv ::
   forall sym ext argTys ts regTy w w'.
   ( C.IsSymInterface sym
-  , Cursor.Last (regTy ': ts) ~ Mem.LLVMPointerType w
+  , Cursor.Last (regTy ': ts) ~ CLM.LLVMPointerType w
   , 1 C.<= w
   ) =>
   sym ->
@@ -128,12 +128,12 @@ annotatePtrBv sym sel bv = do
 freshPtrBv ::
   forall sym ext argTys ts regTy w w'.
   ( C.IsSymInterface sym
-  , Cursor.Last (regTy ': ts) ~ Mem.LLVMPointerType w
+  , Cursor.Last (regTy ': ts) ~ CLM.LLVMPointerType w
   , 1 C.<= w
   ) =>
   sym ->
   Selector ext argTys ts regTy ->
-  ValueName (Mem.LLVMPointerType w) ->
+  ValueName (CLM.LLVMPointerType w) ->
   NatRepr w ->
   Setup sym ext argTys w' (Mem.LLVMPtr sym w)
 freshPtrBv sym sel nm w =
@@ -147,19 +147,19 @@ setupPtrMem ::
   forall sym bak ext tag w argTys ts regTy.
   ( C.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
-  , Mem.HasPtrWidth w
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasPtrWidth w
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
-  , Cursor.Last (regTy ': ts) ~ Mem.LLVMPointerType w
+  , Cursor.Last (regTy ': ts) ~ CLM.LLVMPointerType w
   ) =>
   GreaseLogAction ->
   bak ->
   Mem.DataLayout ->
-  ValueName (Mem.LLVMPointerType w) ->
+  ValueName (CLM.LLVMPointerType w) ->
   Selector ext argTys ts regTy ->
   PtrTarget w tag ->
-  Setup sym ext argTys w (C.RegValue sym (Mem.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
+  Setup sym ext argTys w (C.RegValue sym (CLM.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
 setupPtrMem la bak dl nm sel tgt@(PtrTarget bid _) =
   let unseenFallback = setupPtr la bak dl nm sel tgt
    in case bid of
@@ -180,19 +180,19 @@ setupPtr ::
   forall sym bak ext tag w argTys ts regTy.
   ( C.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
-  , Mem.HasPtrWidth w
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasPtrWidth w
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
-  , Cursor.Last (regTy ': ts) ~ Mem.LLVMPointerType w
+  , Cursor.Last (regTy ': ts) ~ CLM.LLVMPointerType w
   ) =>
   GreaseLogAction ->
   bak ->
   Mem.DataLayout ->
-  ValueName (Mem.LLVMPointerType w) ->
+  ValueName (CLM.LLVMPointerType w) ->
   Selector ext argTys ts regTy ->
   PtrTarget w tag ->
-  Setup sym ext argTys w (C.RegValue sym (Mem.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
+  Setup sym ext argTys w (C.RegValue sym (CLM.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
 setupPtr la bak layout nm sel target = do
   let align = Mem.maxAlignment layout
   let sym = C.backendGetSym bak
@@ -209,7 +209,7 @@ setupPtr la bak layout nm sel target = do
       let bytes = ptrTargetSize ?ptrWidth target
       sz <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral bytes)))
       let loc = "grease setup (" <> show (ppSelector (PtrCursor.ppDereference @ext) sel) <> ")"
-      (ptr, mem') <- liftIO $ Mem.doMalloc bak Mem.HeapAlloc Mem.Mutable loc mem sz align
+      (ptr, mem') <- liftIO $ CLM.doMalloc bak CLM.HeapAlloc CLM.Mutable loc mem sz align
       setupMem .= mem'
       -- write nested shapes to memory
       (_, _, ms') <- foldM go (0, ptr, Seq.empty) ms
@@ -218,7 +218,7 @@ setupPtr la bak layout nm sel target = do
  where
   makeKnownBytes ::
     forall ts'.
-    Cursor.Last (regTy ': ts') ~ Mem.LLVMPointerType w =>
+    Cursor.Last (regTy ': ts') ~ CLM.LLVMPointerType w =>
     sym ->
     Selector ext argTys ts' regTy ->
     [Word8] ->
@@ -229,35 +229,35 @@ setupPtr la bak layout nm sel target = do
         [] -> pure Nothing
         (i, b) : rest -> do
           let sel'' = sel' & selectorPath %~ PtrCursor.addByteIndex i
-          Refl <- pure $ Cursor.lastSnoc (Proxy @(Mem.LLVMPointerType 8)) (Proxy @ts')
-          Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @(Cursor.Snoc ts' (Mem.LLVMPointerType 8)))
+          Refl <- pure $ Cursor.lastSnoc (Proxy @(CLM.LLVMPointerType 8)) (Proxy @ts')
+          Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @(Cursor.Snoc ts' (CLM.LLVMPointerType 8)))
           bv <- liftIO (W4.bvLit sym (C.knownNat @8) (BV.mkBV (C.knownNat @8) (fromIntegral b)))
           bv' <- annotatePtrBv sym sel'' bv
           pure (Just (bv', rest))
 
   writeKnownBytes ::
     forall ts'.
-    Cursor.Last (regTy ': ts') ~ Mem.LLVMPointerType w =>
+    Cursor.Last (regTy ': ts') ~ CLM.LLVMPointerType w =>
     C.IsSymBackend sym bak =>
     sym ->
-    Mem.MemImpl sym ->
+    CLM.MemImpl sym ->
     Selector ext argTys ts' regTy ->
     -- Pointer to write bytes to
-    C.RegValue sym (Mem.LLVMPointerType w) ->
+    C.RegValue sym (CLM.LLVMPointerType w) ->
     [Word8] ->
-    Setup sym ext argTys w (Mem.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
+    Setup sym ext argTys w (CLM.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
   writeKnownBytes sym m sel' ptr bytes = do
-    let i8 = Mem.bitvectorType (Bytes.toBytes (1 :: Int))
+    let i8 = CLM.bitvectorType (Bytes.toBytes (1 :: Int))
     vals <- makeKnownBytes sym sel' bytes
-    let mkInt bv = Mem.LLVMValInt (Mem.llvmPointerBlock bv) (Mem.llvmPointerOffset bv)
-    let val = Mem.LLVMValArray i8 (Vec.map mkInt vals)
-    let storTy = Mem.arrayType (fromIntegral (List.length bytes)) i8
-    m' <- liftIO $ Mem.storeRaw bak m ptr storTy Mem.noAlignment val
+    let mkInt bv = CLM.LLVMValInt (Mem.llvmPointerBlock bv) (Mem.llvmPointerOffset bv)
+    let val = CLM.LLVMValArray i8 (Vec.map mkInt vals)
+    let storTy = CLM.arrayType (fromIntegral (List.length bytes)) i8
+    m' <- liftIO $ CLM.storeRaw bak m ptr storTy Mem.noAlignment val
     pure (m', vals)
 
   makeFreshBytes ::
     forall ts'.
-    Cursor.Last (regTy ': ts') ~ Mem.LLVMPointerType w =>
+    Cursor.Last (regTy ': ts') ~ CLM.LLVMPointerType w =>
     sym ->
     Selector ext argTys ts' regTy ->
     Bytes ->
@@ -265,46 +265,46 @@ setupPtr la bak layout nm sel target = do
   makeFreshBytes sym sel' bytes =
     Vec.generateM (fromIntegral (Bytes.bytesToInteger bytes)) $ \i -> do
       let sel'' = sel' & selectorPath %~ PtrCursor.addByteIndex i
-      Refl <- pure $ Cursor.lastSnoc (Proxy @(Mem.LLVMPointerType 8)) (Proxy @ts')
-      Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @(Cursor.Snoc ts' (Mem.LLVMPointerType 8)))
+      Refl <- pure $ Cursor.lastSnoc (Proxy @(CLM.LLVMPointerType 8)) (Proxy @ts')
+      Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @(Cursor.Snoc ts' (CLM.LLVMPointerType 8)))
       let nm' = addIndex nm i
       freshPtrBv sym sel'' nm' (W4.knownNat @8)
 
   writeFreshBytes ::
     forall ts'.
-    Cursor.Last (regTy ': ts') ~ Mem.LLVMPointerType w =>
+    Cursor.Last (regTy ': ts') ~ CLM.LLVMPointerType w =>
     C.IsSymBackend sym bak =>
     sym ->
-    Mem.MemImpl sym ->
+    CLM.MemImpl sym ->
     Selector ext argTys ts' regTy ->
     -- Pointer to write bytes to
-    C.RegValue sym (Mem.LLVMPointerType w) ->
+    C.RegValue sym (CLM.LLVMPointerType w) ->
     Bytes ->
-    Setup sym ext argTys w (Mem.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
+    Setup sym ext argTys w (CLM.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
   writeFreshBytes sym m sel' ptr bytes = do
-    let i8 = Mem.bitvectorType (Bytes.toBytes (1 :: Int))
+    let i8 = CLM.bitvectorType (Bytes.toBytes (1 :: Int))
     vals <- makeFreshBytes sym sel' bytes
-    let mkInt bv = Mem.LLVMValInt (Mem.llvmPointerBlock bv) (Mem.llvmPointerOffset bv)
-    let val = Mem.LLVMValArray i8 (Vec.map mkInt vals)
-    let storTy = Mem.arrayType (fromIntegral bytes) i8
-    m' <- liftIO $ Mem.storeRaw bak m ptr storTy Mem.noAlignment val
+    let mkInt bv = CLM.LLVMValInt (Mem.llvmPointerBlock bv) (Mem.llvmPointerOffset bv)
+    let val = CLM.LLVMValArray i8 (Vec.map mkInt vals)
+    let storTy = CLM.arrayType (fromIntegral bytes) i8
+    m' <- liftIO $ CLM.storeRaw bak m ptr storTy Mem.noAlignment val
     pure (m', vals)
 
   go ::
-    Mem.HasPtrWidth w =>
+    CLM.HasPtrWidth w =>
     ( -- Index from base pointer, used for names
       Int
     , -- Base pointer plus current offset
-      C.RegValue sym (Mem.LLVMPointerType w)
+      C.RegValue sym (CLM.LLVMPointerType w)
     , -- Values written so far
       Seq.Seq (MemShape w (C.RegValue' sym))
     ) ->
     MemShape w tag ->
-    Setup sym ext argTys w (Int, C.RegValue sym (Mem.LLVMPointerType w), Seq.Seq (MemShape w (C.RegValue' sym)))
+    Setup sym ext argTys w (Int, C.RegValue sym (CLM.LLVMPointerType w), Seq.Seq (MemShape w (C.RegValue' sym)))
   go (idx, ptr, written) memShape = do
     let sym = C.backendGetSym bak
     let sel' = sel & selectorPath %~ PtrCursor.addIndex idx
-    Refl <- pure $ Cursor.lastSnoc (Proxy @(Mem.LLVMPointerType w)) (Proxy @(regTy ': ts))
+    Refl <- pure $ Cursor.lastSnoc (Proxy @(CLM.LLVMPointerType w)) (Proxy @(regTy ': ts))
     memShape' <-
       case memShape of
         Exactly bytes -> do
@@ -326,11 +326,11 @@ setupPtr la bak layout nm sel target = do
           -- recursive case
           let nm' = addIndex nm idx
           (val, tgt') <- setupPtrMem la bak layout nm' sel' tgt
-          let storTy = Mem.bitvectorType (Bytes.bitsToBytes (natValue ?ptrWidth))
+          let storTy = CLM.bitvectorType (Bytes.bitsToBytes (natValue ?ptrWidth))
           m <- use setupMem
           offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset off))))
           val' <- liftIO $ Mem.ptrAdd sym ?ptrWidth val offsetBv
-          m' <- liftIO $ Mem.doStore bak m ptr (Mem.LLVMPointerRepr ?ptrWidth) storTy Mem.noAlignment val'
+          m' <- liftIO $ CLM.doStore bak m ptr (CLM.LLVMPointerRepr ?ptrWidth) storTy Mem.noAlignment val'
           setupMem .= m'
           pure (Pointer (C.RV val) off tgt')
 
@@ -384,9 +384,9 @@ setupShape ::
   forall sym bak ext tag w argTys ts regTy t.
   ( C.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
-  , Mem.HasPtrWidth w
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasPtrWidth w
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
   , Cursor.Last (regTy ': ts) ~ t
@@ -443,9 +443,9 @@ setupArgs ::
   forall sym bak ext tag argTys w.
   ( C.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
-  , Mem.HasPtrWidth w
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasPtrWidth w
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
   ) =>
@@ -469,10 +469,10 @@ setupArgs la bak layout argNames argTys =
 -- | Memory before execution
 --
 -- Used by heuristics to look up the names of globals.
-newtype InitialMem sym = InitialMem {getInitialMem :: Mem.MemImpl sym}
+newtype InitialMem sym = InitialMem {getInitialMem :: CLM.MemImpl sym}
 
 -- | Memory after running 'setup'
-newtype SetupMem sym = SetupMem {getSetupMem :: Mem.MemImpl sym}
+newtype SetupMem sym = SetupMem {getSetupMem :: CLM.MemImpl sym}
 
 -- | Arguments used for an execution of the target
 --
@@ -481,7 +481,7 @@ newtype Args sym ext argTys
   = Args {getArgs :: Ctx.Assignment (Shape ext (C.RegValue' sym)) argTys}
 
 argTypes ::
-  ( Mem.HasPtrWidth w
+  ( CLM.HasPtrWidth w
   , ExtShape ext ~ PtrShape ext w
   ) =>
   Args sym ext argTys ->
@@ -489,7 +489,7 @@ argTypes ::
 argTypes (Args args) = fmapFC (shapeType ptrShapeType) args
 
 argVals ::
-  ( Mem.HasPtrWidth w
+  ( CLM.HasPtrWidth w
   , ExtShape ext ~ PtrShape ext w
   ) =>
   Args sym ext argTys ->
@@ -498,7 +498,7 @@ argVals (Args args) = fmapFC (getTag getPtrTag) args
 
 argRegMap ::
   forall sym ext w argTys.
-  ( Mem.HasPtrWidth w
+  ( CLM.HasPtrWidth w
   , ExtShape ext ~ PtrShape ext w
   ) =>
   Args sym ext argTys ->
@@ -531,9 +531,9 @@ setup ::
   , MonadCatch m
   , C.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
-  , Mem.HasPtrWidth w
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasPtrWidth w
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
   ) =>

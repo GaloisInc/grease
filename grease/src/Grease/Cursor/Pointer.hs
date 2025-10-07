@@ -28,7 +28,7 @@ import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Grease.Cursor (Cursor, CursorExt)
 import Grease.Cursor qualified as Cursor
 import Lang.Crucible.LLVM.Extension (LLVM)
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Types qualified as C
 import Prettyprinter qualified as PP
 
@@ -37,13 +37,13 @@ data Dereference ext w (ts :: [C.CrucibleType]) where
   DereferenceByte ::
     -- | Offset
     !Int ->
-    Cursor ext (Mem.LLVMPointerType 8 ': ts) ->
-    Dereference ext w (Mem.LLVMPointerType w ': Mem.LLVMPointerType 8 ': ts)
+    Cursor ext (CLM.LLVMPointerType 8 ': ts) ->
+    Dereference ext w (CLM.LLVMPointerType w ': CLM.LLVMPointerType 8 ': ts)
   DereferencePtr ::
     -- | Offset
     !Int ->
-    Cursor ext (Mem.LLVMPointerType w ': ts) ->
-    Dereference ext w (Mem.LLVMPointerType w ': Mem.LLVMPointerType w ': ts)
+    Cursor ext (CLM.LLVMPointerType w ': ts) ->
+    Dereference ext w (CLM.LLVMPointerType w ': CLM.LLVMPointerType w ': ts)
 
 type instance
   CursorExt (Symbolic.MacawExt arch) =
@@ -107,10 +107,10 @@ addField tRepr idx cursor =
 
 addDeref ::
   CursorExt ext ~ Dereference ext w =>
-  Cursor.Last ts ~ Mem.LLVMPointerType w =>
-  (Cursor ext '[Mem.LLVMPointerType w] -> Cursor ext (Cursor.Snoc '[Mem.LLVMPointerType w] (Mem.LLVMPointerType w))) ->
+  Cursor.Last ts ~ CLM.LLVMPointerType w =>
+  (Cursor ext '[CLM.LLVMPointerType w] -> Cursor ext (Cursor.Snoc '[CLM.LLVMPointerType w] (CLM.LLVMPointerType w))) ->
   Cursor ext ts ->
-  Cursor ext (Cursor.Snoc ts (Mem.LLVMPointerType w))
+  Cursor ext (Cursor.Snoc ts (CLM.LLVMPointerType w))
 addDeref f =
   \case
     h@(Cursor.Here{}) -> f h
@@ -122,21 +122,21 @@ addDeref f =
 
 addIndex ::
   CursorExt ext ~ Dereference ext w =>
-  Cursor.Last ts ~ Mem.LLVMPointerType w =>
+  Cursor.Last ts ~ CLM.LLVMPointerType w =>
   Int ->
   Cursor ext ts ->
-  Cursor ext (Cursor.Snoc ts (Mem.LLVMPointerType w))
+  Cursor ext (Cursor.Snoc ts (CLM.LLVMPointerType w))
 addIndex idx = addDeref (\c -> Cursor.CursorExt (DereferencePtr idx c))
 
 addByteIndex ::
   CursorExt ext ~ Dereference ext w =>
-  Cursor.Last ts ~ Mem.LLVMPointerType w =>
+  Cursor.Last ts ~ CLM.LLVMPointerType w =>
   Int ->
   Cursor ext ts ->
-  Cursor ext (Cursor.Snoc ts (Mem.LLVMPointerType 8))
+  Cursor ext (Cursor.Snoc ts (CLM.LLVMPointerType 8))
 addByteIndex idx =
   \case
-    Cursor.Here _ -> Cursor.CursorExt (DereferenceByte idx (Cursor.Here (Mem.LLVMPointerRepr (C.knownNat @8))))
+    Cursor.Here _ -> Cursor.CursorExt (DereferenceByte idx (Cursor.Here (CLM.LLVMPointerRepr (C.knownNat @8))))
     Cursor.Field idx' cursor -> Cursor.Field idx' (addByteIndex idx cursor)
     Cursor.CursorExt (DereferenceByte idx' cursor) ->
       Cursor.CursorExt (DereferenceByte idx' (addByteIndex idx cursor))
@@ -147,10 +147,10 @@ asPtrCursor ::
   CursorExt ext ~ Dereference ext w' =>
   C.NatRepr w ->
   Cursor ext ts ->
-  Maybe (Cursor.Last ts :~: Mem.LLVMPointerType w)
+  Maybe (Cursor.Last ts :~: CLM.LLVMPointerType w)
 asPtrCursor w =
   \case
-    Cursor.Here (Mem.LLVMPointerRepr w') | Just Refl <- testEquality w' w -> Just Refl
+    Cursor.Here (CLM.LLVMPointerRepr w') | Just Refl <- testEquality w' w -> Just Refl
     Cursor.Here _ -> Nothing
     Cursor.Field _ c' -> asPtrCursor w c'
     Cursor.CursorExt (DereferenceByte _ c') -> asPtrCursor w c'

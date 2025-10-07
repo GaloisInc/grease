@@ -16,14 +16,14 @@ import Data.Parameterized.Some qualified as Some
 import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Text (Text)
 import Grease.Utility (tshow)
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Types qualified as C
 import Text.LLVM.AST qualified as L
 
 -- | Lift a Crucible type to an LLVM type.
 --
 -- This function has several missing cases that can be filled in as necessary.
-llvmType :: Mem.HasPtrWidth w => C.TypeRepr t -> Maybe L.Type
+llvmType :: CLM.HasPtrWidth w => C.TypeRepr t -> Maybe L.Type
 llvmType =
   \case
     C.AnyRepr{} -> Nothing
@@ -54,7 +54,7 @@ llvmType =
     C.VariantRepr{} -> Nothing
     C.VectorRepr{} -> Nothing
     C.WordMapRepr{} -> Nothing
-    Mem.LLVMPointerRepr w ->
+    CLM.LLVMPointerRepr w ->
       case C.testEquality w ?ptrWidth of
         Just C.Refl -> Just L.PtrOpaque
         Nothing -> Just (intType w)
@@ -69,7 +69,7 @@ llvmType =
 -- See https://github.com/GaloisInc/crucible/issues/1138 for progress on
 -- obviating this code.
 mkDeclare ::
-  Mem.HasPtrWidth w =>
+  CLM.HasPtrWidth w =>
   String ->
   Ctx.Assignment C.TypeRepr args ->
   C.TypeRepr ret ->

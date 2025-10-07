@@ -43,7 +43,7 @@ import Grease.Entrypoint (Entrypoint (..), EntrypointLocation (..))
 import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Utility
 import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import System.Directory (Permissions)
@@ -142,7 +142,7 @@ load ::
   ( 16 C.<= MC.ArchAddrWidth arch
   , Symbolic.SymArchConstraints arch
   , Loader.BinaryLoader arch (Elf.ElfHeaderInfo (MC.RegAddrWidth (MC.ArchReg arch)))
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   [Entrypoint] ->

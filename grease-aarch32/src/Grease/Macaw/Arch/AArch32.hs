@@ -29,7 +29,7 @@ import Grease.Options (ExtraStackSlots)
 import Grease.Panic (panic)
 import Grease.Shape.Pointer (armStackPtrShape)
 import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator.RegValue qualified as C
 import Stubs.FunctionOverride.AArch32.Linux qualified as Stubs
 import Stubs.Memory.AArch32.Linux qualified as Stubs
@@ -39,7 +39,7 @@ import Stubs.Syscall.Names.AArch32.Linux qualified as Stubs
 type instance ArchReloc ARM.ARM = EE.ARM32_RelocationType
 
 armCtx ::
-  (?memOpts :: Mem.MemOptions) =>
+  (?memOpts :: CLM.MemOptions) =>
   C.HandleAllocator ->
   -- | If 'Just', use the specified 'Word32' value to override the initial
   -- value of the link register just before starting simulation.
@@ -65,7 +65,7 @@ armCtx halloc mbReturnAddr stackArgSlots = do
     ArchContext
       { _archInfo = ARM.arm_linux_info
       , _archGetIP = \regs -> do
-          let C.RV (Mem.LLVMPointer _base off) = ARM.Symbolic.lookupReg ARM.pc regs
+          let C.RV (CLM.LLVMPointer _base off) = ARM.Symbolic.lookupReg ARM.pc regs
           pure off
       , _archPcReg = ARM.pc
       , _archVals = avals

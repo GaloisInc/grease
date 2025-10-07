@@ -16,7 +16,7 @@ import Data.Text qualified as Text
 import Grease.Options qualified as GO
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as CLLVM.SymIO
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.SymIO qualified as SymIO
@@ -34,7 +34,7 @@ data InitializedFs sym ptrW
 -- | Initialize the symbolic file system.
 initialLlvmFileSystem ::
   ( C.IsSymInterface sym
-  , Mem.HasPtrWidth ptrW
+  , CLM.HasPtrWidth ptrW
   ) =>
   C.HandleAllocator ->
   sym ->

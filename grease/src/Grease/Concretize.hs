@@ -50,7 +50,7 @@ import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Concretize qualified as Conc
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.SymSequence qualified as C
@@ -108,7 +108,7 @@ concArgsToSym sym fm argTys (ConcArgs cArgs) =
 --
 -- See crucible#1217 for ideas on how we could present this more intuitively in
 -- the future.
-newtype ConcMem sym = ConcMem {getConcMem :: Mem.MemImpl sym}
+newtype ConcMem sym = ConcMem {getConcMem :: CLM.MemImpl sym}
 
 -- | File system contents before execution ('SymIO.InitialFileSystemContents')
 -- that has been concretized
@@ -175,7 +175,7 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   -- reverse-chronological (LIFO) order from when they were created.
   cExtra <- List.reverse . toList <$> liftIO (C.concretizeSymSequence gFn concStruct extra)
   cFs <- traverse (traverse (fmap toWord8 . gFn)) (SymIO.symbolicFiles initFs)
-  cMem <- Mem.concMemImpl sym gFn initMem
+  cMem <- CLM.concMemImpl sym gFn initMem
   cErr <- traverse (\eds -> Err.concretizeErrorDescription sym groundEvalFn eds) minfo
   pure $
     ConcretizedData

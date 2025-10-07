@@ -27,7 +27,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.Extension (ArchWidth, LLVM)
 import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.LLVM.Translation qualified as Trans
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
@@ -43,10 +43,10 @@ initState ::
   , sym ~ W4.ExprBuilder t st fs
   , 16 C.<= ArchWidth arch
   , ArchWidth arch ~ 64
-  , Mem.HasPtrWidth (ArchWidth arch)
-  , Mem.HasLLVMAnn sym
+  , CLM.HasPtrWidth (ArchWidth arch)
+  , CLM.HasLLVMAnn sym
   , HasToConcretize p
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   GreaseLogAction ->

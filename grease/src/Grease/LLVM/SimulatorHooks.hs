@@ -24,7 +24,7 @@ import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.Extension qualified as CLLVM
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as C
 import Lumberjack qualified as LJ
@@ -38,8 +38,8 @@ doLog la diag = LJ.writeLog la (LLVMSimulatorHooksDiagnostic diag)
 -- @crucible-llvm@ operations.
 greaseLlvmExtImpl ::
   ( C.IsSymInterface sym
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   C.HandleAllocator ->
@@ -57,8 +57,8 @@ greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls llvmExtImpl =
 -- overrides for the semantics of certain statements.
 extensionExec ::
   ( C.IsSymInterface sym
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   C.HandleAllocator ->

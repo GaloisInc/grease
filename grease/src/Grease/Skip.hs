@@ -30,7 +30,7 @@ import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout as Mem
 import Lang.Crucible.LLVM.Functions as CLLVM
 import Lang.Crucible.LLVM.Intrinsics as CLLVM
-import Lang.Crucible.LLVM.MemModel as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.Translation (LLVMContext)
 import Lang.Crucible.LLVM.Translation qualified as CLLVM
 import Lang.Crucible.LLVM.TypeContext qualified as CLLVM
@@ -45,15 +45,15 @@ doLog la diag = LJ.writeLog la (SkipDiagnostic diag)
 
 skipOverride ::
   ( C.IsSyntaxExtension ext
-  , Mem.HasPtrWidth w
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasPtrWidth w
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
   ) =>
   GreaseLogAction ->
   Mem.DataLayout ->
-  C.GlobalVar Mem ->
+  C.GlobalVar CLM.Mem ->
   W4.FunctionName ->
   C.TypeRepr ret ->
   Shape ext tag ret ->
@@ -84,15 +84,15 @@ skipOverride la dl memVar funcName valTy shape = do
 createSkipOverride ::
   ( C.IsSyntaxExtension ext
   , C.IsSymInterface sym
-  , Mem.HasPtrWidth w
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasPtrWidth w
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
   ) =>
   GreaseLogAction ->
   Mem.DataLayout ->
-  C.GlobalVar Mem ->
+  C.GlobalVar CLM.Mem ->
   W4.FunctionName ->
   C.TypeRepr ret ->
   Either Shape.MinimalShapeError (C.Override p sym ext args ret)
@@ -109,9 +109,9 @@ createSkipOverride la dl memVar funcName retTy = do
 declSkipOverride ::
   ( C.IsSyntaxExtension ext
   , C.IsSymInterface sym
-  , Mem.HasPtrWidth w
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasPtrWidth w
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
   ) =>
@@ -145,15 +145,15 @@ declSkipOverride la llvmCtx decl =
 registerSkipOverride ::
   ( C.IsSyntaxExtension ext
   , C.IsSymInterface sym
-  , Mem.HasPtrWidth w
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasPtrWidth w
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
   ) =>
   GreaseLogAction ->
   Mem.DataLayout ->
-  C.GlobalVar Mem ->
+  C.GlobalVar CLM.Mem ->
   GO.CantResolveOverrideCallback sym ext ->
   W4.FunctionName ->
   C.FnHandle args ret ->

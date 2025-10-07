@@ -27,7 +27,7 @@ import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Intrinsics.Libc qualified as Libc
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.Printf qualified as Printf
 import Lang.Crucible.Simulator qualified as C
 import Stubs.FunctionOverride qualified as Stubs
@@ -37,13 +37,13 @@ import What4.Interface qualified as W4
 -- | Custom overrides that are only applicable at the machine code level (and
 -- therefore do not belong in crucible-llvm).
 customStubsOverrides ::
-  ( ?memOpts :: Mem.MemOptions
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( ?memOpts :: CLM.MemOptions
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
   ) =>
-  C.GlobalVar Mem.Mem ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
   [Stubs.SomeFunctionOverride p sym arch]
 customStubsOverrides mvar mmConf =
   [ -- Functions that need to read strings using the macaw-symbolic memory
@@ -66,21 +66,21 @@ customStubsOverrides mvar mmConf =
 -- built-in LLVM override, as this override loads the string in a way that
 -- respects the lazy @macaw-symbolic@ memory model.
 buildAssertFailOverride ::
-  ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
-  C.GlobalVar Mem.Mem ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
   Stubs.FunctionOverride
     p
     sym
     ( Ctx.EmptyCtx
-        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> CLM.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> CLM.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> CLM.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> CLM.LLVMPointerType (MC.ArchAddrWidth arch)
     )
     arch
     C.UnitType
@@ -96,21 +96,21 @@ buildAssertFailOverride mvar mmConf =
 -- built-in LLVM override, as this override loads the string in a way that
 -- respects the lazy @macaw-symbolic@ memory model.
 buildAssertRtnOverride ::
-  ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
-  C.GlobalVar Mem.Mem ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
   Stubs.FunctionOverride
     p
     sym
     ( Ctx.EmptyCtx
-        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> CLM.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> CLM.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> CLM.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> CLM.LLVMPointerType (MC.ArchAddrWidth arch)
     )
     arch
     C.UnitType
@@ -126,18 +126,18 @@ buildAssertRtnOverride mvar mmConf =
 -- This assumes that the fourth argument points to an entirely concrete string.
 callAssert ::
   ( OnlineSolverAndBackend solver sym bak t st fm
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
-  C.GlobalVar Mem.Mem ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
-  C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
-  C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
-  C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  C.GlobalVar CLM.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
+  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) r args ret ()
 callAssert bak mvar mmConf _pfn _pfile _pline ptxt = do
   let sym = C.backendGetSym bak
@@ -157,19 +157,19 @@ callAssert bak mvar mmConf _pfn _pfile _pline ptxt = do
 -- built-in LLVM override, as this override loads the string in a way that
 -- respects the lazy @macaw-symbolic@ memory model.
 buildPrintfOverride ::
-  ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
-  C.GlobalVar Mem.Mem ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
   Stubs.FunctionOverride
     p
     sym
-    (Ctx.EmptyCtx Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch))
+    (Ctx.EmptyCtx Ctx.::> CLM.LLVMPointerType (MC.ArchAddrWidth arch))
     arch
-    (Mem.LLVMPointerType (MC.ArchAddrWidth arch))
+    (CLM.LLVMPointerType (MC.ArchAddrWidth arch))
 buildPrintfOverride mvar mmConf =
   W4.withKnownNat ?ptrWidth $
     Stubs.mkVariadicFunctionOverride "printf" $ \bak args gva ->
@@ -184,22 +184,22 @@ buildPrintfOverride mvar mmConf =
 -- built-in LLVM override, as this override loads the string in a way that
 -- respects the lazy @macaw-symbolic@ memory model.
 buildPrintfChkOverride ::
-  ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
-  C.GlobalVar Mem.Mem ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
   Stubs.FunctionOverride
     p
     sym
     ( Ctx.EmptyCtx
-        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
-        Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> CLM.LLVMPointerType (MC.ArchAddrWidth arch)
+        Ctx.::> CLM.LLVMPointerType (MC.ArchAddrWidth arch)
     )
     arch
-    (Mem.LLVMPointerType (MC.ArchAddrWidth arch))
+    (CLM.LLVMPointerType (MC.ArchAddrWidth arch))
 buildPrintfChkOverride mvar mmConf =
   W4.withKnownNat ?ptrWidth $
     Stubs.mkVariadicFunctionOverride "__printf_chk" $ \bak args gva ->
@@ -211,15 +211,15 @@ buildPrintfChkOverride mvar mmConf =
 -- first argument points to an entirely concrete formatting string.
 callPrintf ::
   ( OnlineSolverAndBackend solver sym bak t st fm
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
-  C.GlobalVar Mem.Mem ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  C.GlobalVar CLM.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
+  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   Stubs.GetVarArg sym ->
   C.OverrideSim
     p
@@ -228,7 +228,7 @@ callPrintf ::
     r
     args
     ret
-    (Mem.LLVMPtr sym (MC.ArchAddrWidth arch))
+    (CLM.LLVMPtr sym (MC.ArchAddrWidth arch))
 callPrintf bak mvar mmConf formatStrPtr gva = do
   let sym = C.backendGetSym bak
   st0 <- get
@@ -259,12 +259,12 @@ callPrintf bak mvar mmConf formatStrPtr gva = do
       liftIO $ BSC.hPutStrLn h str
       -- Return the number of characters printed
       nBv <- liftIO $ W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (toInteger n))
-      liftIO $ Mem.llvmPointer_bv sym nBv
+      liftIO $ CLM.llvmPointer_bv sym nBv
 
 -- | Given the directives in a @printf@-style format string, retrieve the
 -- corresponding variadic arguments.
 getPrintfVarArgs ::
-  Mem.HasPtrWidth w =>
+  CLM.HasPtrWidth w =>
   Vec.Vector Printf.PrintfDirective ->
   Stubs.GetVarArg sym ->
   IO (Vec.Vector (C.AnyValue sym))
@@ -281,7 +281,7 @@ getPrintfVarArgs pds =
 -- * Otherwise, return @('Nothing', gva)@.
 getPrintfVarArg ::
   forall sym w.
-  Mem.HasPtrWidth w =>
+  CLM.HasPtrWidth w =>
   Printf.PrintfDirective ->
   Stubs.GetVarArg sym ->
   IO (Maybe (C.AnyValue sym), Stubs.GetVarArg sym)
@@ -290,11 +290,11 @@ getPrintfVarArg pd gva@(Stubs.GetVarArg getVarArg) =
     Printf.StringDirective{} -> pure (Nothing, gva)
     Printf.ConversionDirective cd ->
       case Printf.printfType cd of
-        Printf.Conversion_Integer{} -> getArgWithType Mem.PtrRepr
-        Printf.Conversion_Char{} -> getArgWithType Mem.PtrRepr
-        Printf.Conversion_String{} -> getArgWithType Mem.PtrRepr
-        Printf.Conversion_Pointer{} -> getArgWithType Mem.PtrRepr
-        Printf.Conversion_CountChars{} -> getArgWithType Mem.PtrRepr
+        Printf.Conversion_Integer{} -> getArgWithType CLM.PtrRepr
+        Printf.Conversion_Char{} -> getArgWithType CLM.PtrRepr
+        Printf.Conversion_String{} -> getArgWithType CLM.PtrRepr
+        Printf.Conversion_Pointer{} -> getArgWithType CLM.PtrRepr
+        Printf.Conversion_CountChars{} -> getArgWithType CLM.PtrRepr
         Printf.Conversion_Floating{} -> getArgWithType $ C.FloatRepr C.DoubleFloatRepr
  where
   getArgWithType ::
@@ -312,19 +312,19 @@ getPrintfVarArg pd gva@(Stubs.GetVarArg getVarArg) =
 -- built-in LLVM override, as this override loads the string in a way that
 -- respects the lazy @macaw-symbolic@ memory model.
 buildPutsOverride ::
-  ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
-  C.GlobalVar Mem.Mem ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
   Stubs.FunctionOverride
     p
     sym
-    (Ctx.EmptyCtx Ctx.::> Mem.LLVMPointerType (MC.ArchAddrWidth arch))
+    (Ctx.EmptyCtx Ctx.::> CLM.LLVMPointerType (MC.ArchAddrWidth arch))
     arch
-    (Mem.LLVMPointerType (MC.ArchAddrWidth arch))
+    (CLM.LLVMPointerType (MC.ArchAddrWidth arch))
 buildPutsOverride mvar mmConf =
   W4.withKnownNat ?ptrWidth $
     Stubs.mkFunctionOverride "puts" $ \bak args ->
@@ -334,15 +334,15 @@ buildPutsOverride mvar mmConf =
 -- an entirely concrete string.
 callPuts ::
   ( OnlineSolverAndBackend solver sym bak t st fm
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
-  C.GlobalVar Mem.Mem ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  C.RegEntry sym (Mem.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  C.GlobalVar CLM.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
+  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   C.OverrideSim
     p
     sym
@@ -350,11 +350,11 @@ callPuts ::
     r
     args
     ret
-    (Mem.LLVMPtr sym (MC.ArchAddrWidth arch))
+    (CLM.LLVMPtr sym (MC.ArchAddrWidth arch))
 callPuts bak mvar mmConf strPtr = do
   let sym = C.backendGetSym bak
   st0 <- get
-  let strEntry = C.RegEntry Mem.PtrRepr (C.regValue strPtr)
+  let strEntry = C.RegEntry CLM.PtrRepr (C.regValue strPtr)
   let maxSize = Nothing
   (str, st1) <- liftIO $ loadConcreteString bak mvar mmConf strEntry maxSize st0
   put st1
@@ -362,7 +362,7 @@ callPuts bak mvar mmConf strPtr = do
   liftIO $ BSC.hPutStrLn h str
   -- return non-negative value on success
   oneBv <- liftIO $ W4.bvOne (C.backendGetSym bak) MM.memWidthNatRepr
-  liftIO $ Mem.llvmPointer_bv sym oneBv
+  liftIO $ CLM.llvmPointer_bv sym oneBv
 
 -- | An override for @__stack_chk_fail@, which is called by functions that fail
 -- stack protection checks. (See @Note [Coping with stack protection]@ in

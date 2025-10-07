@@ -72,7 +72,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.Intrinsics qualified as Mem
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.GlobalState qualified as C
@@ -92,8 +92,8 @@ emptyMacawMem ::
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
   , 16 C.<= MC.ArchAddrWidth arch
-  , Mem.HasLLVMAnn sym
-  , ?memOpts :: Mem.MemOptions
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   , sym ~ W4.ExprBuilder t st fs
   ) =>
   bak ->
@@ -289,7 +289,7 @@ minimalArgShapes ::
   , MonadThrow m
   , C.IsSymBackend sym bak
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
-  , Mem.HasPtrWidth wptr
+  , CLM.HasPtrWidth wptr
   , Symbolic.SymArchConstraints arch
   ) =>
   bak ->
@@ -360,8 +360,8 @@ memConfigInitial ::
   , bak ~ C.OnlineBackend solver scope st fs
   , 16 C.<= MC.ArchAddrWidth arch
   , Show (ArchReloc arch)
-  , ?memOpts :: Mem.MemOptions
-  , Mem.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
+  , CLM.HasLLVMAnn sym
   , MSM.MacawProcessAssertion sym
   , Symbolic.HasMacawLazySimulatorState p sym (MC.ArchAddrWidth arch)
   , HasCallStack
@@ -372,7 +372,7 @@ memConfigInitial ::
   Opts.SkipUnsupportedRelocs ->
   -- | Map of relocation addresses and types
   Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (ArchReloc arch) ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem
+  Symbolic.MemModelConfig p sym arch CLM.Mem
 memConfigInitial bak arch ptrTable skipUnsupportedRelocs relocs =
   lazyMemModelConfig
     { -- We deviate from the lazy macaw-symbolic memory model's settings and opt
@@ -418,10 +418,10 @@ memConfigWithHandles ::
   , bak ~ C.OnlineBackend solver scope st fs
   , 16 C.<= MC.ArchAddrWidth arch
   , Show (ArchReloc arch)
-  , ?memOpts :: Mem.MemOptions
-  , Mem.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
+  , CLM.HasLLVMAnn sym
   , HasGreaseSimulatorState p sym arch
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , HasToConcretize p
   ) =>
   bak ->
@@ -445,8 +445,8 @@ memConfigWithHandles ::
   Opts.SkipInvalidCallAddrs ->
   -- | What to do when a forward declaration cannot be resolved (during symex).
   (W4.FunctionName -> IO ()) ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem ->
-  Symbolic.MemModelConfig p sym arch Mem.Mem
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem
 memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddress errCb' memCfg =
   memCfg
     { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddress lfhd
@@ -467,11 +467,11 @@ assertRelocSupported ::
   ) =>
   ArchContext arch ->
   W4PL.ProgramLoc ->
-  Mem.LLVMPtr sym (MC.ArchAddrWidth arch) ->
+  CLM.LLVMPtr sym (MC.ArchAddrWidth arch) ->
   -- | Map of relocation addresses and types
   Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (ArchReloc arch) ->
   IO ()
-assertRelocSupported arch loc (Mem.LLVMPointer _base offset) relocs =
+assertRelocSupported arch loc (CLM.LLVMPointer _base offset) relocs =
   case W4.asBV offset of
     Nothing ->
       -- Symbolic read. Cannot check whether this is an unsupported relocation.
@@ -512,10 +512,10 @@ initState ::
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , sym ~ W4.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
-  , Mem.HasLLVMAnn sym
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLM.HasLLVMAnn sym
   , MSM.MacawProcessAssertion sym
-  , ?memOpts :: Mem.MemOptions
+  , ?memOpts :: CLM.MemOptions
   , HasGreaseSimulatorState p sym arch
   , HasToConcretize p
   ) =>
@@ -523,7 +523,7 @@ initState ::
   GreaseLogAction ->
   C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   C.HandleAllocator ->
-  C.GlobalVar Mem.Mem ->
+  C.GlobalVar CLM.Mem ->
   SetupMem sym ->
   C.SymGlobalState sym ->
   SymIO.SomeOverrideSim sym () ->

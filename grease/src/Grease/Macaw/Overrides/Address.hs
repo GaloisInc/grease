@@ -46,7 +46,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as LCCR
 import Lang.Crucible.CFG.SSAConversion (toSSA)
 import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.LLVM.MemModel qualified as LCLM
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
@@ -255,7 +255,7 @@ loadAddressOverrides archRegsType halloc memory paths = do
 -- | Redirect function handles from forward declarations appearing in
 -- 'AddressOverride's to their implementations.
 registerAddressOverrideForwardDeclarations ::
-  ( LCLM.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , C.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , sym ~ WEB.ExprBuilder scope st fs
@@ -276,7 +276,7 @@ registerAddressOverrideForwardDeclarations bak errCb funOvs addrOvs = do
 
 -- | Register CFGs appearing an in 'AddressOverride'.
 registerAddressOverrideCfgs ::
-  LCLM.HasPtrWidth (MC.ArchAddrWidth arch) =>
+  CLM.HasPtrWidth (MC.ArchAddrWidth arch) =>
   AddressOverrides arch ->
   C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerAddressOverrideCfgs addrOvs = do
@@ -290,7 +290,7 @@ registerAddressOverrideCfgs addrOvs = do
 -- | Register all handles from 'AddressOverrides', including defined CFGs and
 -- forwaAddressrd declarations.
 registerAddressOverrideHandles ::
-  ( LCLM.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , C.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , sym ~ WEB.ExprBuilder scope st fs
@@ -311,7 +311,7 @@ registerAddressOverrideHandles bak errCb funOvs addrOvs = do
 
 toInitialState ::
   sym ~ W4.ExprBuilder t st fs =>
-  C.GlobalVar LCLM.Mem ->
+  C.GlobalVar CLM.Mem ->
   C.CrucibleState p sym ext rtp blocks r args ->
   C.TypeRepr ret ->
   C.ExecCont p sym ext (C.RegEntry sym ret) (C.OverrideLang ret) ('Just Ctx.EmptyCtx) ->
@@ -339,7 +339,7 @@ runAddressOverride ::
   , Symbolic.SymArchConstraints arch
   , HasCallStack
   ) =>
-  C.GlobalVar LCLM.Mem ->
+  C.GlobalVar CLM.Mem ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) C.UnitType ->
   C.RegEntry sym (Symbolic.ArchRegStruct arch) ->
@@ -372,7 +372,7 @@ tryRunAddressOverride ::
   , Symbolic.SymArchConstraints arch
   ) =>
   ArchContext arch ->
-  C.GlobalVar LCLM.Mem ->
+  C.GlobalVar CLM.Mem ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) C.UnitType ->
   IO ()
@@ -391,7 +391,7 @@ maybeRunAddressOverride ::
   , Symbolic.SymArchConstraints arch
   ) =>
   ArchContext arch ->
-  C.GlobalVar LCLM.Mem ->
+  C.GlobalVar CLM.Mem ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
   -- | Current instruction pointer
   MC.ArchSegmentOff arch ->

@@ -30,7 +30,7 @@ import Lang.Crucible.CFG.Core qualified as LCCC
 import Lang.Crucible.CFG.Reg qualified as LCCR
 import Lang.Crucible.CFG.SSAConversion (toSSA)
 import Lang.Crucible.LLVM.DataLayout (DataLayout)
-import Lang.Crucible.LLVM.MemModel qualified as LCLM
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as LCS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Stubs.FunctionOverride qualified as Stubs
@@ -51,12 +51,12 @@ newtype SetupHook sym arch
         , sym ~ WEB.ExprBuilder scope st fs
         , bak ~ LCB.OnlineBackend solver scope st fs
         , WPO.OnlineSolver solver
-        , LCLM.HasLLVMAnn sym
+        , CLM.HasLLVMAnn sym
         , HasGreaseSimulatorState p sym arch
         , HasToConcretize p
         ) =>
         bak ->
-        LCS.GlobalVar LCLM.Mem ->
+        LCS.GlobalVar CLM.Mem ->
         -- Map of names of overridden functions to their implementations
         Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
         LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
@@ -79,7 +79,7 @@ registerOverrideCfgs funOvs =
 -- | Redirect function handles from forward declarations appearing in
 -- 'GMO.MacawSExpOverride's to their implementations.
 registerOverrideForwardDeclarations ::
-  ( LCLM.HasPtrWidth (ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (ArchAddrWidth arch)
   , LCB.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , sym ~ WEB.ExprBuilder scope st fs
@@ -105,7 +105,7 @@ registerOverrideForwardDeclarations bak errCb funOvs =
 --
 -- Calls 'registerOverrides' and 'registerOverrideForwardDeclarations'.
 registerOverrideHandles ::
-  ( LCLM.HasPtrWidth (ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (ArchAddrWidth arch)
   , LCB.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , sym ~ WEB.ExprBuilder scope st fs
@@ -135,22 +135,22 @@ registerSyntaxCfgs prog =
 -- | Redirect function handles from forward declarations appearing in an
 -- S-expression program ('CSyn.ParsedProgram') to their implementations.
 registerSyntaxForwardDeclarations ::
-  ( LCLM.HasPtrWidth (ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (ArchAddrWidth arch)
   , DMS.SymArchConstraints arch
   , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ LCB.OnlineBackend solver scope st fs
-  , LCLM.HasLLVMAnn sym
+  , CLM.HasLLVMAnn sym
   , LCB.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , HasToConcretize p
-  , ?memOpts :: LCLM.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   GreaseLogAction ->
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   DataLayout ->
-  LCS.GlobalVar LCLM.Mem ->
+  LCS.GlobalVar CLM.Mem ->
   -- | Map of names of overridden functions to their implementations
   Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
@@ -162,22 +162,22 @@ registerSyntaxForwardDeclarations bak la errCb dl mvar funOvs prog =
 --
 -- Calls 'registerSyntaxCfgs' and 'registerSyntaxForwardDeclarations'.
 registerSyntaxHandles ::
-  ( LCLM.HasPtrWidth (ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (ArchAddrWidth arch)
   , DMS.SymArchConstraints arch
   , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ LCB.OnlineBackend solver scope st fs
-  , LCLM.HasLLVMAnn sym
+  , CLM.HasLLVMAnn sym
   , LCB.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , HasToConcretize p
-  , ?memOpts :: LCLM.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   GreaseLogAction ->
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   DataLayout ->
-  LCS.GlobalVar LCLM.Mem ->
+  LCS.GlobalVar CLM.Mem ->
   -- | Map of names of overridden functions to their implementations
   Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
@@ -188,9 +188,9 @@ registerSyntaxHandles bak la errCb dl mvar funOvs prog = do
 
 -- | A 'SetupHook' for Macaw CFGs from S-expression programs.
 syntaxSetupHook ::
-  ( LCLM.HasPtrWidth (ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (ArchAddrWidth arch)
   , DMS.SymArchConstraints arch
-  , ?memOpts :: LCLM.MemOptions
+  , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   -- | What to do when a forward declaration cannot be resolved.
@@ -230,7 +230,7 @@ syntaxSetupHook la errCb dl cfgs prog =
 --
 -- We do the same thing for forward declarations in address overrides.
 binSetupHook ::
-  LCLM.HasPtrWidth (ArchAddrWidth arch) =>
+  CLM.HasPtrWidth (ArchAddrWidth arch) =>
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   GMOA.AddressOverrides arch ->

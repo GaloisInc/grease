@@ -13,10 +13,10 @@ import Data.List qualified as List
 import Data.Sequence qualified as Seq
 import Grease.LLVM.Overrides.Defs (customLLVMOverrides)
 import Lang.Crucible.Backend qualified as C
-import Lang.Crucible.LLVM.Intrinsics qualified as Mem
+import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.Intrinsics.LLVM qualified as LLVM
 import Lang.Crucible.LLVM.Intrinsics.Libc qualified as Libc
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 
@@ -29,15 +29,15 @@ basicLLVMOverrides ::
   forall p sym ext w.
   ( C.IsSymInterface sym
   , ?lc :: TCtx.TypeContext
-  , ?memOpts :: Mem.MemOptions
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth w
+  , ?memOpts :: CLM.MemOptions
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth w
   ) =>
   SymIO.LLVMFileSystem w ->
-  Seq.Seq (Mem.SomeLLVMOverride p sym ext)
+  Seq.Seq (CLI.SomeLLVMOverride p sym ext)
 basicLLVMOverrides fs =
   -- We never need to make use of any non-standard IntrinsicsOptions.
-  let ?intrinsicsOpts = Mem.defaultIntrinsicsOptions
+  let ?intrinsicsOpts = CLI.defaultIntrinsicsOptions
    in Seq.fromList $
         List.concat @[]
           [ libcOverrides fs
@@ -51,13 +51,13 @@ libcOverrides ::
   forall p sym ext w.
   ( C.IsSymInterface sym
   , ?lc :: TCtx.TypeContext
-  , ?memOpts :: Mem.MemOptions
-  , ?intrinsicsOpts :: Mem.IntrinsicsOptions
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth w
+  , ?memOpts :: CLM.MemOptions
+  , ?intrinsicsOpts :: CLI.IntrinsicsOptions
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth w
   ) =>
   SymIO.LLVMFileSystem w ->
-  [Mem.SomeLLVMOverride p sym ext]
+  [CLI.SomeLLVMOverride p sym ext]
 libcOverrides fs =
   List.concat @[]
     [ Libc.libc_overrides
@@ -65,12 +65,12 @@ libcOverrides fs =
     , customLLVMOverrides
     ]
  where
-  symioLlvmOverrides :: [Mem.SomeLLVMOverride p sym ext]
+  symioLlvmOverrides :: [CLI.SomeLLVMOverride p sym ext]
   symioLlvmOverrides =
-    [ Mem.SomeLLVMOverride $ SymIO.openFile fs
-    , Mem.SomeLLVMOverride $ SymIO.closeFile fs
-    , Mem.SomeLLVMOverride $ SymIO.readFileHandle fs
-    , Mem.SomeLLVMOverride $ SymIO.writeFileHandle fs
+    [ CLI.SomeLLVMOverride $ SymIO.openFile fs
+    , CLI.SomeLLVMOverride $ SymIO.closeFile fs
+    , CLI.SomeLLVMOverride $ SymIO.readFileHandle fs
+    , CLI.SomeLLVMOverride $ SymIO.writeFileHandle fs
     ]
 
 -- | All of the @crucible-llvm@ overrides that work across all supported
@@ -81,14 +81,14 @@ libcOverrides fs =
 builtinLLVMOverrides ::
   ( C.IsSymInterface sym
   , ?lc :: TCtx.TypeContext
-  , ?memOpts :: Mem.MemOptions
-  , Mem.HasLLVMAnn sym
-  , Mem.HasPtrWidth w
+  , ?memOpts :: CLM.MemOptions
+  , CLM.HasLLVMAnn sym
+  , CLM.HasPtrWidth w
   ) =>
   SymIO.LLVMFileSystem w ->
-  Seq.Seq (Mem.OverrideTemplate p sym ext arch)
+  Seq.Seq (CLI.OverrideTemplate p sym ext arch)
 builtinLLVMOverrides fs =
   -- We never need to make use of any non-standard IntrinsicsOptions.
-  let ?intrinsicsOpts = Mem.defaultIntrinsicsOptions
-   in fmap (\(Mem.SomeLLVMOverride ov) -> Mem.basic_llvm_override ov) (basicLLVMOverrides fs)
-        <> Seq.fromList (List.map (\(pfx, LLVM.Poly1LLVMOverride ov) -> Mem.polymorphic1_llvm_override pfx ov) LLVM.poly1_llvm_overrides)
+  let ?intrinsicsOpts = CLI.defaultIntrinsicsOptions
+   in fmap (\(CLI.SomeLLVMOverride ov) -> CLI.basic_llvm_override ov) (basicLLVMOverrides fs)
+        <> Seq.fromList (List.map (\(pfx, LLVM.Poly1LLVMOverride ov) -> CLI.polymorphic1_llvm_override pfx ov) LLVM.poly1_llvm_overrides)

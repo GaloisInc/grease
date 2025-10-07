@@ -42,7 +42,7 @@ import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (MemShape (Exactly, Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget, TaggedByte (..), memShapeSize, ptrTarget)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (toBytes)
-import Lang.Crucible.LLVM.MemModel qualified as Mem
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Types qualified as CT
 
 -- | Find the pc for DWARF which is relative to the ELF absent its base load address.
@@ -77,7 +77,7 @@ loadDwarfPreconditions ::
   forall arch ext tys.
   Symbolic.SymArchConstraints arch =>
   Integral (Elf.ElfWordType (MC.ArchAddrWidth arch)) =>
-  ( Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  ( CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , ExtShape ext
       ~ PtrShape ext (MC.RegAddrWidth (MC.ArchReg arch))
@@ -118,7 +118,7 @@ extractType sprog vrTy =
     rightToMaybe mbtypeApp
 
 constructPtrTarget ::
-  Mem.HasPtrWidth w =>
+  CLM.HasPtrWidth w =>
   TypeUnrollingBound ->
   Subprogram ->
   VisitCount ->
@@ -131,7 +131,7 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
   padding :: Integral a => a -> MemShape w NoTag
   padding w = Uninitialized (toBytes w)
   -- if we dont know where to place members we have to fail/just place some bytes
-  buildMember :: Mem.HasPtrWidth w => Word64 -> MDwarf.Member -> Maybe (Word64, Seq.Seq (MemShape w NoTag))
+  buildMember :: CLM.HasPtrWidth w => Word64 -> MDwarf.Member -> Maybe (Word64, Seq.Seq (MemShape w NoTag))
   buildMember loc member =
     do
       memLoc <- MDwarf.memberLoc member
@@ -141,10 +141,10 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
       let nextLoc = memLoc + fromIntegral memByteSize
       Just (nextLoc, padd Seq.>< memberShapes)
 
-  shapeOfTyApp :: Mem.HasPtrWidth w => MDwarf.TypeRef -> Maybe (Seq.Seq (MemShape w NoTag))
+  shapeOfTyApp :: CLM.HasPtrWidth w => MDwarf.TypeRef -> Maybe (Seq.Seq (MemShape w NoTag))
   shapeOfTyApp x = shapeSeq =<< extractType sprog =<< pure x
 
-  shapeSeq :: Mem.HasPtrWidth w => MDwarf.TypeApp -> Maybe (Seq.Seq (MemShape w NoTag))
+  shapeSeq :: CLM.HasPtrWidth w => MDwarf.TypeApp -> Maybe (Seq.Seq (MemShape w NoTag))
   shapeSeq (MDwarf.UnsignedIntType w) = ishape w
   shapeSeq (MDwarf.SignedIntType w) = ishape w
   shapeSeq MDwarf.SignedCharType = ishape (1 :: Int)
@@ -175,12 +175,12 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
 
 type VisitCount = Map.Map MDwarf.TypeRef Int
 
-nullPtr :: Mem.HasPtrWidth w => MemShape w NoTag
+nullPtr :: CLM.HasPtrWidth w => MemShape w NoTag
 nullPtr =
   let zbyt = TaggedByte{taggedByteTag = NoTag, taggedByteValue = 0}
    in Exactly (take (fromInteger $ CT.intValue ?ptrWidth `div` 8) $ repeat $ zbyt)
 
-constructPtrMemShapeFromRef :: Mem.HasPtrWidth w => TypeUnrollingBound -> Subprogram -> VisitCount -> MDwarf.TypeRef -> Maybe (MemShape w NoTag)
+constructPtrMemShapeFromRef :: CLM.HasPtrWidth w => TypeUnrollingBound -> Subprogram -> VisitCount -> MDwarf.TypeRef -> Maybe (MemShape w NoTag)
 constructPtrMemShapeFromRef bound@(TypeUnrollingBound tyUnrollBound) sprog vcount ref =
   let ct = fromMaybe 0 (Map.lookup ref vcount)
       newMap = Map.insert ref (ct + 1) vcount
@@ -202,7 +202,7 @@ intPtrShape reg =
     _ -> Nothing
 
 pointerShapeOfDwarf ::
-  (Mem.HasPtrWidth w, Symbolic.SymArchConstraints arch) =>
+  (CLM.HasPtrWidth w, Symbolic.SymArchConstraints arch) =>
   ArchContext arch ->
   TypeUnrollingBound ->
   MC.ArchReg arch tp ->
@@ -228,7 +228,7 @@ takeJust f (h : tl) =
 
 shapeFromVar ::
   ( ExtShape ext ~ PtrShape ext wptr
-  , Mem.HasPtrWidth wptr
+  , CLM.HasPtrWidth wptr
   , Symbolic.SymArchConstraints arch
   ) =>
   ArchContext arch ->
@@ -244,7 +244,7 @@ shapeFromVar arch tyUnrollBound buildingForReg sprog vr =
             =<< MDwarf.varType vr
         )
 
-shapeFromDwarf :: (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr) => ArchContext arch -> TypeUnrollingBound -> Subprogram -> Shape.ParsedShapes ext
+shapeFromDwarf :: (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, CLM.HasPtrWidth wptr) => ArchContext arch -> TypeUnrollingBound -> Subprogram -> Shape.ParsedShapes ext
 shapeFromDwarf aContext tyUnrollBound sub =
   let
     abiRegs = aContext Lens.^. archABIParams
@@ -265,7 +265,7 @@ shapeFromDwarf aContext tyUnrollBound sub =
 -- the provided PC and synthesize a shape from the DWARF provided prototype for the function.
 -- The provided PC is relative to the base of the image (as is represented in DWARF).
 fromDwarfInfo ::
-  (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, Mem.HasPtrWidth wptr) =>
+  (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, CLM.HasPtrWidth wptr) =>
   ArchContext arch ->
   TypeUnrollingBound ->
   -- | The entrypoint PC of the target subprogram relative to the target ELF object.
