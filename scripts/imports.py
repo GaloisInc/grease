@@ -8,7 +8,9 @@ from argparse import ArgumentParser
 from collections import defaultdict
 from pathlib import Path
 
-RULE_PAT = re.compile(r"^- \{ name: ([A-Z][A-Za-z0-9_.]*), as: \w+ \}$")
+RULE_PAT = re.compile(
+    r"^ +- \{ name: ([A-Z][A-Za-z0-9_.]*), as: \w+ \}", flags=re.MULTILINE
+)
 IMPORT_PAT = re.compile(r"^import ([A-Z][A-Za-z0-9_.]*) qualified", flags=re.MULTILINE)
 
 
