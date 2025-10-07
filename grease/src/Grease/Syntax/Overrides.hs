@@ -24,30 +24,30 @@ import Data.Vector qualified as Vec
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.FunctionHandle qualified as LCF
-import Lang.Crucible.Simulator qualified as LCS
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as LCT
 import What4.Interface qualified as WI
 
--- | Check if a 'LCS.TypedOverride' is compatible with a 'LCF.FnHandle'
+-- | Check if a 'CS.TypedOverride' is compatible with a 'LCF.FnHandle'
 checkTypedOverrideHandleCompat ::
   LCF.FnHandle args ret ->
-  LCS.TypedOverride p sym ext args' ret' ->
+  CS.TypedOverride p sym ext args' ret' ->
   Maybe (args :~: args', ret :~: ret')
 checkTypedOverrideHandleCompat hdl ov = do
-  rArgs <- testEquality (LCF.handleArgTypes hdl) (LCS.typedOverrideArgs ov)
-  rRet <- testEquality (LCF.handleReturnType hdl) (LCS.typedOverrideRet ov)
+  rArgs <- testEquality (LCF.handleArgTypes hdl) (CS.typedOverrideArgs ov)
+  rRet <- testEquality (LCF.handleReturnType hdl) (CS.typedOverrideRet ov)
   pure (rArgs, rRet)
 
 -- | The return value indicates whether the override was bound.
 tryBindTypedOverride ::
   LCF.FnHandle args ret ->
-  LCS.TypedOverride p sym ext args' ret' ->
-  LCS.OverrideSim p sym ext rtp args'' ret'' Bool
+  CS.TypedOverride p sym ext args' ret' ->
+  CS.OverrideSim p sym ext rtp args'' ret'' Bool
 tryBindTypedOverride hdl ov =
   case checkTypedOverrideHandleCompat hdl ov of
     Nothing -> pure False
     Just (Refl, Refl) -> do
-      LCS.bindTypedOverride hdl ov
+      CS.bindTypedOverride hdl ov
       pure True
 
 -- | Override for @fresh-bytes@.
@@ -63,10 +63,10 @@ freshBytesOverride ::
   , CB.IsSymInterface sym
   ) =>
   NatRepr.NatRepr w ->
-  LCS.TypedOverride p sym ext (Ctx.EmptyCtx Ctx.::> LCT.StringType WI.Unicode Ctx.::> LCT.BVType w) (LCT.VectorType (LCT.BVType 8))
+  CS.TypedOverride p sym ext (Ctx.EmptyCtx Ctx.::> LCT.StringType WI.Unicode Ctx.::> LCT.BVType w) (LCT.VectorType (LCT.BVType 8))
 freshBytesOverride w =
   WI.withKnownNat w $
-    LCS.typedOverride (Ctx.uncurryAssignment freshBytes)
+    CS.typedOverride (Ctx.uncurryAssignment freshBytes)
 
 -- | Implementation of @fresh-bytes@ override.
 --
@@ -80,19 +80,19 @@ freshBytes ::
   , ToConc.HasToConcretize p
   , CB.IsSymInterface sym
   ) =>
-  LCS.RegValue' sym (LCT.StringType WI.Unicode) ->
-  LCS.RegValue' sym (LCT.BVType w) ->
-  LCS.OverrideSim p sym ext r args ret (LCS.RegValue sym (LCT.VectorType (LCT.BVType 8)))
+  CS.RegValue' sym (LCT.StringType WI.Unicode) ->
+  CS.RegValue' sym (LCT.BVType w) ->
+  CS.OverrideSim p sym ext r args ret (CS.RegValue sym (LCT.VectorType (LCT.BVType 8)))
 freshBytes name0 bv0 =
-  case WI.asString (LCS.unRV name0) of
+  case WI.asString (CS.unRV name0) of
     Nothing ->
-      LCS.overrideError $
-        LCS.AssertFailureSimError "Call to @fresh-bytes with symbolic name" ""
+      CS.overrideError $
+        CS.AssertFailureSimError "Call to @fresh-bytes with symbolic name" ""
     Just (WI.UnicodeLiteral name) ->
-      case WI.asBV (LCS.unRV bv0) of
+      case WI.asBV (CS.unRV bv0) of
         Nothing ->
-          LCS.overrideError $
-            LCS.AssertFailureSimError "Call to @fresh-bytes with symbolic length" ""
+          CS.overrideError $
+            CS.AssertFailureSimError "Call to @fresh-bytes with symbolic length" ""
         Just bv -> doFreshBytes name (BV.asUnsigned bv)
 
 doFreshBytes ::
@@ -101,9 +101,9 @@ doFreshBytes ::
   ) =>
   Text ->
   Integer ->
-  LCS.OverrideSim p sym ext r args ret (LCS.RegValue sym (LCT.VectorType (LCT.BVType 8)))
+  CS.OverrideSim p sym ext r args ret (CS.RegValue sym (LCT.VectorType (LCT.BVType 8)))
 doFreshBytes name len =
-  LCS.ovrWithBackend $ \bak -> do
+  CS.ovrWithBackend $ \bak -> do
     let sym = CB.backendGetSym bak
     v <-
       fmap Vec.fromList $
@@ -113,7 +113,7 @@ doFreshBytes name len =
             WI.freshConstant sym nm (WI.BaseBVRepr (NatRepr.knownNat @8))
 
     let ty = LCT.VectorRepr (LCT.BVRepr (NatRepr.knownNat @8))
-    let entry = LCS.RegEntry ty v
+    let entry = CS.RegEntry ty v
     ToConc.addToConcretize name entry
 
     pure v

@@ -37,7 +37,7 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.LLVM.Translation qualified as Trans
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lumberjack qualified as LJ
 import What4.FunctionName qualified as W4
@@ -67,7 +67,7 @@ newtype SetupHook sym arch
         C.HandleAllocator ->
         Trans.LLVMContext arch ->
         SymIO.LLVMFileSystem (ArchWidth arch) ->
-        C.OverrideSim p sym LLVM rtp a r ()
+        CS.OverrideSim p sym LLVM rtp a r ()
       )
 
 -- | A 'SetupHook' for LLVM CFGs from S-expression programs.
@@ -110,7 +110,7 @@ syntaxSetupHook la ovs prog cfgs errCb =
         Nothing -> do
           C.SomeCFG defSsa <- pure $ C.toSSA defCfg
           -- This could probably be a helper defined in Crucible...
-          let bindCfg c = C.bindFnHandle (C.cfgHandle c) (C.UseCFG c (C.postdomInfo c))
+          let bindCfg c = CS.bindFnHandle (C.cfgHandle c) (CS.UseCFG c (C.postdomInfo c))
           bindCfg defSsa
         Just (CLLVM.SomeLLVMOverride llvmOverride) ->
           GLO.bindLLVMOverrideFnHandle mvar defHdl llvmOverride

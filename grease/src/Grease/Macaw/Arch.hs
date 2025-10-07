@@ -53,14 +53,14 @@ import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Stubs.Common qualified as Stubs
 import Stubs.FunctionOverride qualified as Stubs
 import What4.Expr qualified as W4
 import What4.Interface qualified as W4
 import What4.Protocol.Online qualified as W4
 
-type ArchRegs sym arch = Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch)
+type ArchRegs sym arch = Ctx.Assignment (CS.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch)
 
 type ArchRegCFG arch =
   C.Reg.SomeCFG
@@ -77,11 +77,11 @@ type ArchCFG arch =
     (Symbolic.ArchRegStruct arch)
 
 type ArchResult p sym arch =
-  C.ExecResult
+  CS.ExecResult
     p
     sym
     (Symbolic.MacawExt arch)
-    (C.RegEntry sym (Symbolic.ArchRegStruct arch))
+    (CS.RegEntry sym (Symbolic.ArchRegStruct arch))
 
 -- | The ELF relocation data type for a specific architecture.
 type family ArchReloc arch :: Type
@@ -111,11 +111,11 @@ data ArchContext arch = ArchContext
       bak ->
       C.CtxRepr atps ->
       {- Types of arguments -}
-      Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
+      Ctx.Assignment (CS.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
       {- Argument register values -}
       CLM.MemImpl sym ->
       {- The memory state at the time of the function call -}
-      IO (Ctx.Assignment (C.RegEntry sym) atps, Stubs.GetVarArg sym)
+      IO (Ctx.Assignment (CS.RegEntry sym) atps, Stubs.GetVarArg sym)
   , {- A pair containing the function argument values and a callback for
     retrieving variadic arguments. -}
     -- Build an OverrideSim action with appropriate return register types.
@@ -129,9 +129,9 @@ data ArchContext arch = ArchContext
       {- Function return type -}
       Stubs.OverrideResult sym arch t ->
       {- Function's return value -}
-      C.RegValue sym (Symbolic.ArchRegStruct arch) ->
+      CS.RegValue sym (Symbolic.ArchRegStruct arch) ->
       {- Argument register values from before function execution -}
-      C.OverrideSim p sym (Symbolic.MacawExt arch) r args rtp (C.RegValue sym (Symbolic.ArchRegStruct arch))
+      CS.OverrideSim p sym (Symbolic.MacawExt arch) r args rtp (CS.RegValue sym (Symbolic.ArchRegStruct arch))
   , {- OverrideSim action with return type matching system return register type -}
     -- If the return address for the function being called can be determined,
     -- then return Just that address. Otherwise, return Nothing. Some ABIs
@@ -148,7 +148,7 @@ data ArchContext arch = ArchContext
       ) =>
       bak ->
       Symbolic.GenArchVals mem arch ->
-      Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
+      Ctx.Assignment (CS.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
       {- Registers for the given architecture -}
       CLM.MemImpl sym ->
       {- The memory state at the time of the function call -}
@@ -161,11 +161,11 @@ data ArchContext arch = ArchContext
       bak ->
       C.CtxRepr atps ->
       {- Types of argument registers -}
-      C.RegEntry sym (C.StructType atps) ->
+      CS.RegEntry sym (C.StructType atps) ->
       {- Argument register values -}
       C.CtxRepr args ->
       {- Types of syscall arguments -}
-      IO (Ctx.Assignment (C.RegEntry sym) args)
+      IO (Ctx.Assignment (CS.RegEntry sym) args)
   , {- Syscall argument values -}
     -- Extract the syscall number from the register state.
     _archSyscallNumberRegister ::
@@ -174,9 +174,9 @@ data ArchContext arch = ArchContext
       bak ->
       Ctx.Assignment C.TypeRepr atps ->
       {- Types of argument registers -}
-      C.RegEntry sym (C.StructType atps) ->
+      CS.RegEntry sym (C.StructType atps) ->
       {- Argument register values -}
-      IO (C.RegEntry sym (C.BVType (MC.ArchAddrWidth arch)))
+      IO (CS.RegEntry sym (C.BVType (MC.ArchAddrWidth arch)))
   , {- Extracted syscall number -}
     -- Build an OverrideSim action with appropriate return register types from
     -- a given OverrideSim action.
@@ -184,15 +184,15 @@ data ArchContext arch = ArchContext
       forall sym p t ext r args rtps atps.
       C.TypeRepr t ->
       {- Syscall return type -}
-      C.OverrideSim p sym ext r args (C.StructType rtps) (C.RegValue sym t) ->
+      CS.OverrideSim p sym ext r args (C.StructType rtps) (CS.RegValue sym t) ->
       {- OverrideSim action producing the syscall's return value -}
       C.CtxRepr atps ->
       {- Argument register types -}
-      C.RegEntry sym (C.StructType atps) ->
+      CS.RegEntry sym (C.StructType atps) ->
       {- Argument register values from before syscall execution -}
       C.CtxRepr rtps ->
       {- Return register types -}
-      C.OverrideSim p sym ext r args (C.StructType rtps) (C.RegValue sym (C.StructType rtps))
+      CS.OverrideSim p sym ext r args (C.StructType rtps) (CS.RegValue sym (C.StructType rtps))
   , {- OverrideSim action with return type matching system return register
        type -}
     -- A mapping from syscall numbers to names.
@@ -222,8 +222,8 @@ data ArchContext arch = ArchContext
       ) =>
       Stubs.Sym sym ->
       CLM.MemImpl sym ->
-      C.SymGlobalState sym ->
-      IO (CLM.MemImpl sym, C.SymGlobalState sym)
+      CS.SymGlobalState sym ->
+      IO (CLM.MemImpl sym, CS.SymGlobalState sym)
   , _archRegOverrides :: Map RegName (BV.BV (MC.ArchAddrWidth arch))
   -- ^ When setting up the initial register values just before starting
   -- simulation, override the default values for the following registers and
@@ -236,7 +236,7 @@ data ArchContext arch = ArchContext
       forall sym p ext rtp a r.
       CB.IsSymInterface sym =>
       ArchRegs sym arch ->
-      C.OverrideSim p sym ext rtp a r (ArchRegs sym arch)
+      CS.OverrideSim p sym ext rtp a r (ArchRegs sym arch)
   -- ^ On certain architectures, invoking a function will push the return
   -- address onto the stack (e.g., x86-64's @call@ instruction). This
   -- generally comes with the expectation that the invoked function will pop

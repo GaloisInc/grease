@@ -31,8 +31,8 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.LLVM.Translation qualified as Trans
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
-import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Simulator.GlobalState qualified as C
+import Lang.Crucible.Simulator qualified as CS
+import Lang.Crucible.Simulator.GlobalState qualified as CS
 import What4.Expr qualified as W4
 
 initState ::
@@ -50,7 +50,7 @@ initState ::
   ) =>
   bak ->
   GreaseLogAction ->
-  C.ExtensionImpl p sym LLVM ->
+  CS.ExtensionImpl p sym LLVM ->
   -- | The initial personality, see
   -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'
   p ->
@@ -58,25 +58,25 @@ initState ::
   ErrorSymbolicFunCalls ->
   SetupMem sym ->
   SymIO.LLVMFileSystem (ArchWidth arch) ->
-  C.SymGlobalState sym ->
+  CS.SymGlobalState sym ->
   SymIO.SomeOverrideSim sym () ->
   Trans.LLVMContext arch ->
   SetupHook sym arch ->
   -- | The initial arguments to the entrypoint function.
-  Ctx.Assignment (C.RegValue' sym) argTys ->
+  Ctx.Assignment (CS.RegValue' sym) argTys ->
   -- | An optional startup override to run just before the entrypoint function.
   Maybe (C.SomeCFG LLVM argTys (C.StructType argTys)) ->
   -- | The CFG of the user-requested entrypoint function.
   C.SomeCFG LLVM argTys retTy ->
-  m (C.ExecState p sym LLVM (C.RegEntry sym retTy))
+  m (CS.ExecState p sym LLVM (CS.RegEntry sym retTy))
 initState bak la llvmExtImpl p halloc errorSymbolicFunCalls mem fs globs (SymIO.SomeOverrideSim initFsOv) llvmCtx setupHook initArgs mbStartupOvCfg (C.SomeCFG cfg) = do
   let dl = TCtx.llvmDataLayout (llvmCtx ^. Trans.llvmTypeCtx)
   let extImpl = greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls llvmExtImpl
   let bindings =
-        C.FnBindings $
-          C.insertHandleMap (C.cfgHandle cfg) (C.UseCFG cfg $ C.postdomInfo cfg) C.emptyHandleMap
+        CS.FnBindings $
+          C.insertHandleMap (C.cfgHandle cfg) (CS.UseCFG cfg $ C.postdomInfo cfg) C.emptyHandleMap
   let ctx =
-        C.initSimContext
+        CS.initSimContext
           bak
           (CLLVM.llvmIntrinsicTypes `MapF.union` SymIO.llvmSymIOIntrinsicTypes)
           halloc
@@ -88,15 +88,15 @@ initState bak la llvmExtImpl p halloc errorSymbolicFunCalls mem fs globs (SymIO.
   let args =
         Ctx.generate
           (Ctx.size argTys)
-          (\i -> C.RegEntry (argTys ^. C.ixF' i) (C.unRV (initArgs ^. C.ixF' i)))
+          (\i -> CS.RegEntry (argTys ^. C.ixF' i) (CS.unRV (initArgs ^. C.ixF' i)))
   let mvar = Trans.llvmMemVar llvmCtx
   pure $
-    C.InitialState
+    CS.InitialState
       ctx
-      (C.insertGlobal mvar (getSetupMem mem) globs)
-      C.defaultAbortHandler
+      (CS.insertGlobal mvar (getSetupMem mem) globs)
+      CS.defaultAbortHandler
       (C.cfgReturnType cfg)
-      ( C.runOverrideSim (C.cfgReturnType cfg) $ do
+      ( CS.runOverrideSim (C.cfgReturnType cfg) $ do
           let ?lc = llvmCtx ^. Trans.llvmTypeCtx
           let ?intrinsicsOpts = CLLVM.defaultIntrinsicsOptions
           let SetupHook hook = setupHook
@@ -105,15 +105,15 @@ initState bak la llvmExtImpl p halloc errorSymbolicFunCalls mem fs globs (SymIO.
           r <-
             case mbStartupOvCfg of
               Nothing ->
-                C.callCFG cfg (C.RegMap args)
+                CS.callCFG cfg (CS.RegMap args)
               Just (C.SomeCFG startupOvCfg) -> do
-                args' <- C.callCFG startupOvCfg (C.RegMap args)
-                C.StructRepr argTys' <- pure $ C.regType args'
-                C.callCFG cfg $
-                  C.RegMap $
+                args' <- CS.callCFG startupOvCfg (CS.RegMap args)
+                C.StructRepr argTys' <- pure $ CS.regType args'
+                CS.callCFG cfg $
+                  CS.RegMap $
                     Ctx.zipWith
-                      (\argTy (C.RV arg) -> C.RegEntry argTy arg)
+                      (\argTy (CS.RV arg) -> CS.RegEntry argTy arg)
                       argTys'
-                      (C.regValue args')
-          pure $ C.regValue r
+                      (CS.regValue args')
+          pure $ CS.regValue r
       )

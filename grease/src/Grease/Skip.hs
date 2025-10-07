@@ -34,7 +34,7 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.Translation (LLVMContext)
 import Lang.Crucible.LLVM.Translation qualified as CLLVM
 import Lang.Crucible.LLVM.TypeContext qualified as CLLVM
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
 import Text.LLVM.AST qualified as L
@@ -53,22 +53,22 @@ skipOverride ::
   ) =>
   GreaseLogAction ->
   Mem.DataLayout ->
-  C.GlobalVar CLM.Mem ->
+  CS.GlobalVar CLM.Mem ->
   W4.FunctionName ->
   C.TypeRepr ret ->
   Shape ext tag ret ->
-  C.OverrideSim p sym ext r args' ret' (C.RegValue sym ret)
+  CS.OverrideSim p sym ext r args' ret' (CS.RegValue sym ret)
 skipOverride la dl memVar funcName valTy shape = do
   doLog la (Diag.FunctionCall funcName)
-  C.ovrWithBackend $ \bak -> do
-    mem <- C.readGlobal memVar
+  CS.ovrWithBackend $ \bak -> do
+    mem <- CS.readGlobal memVar
     -- TODO(#15): Preserve LLVM memory and annotations from setup monad state
     liftIO $ Setup.runSetup (Setup.InitialMem mem) $ do
       let funcNameStr = Text.unpack (W4.functionName funcName)
       let valName = Setup.ValueName (funcNameStr ++ "Return")
       let sel = SelectRet (RetSelector funcName (Cursor.Here valTy))
       shape' <- Setup.setupShape la bak dl valName valTy sel shape
-      pure (C.unRV (Shape.getTag PtrShape.getPtrTag shape'))
+      pure (CS.unRV (Shape.getTag PtrShape.getPtrTag shape'))
 
 -- | Try to create an override for a declared (but not defined) function.
 --
@@ -92,14 +92,14 @@ createSkipOverride ::
   ) =>
   GreaseLogAction ->
   Mem.DataLayout ->
-  C.GlobalVar CLM.Mem ->
+  CS.GlobalVar CLM.Mem ->
   W4.FunctionName ->
   C.TypeRepr ret ->
-  Either Shape.MinimalShapeError (C.Override p sym ext args ret)
+  Either Shape.MinimalShapeError (CS.Override p sym ext args ret)
 createSkipOverride la dl memVar funcName retTy = do
   shape <- minimalShapeWithPtrs (const NoTag) retTy
   let override =
-        C.mkOverride' funcName retTy $
+        CS.mkOverride' funcName retTy $
           skipOverride la dl memVar funcName retTy shape
   Right override
 
@@ -153,14 +153,14 @@ registerSkipOverride ::
   ) =>
   GreaseLogAction ->
   Mem.DataLayout ->
-  C.GlobalVar CLM.Mem ->
+  CS.GlobalVar CLM.Mem ->
   GO.CantResolveOverrideCallback sym ext ->
   W4.FunctionName ->
   C.FnHandle args ret ->
-  C.OverrideSim p sym ext r args' ret' ()
+  CS.OverrideSim p sym ext r args' ret' ()
 registerSkipOverride la dl memVar errCb funcName hdl =
   case createSkipOverride la dl memVar funcName (C.handleReturnType hdl) of
     Left{} -> GO.runCantResolveOverrideCallback errCb funcName hdl
     Right ov ->
       let symbol = L.Symbol (Text.unpack (W4.functionName funcName))
-       in CLLVM.bindLLVMHandle memVar symbol hdl (C.UseOverride ov)
+       in CLLVM.bindLLVMHandle memVar symbol hdl (CS.UseOverride ov)

@@ -182,7 +182,7 @@ import Lang.Crucible.LLVM.SymIO qualified as CLLVM.SymIO
 import Lang.Crucible.LLVM.Syntax (emptyParserHooks, llvmParserHooks)
 import Lang.Crucible.LLVM.Translation qualified as Trans
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
@@ -625,8 +625,8 @@ overrideRegs ::
   ) =>
   ArchContext arch ->
   sym ->
-  Ctx.Assignment (C.RegValue' sym) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
-  IO (Ctx.Assignment (C.RegValue' sym) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)))
+  Ctx.Assignment (CS.RegValue' sym) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
+  IO (Ctx.Assignment (CS.RegValue' sym) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)))
 overrideRegs archCtx sym =
   let rNames = regNames (archCtx ^. archVals)
       regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
@@ -644,7 +644,7 @@ overrideRegs archCtx sym =
                     blk <- liftIO $ W4.natLit sym macawGlobalMemBlock
                     off <- liftIO (W4.bvLit sym ?ptrWidth i)
                     let ptr = CLM.LLVMPointer blk off
-                    pure $ C.RV $ ptr
+                    pure $ CS.RV $ ptr
                 | otherwise ->
                     throw $ GreaseException "Can't override non-pointer register"
               Nothing -> pure reg
@@ -660,7 +660,7 @@ macawExecFeats ::
   ArchContext arch ->
   MacawCfgConfig arch ->
   SimOpts ->
-  IO ([C.ExecutionFeature p sym (Symbolic.MacawExt arch) (C.RegEntry sym (Symbolic.ArchRegStruct arch))], Maybe (Async ()))
+  IO ([CS.ExecutionFeature p sym (Symbolic.MacawExt arch) (CS.RegEntry sym (Symbolic.ArchRegStruct arch))], Maybe (Async ()))
 macawExecFeats la bak archCtx macawCfgConfig simOpts = do
   profFeatLog <- traverse greaseProfilerFeature (simProfileTo simOpts)
   let dbgOpts =
@@ -685,7 +685,7 @@ llvmExecFeats ::
   SimOpts ->
   C.GlobalVar CLM.Mem ->
   C.TypeRepr ret ->
-  IO ([C.ExecutionFeature p sym ext (C.RegEntry sym ret)], Maybe (Async ()))
+  IO ([CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)], Maybe (Async ()))
 llvmExecFeats la bak simOpts memVar ret = do
   profFeatLog <- traverse greaseProfilerFeature (simProfileTo simOpts)
   let dbgOpts =
@@ -820,7 +820,7 @@ macawInitState ::
   SetupMem sym ->
   GSIO.InitializedFs sym wptr ->
   Args sym ext (Symbolic.MacawCrucibleRegTypes arch) ->
-  IO (C.ExecState p sym ext (C.RegEntry sym ret))
+  IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
 macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConcVar setupMem initFs args = do
   let sym = CB.backendGetSym bak
   regs <- liftIO (overrideRegs archCtx sym (argVals args))
@@ -879,7 +879,7 @@ macawRefineOnce ::
   InitialMem sym ->
   C.GlobalVar CLM.Mem ->
   [RefineHeuristic sym bak ext argTys] ->
-  [C.ExecutionFeature p sym ext (C.RegEntry sym ret)] ->
+  [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
@@ -1070,7 +1070,7 @@ simulateRewrittenCfg ::
   InitialMem sym ->
   ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
   RefinementSummary sym (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
-  [C.ExecutionFeature (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (C.RegEntry sym (Symbolic.ArchRegStruct arch))] ->
+  [CS.ExecutionFeature (GreaseSimulatorState sym arch) sym (Symbolic.MacawExt arch) (CS.RegEntry sym (Symbolic.ArchRegStruct arch))] ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->

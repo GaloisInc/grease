@@ -25,7 +25,7 @@ import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.Evaluation qualified as C
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
@@ -35,7 +35,7 @@ import What4.Interface qualified as W4
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (SimulatorHooksDiagnostic diag)
 
--- | A 'C.ExtensionImpl' with overrides for the semantics of some macaw-symbolic
+-- | A 'CS.ExtensionImpl' with overrides for the semantics of some macaw-symbolic
 -- operations.
 --
 -- Wraps around a base ExtensionImpl that is invoked in cases where
@@ -65,23 +65,23 @@ greaseMacawExtImpl ::
   bak ->
   GreaseLogAction ->
   AddressOverrides arch ->
-  C.GlobalVar CLM.Mem ->
-  C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
-  C.ExtensionImpl p sym (Symbolic.MacawExt arch)
+  CS.GlobalVar CLM.Mem ->
+  CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
+  CS.ExtensionImpl p sym (Symbolic.MacawExt arch)
 greaseMacawExtImpl archCtx bak la tgtOvs memVar macawExtImpl =
   macawExtImpl
-    { C.extensionEval = extensionEval macawExtImpl
-    , C.extensionExec = extensionExec archCtx bak la tgtOvs memVar macawExtImpl
+    { CS.extensionEval = extensionEval macawExtImpl
+    , CS.extensionExec = extensionExec archCtx bak la tgtOvs memVar macawExtImpl
     }
 
 -- | This evaluates a Macaw statement extension in the simulator.
 extensionEval ::
   CB.IsSymBackend sym bak =>
-  C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
+  CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   bak ->
-  C.IntrinsicTypes sym ->
+  CS.IntrinsicTypes sym ->
   (Int -> String -> IO ()) ->
-  C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
+  CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
   C.EvalAppFunc sym (C.ExprExtension (Symbolic.MacawExt arch))
 extensionEval baseExt bak iTypes logFn cst evalFn =
   \case
@@ -90,7 +90,7 @@ extensionEval baseExt bak iTypes logFn cst evalFn =
       pure off
     e -> defaultExec e
  where
-  defaultExec = C.extensionEval baseExt bak iTypes logFn cst evalFn
+  defaultExec = CS.extensionEval baseExt bak iTypes logFn cst evalFn
 
 -- | Perform and AND of two pointers.
 --
@@ -115,7 +115,7 @@ ptrAnd bak x y = do
   oneBv <- W4.orPred sym xbv ybv
   ok <- W4.orPred sym sameBlk oneBv
   let msg = "Invalid AND of two pointers"
-  CB.assert bak ok (C.AssertFailureSimError msg "")
+  CB.assert bak ok (CS.AssertFailureSimError msg "")
   xptr <- W4.notPred sym xbv
   blk <- W4.natIte sym xptr xblk yblk
   off <- W4.bvAndBits sym xoff yoff
@@ -133,29 +133,29 @@ extensionExec ::
   bak ->
   GreaseLogAction ->
   AddressOverrides arch ->
-  C.GlobalVar CLM.Mem ->
-  C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
+  CS.GlobalVar CLM.Mem ->
+  CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   Symbolic.MacawEvalStmtFunc (C.StmtExtension (Symbolic.MacawExt arch)) p sym (Symbolic.MacawExt arch)
 extensionExec archCtx bak la tgtOvs memVar baseExt stmt crucState = do
   let sym = CB.backendGetSym bak
   case stmt of
-    Symbolic.PtrAnd _w (C.RegEntry _ x) (C.RegEntry _ y) -> do
+    Symbolic.PtrAnd _w (CS.RegEntry _ x) (CS.RegEntry _ y) -> do
       p <- ptrAnd bak x y
       pure (p, crucState)
-    Symbolic.PtrEq _w (C.RegEntry _ x) (C.RegEntry _ y) -> do
+    Symbolic.PtrEq _w (CS.RegEntry _ x) (CS.RegEntry _ y) -> do
       p <- CLM.ptrEq sym (CLM.ptrWidth x) x y
       pure (p, crucState)
-    Symbolic.PtrLeq _w (C.RegEntry _ x) (C.RegEntry _ y) -> do
+    Symbolic.PtrLeq _w (CS.RegEntry _ x) (CS.RegEntry _ y) -> do
       CLM.LLVMPointer _xblk xoff <- pure x
       CLM.LLVMPointer _yblk yoff <- pure y
       p <- W4.bvUle sym xoff yoff
       pure (p, crucState)
-    Symbolic.PtrLt _w (C.RegEntry _ x) (C.RegEntry _ y) -> do
+    Symbolic.PtrLt _w (CS.RegEntry _ x) (CS.RegEntry _ y) -> do
       CLM.LLVMPointer _xblk xoff <- pure x
       CLM.LLVMPointer _yblk yoff <- pure y
       p <- W4.bvUlt sym xoff yoff
       pure (p, crucState)
-    Symbolic.PtrMux _w (C.RegEntry _ cond) (C.RegEntry _ x) (C.RegEntry _ y) -> do
+    Symbolic.PtrMux _w (CS.RegEntry _ cond) (CS.RegEntry _ x) (CS.RegEntry _ y) -> do
       p <- CLM.muxLLVMPtr sym cond x y
       pure (p, crucState)
     Symbolic.MacawInstructionStart baddr iaddr dis ->
@@ -175,4 +175,4 @@ extensionExec archCtx bak la tgtOvs memVar baseExt stmt crucState = do
             ]
     _ -> defaultExec
  where
-  defaultExec = C.extensionExec baseExt stmt crucState
+  defaultExec = CS.extensionExec baseExt stmt crucState

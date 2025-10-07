@@ -16,7 +16,7 @@ import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Stubs.Syscall qualified as Stubs
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
@@ -60,7 +60,7 @@ callGetppid ::
   , CLM.HasPtrWidth w
   ) =>
   bak ->
-  C.OverrideSim p sym ext r args ret (CLM.LLVMPtr sym w)
+  CS.OverrideSim p sym ext r args ret (CLM.LLVMPtr sym w)
 callGetppid bak = liftIO $ do
   let sym = CB.backendGetSym bak
   -- The parent PID can change at any time due to reparenting, so this override

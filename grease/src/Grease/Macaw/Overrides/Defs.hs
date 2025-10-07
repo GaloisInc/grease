@@ -29,7 +29,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Intrinsics.Libc qualified as Libc
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.Printf qualified as Printf
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Stubs.FunctionOverride qualified as Stubs
 import What4.FunctionName qualified as W4
 import What4.Interface qualified as W4
@@ -134,18 +134,18 @@ callAssert ::
   bak ->
   C.GlobalVar CLM.Mem ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
-  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
-  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
-  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
-  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
-  C.OverrideSim p sym (Symbolic.MacawExt arch) r args ret ()
+  CS.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  CS.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  CS.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  CS.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  CS.OverrideSim p sym (Symbolic.MacawExt arch) r args ret ()
 callAssert bak mvar mmConf _pfn _pfile _pline ptxt = do
   let sym = CB.backendGetSym bak
   st0 <- get
   let maxSize = Nothing
   (txt, st1) <- liftIO $ loadConcreteString bak mvar mmConf ptxt maxSize st0
   put st1
-  let err = C.AssertFailureSimError "Call to assert()" (BSC.unpack txt)
+  let err = CS.AssertFailureSimError "Call to assert()" (BSC.unpack txt)
   _ <- liftIO $ CB.addFailedAssertion bak err
   loc <- liftIO $ W4.getCurrentProgramLoc sym
   liftIO $ CB.abortExecBecause $ CB.EarlyExit loc
@@ -219,9 +219,9 @@ callPrintf ::
   bak ->
   C.GlobalVar CLM.Mem ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
-  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  CS.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
   Stubs.GetVarArg sym ->
-  C.OverrideSim
+  CS.OverrideSim
     p
     sym
     (Symbolic.MacawExt arch)
@@ -241,21 +241,21 @@ callPrintf bak mvar mmConf formatStrPtr gva = do
   -- Parse format directives
   case Printf.parseDirectives (BS.unpack formatStr) of
     Left err ->
-      C.overrideError $
-        C.AssertFailureSimError "Format string parsing failed" err
+      CS.overrideError $
+        CS.AssertFailureSimError "Format string parsing failed" err
     Right ds -> do
       -- Get variadic arguments
       valist <- liftIO $ getPrintfVarArgs (Vec.fromList ds) gva
-      mem0 <- C.readGlobal mvar
+      mem0 <- CS.readGlobal mvar
       -- Execute directives
       ((str, n), mem1) <-
         liftIO $
           runStateT
             (Printf.executeDirectives (Libc.printfOps bak valist) ds)
             mem0
-      C.writeGlobal mvar mem1
+      CS.writeGlobal mvar mem1
       -- Print formatted output
-      h <- C.printHandle <$> C.getContext
+      h <- CS.printHandle <$> CS.getContext
       liftIO $ BSC.hPutStrLn h str
       -- Return the number of characters printed
       nBv <- liftIO $ W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (toInteger n))
@@ -267,7 +267,7 @@ getPrintfVarArgs ::
   CLM.HasPtrWidth w =>
   Vec.Vector Printf.PrintfDirective ->
   Stubs.GetVarArg sym ->
-  IO (Vec.Vector (C.AnyValue sym))
+  IO (Vec.Vector (CS.AnyValue sym))
 getPrintfVarArgs pds =
   evalStateT (Vec.mapMaybeM (StateT . getPrintfVarArg) pds)
 
@@ -284,7 +284,7 @@ getPrintfVarArg ::
   CLM.HasPtrWidth w =>
   Printf.PrintfDirective ->
   Stubs.GetVarArg sym ->
-  IO (Maybe (C.AnyValue sym), Stubs.GetVarArg sym)
+  IO (Maybe (CS.AnyValue sym), Stubs.GetVarArg sym)
 getPrintfVarArg pd gva@(Stubs.GetVarArg getVarArg) =
   case pd of
     Printf.StringDirective{} -> pure (Nothing, gva)
@@ -300,10 +300,10 @@ getPrintfVarArg pd gva@(Stubs.GetVarArg getVarArg) =
   getArgWithType ::
     forall arg.
     C.TypeRepr arg ->
-    IO (Maybe (C.AnyValue sym), Stubs.GetVarArg sym)
+    IO (Maybe (CS.AnyValue sym), Stubs.GetVarArg sym)
   getArgWithType tpRepr = do
-    (C.RegEntry ty val, gva') <- getVarArg tpRepr
-    pure (Just (C.AnyValue ty val), gva')
+    (CS.RegEntry ty val, gva') <- getVarArg tpRepr
+    pure (Just (CS.AnyValue ty val), gva')
 
 -- | An override for the @puts@ function. This assumes that the pointer argument
 -- points to an entirely concrete string.
@@ -342,8 +342,8 @@ callPuts ::
   bak ->
   C.GlobalVar CLM.Mem ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
-  C.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
-  C.OverrideSim
+  CS.RegEntry sym (CLM.LLVMPointerType (MC.ArchAddrWidth arch)) ->
+  CS.OverrideSim
     p
     sym
     (Symbolic.MacawExt arch)
@@ -354,11 +354,11 @@ callPuts ::
 callPuts bak mvar mmConf strPtr = do
   let sym = CB.backendGetSym bak
   st0 <- get
-  let strEntry = C.RegEntry CLM.PtrRepr (C.regValue strPtr)
+  let strEntry = CS.RegEntry CLM.PtrRepr (CS.regValue strPtr)
   let maxSize = Nothing
   (str, st1) <- liftIO $ loadConcreteString bak mvar mmConf strEntry maxSize st0
   put st1
-  h <- C.printHandle <$> C.getContext
+  h <- CS.printHandle <$> CS.getContext
   liftIO $ BSC.hPutStrLn h str
   -- return non-negative value on success
   oneBv <- liftIO $ W4.bvOne (CB.backendGetSym bak) MM.memWidthNatRepr
@@ -387,12 +387,12 @@ buildStackChkFailLocalOverride =
         callStackChkFail fnName
 
 -- | Call a function in the @__stack_chk_fail@ family.
-callStackChkFail :: W4.FunctionName -> C.OverrideSim p sym ext r args ret ()
+callStackChkFail :: W4.FunctionName -> CS.OverrideSim p sym ext r args ret ()
 callStackChkFail fnName =
-  C.ovrWithBackend $ \bak -> liftIO $ do
+  CS.ovrWithBackend $ \bak -> liftIO $ do
     let sym = CB.backendGetSym bak
     let msg = "Call to " List.++ show fnName
-    let err = C.AssertFailureSimError msg ""
+    let err = CS.AssertFailureSimError msg ""
     CB.assert bak (W4.falsePred sym) err
     loc <- W4.getCurrentProgramLoc sym
     CB.abortExecBecause $ CB.EarlyExit loc

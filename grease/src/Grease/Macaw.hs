@@ -74,8 +74,8 @@ import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.Intrinsics qualified as Mem
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as SymIO
-import Lang.Crucible.Simulator qualified as C
-import Lang.Crucible.Simulator.GlobalState qualified as C
+import Lang.Crucible.Simulator qualified as CS
+import Lang.Crucible.Simulator.GlobalState qualified as CS
 import Stubs.Common qualified as Stubs
 import Stubs.Syscall qualified as Stubs
 import What4.Expr qualified as W4
@@ -495,8 +495,8 @@ assertRelocSupported arch loc (CLM.LLVMPointer _base offset) relocs =
                       , "relevant PLT section of the binary"
                       , "(.plt, .plt.got, .plt.sec, etc.)."
                       ]
-              let reason = C.Unsupported callStack msg
-              let simErr = C.SimError loc reason
+              let reason = CS.Unsupported callStack msg
+              let simErr = CS.SimError loc reason
               CB.abortExecBecause (CB.AssertionFailure simErr)
         _ ->
           pure ()
@@ -521,11 +521,11 @@ initState ::
   ) =>
   bak ->
   GreaseLogAction ->
-  C.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
+  CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   C.HandleAllocator ->
-  C.GlobalVar CLM.Mem ->
+  CS.GlobalVar CLM.Mem ->
   SetupMem sym ->
-  C.SymGlobalState sym ->
+  CS.SymGlobalState sym ->
   SymIO.SomeOverrideSim sym () ->
   ArchContext arch ->
   SetupHook sym arch ->
@@ -541,18 +541,18 @@ initState ::
   Maybe (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   -- | The 'C.CFG' of the user-requested entrypoint function.
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch) ->
-  m (C.ExecState p sym (Symbolic.MacawExt arch) (C.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch))))
+  m (CS.ExecState p sym (Symbolic.MacawExt arch) (CS.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch))))
 initState bak la macawExtImpl halloc mvar mem0 globs0 (SymIO.SomeOverrideSim initFsOv) arch setupHook tgtOvs initialPersonality initialRegs funOvs mbStartupOvCfg (C.SomeCFG cfg) = do
   let sym = CB.backendGetSym bak
   (mem1, globs1) <- liftIO $ (arch ^. archInitGlobals) (Stubs.Sym sym bak) (getSetupMem mem0) globs0
-  let globs2 = C.insertGlobal mvar mem1 globs1
+  let globs2 = CS.insertGlobal mvar mem1 globs1
   let extImpl = greaseMacawExtImpl arch bak la tgtOvs mvar macawExtImpl
   let cfgHdl = C.cfgHandle cfg
   let bindings =
-        C.FnBindings $
-          C.insertHandleMap cfgHdl (C.UseCFG cfg $ C.postdomInfo cfg) C.emptyHandleMap
+        CS.FnBindings $
+          C.insertHandleMap cfgHdl (CS.UseCFG cfg $ C.postdomInfo cfg) C.emptyHandleMap
   let ctx =
-        C.initSimContext
+        CS.initSimContext
           bak
           (Mem.llvmIntrinsicTypes `MapF.union` SymIO.llvmSymIOIntrinsicTypes)
           halloc
@@ -562,23 +562,23 @@ initState bak la macawExtImpl halloc mvar mem0 globs0 (SymIO.SomeOverrideSim ini
           initialPersonality
   let sRepr = regStructRepr arch
   pure
-    $ C.InitialState
+    $ CS.InitialState
       ctx
       globs2
-      C.defaultAbortHandler
+      CS.defaultAbortHandler
       sRepr
-    $ C.runOverrideSim sRepr
+    $ CS.runOverrideSim sRepr
     $ Symbolic.crucGenArchConstraints (arch ^. archVals . to Symbolic.archFunctions)
     $ do
       let SetupHook hook = setupHook
       hook bak mvar funOvs
       initFsOv
-      let args = Ctx.singleton $ C.RegEntry sRepr initialRegs
+      let args = Ctx.singleton $ CS.RegEntry sRepr initialRegs
       r <-
         case mbStartupOvCfg of
           Nothing ->
-            C.callCFG cfg (C.RegMap args)
+            CS.callCFG cfg (CS.RegMap args)
           Just (C.SomeCFG startupOvCfg) -> do
-            args' <- C.callCFG startupOvCfg (C.RegMap args)
-            C.callCFG cfg (C.RegMap (Ctx.singleton args'))
-      pure $ C.regValue r
+            args' <- CS.callCFG startupOvCfg (CS.RegMap args)
+            CS.callCFG cfg (CS.RegMap (Ctx.singleton args'))
+      pure $ CS.regValue r

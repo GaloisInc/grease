@@ -31,7 +31,7 @@ import Lang.Crucible.CFG.Reg qualified as LCCR
 import Lang.Crucible.CFG.SSAConversion (toSSA)
 import Lang.Crucible.LLVM.DataLayout (DataLayout)
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.Simulator qualified as LCS
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Stubs.FunctionOverride qualified as Stubs
 import What4.Expr.Builder qualified as WEB
@@ -56,25 +56,25 @@ newtype SetupHook sym arch
         , HasToConcretize p
         ) =>
         bak ->
-        LCS.GlobalVar CLM.Mem ->
+        CS.GlobalVar CLM.Mem ->
         -- Map of names of overridden functions to their implementations
         Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
-        LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+        CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
       )
 
 -- | Register overrides, both user-defined ones and ones that are hard-coded
 -- into GREASE itself.
 registerOverrideCfgs ::
   Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
-  LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+  CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideCfgs funOvs =
   Monad.forM_ (Map.elems funOvs) $ \mso -> do
     let publicOvHdl = GMO.msoPublicFnHandle mso
         publicOv = GMO.msoPublicOverride mso
     Stubs.SomeFunctionOverride fnOv <- pure $ GMO.msoSomeFunctionOverride mso
-    LCS.bindFnHandle publicOvHdl (LCS.UseOverride publicOv)
+    CS.bindFnHandle publicOvHdl (CS.UseOverride publicOv)
     let auxFns = Stubs.functionAuxiliaryFnBindings fnOv
-    Monad.forM_ auxFns $ \(LCS.FnBinding auxHdl auxSt) -> LCS.bindFnHandle auxHdl auxSt
+    Monad.forM_ auxFns $ \(CS.FnBinding auxHdl auxSt) -> CS.bindFnHandle auxHdl auxSt
 
 -- | Redirect function handles from forward declarations appearing in
 -- 'GMO.MacawSExpOverride's to their implementations.
@@ -90,7 +90,7 @@ registerOverrideForwardDeclarations ::
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
-  LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+  CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideForwardDeclarations bak errCb funOvs =
   Monad.forM_ (Map.elems funOvs) $ \mso ->
     case GMO.msoSomeFunctionOverride mso of
@@ -116,7 +116,7 @@ registerOverrideHandles ::
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
-  LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+  CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerOverrideHandles bak errCb funOvs = do
   registerOverrideCfgs funOvs
   registerOverrideForwardDeclarations bak errCb funOvs
@@ -126,11 +126,11 @@ registerOverrideHandles bak errCb funOvs = do
 registerSyntaxCfgs ::
   DMS.SymArchConstraints arch =>
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
-  LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+  CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerSyntaxCfgs prog =
   Monad.forM_ (CSyn.parsedProgCFGs prog) $ \(LCCR.AnyCFG defCfg) -> do
     LCCC.SomeCFG defSsa <- pure $ toSSA defCfg
-    LCS.bindCFG defSsa
+    CS.bindCFG defSsa
 
 -- | Redirect function handles from forward declarations appearing in an
 -- S-expression program ('CSyn.ParsedProgram') to their implementations.
@@ -150,11 +150,11 @@ registerSyntaxForwardDeclarations ::
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   DataLayout ->
-  LCS.GlobalVar CLM.Mem ->
+  CS.GlobalVar CLM.Mem ->
   -- | Map of names of overridden functions to their implementations
   Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
-  LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+  CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerSyntaxForwardDeclarations bak la errCb dl mvar funOvs prog =
   GMO.registerMacawSexpProgForwardDeclarations bak la dl mvar errCb funOvs (CSyn.parsedProgForwardDecs prog)
 
@@ -177,11 +177,11 @@ registerSyntaxHandles ::
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   DataLayout ->
-  LCS.GlobalVar CLM.Mem ->
+  CS.GlobalVar CLM.Mem ->
   -- | Map of names of overridden functions to their implementations
   Map.Map WF.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
-  LCS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
+  CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
 registerSyntaxHandles bak la errCb dl mvar funOvs prog = do
   registerSyntaxCfgs prog
   registerSyntaxForwardDeclarations bak la errCb dl mvar funOvs prog

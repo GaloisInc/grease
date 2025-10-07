@@ -70,7 +70,7 @@ import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.CFG.SSAConversion qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lumberjack qualified as LJ
 import Stubs.FunctionOverride qualified as Stubs
 import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
@@ -98,25 +98,25 @@ useComposedOverride ::
   -- | Implementation of existing override
   MacawOverride p sym arch ->
   -- | Simulator state
-  C.SimState p sym (Symbolic.MacawExt arch) r f a ->
+  CS.SimState p sym (Symbolic.MacawExt arch) r f a ->
   -- | Name for new override
   W4.FunctionName ->
   -- | New action to take
   ( forall r'.
-    C.RegValue sym (Symbolic.ArchRegStruct arch) ->
-    C.OverrideSim p sym (Symbolic.MacawExt arch) r' (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch) (C.RegValue sym (Symbolic.ArchRegStruct arch))
+    CS.RegValue sym (Symbolic.ArchRegStruct arch) ->
+    CS.OverrideSim p sym (Symbolic.MacawExt arch) r' (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch) (CS.RegValue sym (Symbolic.ArchRegStruct arch))
   ) ->
   IO
     ( C.FnHandle (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)
-    , C.SimState p sym (Symbolic.MacawExt arch) r f a
+    , CS.SimState p sym (Symbolic.MacawExt arch) r f a
     )
 useComposedOverride halloc arch handle0 override0 st funcName f = do
   handle <- C.mkHandle' halloc funcName (Ctx.Empty Ctx.:> regStructRepr arch) (regStructRepr arch)
-  let override = C.mkOverride' funcName (regStructRepr arch) $ do
-        args <- C.getOverrideArgs
-        regs <- C.callOverride handle0 override0 args
-        f (C.regValue regs)
-  pure $ useFnHandleAndState handle (C.UseOverride override) st
+  let override = CS.mkOverride' funcName (regStructRepr arch) $ do
+        args <- CS.getOverrideArgs
+        regs <- CS.callOverride handle0 override0 args
+        f (CS.regValue regs)
+  pure $ useFnHandleAndState handle (CS.UseOverride override) st
 
 -- | Dispatch on the result of looking up a function handle. The
 -- 'lookupFunctionHandle' function invokes a continuation of this type after it
@@ -126,13 +126,13 @@ useComposedOverride halloc arch handle0 override0 st funcName f = do
 newtype LookupFunctionHandleDispatch p sym arch
   = LookupFunctionHandleDispatch
       ( forall rtp blocks r ctx.
-        C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
+        CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
         CLM.MemImpl sym ->
-        Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
+        Ctx.Assignment (CS.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
         LookupFunctionHandleResult p sym arch ->
         IO
           ( C.FnHandle (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)
-          , C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
+          , CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
           )
       )
 
@@ -182,11 +182,11 @@ defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs errCb =
         doLog la $ Diag.SkippedFunctionCall reason
         let funcName = W4.functionNameFromText "_grease_external"
         handle <- C.mkHandle' halloc funcName (Ctx.Empty Ctx.:> regStructRepr arch) (regStructRepr arch)
-        let override = C.mkOverride' funcName (regStructRepr arch) $ do
-              args <- C.getOverrideArgs
-              let regs' = Ctx.last $ C.regMap args
-              (arch ^. archOffsetStackPointerPostCall) (C.regValue regs')
-        pure $ useFnHandleAndState handle (C.UseOverride override) st
+        let override = CS.mkOverride' funcName (regStructRepr arch) $ do
+              args <- CS.getOverrideArgs
+              let regs' = Ctx.last $ CS.regMap args
+              (arch ^. archOffsetStackPointerPostCall) (CS.regValue regs')
+        pure $ useFnHandleAndState handle (CS.UseOverride override) st
       CachedFnHandle fnAddrOff hdl mbOv -> do
         logFunctionCall (C.handleName hdl) fnAddrOff
         callHandle hdl mbOv st
@@ -257,11 +257,11 @@ lookupFunctionHandleResult ::
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
   ErrorSymbolicFunCalls ->
   SkipInvalidCallAddrs ->
-  C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
-  Ctx.Assignment (C.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
+  CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
+  Ctx.Assignment (CS.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
   IO
     ( LookupFunctionHandleResult p sym arch
-    , C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
+    , CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
     )
 lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddrs st regs = do
   -- First, obtain the address contained in the instruction pointer.
@@ -291,7 +291,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
       if getErrorSymbolicFunCalls errorSymbolicFunCalls
         then
           CB.addFailedAssertion bak $
-            C.AssertFailureSimError
+            CS.AssertFailureSimError
               "Failed to call function"
               "Cannot resolve a symbolic function address"
         else pure (SkippedFunctionCall SymbolicAddress, st)
@@ -308,7 +308,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
                   then
                     pure (SkippedFunctionCall (InvalidAddress addrString), st)
                   else
-                    CB.addFailedAssertion bak $ C.AssertFailureSimError "Failed to call function" ("Invalid address: " ++ addrString)
+                    CB.addFailedAssertion bak $ CS.AssertFailureSimError "Failed to call function" ("Invalid address: " ++ addrString)
           Just funcAddrOff -> go funcAddrOff
  where
   lookupOv ::
@@ -328,7 +328,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
     MC.ArchSegmentOff arch ->
     IO
       ( LookupFunctionHandleResult p sym arch
-      , C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
+      , CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
       )
   go funcAddrOff
     -- First, check if this is the address of a CFG we have already
@@ -423,12 +423,12 @@ newtype LookupSyscallDispatch p sym arch
       ( forall rtp blocks r ctx atps rtps.
         Ctx.Assignment C.TypeRepr atps ->
         Ctx.Assignment C.TypeRepr rtps ->
-        C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
-        C.RegEntry sym (C.StructType atps) ->
+        CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
+        CS.RegEntry sym (C.StructType atps) ->
         LookupSyscallResult p sym arch atps rtps ->
         IO
           ( C.FnHandle atps (C.StructType rtps)
-          , C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
+          , CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
           )
       )
 
@@ -453,7 +453,7 @@ defaultLookupSyscallDispatch bak la halloc arch =
         let funcName = W4.functionNameFromText "_grease_syscall"
         handle <- C.mkHandle' halloc funcName atps (C.StructRepr rtps)
         let override =
-              C.mkOverride'
+              CS.mkOverride'
                 funcName
                 (C.StructRepr rtps)
                 ( (arch ^. archSyscallReturnRegisters)
@@ -463,7 +463,7 @@ defaultLookupSyscallDispatch bak la halloc arch =
                     regs
                     rtps
                 )
-        pure $ useFnHandleAndState handle (C.UseOverride override) st
+        pure $ useFnHandleAndState handle (CS.UseOverride override) st
       CachedSyscallFnHandle (Stubs.SyscallFnHandle syscallHdl) ->
         pure (syscallHdl, st)
       NewSyscall syscallName syscallNum (Stubs.SomeSyscall syscallOv) -> do
@@ -471,7 +471,7 @@ defaultLookupSyscallDispatch bak la halloc arch =
         let syscallFnName = W4.functionNameFromText syscallName
         macawSyscallHdl <- C.mkHandle' halloc syscallFnName atps (C.StructRepr rtps)
         let macawSyscallOv = macawSyscallOverride bak arch atps rtps syscallOv
-        pure $ useFnHandleAndState macawSyscallHdl (C.UseOverride macawSyscallOv) st
+        pure $ useFnHandleAndState macawSyscallHdl (CS.UseOverride macawSyscallOv) st
 
 -- | The result of looking up a syscall override.
 data LookupSyscallResult p sym arch atps rtps where
@@ -512,17 +512,17 @@ lookupSyscallResult ::
   ErrorSymbolicSyscalls ->
   Ctx.Assignment C.TypeRepr atps ->
   Ctx.Assignment C.TypeRepr rtps ->
-  C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
-  C.RegEntry sym (C.StructType atps) ->
+  CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
+  CS.RegEntry sym (C.StructType atps) ->
   IO (LookupSyscallResult p sym arch atps rtps)
 lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs = do
   symSyscallBV <- (arch ^. archSyscallNumberRegister) bak atps regs
-  case W4.asBV (C.regValue symSyscallBV) of
+  case W4.asBV (CS.regValue symSyscallBV) of
     Nothing ->
       if getErrorSymbolicSyscalls errorSymbolicSyscalls
         then
           CB.addFailedAssertion bak $
-            C.AssertFailureSimError
+            CS.AssertFailureSimError
               "Failed to execute syscall"
               "Cannot resolve a symbolic syscall number"
         else pure $ SkippedSyscall SymbolicSyscallNumber
@@ -584,10 +584,10 @@ discoverFuncAddr ::
   -- | The function address
   MC.ArchSegmentOff arch ->
   -- | The current Crucible state
-  C.SimState p sym (Symbolic.MacawExt arch) r f a ->
+  CS.SimState p sym (Symbolic.MacawExt arch) r f a ->
   IO
     ( MacawFnHandle arch
-    , C.SimState p sym (Symbolic.MacawExt arch) r f a
+    , CS.SimState p sym (Symbolic.MacawExt arch) r f a
     )
 discoverFuncAddr logAction halloc arch memory symMap pltStubs addr st0 = do
   C.Reg.SomeCFG regCFG <-
@@ -595,7 +595,7 @@ discoverFuncAddr logAction halloc arch memory symMap pltStubs addr st0 = do
   C.SomeCFG funcCFG <- pure (C.toSSA regCFG)
   let cfgHdl = C.cfgHandle funcCFG
   let st1 = st0 & stateDiscoveredFnHandles %~ Map.insert addr cfgHdl
-  pure $ useFnHandleAndState cfgHdl (C.UseCFG funcCFG (C.postdomInfo funcCFG)) st1
+  pure $ useFnHandleAndState cfgHdl (CS.UseCFG funcCFG (C.postdomInfo funcCFG)) st1
 
 -- | Bind the public function defined in a 'MacawSExpOverride' to its
 -- 'MacawOverride', bind the auxiliary functions to their corresponding CFGs,
@@ -617,8 +617,8 @@ useMacawSExpOverride ::
   -- | What to do when a forward declaration cannot be resolved.
   (W4.FunctionName -> IO ()) ->
   MacawSExpOverride p sym arch ->
-  C.SimState p sym (Symbolic.MacawExt arch) r f a ->
-  IO (MacawFnHandle arch, C.SimState p sym (Symbolic.MacawExt arch) r f a)
+  CS.SimState p sym (Symbolic.MacawExt arch) r f a ->
+  IO (MacawFnHandle arch, CS.SimState p sym (Symbolic.MacawExt arch) r f a)
 useMacawSExpOverride bak la halloc arch allOvs errCb mOv st0 =
   do
     MacawSExpOverride
@@ -627,14 +627,14 @@ useMacawSExpOverride bak la halloc arch allOvs errCb mOv st0 =
       , msoSomeFunctionOverride = Stubs.SomeFunctionOverride fnOv
       } <-
       pure mOv
-    let C.FnBindings fnHdlMap0 = st0 ^. C.stateContext . C.functionBindings
+    let CS.FnBindings fnHdlMap0 = st0 ^. CS.stateContext . CS.functionBindings
         fnOvName = Stubs.functionName fnOv
     doLog la $ Diag.FunctionOverride fnOvName
     fnHdlMap1 <- extendHandleMap bak allOvs errCb fnOv fnHdlMap0
     let st1 =
           st0
-            & C.stateContext . C.functionBindings
-              .~ C.FnBindings fnHdlMap1
+            & CS.stateContext . CS.functionBindings
+              .~ CS.FnBindings fnHdlMap1
         funcName = W4.functionNameFromText "_grease_fix_stack_ptr"
     useComposedOverride halloc arch publicOvHdl publicOv st1 funcName (arch ^. archOffsetStackPointerPostCall)
 
@@ -661,9 +661,9 @@ extendHandleMap ::
   -- | The override that needs to be registered
   Stubs.FunctionOverride p sym args arch ret ->
   -- | The initial function handle map
-  C.FnHandleMap (C.FnState p sym (Symbolic.MacawExt arch)) ->
+  C.FnHandleMap (CS.FnState p sym (Symbolic.MacawExt arch)) ->
   -- | The extended function handle map
-  IO (C.FnHandleMap (C.FnState p sym (Symbolic.MacawExt arch)))
+  IO (C.FnHandleMap (CS.FnState p sym (Symbolic.MacawExt arch)))
 extendHandleMap bak allOvs errCb = go
  where
   -- Note the local quantification for @args'@ and @ret'@. Each recursive call
@@ -671,23 +671,23 @@ extendHandleMap bak allOvs errCb = go
   go ::
     forall args' ret'.
     Stubs.FunctionOverride p sym args' arch ret' ->
-    C.FnHandleMap (C.FnState p sym (Symbolic.MacawExt arch)) ->
-    IO (C.FnHandleMap (C.FnState p sym (Symbolic.MacawExt arch)))
+    C.FnHandleMap (CS.FnState p sym (Symbolic.MacawExt arch)) ->
+    IO (C.FnHandleMap (CS.FnState p sym (Symbolic.MacawExt arch)))
   go fnOv fnHdlMap0 =
     let auxFns = Stubs.functionAuxiliaryFnBindings fnOv
         fwdDecs = Map.toList $ Stubs.functionForwardDeclarations fnOv
         fnHdlMap1 =
           foldl'
-            ( \binds (C.FnBinding fnHdl fnSt) ->
+            ( \binds (CS.FnBinding fnHdl fnSt) ->
                 C.insertHandleMap fnHdl fnSt binds
             )
             fnHdlMap0
             auxFns
 
         extendFwdDec ::
-          C.FnHandleMap (C.FnState p sym (Symbolic.MacawExt arch)) ->
+          C.FnHandleMap (CS.FnState p sym (Symbolic.MacawExt arch)) ->
           (W4.FunctionName, C.SomeHandle) ->
-          IO (C.FnHandleMap (C.FnState p sym (Symbolic.MacawExt arch)))
+          IO (C.FnHandleMap (CS.FnState p sym (Symbolic.MacawExt arch)))
         extendFwdDec binds (fwdDecName, C.SomeHandle fwdDecHdl) =
           -- If the handle is already in the HandleMap, don't bother
           -- reprocessing it. This isn't just an optimization—it's important
@@ -699,7 +699,7 @@ extendHandleMap bak allOvs errCb = go
               case Map.lookup fwdDecName allOvs of
                 Nothing ->
                   case lookupMacawForwardDeclarationOverride bak allOvs fwdDecName fwdDecHdl of
-                    Just ov -> pure (C.insertHandleMap fwdDecHdl (C.UseOverride ov) binds)
+                    Just ov -> pure (C.insertHandleMap fwdDecHdl (CS.UseOverride ov) binds)
                     Nothing -> do
                       errCb fwdDecName
                       pure binds
@@ -716,16 +716,16 @@ extendHandleMap bak allOvs errCb = go
                             (someForwardedOv NE.:| [])
                             fwdDecName
                             fwdDecHdl
-                        binds' = C.insertHandleMap fwdDecHdl (C.UseOverride forwardedOvSim) binds
+                        binds' = C.insertHandleMap fwdDecHdl (CS.UseOverride forwardedOvSim) binds
                      in go forwardedOv binds'
      in foldM extendFwdDec fnHdlMap1 fwdDecs
 
--- | A helper function for binding a 'C.FnHandle' to its 'C.FnState' when
+-- | A helper function for binding a 'C.FnHandle' to its 'CS.FnState' when
 -- returning in a 'Symbolic.LookupFunctionHandle'.
 useFnHandleAndState ::
   C.FnHandle args ret ->
-  C.FnState p sym ext args ret ->
-  C.SimState p sym ext r f a ->
-  (C.FnHandle args ret, C.SimState p sym ext r f a)
+  CS.FnState p sym ext args ret ->
+  CS.SimState p sym ext r f a ->
+  (C.FnHandle args ret, CS.SimState p sym ext r f a)
 useFnHandleAndState fnHdl fnState crucState =
   (fnHdl, Stubs.insertFunctionHandle crucState fnHdl fnState)

@@ -47,7 +47,7 @@ import Lang.Crucible.CFG.Reg qualified as LCCR
 import Lang.Crucible.CFG.SSAConversion (toSSA)
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
 import Lang.Crucible.Simulator.GlobalState qualified as C
@@ -267,7 +267,7 @@ registerAddressOverrideForwardDeclarations ::
   CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   AddressOverrides arch ->
-  C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
+  CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerAddressOverrideForwardDeclarations bak errCb funOvs addrOvs = do
   let AddressOverrides addrOvsMap = addrOvs
   Monad.forM_ (Map.elems addrOvsMap) $ \addrOv -> do
@@ -278,14 +278,14 @@ registerAddressOverrideForwardDeclarations bak errCb funOvs addrOvs = do
 registerAddressOverrideCfgs ::
   CLM.HasPtrWidth (MC.ArchAddrWidth arch) =>
   AddressOverrides arch ->
-  C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
+  CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerAddressOverrideCfgs addrOvs = do
   let AddressOverrides addrOvsMap = addrOvs
   Monad.forM_ (Map.elems addrOvsMap) $ \addrOv -> do
     C.SomeCFG cfg <- pure (aoCfg addrOv)
-    C.bindCFG cfg
+    CS.bindCFG cfg
     Monad.forM_ (aoAuxiliaryOverrides addrOv) $ \(C.AnyCFG auxCfg) ->
-      C.bindCFG auxCfg
+      CS.bindCFG auxCfg
 
 -- | Register all handles from 'AddressOverrides', including defined CFGs and
 -- forwaAddressrd declarations.
@@ -302,7 +302,7 @@ registerAddressOverrideHandles ::
   CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   Map.Map W4.FunctionName (MacawSExpOverride p sym arch) ->
   AddressOverrides arch ->
-  C.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
+  CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
 registerAddressOverrideHandles bak errCb funOvs addrOvs = do
   registerAddressOverrideCfgs addrOvs
   registerAddressOverrideForwardDeclarations bak errCb funOvs addrOvs
@@ -314,8 +314,8 @@ toInitialState ::
   C.GlobalVar CLM.Mem ->
   C.CrucibleState p sym ext rtp blocks r args ->
   C.TypeRepr ret ->
-  C.ExecCont p sym ext (C.RegEntry sym ret) (C.OverrideLang ret) ('Just Ctx.EmptyCtx) ->
-  IO (C.ExecState p sym ext (C.RegEntry sym ret))
+  CS.ExecCont p sym ext (CS.RegEntry sym ret) (C.OverrideLang ret) ('Just Ctx.EmptyCtx) ->
+  IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
 toInitialState memVar crucState retTy action = do
   let ctx = crucState Lens.^. C.stateContext
   let globals =
@@ -327,7 +327,7 @@ toInitialState memVar crucState retTy action = do
       C.InitialState
         ctx
         globals
-        C.defaultAbortHandler -- (crucState Lens.^. C.abortHandler)
+        CS.defaultAbortHandler -- (crucState Lens.^. CS.abortHandler)
         retTy
         action
 
@@ -342,22 +342,22 @@ runAddressOverride ::
   C.GlobalVar CLM.Mem ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) C.UnitType ->
-  C.RegEntry sym (Symbolic.ArchRegStruct arch) ->
+  CS.RegEntry sym (Symbolic.ArchRegStruct arch) ->
   IO ()
 runAddressOverride memVar crucState someCfg regs = do
   C.SomeCFG cfg <- pure someCfg
   initState <-
     toInitialState memVar crucState C.UnitRepr $
-      C.runOverrideSim C.UnitRepr $
-        C.regValue <$> C.callCFG cfg (C.RegMap (Ctx.singleton regs))
+      CS.runOverrideSim C.UnitRepr $
+        CS.regValue <$> CS.callCFG cfg (CS.RegMap (Ctx.singleton regs))
   C.ctxSolverProof (C.execStateContext initState) $ do
-    execResult <- C.executeCrucible [] initState
+    execResult <- CS.executeCrucible [] initState
     case execResult of
       C.FinishedResult _ (C.TotalRes{}) -> pure ()
       C.FinishedResult _ (C.PartialRes loc p _gp _aborted) -> do
         let ctx = crucState Lens.^. C.stateContext
         C.withBackend ctx $ \bak -> do
-          CB.assert bak p (C.GenericSimError ("Assertion from address override at " ++ show loc))
+          CB.assert bak p (CS.GenericSimError ("Assertion from address override at " ++ show loc))
           pure ()
       C.AbortedResult _ (C.AbortedExec reason _) -> CB.abortExecBecause reason
       _ -> do
@@ -381,7 +381,7 @@ tryRunAddressOverride archCtx memVar crucState cfg = do
   case DMSR.simStateRegs archFns crucState of
     Nothing -> pure ()
     Just regs ->
-      let regsEntry = C.RegEntry (regStructRepr archCtx) regs
+      let regsEntry = CS.RegEntry (regStructRepr archCtx) regs
        in runAddressOverride memVar crucState cfg regsEntry
 
 -- | See if there is an address override corresponding to the current

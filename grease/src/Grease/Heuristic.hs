@@ -71,7 +71,7 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM hiding (Mem)
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Generic qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lumberjack qualified as LJ
 import Numeric.Natural (Natural)
 import Prettyprinter qualified as PP
@@ -308,17 +308,17 @@ handleUB ::
   sym ->
   W4.ProgramLoc ->
   ArgShapes ext NoTag argTys ->
-  Mem.UndefinedBehavior (C.RegValue' sym) ->
+  Mem.UndefinedBehavior (CS.RegValue' sym) ->
   IO (HeuristicResult ext argTys)
 handleUB la anns sym _loc args =
   \case
-    Mem.FreeBadOffset (C.RV ptr) ->
+    Mem.FreeBadOffset (CS.RV ptr) ->
       makeIntoPointer ptr
-    Mem.FreeUnallocated (C.RV ptr) ->
+    Mem.FreeUnallocated (CS.RV ptr) ->
       modPtr la anns sym args (growPtrTargetUpTo ptrBytes) ptr
-    Mem.MemsetInvalidRegion (C.RV ptr) _val (C.RV len) ->
+    Mem.MemsetInvalidRegion (CS.RV ptr) _val (CS.RV len) ->
       modPtr la anns sym args (growPtrTargetUpToBv sym len) ptr
-    Mem.PtrAddOffsetOutOfBounds (C.RV ptr) (C.RV offset) ->
+    Mem.PtrAddOffsetOutOfBounds (CS.RV ptr) (CS.RV offset) ->
       modPtr la anns sym args (growPtrTargetUpToBv sym offset) ptr
     _ -> pure Unknown
  where
@@ -431,13 +431,13 @@ mustFailHeuristic bak _anns _initMem obligation minfo _argNames _args =
       mustFail <- MustFail.oneMustFail bak [obligation]
       let lp = CB.proofGoal obligation
       let simError = lp ^. W4.labeledPredMsg
-      let loc = C.simErrorLoc simError
+      let loc = CS.simErrorLoc simError
       let bug =
             Bug.BugInstance
               { Bug.bugType = Bug.MustFail
               , Bug.bugLoc = ppProgramLoc loc
               , Bug.bugDetails = do
-                  let txt = tshow (C.ppSimError simError)
+                  let txt = tshow (CS.ppSimError simError)
                   case minfo of
                     Just (CrucibleLLVMError badBehavior callStack) ->
                       let txt' = tshow (Mem.ppBB badBehavior)
@@ -498,7 +498,7 @@ pointerHeuristic la ptrHeuristic byteHeuristic bak anns initMem obligation minfo
  where
   sym = CB.backendGetSym bak
   labeledPred = CB.proofGoal obligation
-  loc = C.simErrorLoc (labeledPred ^. W4.labeledPredMsg)
+  loc = CS.simErrorLoc (labeledPred ^. W4.labeledPredMsg)
   applyToErr :: AnyMemError sym -> Mem.LLVMPtr sym w -> IO (HeuristicResult ext argTys)
   applyToErr e ptr = applyMemoryHeuristics la anns sym ptrHeuristic byteHeuristic loc initMem e argNames args ptr
 

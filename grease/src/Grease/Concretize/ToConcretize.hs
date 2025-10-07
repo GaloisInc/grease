@@ -33,7 +33,7 @@ import Data.Text (Text)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Generator qualified as LCCG
 import Lang.Crucible.FunctionHandle qualified as LCF
-import Lang.Crucible.Simulator qualified as LCS
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.ExecutionTree qualified as LCSE
 import Lang.Crucible.Simulator.GlobalState qualified as LCSG
 import Lang.Crucible.Simulator.SymSequence qualified as LCSS
@@ -54,16 +54,16 @@ type ToConcretizeType =
 -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality') which contain a
 -- @'C.GlobalVar' 'ToConcretize'@.
 class HasToConcretize p where
-  toConcretize :: p -> LCS.GlobalVar ToConcretizeType
+  toConcretize :: p -> CS.GlobalVar ToConcretizeType
 
-instance HasToConcretize (LCS.GlobalVar ToConcretizeType) where
+instance HasToConcretize (CS.GlobalVar ToConcretizeType) where
   toConcretize = id
 
--- | Create and initialize a @'LCS.GlobalVar' 'ToConcretizeType'@.
+-- | Create and initialize a @'CS.GlobalVar' 'ToConcretizeType'@.
 newToConcretize ::
   LCF.HandleAllocator ->
   LCSG.SymGlobalState sym ->
-  IO (LCS.GlobalVar ToConcretizeType, LCSG.SymGlobalState sym)
+  IO (CS.GlobalVar ToConcretizeType, LCSG.SymGlobalState sym)
 newToConcretize halloc globals = do
   g <- LCCG.freshGlobalVar halloc "to-concretize" knownRepr
   pure (g, LCSG.insertGlobal g LCSS.SymSequenceNil globals)
@@ -89,23 +89,23 @@ readToConcretize ::
   (sym ~ WEB.ExprBuilder t st fs) =>
   HasToConcretize p =>
   WEG.GroundEvalFn t ->
-  LCS.ExecResult p sym ext r ->
-  IO (LCS.RegValue sym ToConcretizeType)
+  CS.ExecResult p sym ext r ->
+  IO (CS.RegValue sym ToConcretizeType)
 readToConcretize groundFn result = do
-  let simCtx = LCS.execResultContext result
-  let toConcVar = simCtx Lens.^. LCS.cruciblePersonality . Lens.to toConcretize
+  let simCtx = CS.execResultContext result
+  let toConcVar = simCtx Lens.^. CS.cruciblePersonality . Lens.to toConcretize
   globs <- liftIO (execResultGroundGlobals groundFn result)
   pure (Maybe.fromMaybe LCSS.SymSequenceNil (LCSG.lookupGlobal toConcVar globs))
 
--- | Getter for the @'LCS.GlobalVar' 'ToConcretizeType'@ in the
+-- | Getter for the @'CS.GlobalVar' 'ToConcretizeType'@ in the
 -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'
 stateToConcretize ::
   HasToConcretize p =>
-  LCS.SimState p sym ext r f a -> LCS.GlobalVar ToConcretizeType
+  CS.SimState p sym ext r f a -> CS.GlobalVar ToConcretizeType
 stateToConcretize =
   Lens.view (LCSE.stateContext . LCSE.cruciblePersonality . Lens.to toConcretize)
 
--- | Add a value to the @'LCS.GlobalVar' 'ToConcretizeType'@ in the
+-- | Add a value to the @'CS.GlobalVar' 'ToConcretizeType'@ in the
 -- 'C.SimState'.
 addToConcretize ::
   forall p sym ext rtp args ret ty.
@@ -113,17 +113,17 @@ addToConcretize ::
   HasToConcretize p =>
   -- | Name to be displayed when pretty-printing
   Text ->
-  LCS.RegEntry sym ty ->
-  LCS.OverrideSim p sym ext rtp args ret ()
+  CS.RegEntry sym ty ->
+  CS.OverrideSim p sym ext rtp args ret ()
 addToConcretize name0 ent = do
   concVar <- State.gets stateToConcretize
-  LCS.ovrWithBackend $ \bak -> do
+  CS.ovrWithBackend $ \bak -> do
     let sym = CB.backendGetSym bak
     name <- liftIO (WI.stringLit sym (WI.UnicodeLiteral name0))
-    let LCS.RegEntry ty val = ent
-    let anyVal = LCS.AnyValue ty val
-    LCS.modifyGlobal concVar $ \toConc -> liftIO $ do
-      let struct = Ctx.Empty Ctx.:> LCS.RV anyVal Ctx.:> LCS.RV name
+    let CS.RegEntry ty val = ent
+    let anyVal = CS.AnyValue ty val
+    CS.modifyGlobal concVar $ \toConc -> liftIO $ do
+      let struct = Ctx.Empty Ctx.:> CS.RV anyVal Ctx.:> CS.RV name
       toConc' <- LCSS.consSymSequence sym struct toConc
       p <- CB.getPathCondition bak
       toConc'' <- liftIO (LCSS.muxSymSequence sym p toConc' toConc)

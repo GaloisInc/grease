@@ -63,7 +63,7 @@ import Lang.Crucible.LLVM.Bytes qualified as Bytes
 import Lang.Crucible.LLVM.DataLayout qualified as Mem
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
 import System.IO (IO)
@@ -98,7 +98,7 @@ doLog la diag = LJ.writeLog la (SetupDiagnostic diag)
 -- `setupResTgt` stores the runtime representation of what is stored in that pointer. These
 -- results are memoized during setup based on `BlockId` so that a given block is only given
 -- one runtime value.
-data SetupRes sym w = SetupRes {setupResPtr :: C.RegValue sym (CLM.LLVMPointerType w), setupResTgt :: PtrTarget w (C.RegValue' sym)}
+data SetupRes sym w = SetupRes {setupResPtr :: CS.RegValue sym (CLM.LLVMPointerType w), setupResTgt :: PtrTarget w (CS.RegValue' sym)}
 
 data SetupState sym ext argTys w = SetupState
   { _setupMem :: CLM.MemImpl sym
@@ -119,7 +119,7 @@ annotatePtrBv ::
   ) =>
   sym ->
   Selector ext argTys ts regTy ->
-  C.RegValue sym (C.BVType w) ->
+  CS.RegValue sym (C.BVType w) ->
   Setup sym ext argTys w' (Mem.LLVMPtr sym w)
 annotatePtrBv sym sel bv = do
   ptr <- liftIO (Mem.llvmPointer_bv sym bv)
@@ -159,7 +159,7 @@ setupPtrMem ::
   ValueName (CLM.LLVMPointerType w) ->
   Selector ext argTys ts regTy ->
   PtrTarget w tag ->
-  Setup sym ext argTys w (C.RegValue sym (CLM.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
+  Setup sym ext argTys w (CS.RegValue sym (CLM.LLVMPointerType w), PtrTarget w (CS.RegValue' sym))
 setupPtrMem la bak dl nm sel tgt@(PtrTarget bid _) =
   let unseenFallback = setupPtr la bak dl nm sel tgt
    in case bid of
@@ -192,7 +192,7 @@ setupPtr ::
   ValueName (CLM.LLVMPointerType w) ->
   Selector ext argTys ts regTy ->
   PtrTarget w tag ->
-  Setup sym ext argTys w (C.RegValue sym (CLM.LLVMPointerType w), PtrTarget w (C.RegValue' sym))
+  Setup sym ext argTys w (CS.RegValue sym (CLM.LLVMPointerType w), PtrTarget w (CS.RegValue' sym))
 setupPtr la bak layout nm sel target = do
   let align = Mem.maxAlignment layout
   let sym = CB.backendGetSym bak
@@ -243,7 +243,7 @@ setupPtr la bak layout nm sel target = do
     CLM.MemImpl sym ->
     Selector ext argTys ts' regTy ->
     -- Pointer to write bytes to
-    C.RegValue sym (CLM.LLVMPointerType w) ->
+    CS.RegValue sym (CLM.LLVMPointerType w) ->
     [Word8] ->
     Setup sym ext argTys w (CLM.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
   writeKnownBytes sym m sel' ptr bytes = do
@@ -278,7 +278,7 @@ setupPtr la bak layout nm sel target = do
     CLM.MemImpl sym ->
     Selector ext argTys ts' regTy ->
     -- Pointer to write bytes to
-    C.RegValue sym (CLM.LLVMPointerType w) ->
+    CS.RegValue sym (CLM.LLVMPointerType w) ->
     Bytes ->
     Setup sym ext argTys w (CLM.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
   writeFreshBytes sym m sel' ptr bytes = do
@@ -295,12 +295,12 @@ setupPtr la bak layout nm sel target = do
     ( -- Index from base pointer, used for names
       Int
     , -- Base pointer plus current offset
-      C.RegValue sym (CLM.LLVMPointerType w)
+      CS.RegValue sym (CLM.LLVMPointerType w)
     , -- Values written so far
-      Seq.Seq (MemShape w (C.RegValue' sym))
+      Seq.Seq (MemShape w (CS.RegValue' sym))
     ) ->
     MemShape w tag ->
-    Setup sym ext argTys w (Int, C.RegValue sym (CLM.LLVMPointerType w), Seq.Seq (MemShape w (C.RegValue' sym)))
+    Setup sym ext argTys w (Int, CS.RegValue sym (CLM.LLVMPointerType w), Seq.Seq (MemShape w (CS.RegValue' sym)))
   go (idx, ptr, written) memShape = do
     let sym = CB.backendGetSym bak
     let sel' = sel & selectorPath %~ PtrCursor.addIndex idx
@@ -312,16 +312,16 @@ setupPtr la bak layout nm sel target = do
           m <- use setupMem
           (m', byteVals) <- writeKnownBytes sym m sel' ptr bytes'
           setupMem .= m'
-          pure (Exactly (List.zipWith (\v -> TaggedByte (C.RV v)) (Vec.toList byteVals) bytes'))
+          pure (Exactly (List.zipWith (\v -> TaggedByte (CS.RV v)) (Vec.toList byteVals) bytes'))
         Uninitialized bytes -> pure (Uninitialized bytes)
         Initialized _tag bytes -> do
           m <- use setupMem
           if bytes == 0
-            then pure (Initialized (C.RV Vec.empty) 0)
+            then pure (Initialized (CS.RV Vec.empty) 0)
             else do
               (m', byteVals) <- writeFreshBytes sym m sel' ptr bytes
               setupMem .= m'
-              pure (Initialized (C.RV byteVals) bytes)
+              pure (Initialized (CS.RV byteVals) bytes)
         Pointer _tag off tgt -> do
           -- recursive case
           let nm' = addIndex nm idx
@@ -332,7 +332,7 @@ setupPtr la bak layout nm sel target = do
           val' <- liftIO $ Mem.ptrAdd sym ?ptrWidth val offsetBv
           m' <- liftIO $ CLM.doStore bak m ptr (CLM.LLVMPointerRepr ?ptrWidth) storTy Mem.noAlignment val'
           setupMem .= m'
-          pure (Pointer (C.RV val) off tgt')
+          pure (Pointer (CS.RV val) off tgt')
 
     let offset = memShapeSize ?ptrWidth memShape
     offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral offset)))
@@ -377,7 +377,7 @@ It is worth noting that GREASE's default heuristics do not make empty sequences
 of MemShapes exactly because their treatment is ambiguous in this way.
 -}
 
--- | Create 'C.RegValue's from a 'Shape'.
+-- | Create 'CS.RegValue's from a 'Shape'.
 --
 -- Ignores @tag@s.
 setupShape ::
@@ -398,7 +398,7 @@ setupShape ::
   C.TypeRepr t ->
   Selector ext argTys ts regTy ->
   Shape ext tag t ->
-  Setup sym ext argTys w (Shape ext (C.RegValue' sym) t)
+  Setup sym ext argTys w (Shape ext (CS.RegValue' sym) t)
 setupShape la bak layout nm tRepr sel s = do
   let sym = CB.backendGetSym bak
   Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @ts)
@@ -406,21 +406,21 @@ setupShape la bak layout nm tRepr sel s = do
     ShapeBool _tag -> do
       b <- liftIO (W4.freshConstant sym (safeSymbol nm) W4.BaseBoolRepr)
       b' <- zoom setupAnns (Anns.annotate sym sel b)
-      pure (ShapeBool (C.RV b'))
+      pure (ShapeBool (CS.RV b'))
     ShapeFloat _tag fi -> do
       f <- liftIO $ C.freshFloatConstant sym (safeSymbol nm) fi
-      pure (ShapeFloat (C.RV f) fi)
+      pure (ShapeFloat (CS.RV f) fi)
     ShapeExt (ShapePtrBV _tag w) -> do
       bv <- freshPtrBv sym sel nm w
-      pure (ShapeExt (ShapePtrBV (C.RV bv) w))
+      pure (ShapeExt (ShapePtrBV (CS.RV bv) w))
     ShapeExt (ShapePtrBVLit _tag w bv) -> do
       bv' <- liftIO (Mem.llvmPointer_bv sym =<< W4.bvLit sym w bv)
-      pure (ShapeExt (ShapePtrBV (C.RV bv') w))
+      pure (ShapeExt (ShapePtrBV (CS.RV bv') w))
     ShapeExt (ShapePtr _tag offset target) -> do
       (basePtr, target') <- setupPtrMem la bak layout nm sel target
       offsetBv <- liftIO (W4.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset offset))))
       p <- liftIO (Mem.ptrAdd sym ?ptrWidth basePtr offsetBv)
-      pure (ShapeExt (ShapePtr (C.RV p) offset target'))
+      pure (ShapeExt (ShapePtr (CS.RV p) offset target'))
     ShapeStruct _tag fs -> do
       fieldShapes <-
         Ctx.traverseWithIndex
@@ -433,10 +433,10 @@ setupShape la bak layout nm tRepr sel s = do
           )
           fs
       let vals = fmapFC (getTag getPtrTag) fieldShapes
-      pure (ShapeStruct (C.RV vals) fieldShapes)
-    ShapeUnit _tag -> pure (ShapeUnit (C.RV ()))
+      pure (ShapeStruct (CS.RV vals) fieldShapes)
+    ShapeUnit _tag -> pure (ShapeUnit (CS.RV ()))
 
--- | Create 'C.RegValue's from 'Shape's.
+-- | Create 'CS.RegValue's from 'Shape's.
 --
 -- Ignores @tag@s.
 setupArgs ::
@@ -478,7 +478,7 @@ newtype SetupMem sym = SetupMem {getSetupMem :: CLM.MemImpl sym}
 --
 -- Used by refinement loop to print concrete examples.
 newtype Args sym ext argTys
-  = Args {getArgs :: Ctx.Assignment (Shape ext (C.RegValue' sym)) argTys}
+  = Args {getArgs :: Ctx.Assignment (Shape ext (CS.RegValue' sym)) argTys}
 
 argTypes ::
   ( CLM.HasPtrWidth w
@@ -493,7 +493,7 @@ argVals ::
   , ExtShape ext ~ PtrShape ext w
   ) =>
   Args sym ext argTys ->
-  Ctx.Assignment (C.RegValue' sym) argTys
+  Ctx.Assignment (CS.RegValue' sym) argTys
 argVals (Args args) = fmapFC (getTag getPtrTag) args
 
 argRegMap ::
@@ -502,9 +502,9 @@ argRegMap ::
   , ExtShape ext ~ PtrShape ext w
   ) =>
   Args sym ext argTys ->
-  C.RegMap sym argTys
+  CS.RegMap sym argTys
 argRegMap args =
-  C.RegMap (Ctx.zipWith (\ty (C.RV v) -> C.RegEntry ty v) (argTypes args) (argVals args))
+  CS.RegMap (Ctx.zipWith (\ty (CS.RV v) -> CS.RegEntry ty v) (argTypes args) (argVals args))
 
 runSetup ::
   ( MonadIO m

@@ -52,7 +52,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Concretize qualified as Conc
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.SymSequence qualified as C
 import Lang.Crucible.SymIO qualified as SymIO
 import Numeric (showHex)
@@ -92,14 +92,14 @@ concArgsToSym ::
   W4FM.FloatModeRepr fm ->
   Ctx.Assignment C.TypeRepr argTys ->
   ConcArgs sym ext argTys ->
-  IO (C.RegMap sym argTys)
+  IO (CS.RegMap sym argTys)
 concArgsToSym sym fm argTys (ConcArgs cArgs) =
-  C.RegMap
+  CS.RegMap
     <$> Ctx.zipWithM
       ( \tp cShape -> do
           let conc = Conc.unConcRV' (Shape.getTag PtrShape.getPtrTag cShape)
           symb <- Conc.concToSym sym Mem.concToSymPtrFnMap fm tp conc
-          pure (C.RegEntry @sym tp symb)
+          pure (CS.RegEntry @sym tp symb)
       )
       argTys
       cArgs
@@ -145,7 +145,7 @@ makeConcretizedData ::
   W4.GroundEvalFn t ->
   Maybe (ErrorDescription sym) ->
   InitialState sym ext argTys ->
-  C.RegValue sym ToConcretizeType ->
+  CS.RegValue sym ToConcretizeType ->
   IO (ConcretizedData sym ext argTys)
 makeConcretizedData bak groundEvalFn minfo initState extra = do
   let InitialState
@@ -155,8 +155,8 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
         } = initState
   let sym = CB.backendGetSym bak
   let ctx = Conc.ConcCtx @sym @t groundEvalFn Mem.concPtrFnMap
-  let concRV :: forall tp. C.TypeRepr tp -> C.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)
-      concRV t = fmap (Conc.ConcRV' @sym) . Conc.concRegValue @sym @t ctx t . C.unRV
+  let concRV :: forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)
+      concRV t = fmap (Conc.ConcRV' @sym) . Conc.concRegValue @sym @t ctx t . CS.unRV
   cArgs <- liftIO (traverseFC (Shape.traverseShapeWithType concRV) initArgs)
   let W4.GroundEvalFn gFn = groundEvalFn
   let toWord8 :: BV.BV 8 -> Word8

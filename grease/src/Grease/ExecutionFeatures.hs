@@ -18,7 +18,7 @@ import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.Debug qualified as Dbg
-import Lang.Crucible.Simulator qualified as C
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.BoundedExec qualified as C
 import Lang.Crucible.Simulator.BoundedRecursion qualified as C
 import Lang.Crucible.Simulator.PathSatisfiability qualified as C
@@ -34,14 +34,14 @@ import What4.Protocol.Online qualified as WPO
 -- | Execution features related to bounding and timeouts
 boundedExecFeats ::
   GO.BoundsOpts ->
-  IO [C.GenericExecutionFeature sym]
+  IO [CS.GenericExecutionFeature sym]
 boundedExecFeats boundsOpts = do
   let symexTimeout = realToFrac (C.secondsToInt (GO.simTimeout boundsOpts))
   let GO.LoopBound loopBound = GO.simLoopBound boundsOpts
   let boundObligation = GO.simLoopBoundObligation boundsOpts
   boundExecFeat <- C.boundedExecFeature (\_ -> pure (Just loopBound)) boundObligation
   boundRecFeat <- C.boundedRecursionFeature (\_ -> pure (Just loopBound)) boundObligation
-  timeoutFeat <- C.timeoutFeature (secondsToNominalDiffTime symexTimeout)
+  timeoutFeat <- CS.timeoutFeature (secondsToNominalDiffTime symexTimeout)
   pure [boundExecFeat, boundRecFeat, timeoutFeat]
 
 -- | Path satisfiability feature, plus enables 'C.assertThenAssumeConfigOption'
@@ -52,7 +52,7 @@ pathSatFeat ::
   , WPO.OnlineSolver solver
   ) =>
   bak ->
-  IO (C.GenericExecutionFeature sym)
+  IO (CS.GenericExecutionFeature sym)
 pathSatFeat bak = do
   let sym = CB.backendGetSym bak
   pathSat <- C.pathSatisfiabilityFeature sym (C.considerSatisfiability bak)
@@ -82,7 +82,7 @@ greaseExecFeats ::
   bak ->
   -- | Debugger configuration, if desired
   Maybe (Dbg.CommandExt cExt, Dbg.ExtImpl cExt p sym ext ret, CT.TypeRepr ret) ->
-  IO [C.ExecutionFeature p sym ext (C.RegEntry sym ret)]
+  IO [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)]
 greaseExecFeats la bak dbgOpts = do
   debuggerFeat <-
     case dbgOpts of
@@ -100,7 +100,7 @@ greaseExecFeats la bak dbgOpts = do
   let execFeats_ = Maybe.catMaybes [debuggerFeat]
   pathSat <- pathSatFeat bak
   let execFeats =
-        C.genericToExecutionFeature pathSat
+        CS.genericToExecutionFeature pathSat
           : greaseBranchTracerFeature la
           : execFeats_
   pure execFeats
