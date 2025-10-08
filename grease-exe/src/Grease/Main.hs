@@ -1879,15 +1879,28 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
       mbOrError doc = Maybe.maybe (userError la doc) pure
     -- When loading a binary in raw mode
     -- symbol entrypoints cannot be used
-    let
-      getAddressEntrypoint :: Entrypoint -> IO (Maybe FilePath, Text.Text, MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)))
-      getAddressEntrypoint ent = do
-        (txt, fpath) <- case ent of
-          Entrypoint{entrypointLocation = EntrypointAddress x, entrypointStartupOvPath = override} -> pure (x, override)
-          e -> userError la ("An entrypoint was provided that was not an address in raw mode:" PP.<+> PP.viaShow e)
-        intAddr <- mbOrError ("Provided address was not parseable:" PP.<+> PP.pretty txt) (readMaybe $ Text.unpack txt :: Maybe Integer)
-        addr <- mbOrError ("A provided address entrypoint could not be resolved to an addressin memory:" PP.<+> PP.pretty intAddr) (MM.resolveAbsoluteAddr memory $ fromIntegral intAddr)
-        pure (fpath, txt, addr)
+    let getAddressEntrypoint ent = do
+          (txt, fpath) <- case ent of
+            Entrypoint{entrypointLocation = EntrypointAddress x, entrypointStartupOvPath = override} -> pure (x, override)
+            e ->
+              userError
+                la
+                ( "An entrypoint was provided that was not an address in raw mode:"
+                    PP.<+> PP.pretty e
+                )
+          intAddr <-
+            mbOrError
+              ( "Provided address was not parseable:"
+                  PP.<+> PP.pretty txt
+              )
+              (readMaybe $ Text.unpack txt :: Maybe Integer)
+          addr <-
+            mbOrError
+              ( "A provided address entrypoint could not be resolved to an address in memory:"
+                  PP.<+> PP.pretty intAddr
+              )
+              (MM.resolveAbsoluteAddr memory $ fromIntegral intAddr)
+          pure (fpath, txt, addr)
 
     entryAddrs :: [(Maybe FilePath, Text.Text, MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)))] <- forM entries getAddressEntrypoint
     let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
