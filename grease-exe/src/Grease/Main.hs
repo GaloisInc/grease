@@ -187,6 +187,7 @@ import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Lumberjack qualified as LJ
+import Numeric (showHex)
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import System.Directory (Permissions, getPermissions)
@@ -1879,6 +1880,9 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
       mbOrError doc = Maybe.maybe (userError la doc) pure
     -- When loading a binary in raw mode
     -- symbol entrypoints cannot be used
+    let 
+      numericToHex:: Integral a => a -> String
+      numericToHex n = "0x" List.++ showHex n ""
     let getAddressEntrypoint ent = do
           (txt, fpath) <- case ent of
             Entrypoint{entrypointLocation = EntrypointAddress x, entrypointStartupOvPath = override} -> pure (x, override)
@@ -1897,10 +1901,11 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
           addr <-
             mbOrError
               ( "A provided address entrypoint could not be resolved to an address in memory:"
-                  PP.<+> PP.pretty intAddr
+                  PP.<+> (PP.pretty $ numericToHex intAddr)
               )
               (MM.resolveAbsoluteAddr memory $ fromIntegral intAddr)
           pure (fpath, txt, addr)
+
 
     entryAddrs :: [(Maybe FilePath, Text.Text, MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)))] <- forM entries getAddressEntrypoint
     let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
