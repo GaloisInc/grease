@@ -1874,17 +1874,35 @@ simulateMacawRaw ::
 simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
   do
     let entries = simEntryPoints simOpts
+    let
+      mbOrError :: PP.Doc Void -> Maybe a -> IO a
+      mbOrError doc = Maybe.maybe (userError la doc) pure
     -- When loading a binary in raw mode
     -- symbol entrypoints cannot be used
     let getAddressEntrypoint ent = do
           (txt, fpath) <- case ent of
-            Entrypoint{entrypointLocation = EntrypointAddress x, entrypointStartupOvPath = override} -> Just (x, override)
-            _ -> throw (GreaseException "When loading a binary in raw mode, only address entrypoints are valid")
-          intAddr <- (readMaybe $ Text.unpack txt :: Maybe Integer)
-          addr <- MM.resolveAbsoluteAddr memory $ fromIntegral intAddr
+            Entrypoint{entrypointLocation = EntrypointAddress x, entrypointStartupOvPath = override} -> pure (x, override)
+            e ->
+              userError
+                la
+                ( "An entrypoint was provided that was not an address in raw mode:"
+                    PP.<+> PP.pretty e
+                )
+          intAddr <-
+            mbOrError
+              ( "Provided address was not parseable:"
+                  PP.<+> PP.pretty txt
+              )
+              (readMaybe $ Text.unpack txt :: Maybe Integer)
+          addr <-
+            mbOrError
+              ( "A provided address entrypoint could not be resolved to an address in memory:"
+                  PP.<+> PP.pretty intAddr
+              )
+              (MM.resolveAbsoluteAddr memory $ fromIntegral intAddr)
           pure (fpath, txt, addr)
 
-    let entryAddrs :: [(Maybe FilePath, Text.Text, MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)))] = Maybe.mapMaybe getAddressEntrypoint entries
+    entryAddrs :: [(Maybe FilePath, Text.Text, MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)))] <- forM entries getAddressEntrypoint
     let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
     cfgs <-
       fmap Map.fromList $ forM entryAddrs $ \(mbOverride, entText, entAddr) -> do
