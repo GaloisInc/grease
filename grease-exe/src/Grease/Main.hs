@@ -1880,8 +1880,8 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
       mbOrError doc = Maybe.maybe (userError la doc) pure
     -- When loading a binary in raw mode
     -- symbol entrypoints cannot be used
-    let 
-      numericToHex:: Integral a => a -> String
+    let
+      numericToHex :: Integral a => a -> String
       numericToHex n = "0x" List.++ showHex n ""
     let getAddressEntrypoint ent = do
           (txt, fpath) <- case ent of
@@ -1905,7 +1905,6 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
               )
               (MM.resolveAbsoluteAddr memory $ fromIntegral intAddr)
           pure (fpath, txt, addr)
-
 
     entryAddrs :: [(Maybe FilePath, Text.Text, MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)))] <- forM entries getAddressEntrypoint
     let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
