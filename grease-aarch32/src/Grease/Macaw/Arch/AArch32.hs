@@ -10,14 +10,16 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Arch.AArch32 (armCtx) where
 
+import Control.Lens ((^.))
 import Data.BitVector.Sized qualified as BV
 import Data.ElfEdit qualified as EE
-import Data.Macaw.AArch32.Symbolic qualified as ARM.Symbolic
+import Data.Macaw.AArch32.Symbolic.Regs qualified as ARM.Symbolic.Regs
 import Data.Macaw.ARM qualified as ARM
 import Data.Macaw.ARM.ARMReg ()
 import Data.Macaw.ARM.ARMReg qualified as ARM
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map qualified as Map
+import Data.Parameterized.Classes (ixF')
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
@@ -65,7 +67,7 @@ armCtx halloc mbReturnAddr stackArgSlots = do
     ArchContext
       { _archInfo = ARM.arm_linux_info
       , _archGetIP = \regs -> do
-          let C.RV (CLM.LLVMPointer _base off) = ARM.Symbolic.lookupReg ARM.pc regs
+          let C.RV (CLM.LLVMPointer _base off) = regs ^. ixF' ARM.Symbolic.Regs.pc
           pure off
       , _archPcReg = ARM.pc
       , _archVals = avals
