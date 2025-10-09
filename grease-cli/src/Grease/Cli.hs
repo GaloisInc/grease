@@ -31,6 +31,7 @@ module Grease.Cli (
 ) where
 
 import Control.Applicative (optional, (<**>))
+import Data.Char (toLower)
 import Data.Char qualified as Char
 import Data.List qualified as List
 import Data.Map.Strict (Map)
@@ -50,7 +51,7 @@ import Grease.Panic (panic)
 import Grease.Requirement (displayReq, reqParser)
 import Grease.Shape.Simple (SimpleShape)
 import Grease.Shape.Simple qualified as Simple
-import Grease.Solver (Solver (..))
+import Grease.Solver (Solver (..), parseSolver)
 import Grease.Version (verStr)
 import Lang.Crucible.Utils.Seconds (secondsFromInt)
 import Lang.Crucible.Utils.Timeout (Timeout (Timeout))
@@ -75,7 +76,7 @@ boundedEnumMetavar ::
   (Bounded a, Enum a, Opt.HasMetavar f, Show a) =>
   proxy a ->
   Opt.Mod f a
-boundedEnumMetavar _ = Opt.metavar $ varShowS ""
+boundedEnumMetavar _ = Opt.metavar $ map toLower $ varShowS ""
  where
   -- Use ShowS (i.e., a difference list of strings) below to amortize the cost
   -- of appending strings.
@@ -341,7 +342,7 @@ overridesYamlParser =
 solverParser :: Opt.Parser Solver
 solverParser =
   Opt.option
-    Opt.auto
+    (Opt.maybeReader parseSolver)
     ( Opt.long "solver"
         <> boundedEnumMetavar (Proxy @Solver)
         <> Opt.value Yices
@@ -411,7 +412,7 @@ simOpts = do
   simOverridesYaml <- overridesYamlParser
   simPathStrategy <-
     Opt.option
-      Opt.auto
+      (Opt.maybeReader GO.parsePathStrategy)
       ( Opt.long "path-strategy"
           <> boundedEnumMetavar (Proxy @GO.PathStrategy)
           <> Opt.value GO.Sse

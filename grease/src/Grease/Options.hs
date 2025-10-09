@@ -1,10 +1,12 @@
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE LambdaCase #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Options (
   PathStrategy (..),
+  parsePathStrategy,
   LoopBound (..),
   defaultLoopBound,
   defaultTimeout,
@@ -47,7 +49,14 @@ data PathStrategy
     --
     -- Always merge paths at control-flow join points.
     Sse
-  deriving (Bounded, Enum, Show, Read)
+  deriving (Bounded, Enum, Show)
+
+parsePathStrategy :: String -> Maybe PathStrategy
+parsePathStrategy =
+  \case
+    "dfs" -> Just Dfs
+    "sse" -> Just Sse
+    _ -> Nothing
 
 newtype TypeUnrollingBound = TypeUnrollingBound Int
   deriving Show
