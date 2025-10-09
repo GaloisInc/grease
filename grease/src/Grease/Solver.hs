@@ -1,11 +1,13 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Solver (
   Solver (..),
+  parseSolver,
   solverAdapter,
   withSolverOnlineBackend,
 ) where
@@ -27,6 +29,15 @@ data Solver
   | Yices
   | Z3
   deriving (Bounded, Enum, Read, Show)
+
+parseSolver :: String -> Maybe Solver
+parseSolver =
+  \case
+    "cvc4" -> Just CVC4
+    "cvc5" -> Just CVC5
+    "yices" -> Just Yices
+    "z3" -> Just Z3
+    _ -> Nothing
 
 -- | Get the 'W4.SolverAdapter' for the requested 'Solver'.
 solverAdapter :: Solver -> W4.SolverAdapter t
