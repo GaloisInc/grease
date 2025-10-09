@@ -14,11 +14,11 @@
     (return ())))
 
 ;; flags {"--symbol", "test"}
-;; flags {"--path-strategy", "sse"}
+;; flags {"--path-strategy", "Sse"}
 ;; go(prog)
 ;; uninit_stack()
 
 ;; flags {"--symbol", "test"}
-;; flags {"--path-strategy", "dfs"}
+;; flags {"--path-strategy", "Dfs"}
 ;; go(prog)
 ;; uninit_stack()

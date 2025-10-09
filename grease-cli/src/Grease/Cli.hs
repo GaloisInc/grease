@@ -411,7 +411,7 @@ simOpts = do
   simOverridesYaml <- overridesYamlParser
   simPathStrategy <-
     Opt.option
-      (Opt.maybeReader GO.parsePathStrategy)
+      Opt.auto
       ( Opt.long "path-strategy"
           <> boundedEnumMetavar (Proxy @GO.PathStrategy)
           <> Opt.value GO.Sse
