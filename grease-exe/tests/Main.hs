@@ -14,7 +14,6 @@ import Control.Exception qualified as X
 import Control.Monad (forM, forM_)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.FileEmbed (embedFileRelative)
-import Data.Functor ((<&>))
 import Data.IORef qualified as IORef
 import Data.List qualified as List
 import Data.Maybe qualified as Maybe
@@ -34,6 +33,7 @@ import Oughta qualified
 import Prettyprinter qualified as PP
 import Shape (shapeTests)
 import System.Directory qualified as Dir
+import System.Exit qualified as Exit
 import System.FilePath ((</>))
 import System.FilePath qualified as FilePath
 import Test.Tasty qualified as T
@@ -79,14 +79,10 @@ withCapturedLogs ::
   IO Text.Text
 withCapturedLogs withLogAction = do
   logRef <- IORef.newIORef []
-  extra <-
-    X.try @X.SomeException (withLogAction (capture logRef))
-      <&> \case
-        Left e -> Text.pack ("Exception: " ++ show e)
-        Right () -> ""
+  _ <- X.try @Exit.ExitCode (withLogAction (capture logRef))
   logs <- map (Text.pack . show . PP.pretty) <$> IORef.readIORef logRef
   -- Reverse the list so that logs appear chronologically
-  pure (Text.unlines (List.reverse (extra : logs)))
+  pure (Text.unlines (List.reverse logs))
 
 go :: String -> Lua ()
 go prog = do

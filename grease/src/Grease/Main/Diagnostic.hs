@@ -43,6 +43,8 @@ data Diagnostic where
     Diagnostic
   BitcodeParseWarnings ::
     Seq ParseWarning -> Diagnostic
+  Exception ::
+    PP.Doc Void -> Diagnostic
   LoadedPrecondition ::
     forall w ext tag tys.
     ( ExtShape ext ~ PtrShape ext w
@@ -95,6 +97,8 @@ instance PP.Pretty Diagnostic where
           , PP.pretty entry
           ]
       BitcodeParseWarnings warns -> PP.viaShow (ppParseWarnings warns)
+      Exception err ->
+        "Exception:" PP.<+> fmap absurd err
       FinishedAnalyzingEntrypoint entry duration ->
         PP.hsep
           [ "Analysis of"
@@ -146,6 +150,7 @@ severity =
     AnalyzedEntrypoint{} -> Info
     AnalyzingEntrypoint{} -> Info
     BitcodeParseWarnings{} -> Warn
+    Exception{} -> Error
     FinishedAnalyzingEntrypoint{} -> Debug
     LoadedPrecondition{} -> Debug
     MalformedElf{} -> Error

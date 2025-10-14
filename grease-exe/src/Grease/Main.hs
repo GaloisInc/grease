@@ -30,6 +30,7 @@ module Grease.Main (
 import Control.Applicative (pure)
 import Control.Concurrent.Async (Async, cancel)
 import Control.Exception.Safe (Handler (..), MonadThrow, catches)
+import Control.Exception.Safe qualified as X
 import Control.Lens (to, (.~), (^.))
 import Control.Monad (forM, forM_, mapM_, when, (>>=))
 import Control.Monad qualified as Monad
@@ -143,7 +144,7 @@ import Grease.Main.Diagnostic qualified as Diag
 import Grease.MustFail qualified as MustFail
 import Grease.Options
 import Grease.Output
-import Grease.Panic (panic)
+import Grease.Panic (Grease, panic)
 import Grease.Pretty (prettyPtrFnMap)
 import Grease.Profiler.Feature (greaseProfilerFeature)
 import Grease.Refine
@@ -187,6 +188,7 @@ import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Lumberjack qualified as LJ
 import Numeric (showHex)
+import Panic qualified
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import System.Directory (Permissions, getPermissions)
@@ -2201,15 +2203,46 @@ logResults la (Results results) =
         (entrypointLocation entrypoint)
         (batchStatus result)
 
+-- | Run GREASE in a top-level exception handler.
+--
+-- This exception handler catches known/expected exceptions, forwards their
+-- messages to the 'GreaseLogAction', and exits. For unknown/unexpected
+-- exceptions, it upgrades them to panics and requests that the user file a bug
+-- about them.
+--
+-- This is part of an overall error-handling strategy that involves avoiding
+-- uncaught exceptions. This overall strategy has not yet been documented
+-- (TODO(#411)).
+withTopLevelExceptionHandler :: GreaseLogAction -> IO a -> IO a
+withTopLevelExceptionHandler la act =
+  act
+    `catches` [ Handler @_ @_ @X.IOException $ \e -> do
+                  doLog la (Diag.Exception (PP.viaShow e))
+                  Exit.exitFailure
+              , Handler @_ @_ @(Panic.Panic Grease) $ \e -> do
+                  doLog la (Diag.Exception (PP.viaShow e))
+                  Exit.exitFailure
+              , Handler @_ @_ @Exit.ExitCode $ \e ->
+                  X.throw e
+              , Handler @_ @_ @X.SomeException $ \e -> do
+                  let msg = "Uncaught exception"
+                  r <- X.try @_ @(Panic.Panic Grease) (panic "main" [msg, show e])
+                  case r of
+                    Right () -> Exit.exitFailure -- impossible
+                    Left e' -> do
+                      doLog la (Diag.Exception (PP.viaShow e'))
+                      Exit.exitFailure
+              ]
+
 main :: IO ()
 main = do
   parsedOpts <- optsFromArgs
-  let simOpts = optsSimOpts parsedOpts
-
-      la :: GreaseLogAction
+  let la :: GreaseLogAction
       la = logAction (optsVerbosity parsedOpts)
-  rs@(Results results) <-
-    simulateFile simOpts la
-  if optsJSON parsedOpts
-    then forM_ (Map.elems results) $ putStrLn . renderJSON
-    else logResults la rs
+  withTopLevelExceptionHandler la $ do
+    let simOpts = optsSimOpts parsedOpts
+    rs@(Results results) <-
+      simulateFile simOpts la
+    if optsJSON parsedOpts
+      then forM_ (Map.elems results) $ putStrLn . renderJSON
+      else logResults la rs
