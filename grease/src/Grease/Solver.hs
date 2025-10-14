@@ -7,7 +7,6 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Solver (
   Solver (..),
-  parseSolver,
   solverAdapter,
   withSolverOnlineBackend,
 ) where
@@ -24,27 +23,18 @@ import What4.Solver qualified as W4
 
 -- | The SMT solver to use for solving proof goals.
 data Solver
-  = CVC4
-  | CVC5
+  = Cvc4
+  | Cvc5
   | Yices
   | Z3
   deriving (Bounded, Enum, Read, Show)
-
-parseSolver :: String -> Maybe Solver
-parseSolver =
-  \case
-    "cvc4" -> Just CVC4
-    "cvc5" -> Just CVC5
-    "yices" -> Just Yices
-    "z3" -> Just Z3
-    _ -> Nothing
 
 -- | Get the 'W4.SolverAdapter' for the requested 'Solver'.
 solverAdapter :: Solver -> W4.SolverAdapter t
 solverAdapter solver =
   case solver of
-    CVC4 -> W4.cvc4Adapter
-    CVC5 -> W4.cvc5Adapter
+    Cvc4 -> W4.cvc4Adapter
+    Cvc5 -> W4.cvc5Adapter
     Yices -> W4.yicesAdapter
     Z3 -> W4.z3Adapter
 
@@ -67,10 +57,10 @@ withSolverOnlineBackend ::
   m a
 withSolverOnlineBackend solver fm ng bakAction =
   case solver of
-    CVC4 ->
+    Cvc4 ->
       withSym $ \sym ->
         C.withCVC4OnlineBackend sym unsatFeatures problemFeatures bakAction
-    CVC5 ->
+    Cvc5 ->
       withSym $ \sym ->
         C.withCVC5OnlineBackend sym unsatFeatures problemFeatures bakAction
     Yices ->

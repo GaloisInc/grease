@@ -6,7 +6,6 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Options (
   PathStrategy (..),
-  parsePathStrategy,
   LoopBound (..),
   defaultLoopBound,
   defaultTimeout,
@@ -14,7 +13,6 @@ module Grease.Options (
   defaultTypeUnrollingBound,
   TypeUnrollingBound (..),
   MutableGlobalState (..),
-  allMutableGlobalStates,
   ExtraStackSlots (..),
   ErrorSymbolicFunCalls (..),
   ErrorSymbolicSyscalls (..),
@@ -51,13 +49,6 @@ data PathStrategy
     Sse
   deriving (Bounded, Enum, Show)
 
-parsePathStrategy :: String -> Maybe PathStrategy
-parsePathStrategy =
-  \case
-    "dfs" -> Just Dfs
-    "sse" -> Just Sse
-    _ -> Nothing
-
 newtype TypeUnrollingBound = TypeUnrollingBound Int
   deriving Show
 
@@ -84,9 +75,6 @@ data MutableGlobalState
   | Symbolic
   | Uninitialized
   deriving (Bounded, Enum, Read, Show)
-
-allMutableGlobalStates :: [MutableGlobalState]
-allMutableGlobalStates = [minBound .. maxBound]
 
 -- | If 'True', throw an error if attempting to call a symbolic function handle
 -- or pointer. If 'False', skip over such calls.
