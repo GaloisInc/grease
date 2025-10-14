@@ -59,6 +59,9 @@ data Diagnostic where
   MalformedElf ::
     PP.Doc Void ->
     Diagnostic
+  MalformedLlvm ::
+    PP.Doc Void ->
+    Diagnostic
   NoEntrypoints ::
     Diagnostic
   SimulationTestingRequirements ::
@@ -106,6 +109,8 @@ instance PP.Pretty Diagnostic where
           ]
       MalformedElf err ->
         "Malformed ELF file: " <> fmap absurd err
+      MalformedLlvm err ->
+        "Malformed LLVM module: " <> fmap absurd err
       NoEntrypoints ->
         "No entry points specified, analyzing all known functions."
       SimulationTestingRequirements rs ->
@@ -144,6 +149,7 @@ severity =
     FinishedAnalyzingEntrypoint{} -> Debug
     LoadedPrecondition{} -> Debug
     MalformedElf{} -> Error
+    MalformedLlvm{} -> Error
     NoEntrypoints -> Warn
     SimulationTestingRequirements{} -> Debug
     SimulationAllGoalsPassed{} -> Info

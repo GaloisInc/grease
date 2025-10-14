@@ -29,8 +29,7 @@ module Grease.Main (
 
 import Control.Applicative (pure)
 import Control.Concurrent.Async (Async, cancel)
-import Control.Exception.Safe (Handler (..), MonadThrow, catches, throw)
-import Control.Exception.Safe qualified as X
+import Control.Exception.Safe (Handler (..), MonadThrow, catches)
 import Control.Lens (to, (.~), (^.))
 import Control.Monad (forM, forM_, mapM_, when, (>>=))
 import Control.Monad qualified as Monad
@@ -46,7 +45,7 @@ import Data.Functor (fmap, (<$>), (<&>))
 import Data.Functor.Const (Const (..))
 import Data.Functor.Const qualified as Const
 import Data.IntMap qualified as IntMap
-import Data.LLVM.BitCode (parseBitCodeFromFileWithWarnings)
+import Data.LLVM.BitCode (formatError, parseBitCodeFromFileWithWarnings)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.AArch32.Symbolic qualified as AArch32Symbolic
@@ -204,12 +203,6 @@ import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
 import Prelude (Int, Integer, Integral, Num (..), fromIntegral)
 
--- TODO(#410): Eliminate this exception type
-newtype GreaseException = GreaseException Text.Text
-instance X.Exception GreaseException
-instance Show GreaseException where
-  show (GreaseException msg) = Text.unpack msg
-
 {- Note [Explicitly listed errors]
 
 In this module, we frequently explicitly list all constructors of an error type,
@@ -229,6 +222,11 @@ doLog la diag = LJ.writeLog la (MainDiagnostic diag)
 malformedElf :: GreaseLogAction -> PP.Doc Void -> IO a
 malformedElf la doc = do
   doLog la (Diag.MalformedElf doc)
+  Exit.exitFailure
+
+malformedLlvm :: GreaseLogAction -> PP.Doc Void -> IO a
+malformedLlvm la doc = do
+  doLog la (Diag.MalformedLlvm doc)
   Exit.exitFailure
 
 unsupported :: GreaseLogAction -> PP.Doc Void -> IO a
@@ -284,21 +282,29 @@ readElfHeaderInfo la _proxy path =
 -- Throw an exception if a user provides an entrypoint without a name in a
 -- context where only named entrypoints make sense (e.g., when simulating an
 -- S-expression program).
-nonSymbolEntrypointException :: IO a
-nonSymbolEntrypointException =
-  throw $ GreaseException "Must provide entrypoint name"
+nonSymbolEntrypoint :: GreaseLogAction -> IO a
+nonSymbolEntrypoint la =
+  userError la "Must provide entrypoint name"
 
 textBounds ::
   Num (Elf.ElfWordType w) =>
+  GreaseLogAction ->
   MML.LoadOptions ->
   Elf.ElfHeaderInfo w ->
   IO (Elf.ElfWordType w, Elf.ElfWordType w)
-textBounds loadOpts elf =
+textBounds la loadOpts elf =
   case Elf.headerNamedShdrs elf of
-    Left (si, err) -> throw . GreaseException $ "Failed to lookup ELF section header at index " <> tshow si <> ": " <> tshow err
+    Left (si, err) ->
+      malformedElf la $
+        PP.hcat
+          [ "Failed to lookup ELF section header at index "
+          , PP.viaShow si
+          , ": "
+          , PP.viaShow err
+          ]
     Right shdrs ->
       case fmap NE.head . NE.nonEmpty . List.filter (\s -> Elf.shdrName s == ".text") $ Vec.toList shdrs of
-        Nothing -> throw $ GreaseException "Could not find .text segment"
+        Nothing -> malformedElf la "Could not find .text segment"
         Just s ->
           let loadOffset = fromIntegral $ fromMaybe 0 (MML.loadOffset loadOpts)
            in let sWithOffset = Elf.shdrAddr s + loadOffset
@@ -347,14 +353,18 @@ loadInitialPreconditions la preconds names initArgs =
       parsed <-
         if ".json" `List.isSuffixOf` path
           then case Shape.parseJsonShapes path txt of
-            Left err -> throw (GreaseException (Text.pack err))
+            Left err -> userError la (PP.pretty err)
             Right parsed -> pure parsed
-          else case Parse.parseShapes path txt of
-            Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
-            Right parsed -> pure parsed
+          else
+            let usrErr = userError la . PP.pretty
+             in case Parse.parseShapes path txt of
+                  -- See Note [Explicitly listed errors]
+                  Left err@Parse.ParseError{} -> usrErr err
+                  Left err@Parse.MissingBlock{} -> usrErr err
+                  Right parsed -> pure parsed
       precond <-
         case Shape.replaceShapes names initArgs parsed of
-          Left err -> throw (GreaseException (Text.pack (show (PP.pretty err))))
+          Left err@Shape.TypeMismatch{} -> userError la (PP.pretty err)
           Right shapes -> pure shapes
       let addrWidth = MC.addrWidthRepr ?ptrWidth
       doLog la (Diag.LoadedPrecondition path addrWidth names precond)
@@ -638,7 +648,7 @@ overrideRegs archCtx sym =
             case Map.lookup regName (archCtx ^. archRegOverrides) of
               Just i
                 | isStackPointer ->
-                    throw $ GreaseException "Can't override stack pointer"
+                    panic "overrideRegs" ["Can't override stack pointer"]
                 | CLM.LLVMPointerRepr w <- regTypes ^. ixF' idx
                 , Just C.Refl <- C.testEquality w ?ptrWidth -> do
                     let macawGlobalMemBlock = 1 -- TODO: don't hardcode this
@@ -647,7 +657,7 @@ overrideRegs archCtx sym =
                     let ptr = CLM.LLVMPointer blk off
                     pure $ CS.RV $ ptr
                 | otherwise ->
-                    throw $ GreaseException "Can't override non-pointer register"
+                    panic "overrideRegs" ["Can't override non-pointer register"]
               Nothing -> pure reg
         )
 
@@ -959,7 +969,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
       Initialized -> pure Symbolic.ConcreteMutable
       Symbolic -> pure Symbolic.SymbolicMutable
       Uninitialized ->
-        throw (GreaseException "Macaw does not support uninitialized globals (macaw#372)")
+        unsupported la "Macaw does not support uninitialized globals (macaw#372)"
   (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory globs relocs
 
   let (tyCtxErrs, tyCtx) = TCtx.mkTypeContext dl IntMap.empty []
@@ -1144,9 +1154,9 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
             entrypointCfgsSsa'
         case new of
           ProveBug{} ->
-            throw (GreaseException "CFG rewriting introduced a bug!")
+            panic "simulateRewrittenCfg" ["CFG rewriting introduced a bug!"]
           ProveCantRefine{} ->
-            throw (GreaseException "CFG rewriting prevented refinement!")
+            panic "simulateRewrittenCfg" ["CFG rewriting prevented refinement!"]
           ProveSuccess -> do
             doLog la Diag.SimulationAllGoalsPassed
             pure CheckSuccess
@@ -1254,8 +1264,8 @@ entrypointCfgMap la halloc prog entries =
       results <-
         forM entries $ \e ->
           case entrypointLocation e of
-            EntrypointAddress{} -> nonSymbolEntrypointException
-            EntrypointCoreDump{} -> nonSymbolEntrypointException
+            EntrypointAddress{} -> nonSymbolEntrypoint la
+            EntrypointCoreDump{} -> nonSymbolEntrypoint la
             EntrypointSymbolName nm ->
               case Map.lookup nm cfgs of
                 Just cfg -> do
@@ -1273,7 +1283,8 @@ entrypointCfgMap la halloc prog entries =
                           , entrypointCfg = cfg
                           }
                   pure (e, entrypointCfgs)
-                Nothing -> throw $ GreaseException $ "Could not find function: " <> nm
+                Nothing ->
+                  userError la (PP.pretty ("Could not find function:" <> nm))
       pure (Map.fromList results)
  where
   cfgs = parsedProgramCfgMap prog
@@ -1318,16 +1329,15 @@ loadAddrOvs la archCtx halloc memory simOpts = do
 
 loadLLVMSExpOvs ::
   CLM.HasPtrWidth w =>
+  GreaseLogAction ->
   [FilePath] ->
   C.HandleAllocator ->
   C.GlobalVar CLM.Mem ->
   IO (Seq.Seq (WFN.FunctionName, GLOS.LLVMSExpOverride))
-loadLLVMSExpOvs sexpOvPaths halloc mvar = do
+loadLLVMSExpOvs la sexpOvPaths halloc mvar = do
   mbOvs <- liftIO (GLOS.loadOverrides sexpOvPaths halloc mvar)
   case mbOvs of
-    Left err -> do
-      let msg = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions (PP.pretty err))
-      throw (GreaseException ("user error: " <> msg))
+    Left err -> userError la (PP.pretty err)
     Right ovs -> pure ovs
 
 doParse ::
@@ -1461,7 +1471,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
           )
       else forM (simEntryPoints simOpts) $ \entry -> do
         case Map.lookup entry (Load.progEntrypointAddrs loadedProg) of
-          Nothing -> throw . GreaseException $ "Impossible: entrypoint not in map"
+          Nothing -> panic "simulateMacaw" ["Entrypoint not in map"]
           Just a -> pure (entry, a)
 
   cfgs <-
@@ -1572,7 +1582,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
   C.Refl <-
     case C.testEquality ?ptrWidth (knownNat @64) of
       Just r -> pure r
-      Nothing -> throw $ GreaseException "Bad pointer width"
+      Nothing -> panic "simulateLlvmCfg" ["Bad pointer width", show ?ptrWidth]
 
   let argTys = C.cfgArgTypes cfg
       -- Display the arguments as though they are unnamed LLVM virtual registers.
@@ -1682,24 +1692,22 @@ simulateLlvmCfgs la simOpts halloc llvmCtx llvmMod mkMem setupHook cfgs = do
                 case testEquality expectedArgTys actualArgTys of
                   Just r -> pure r
                   Nothing ->
-                    throw $
-                      GreaseException $
-                        Text.unlines
-                          [ "Startup override must have the same argument types as the entrypoint function"
-                          , "Entrypoint function argument types: " <> Text.pack (show expectedArgTys)
-                          , "Startup override argument types: " <> Text.pack (show actualArgTys)
-                          ]
+                    userError la $
+                      PP.vcat
+                        [ "Startup override must have the same argument types as the entrypoint function"
+                        , "Entrypoint function argument types: " <> PP.viaShow expectedArgTys
+                        , "Startup override argument types: " <> PP.viaShow actualArgTys
+                        ]
               Refl <-
                 case testEquality expectedRetTy actualRetTy of
                   Just r -> pure r
                   Nothing ->
-                    throw $
-                      GreaseException $
-                        Text.unlines
-                          [ "Startup override must return a struct containing the argument types of the entrypoint function"
-                          , "Entrypoint function argument types: " <> Text.pack (show expectedArgTys)
-                          , "Startup override return type: " <> Text.pack (show actualRetTy)
-                          ]
+                    userError la $
+                      PP.vcat
+                        [ "Startup override must return a struct containing the argument types of the entrypoint function"
+                        , "Entrypoint function argument types: " <> PP.viaShow expectedArgTys
+                        , "Startup override return type: " <> PP.viaShow actualRetTy
+                        ]
               pure $ C.SomeCFG startupOvCfg'
           status <- simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbStartupOvSomeCfg (C.SomeCFG entrypointCfg')
           let result =
@@ -1736,7 +1744,7 @@ simulateLlvmSyntax simOpts la = do
           , Trans.llvmGlobalAliases = Map.empty
           , Trans.llvmFunctionAliases = Map.empty
           }
-  sexpOvs <- loadLLVMSExpOvs (simOverrides simOpts) halloc mvar
+  sexpOvs <- loadLLVMSExpOvs la (simOverrides simOpts) halloc mvar
   let llvmMod = Nothing
   let setupHook :: forall sym arch. LLVM.SetupHook sym arch
       setupHook =
@@ -1747,12 +1755,13 @@ simulateLlvmSyntax simOpts la = do
 
 -- | Helper, not exported
 --
--- Parse bitcode from a 'FilePath', logging any parse warnings and throwing
--- 'GreaseException' on error.
+-- Parse bitcode from a 'FilePath', logging any parse warnings and calling
+-- 'malformedLlvm' on error.
 parseBitcode :: GreaseLogAction -> FilePath -> IO L.Module
 parseBitcode la path =
   parseBitCodeFromFileWithWarnings path >>= \case
-    Left _err -> throw $ GreaseException "Could not parse LLVM module"
+    Left err ->
+      malformedLlvm la (PP.pretty (formatError err))
     Right (m, warns) -> do
       Monad.unless (Seq.null warns) $
         doLog la (Diag.BitcodeParseWarnings warns)
@@ -1793,7 +1802,7 @@ simulateLlvm transOpts simOpts la = do
                     Initialized ->
                       CLLVM.populateAllGlobals bak (trans ^. Trans.globalInitMap) unpopulated
                     Symbolic ->
-                      throw (GreaseException "GREASE does not yet support symbolic globals for LLVM")
+                      unsupported la "GREASE does not yet support symbolic globals for LLVM"
                     Uninitialized ->
                       CLLVM.populateConstGlobals bak (trans ^. Trans.globalInitMap) unpopulated
                 pure (InitialMem initMem)
@@ -1803,8 +1812,8 @@ simulateLlvm transOpts simOpts la = do
       fmap Map.fromList $
         forM entries $ \entry -> do
           case entrypointLocation entry of
-            EntrypointAddress{} -> nonSymbolEntrypointException
-            EntrypointCoreDump{} -> nonSymbolEntrypointException
+            EntrypointAddress{} -> nonSymbolEntrypoint la
+            EntrypointCoreDump{} -> nonSymbolEntrypoint la
             EntrypointSymbolName nm ->
               Trans.getTranslatedCFG trans (L.Symbol (Text.unpack nm)) >>= \case
                 Just (_decl, cfg, warns) -> do
@@ -1829,9 +1838,9 @@ simulateLlvm transOpts simOpts la = do
                           , entrypointCfg = cfg
                           }
                   pure (entry, entrypointCfgs)
-                Nothing -> throw $ GreaseException $ "Could not find function: " <> nm
+                Nothing -> userError la (PP.pretty ("Could not find function: " <> nm))
 
-    sexpOvs <- loadLLVMSExpOvs (simOverrides simOpts) halloc mvar
+    sexpOvs <- loadLLVMSExpOvs la (simOverrides simOpts) halloc mvar
     let setupHook :: forall sym. LLVM.SetupHook sym arch
         setupHook =
           LLVM.moduleSetupHook la sexpOvs trans cfgs $
@@ -2054,7 +2063,7 @@ simulateARM simOpts la = do
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
     loadedProg <- doLoad la proxy (simEntryPoints simOpts) perms elf
-    txtBounds@(starttext, _) <- textBounds (Load.progLoadOptions loadedProg) elf
+    txtBounds@(starttext, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- armCtx halloc (Just starttext) (simStackArgumentSlots simOpts)
     simulateMacaw la halloc elf loadedProg (Just ARM.armPLTStubInfo) archCtx txtBounds simOpts AArch32Syn.aarch32ParserHooks
@@ -2080,8 +2089,8 @@ simulatePPC64Syntax ::
   SimOpts ->
   GreaseLogAction ->
   IO Results
-simulatePPC64Syntax _simOpts _la =
-  throw $ GreaseException "*.ppc64.cbl files are not currently supported."
+simulatePPC64Syntax _simOpts la =
+  unsupported la "*.ppc64.cbl files are not currently supported."
 
 simulatePPC32 :: SimOpts -> GreaseLogAction -> IO Results
 simulatePPC32 simOpts la = do
@@ -2091,7 +2100,7 @@ simulatePPC32 simOpts la = do
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
     loadedProg <- doLoad la proxy (simEntryPoints simOpts) perms elf
-    txtBounds@(starttext, _) <- textBounds (Load.progLoadOptions loadedProg) elf
+    txtBounds@(starttext, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- ppc32Ctx (Just starttext) (simStackArgumentSlots simOpts)
     -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
@@ -2107,7 +2116,7 @@ simulatePPC64 simOpts la = do
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
     loadedProg <- doLoad la proxy (simEntryPoints simOpts) perms elf
-    txtBounds@(starttext, _) <- textBounds (Load.progLoadOptions loadedProg) elf
+    txtBounds@(starttext, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- ppc64Ctx (Just starttext) (simStackArgumentSlots simOpts) (Load.progLoadedBinary loadedProg)
     -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
@@ -2136,7 +2145,7 @@ simulateX86 simOpts la = do
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
     loadedProg <- doLoad la proxy (simEntryPoints simOpts) perms elf
-    txtBounds@(startText, _) <- textBounds (Load.progLoadOptions loadedProg) elf
+    txtBounds@(startText, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- x86Ctx halloc (Just startText) (simStackArgumentSlots simOpts)
     simulateMacaw la halloc elf loadedProg (Just X86.x86_64PLTStubInfo) archCtx txtBounds simOpts X86Syn.x86ParserHooks
@@ -2154,8 +2163,8 @@ simulateElf simOpts la = do
         (Elf.ELFCLASS32, Elf.EM_PPC) -> simulatePPC32 simOpts la
         (Elf.ELFCLASS64, Elf.EM_PPC64) -> simulatePPC64 simOpts la
         (Elf.ELFCLASS64, Elf.EM_X86_64) -> simulateX86 simOpts la
-        (_, mach) -> throw $ GreaseException $ "User error: unsupported ELF architecture: " <> tshow mach
-    Left _ -> throw (GreaseException ("User error: expected ELF binary, but found non-ELF file at " <> Text.pack (simProgPath simOpts)))
+        (_, mach) -> unsupported la ("unsupported ELF architecture: " <> PP.viaShow mach)
+    Left _ -> userError la ("User error: expected ELF binary, but found non-ELF file at " <> PP.pretty (simProgPath simOpts))
 
 simulateFile ::
   SimOpts ->
@@ -2170,7 +2179,7 @@ simulateFile opts la =
               | ".armv7l.elf" `List.isSuffixOf` path -> simulateARMRaw opts la
               | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32Raw opts la
               | ".x64.elf" `List.isSuffixOf` path -> simulateX86Raw opts la
-              | otherwise -> throw (GreaseException "Unsupported file suffix for raw binary mode")
+              | otherwise -> userError la "Unsupported file suffix for raw binary mode"
         | ".armv7l.elf" `List.isSuffixOf` path -> simulateARM opts la
         | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32 opts la
         | ".ppc64.elf" `List.isSuffixOf` path -> simulatePPC64 opts la
