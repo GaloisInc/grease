@@ -57,11 +57,11 @@ Mutable global variables are tricky:
 GREASE's behavior in this regard is controlled via the `--globals` flag. The
 possible values are:
 
-- `Initialized`: Each mutable global is initialized using its initializer before
+- `initialized`: Each mutable global is initialized using its initializer before
   analysis of the target function.
-- `Symbolic`: Each mutable global is initialized to a symbolic value before
+- `symbolic`: Each mutable global is initialized to a symbolic value before
   analysis of the target function.
-- `Uninitialized`: Mutable globals are left uninitialized. Reads from mutable
+- `uninitialized`: Mutable globals are left uninitialized. Reads from mutable
   globals will fail, causing GREASE to be unable to proceed with analysis.
 
 ## The stack
