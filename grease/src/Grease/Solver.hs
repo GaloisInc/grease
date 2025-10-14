@@ -1,6 +1,5 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE LambdaCase #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024

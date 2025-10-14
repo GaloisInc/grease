@@ -1,6 +1,5 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -36,11 +35,11 @@ import Data.Char qualified as Char
 import Data.List qualified as List
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Proxy (Proxy (..))
 import Data.String qualified as String
 import Data.Text (Text)
 import Data.Void (Void)
 import Data.Word (Word64)
+import Grease.Cli.Enum qualified as GCE
 import Grease.Diagnostic.Severity qualified as Sev
 import Grease.Entrypoint
 import Grease.Macaw.Overrides.Address (addressOverrideParser)
@@ -64,68 +63,6 @@ megaparsecReader p = Opt.eitherReader $ \rawStr ->
   case TM.parse p "" (String.fromString rawStr) of
     Left err -> Left $ TM.errorBundlePretty err
     Right val -> Right val
-
-camelCaseToKebabCase :: String -> String
-camelCaseToKebabCase = foldl go "" . lowerFirst
- where
-  lowerFirst =
-    \case
-      [] -> []
-      (c : cs) -> Char.toLower c : cs
-  go acc c =
-    acc ++ if Char.isUpperCase c then "-" ++ [Char.toLower c] else [c]
-
--- Given an enumeration type, construct an @optparse-applicative@ metavar that
--- displays all possible variants. For example, given @data Letter = A | B | C@,
--- this would produce the metavar @(A|B|C)@.
-boundedEnumMetavar ::
-  forall a f proxy.
-  (Bounded a, Enum a, Opt.HasMetavar f, Show a) =>
-  proxy a ->
-  Opt.Mod f a
-boundedEnumMetavar _ = Opt.metavar $ varShowS ""
- where
-  -- Use ShowS (i.e., a difference list of strings) below to amortize the cost
-  -- of appending strings.
-  varShowS :: ShowS
-  varShowS =
-    showParen True $
-      List.foldr (.) id $
-        List.intersperse (showChar '|') $
-          List.map
-            ((camelCaseToKebabCase .) . shows)
-            [minBound @a .. maxBound @a]
-
-enumMap :: (Bounded a, Enum a, Show a) => Map String a
-enumMap = Map.fromList [(name v, v) | v <- [minBound .. maxBound]]
- where
-  name = camelCaseToKebabCase . show
-
--- Parse a 'Bounded' 'Enum' by converting 'show'n values to kebab case.
-parseBounded :: (Bounded a, Enum a, Show a) => String -> Maybe a
-parseBounded s = Map.lookup s enumMap
-
-enumParser ::
-  forall a.
-  (Bounded a, Enum a, Show a) =>
-  [Opt.Mod Opt.OptionFields a] ->
-  Opt.Parser a
-enumParser o =
-  Opt.option (Opt.maybeReader parseBounded) $
-    mconcat
-      [ mconcat o
-      , boundedEnumMetavar (Proxy @a)
-      , Opt.completeWith (Map.keys (enumMap @a))
-      ]
-
-enumParserDefault ::
-  forall a.
-  (Bounded a, Enum a, Show a) =>
-  a ->
-  [Opt.Mod Opt.OptionFields a] ->
-  Opt.Parser a
-enumParserDefault a o =
-  enumParser (o ++ [Opt.showDefault, Opt.value a])
 
 ------------------------------------------------------------
 -- Individual option parsers
@@ -305,7 +242,7 @@ fsRootParser =
 
 globalsParser :: Opt.Parser GO.MutableGlobalState
 globalsParser =
-  enumParserDefault
+  GCE.enumParserDefault
     GO.Initialized
     [ Opt.long "globals"
     , Opt.help "how to initialize mutable global variables"
@@ -346,7 +283,7 @@ overridesYamlParser =
 
 solverParser :: Opt.Parser Solver
 solverParser =
-  enumParserDefault
+  GCE.enumParserDefault
     Yices
     [ Opt.long "solver"
     , Opt.help "The SMT solver to use for solving proof goals"
@@ -400,7 +337,7 @@ simOpts = do
   simMutGlobs <- globalsParser
   simReqs <-
     Opt.many
-      ( enumParser
+      ( GCE.enumParser
           [ Opt.long "req"
           , Opt.help "names of requirements to test"
           ]
@@ -410,7 +347,7 @@ simOpts = do
   simAddressOverrides <- addrOverridesParser
   simOverridesYaml <- overridesYamlParser
   simPathStrategy <-
-    enumParserDefault
+    GCE.enumParserDefault
       GO.Sse
       [ Opt.long "path-strategy"
       , Opt.help "path exploration strategy"
