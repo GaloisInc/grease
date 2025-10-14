@@ -4,5 +4,4 @@
 path = "tests/ux/extra/llvm-override-function-not-found.llvm.cbl"
 flags {"--symbol", "test", "--overrides", path}
 go "tests/llvm/load.llvm.cbl"
-exception()
-check "user error: Expected to find a function named 'llvm-override-function-not-found'"
+user_error "Expected to find a function named 'llvm-override-function-not-found'"
