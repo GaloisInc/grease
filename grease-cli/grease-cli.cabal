@@ -151,3 +151,4 @@ library
 
   exposed-modules:
     Grease.Cli
+    Grease.Cli.Enum
