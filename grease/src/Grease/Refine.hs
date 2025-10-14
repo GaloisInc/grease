@@ -284,7 +284,6 @@ consumer ::
   ( C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st fm
   , 16 C.<= w
-  , Mem.HasLLVMAnn sym
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
   , ?memOpts :: CLM.MemOptions
@@ -368,7 +367,6 @@ execCfg ::
   ( C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st fm
   , 16 C.<= w
-  , Mem.HasLLVMAnn sym
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
   , ?memOpts :: CLM.MemOptions
@@ -428,7 +426,6 @@ proveAndRefine ::
   ( C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st fm
   , 16 C.<= w
-  , Mem.HasLLVMAnn sym
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
   , ?memOpts :: CLM.MemOptions
@@ -462,7 +459,6 @@ execAndRefine ::
   , C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
   , 16 C.<= w
-  , Mem.HasLLVMAnn sym
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
   , ?memOpts :: CLM.MemOptions
