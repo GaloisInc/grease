@@ -29,7 +29,7 @@ module Grease.Main (
 
 import Control.Applicative (pure)
 import Control.Concurrent.Async (Async, cancel)
-import Control.Exception.Safe (Handler (..), MonadThrow, catches)
+import Control.Exception.Safe (MonadThrow)
 import Control.Exception.Safe qualified as X
 import Control.Lens (to, (.~), (^.))
 import Control.Monad (forM, forM_, mapM_, when, (>>=))
@@ -922,17 +922,17 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable setupHook a
     heuristics
     execFeats
     (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
-    `catches` [ Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
-                  pure $ ProveCantRefine $ MissingSemantics $ pshow ex
-              , Handler
-                  ( \(ex :: AArch32Symbolic.AArch32Exception) ->
-                      pure (ProveCantRefine (MissingSemantics (tshow ex)))
-                  )
-              , Handler
-                  ( \(ex :: PPCSymbolic.SemanticsError) ->
-                      pure (ProveCantRefine (MissingSemantics (tshow ex)))
-                  )
-              ]
+    `X.catches` [ X.Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
+                    pure $ ProveCantRefine $ MissingSemantics $ pshow ex
+                , X.Handler
+                    ( \(ex :: AArch32Symbolic.AArch32Exception) ->
+                        pure (ProveCantRefine (MissingSemantics (tshow ex)))
+                    )
+                , X.Handler
+                    ( \(ex :: PPCSymbolic.SemanticsError) ->
+                        pure (ProveCantRefine (MissingSemantics (tshow ex)))
+                    )
+                ]
 
 simulateMacawCfg ::
   forall sym bak arch solver scope st fm.
@@ -2215,24 +2215,25 @@ logResults la (Results results) =
 -- (TODO(#411)).
 withTopLevelExceptionHandler :: GreaseLogAction -> IO a -> IO a
 withTopLevelExceptionHandler la act =
-  act
-    `catches` [ Handler @_ @_ @X.IOException $ \e -> do
-                  doLog la (Diag.Exception (PP.viaShow e))
-                  Exit.exitFailure
-              , Handler @_ @_ @(Panic.Panic Grease) $ \e -> do
-                  doLog la (Diag.Exception (PP.viaShow e))
-                  Exit.exitFailure
-              , Handler @_ @_ @Exit.ExitCode $ \e ->
-                  X.throw e
-              , Handler @_ @_ @X.SomeException $ \e -> do
-                  let msg = "Uncaught exception"
-                  r <- X.try @_ @(Panic.Panic Grease) (panic "main" [msg, show e])
-                  case r of
-                    Right () -> Exit.exitFailure -- impossible
-                    Left e' -> do
-                      doLog la (Diag.Exception (PP.viaShow e'))
-                      Exit.exitFailure
-              ]
+  X.catches
+    act
+    [ X.Handler @_ @_ @X.IOException $ \e -> do
+        doLog la (Diag.Exception (PP.viaShow e))
+        Exit.exitFailure
+    , X.Handler @_ @_ @(Panic.Panic Grease) $ \e -> do
+        doLog la (Diag.Exception (PP.viaShow e))
+        Exit.exitFailure
+    , X.Handler @_ @_ @Exit.ExitCode $ \e ->
+        X.throw e
+    , X.Handler @_ @_ @X.SomeException $ \e -> do
+        let msg = "Uncaught exception"
+        r <- X.try @_ @(Panic.Panic Grease) (panic "main" [msg, show e])
+        case r of
+          Right () -> Exit.exitFailure -- impossible
+          Left e' -> do
+            doLog la (Diag.Exception (PP.viaShow e'))
+            Exit.exitFailure
+    ]
 
 main :: IO ()
 main = do
