@@ -5,8 +5,6 @@ function exception() check 'Exception: ' end
 function user_error(msg)
   check 'User error: '
   check(msg)
-  exception()
-  check 'ExitFailure 1'
 end
 
 function could_not_infer() check 'Possible bug(s)' end

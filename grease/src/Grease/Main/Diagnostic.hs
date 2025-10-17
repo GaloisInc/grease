@@ -43,6 +43,8 @@ data Diagnostic where
     Diagnostic
   BitcodeParseWarnings ::
     Seq ParseWarning -> Diagnostic
+  Exception ::
+    PP.Doc Void -> Diagnostic
   LoadedPrecondition ::
     forall w ext tag tys.
     ( ExtShape ext ~ PtrShape ext w
@@ -57,6 +59,9 @@ data Diagnostic where
   FinishedAnalyzingEntrypoint ::
     EntrypointLocation -> Nanoseconds -> Diagnostic
   MalformedElf ::
+    PP.Doc Void ->
+    Diagnostic
+  MalformedLlvm ::
     PP.Doc Void ->
     Diagnostic
   NoEntrypoints ::
@@ -92,6 +97,8 @@ instance PP.Pretty Diagnostic where
           , PP.pretty entry
           ]
       BitcodeParseWarnings warns -> PP.viaShow (ppParseWarnings warns)
+      Exception err ->
+        "Exception:" PP.<+> fmap absurd err
       FinishedAnalyzingEntrypoint entry duration ->
         PP.hsep
           [ "Analysis of"
@@ -106,6 +113,8 @@ instance PP.Pretty Diagnostic where
           ]
       MalformedElf err ->
         "Malformed ELF file: " <> fmap absurd err
+      MalformedLlvm err ->
+        "Malformed LLVM module: " <> fmap absurd err
       NoEntrypoints ->
         "No entry points specified, analyzing all known functions."
       SimulationTestingRequirements rs ->
@@ -141,9 +150,11 @@ severity =
     AnalyzedEntrypoint{} -> Info
     AnalyzingEntrypoint{} -> Info
     BitcodeParseWarnings{} -> Warn
+    Exception{} -> Error
     FinishedAnalyzingEntrypoint{} -> Debug
     LoadedPrecondition{} -> Debug
     MalformedElf{} -> Error
+    MalformedLlvm{} -> Error
     NoEntrypoints -> Warn
     SimulationTestingRequirements{} -> Debug
     SimulationAllGoalsPassed{} -> Info

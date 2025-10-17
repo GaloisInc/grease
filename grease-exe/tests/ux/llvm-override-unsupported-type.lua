@@ -3,5 +3,4 @@
 path = "tests/ux/extra/llvm-override-unsupported-type.llvm.cbl"
 flags {"--symbol", "test", "--overrides", path}
 go "tests/llvm/load.llvm.cbl"
-exception()
-check("user error: Unsupported type in override in file " .. path)
+user_error("Unsupported type in override in file " .. path)

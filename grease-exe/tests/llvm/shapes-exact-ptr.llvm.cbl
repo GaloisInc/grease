@@ -7,8 +7,8 @@
 ;; flags {"--symbol", "test"}
 ;; flags {"--initial-precondition", "tests/llvm/extra/shapes-exact-ptr.txt"}
 ;; go(prog)
-;; check [[
-;; Exception: tests/llvm/extra/shapes-exact-ptr.txt:3:19:
+;; user_error [[
+;; tests/llvm/extra/shapes-exact-ptr.txt:3:19:
 ;;   |
 ;; 3 | 00: 00 00 00 00 01+00
 ;;   |                   ^
@@ -20,8 +20,8 @@
 ;; flags {"--symbol", "test"}
 ;; flags {"--initial-precondition", "tests/llvm/extra/shapes-exact-ptr-rle.txt"}
 ;; go(prog)
-;; check [[
-;; Exception: tests/llvm/extra/shapes-exact-ptr-rle.txt:3:12:
+;; user_error [[
+;; tests/llvm/extra/shapes-exact-ptr-rle.txt:3:12:
 ;;   |
 ;; 3 | 00: 00*4 01+00
 ;;   |            ^

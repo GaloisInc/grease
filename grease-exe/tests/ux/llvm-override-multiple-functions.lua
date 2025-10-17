@@ -4,5 +4,4 @@
 path = "tests/ux/extra/llvm-override-multiple-functions.llvm.cbl"
 flags {"--symbol", "test", "--overrides", path}
 go "tests/llvm/load.llvm.cbl"
-exception()
-check "user error: Override contains multiple 'llvm-override-multiple-functions' functions"
+user_error "Override contains multiple 'llvm-override-multiple-functions' functions"
