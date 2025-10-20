@@ -109,7 +109,7 @@ SHARED_LIBARY_DWARFV5_DIRS = sanity/pass/dwarf-shapes sanity/pass/dwarf-shape-re
 SHARED_LIBARY_DWARFV5_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV5_DIRS))
 
 
-RAW_BINARY_DIRS = sanity/pass/simple-static
+RAW_BINARY_DIRS = sanity/pass/simple-static sanity/pass/thumb-calls
 RAW_BINARY_EXES = $(addsuffix /test.armv7l.elf,$(RAW_BINARY_DIRS))
 
 
