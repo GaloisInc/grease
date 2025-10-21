@@ -123,7 +123,12 @@ armArchPCFixup bak regs origAddr = do
   raddr <- Symbolic.resolveSymBV bak C.knownNat off
   pure $ case WI.asBV raddr of
     Nothing -> panic "armArchPCFixup" ["PSTATE_T should always be concrete"]
-    Just bv -> if BV.testBit' 0 bv then fromJust $ MM.incSegmentOff origAddr 1 else origAddr
+    Just bv ->
+      if BV.testBit' 0 bv
+        then case MM.incSegmentOff origAddr 1 of
+          Nothing -> panic "armArchPCFixup" ["attempted to call last byte of segment in thumb mode"]
+          Just naddr -> naddr
+        else origAddr
 
 armRelocSupported :: EE.ARM32_RelocationType -> Maybe RelocType
 armRelocSupported EE.R_ARM_RELATIVE = Just RelativeReloc
