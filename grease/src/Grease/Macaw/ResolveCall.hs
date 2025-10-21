@@ -146,7 +146,7 @@ defaultLookupFunctionHandleDispatch ::
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , HasToConcretize p
-  , HasGreaseSimulatorState p sym arch
+  , HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
   GreaseLogAction ->
@@ -236,10 +236,10 @@ data LookupFunctionHandleResult p sym arch where
 --
 -- The behavior of this function is documented in @doc/function-calls.md@.
 lookupFunctionHandleResult ::
-  forall arch sym bak solver scope st fs p rtp blocks r ctx.
+  forall arch sym bak solver scope st fs p rtp blocks r ctx cExt.
   ( OnlineSolverAndBackend solver sym bak scope st fs
   , Symbolic.SymArchConstraints arch
-  , HasGreaseSimulatorState p sym arch
+  , HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
   GreaseLogAction ->
@@ -390,7 +390,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
 lookupFunctionHandle ::
   ( OnlineSolverAndBackend solver sym bak t st fs
   , Symbolic.SymArchConstraints arch
-  , HasGreaseSimulatorState p sym arch
+  , HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
   GreaseLogAction ->
@@ -502,7 +502,7 @@ data LookupSyscallResult p sym arch atps rtps where
 -- The behavior of this function is documented in @doc/syscalls.md@.
 lookupSyscallResult ::
   ( CB.IsSymBackend sym bak
-  , HasGreaseSimulatorState p sym arch
+  , HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
   ArchContext arch ->
@@ -549,7 +549,7 @@ lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs 
 -- up a syscall override and dispatches on the result.
 lookupSyscallHandle ::
   ( CB.IsSymBackend sym bak
-  , HasGreaseSimulatorState p sym arch
+  , HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
   ArchContext arch ->
@@ -572,7 +572,7 @@ lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd =
 -- handle to its CFG.
 discoverFuncAddr ::
   ( Symbolic.SymArchConstraints arch
-  , HasGreaseSimulatorState p sym arch
+  , HasGreaseSimulatorState p cExt sym arch
   ) =>
   LJ.LogAction IO Diagnostic ->
   C.HandleAllocator ->

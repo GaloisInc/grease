@@ -44,14 +44,14 @@ import Text.LLVM.AST qualified as L
 -- c.f. 'builtinLLVMOverrides', which includes all of the functions here (i.e.,
 -- from libc) and then some (i.e., LLVM intrinsics).
 builtinStubsOverrides ::
-  forall sym bak p arch.
+  forall sym bak p arch cExt.
   ( CB.IsSymBackend sym bak
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
-  , HasGreaseSimulatorState p sym arch
+  , HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
   C.GlobalVar CLM.Mem ->

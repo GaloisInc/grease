@@ -46,13 +46,13 @@ import What4.Protocol.Online qualified as WPO
 -- c.f. 'Grease.LLVM.SetupHook.SetupHook'
 newtype SetupHook sym arch
   = SetupHook
-      ( forall bak rtp a r solver scope st fs p.
+      ( forall bak rtp a r solver scope st fs p cExt.
         ( CB.IsSymBackend sym bak
         , sym ~ WEB.ExprBuilder scope st fs
         , bak ~ LCB.OnlineBackend solver scope st fs
         , WPO.OnlineSolver solver
         , CLM.HasLLVMAnn sym
-        , HasGreaseSimulatorState p sym arch
+        , HasGreaseSimulatorState p cExt sym arch
         , HasToConcretize p
         ) =>
         bak ->

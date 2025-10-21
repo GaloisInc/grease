@@ -213,7 +213,7 @@ mkMacawOverrideMapWithBuiltins ::
   , Symbolic.SymArchConstraints arch
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
-  , HasGreaseSimulatorState p sym arch
+  , HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
   -- | The paths of each user-supplied override file.
