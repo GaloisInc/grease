@@ -24,7 +24,7 @@ import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
 import Data.Word (Word64)
 import Dismantle.PPC qualified as D
-import Grease.Macaw.Arch (ArchContext (..), ArchReloc)
+import Grease.Macaw.Arch (ArchContext (..), ArchReloc, defaultPCFixup)
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Macaw.RegName (RegName (..))
 import Grease.Options (ExtraStackSlots)
@@ -99,6 +99,7 @@ ppc64Ctx mbReturnAddr stackArgSlots loadedBinary = do
           [ Some.Some (PPC.PPC_GP (D.GPR rnum))
           | rnum <- [3 .. 10]
           ]
+      , _archPCFixup = defaultPCFixup @PPC.PPC64 Proxy
       }
 
 ppc64RelocSupported :: EE.PPC64_RelocationType -> Maybe RelocType

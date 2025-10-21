@@ -24,7 +24,7 @@ import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
 import Data.Word (Word32)
-import Grease.Macaw.Arch (ArchContext (..), ArchReloc)
+import Grease.Macaw.Arch (ArchContext (..), ArchReloc, defaultPCFixup)
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Macaw.RegName (RegName (..))
 import Grease.Options (ExtraStackSlots)
@@ -86,6 +86,7 @@ armCtx halloc mbReturnAddr stackArgSlots = do
       , _archOffsetStackPointerPostCall = pure
       , -- assumes AAPCS32 https://github.com/ARM-software/abi-aa/blob/main/aapcs32/aapcs32.rst#parameter-passing
         _archABIParams = Some.Some <$> [ARM.r0, ARM.r1, ARM.r2, ARM.r3]
+      , _archPCFixup = defaultPCFixup @ARM.ARM Proxy
       }
 
 armRelocSupported :: EE.ARM32_RelocationType -> Maybe RelocType

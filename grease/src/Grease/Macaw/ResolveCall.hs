@@ -376,8 +376,9 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
     -- that fail the `in-text` requirement), as Macaw will simply crash
     -- when simulating them.
     | Discovery.isExecutableSegOff funcAddrOff = do
+        fixedAddr <- (arch ^. archPCFixup) bak regs funcAddrOff
         (hdl, st') <-
-          discoverFuncAddr la halloc arch memory symMap pltStubs funcAddrOff st
+          discoverFuncAddr la halloc arch memory symMap pltStubs fixedAddr st
         pure
           ( DiscoveredFnHandle funcAddrOff hdl $
               lookupOv (C.handleName hdl) funcAddrOff
