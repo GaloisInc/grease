@@ -156,7 +156,7 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   let sym = CB.backendGetSym bak
   let ctx = Conc.ConcCtx @sym @t groundEvalFn Mem.concPtrFnMap
   let concRV :: forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)
-      concRV t = fmap (Conc.ConcRV' @sym) . Conc.concRegValue @sym @t ctx t . CS.unRV
+      concRV t = fmap (Conc.ConcRV' @sym) . Conc.groundRegValue @sym @t ctx t . CS.unRV
   cArgs <- liftIO (traverseFC (Shape.traverseShapeWithType concRV) initArgs)
   let W4.GroundEvalFn gFn = groundEvalFn
   let toWord8 :: BV.BV 8 -> Word8

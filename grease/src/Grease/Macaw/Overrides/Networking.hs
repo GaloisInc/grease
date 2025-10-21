@@ -166,7 +166,7 @@ networkOverrides ::
   , ?memOpts :: CLM.MemOptions
   , MC.MemWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p sym arch
+  , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   CLSymIo.LLVMFileSystem w ->
   CS.GlobalVar CLM.Mem ->
@@ -186,7 +186,7 @@ networkOverrides fs memVar mmConf =
 buildAcceptOverride ::
   ( CLM.HasPtrWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p sym arch
+  , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   CLSymIo.LLVMFileSystem w ->
   StubsF.FunctionOverride
@@ -216,7 +216,7 @@ callAccept ::
   , WPO.OnlineSolver solver
   , CLM.HasPtrWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p sym arch
+  , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
   CLSymIo.LLVMFileSystem w ->
@@ -260,7 +260,7 @@ buildBindOverride ::
   , ?memOpts :: CLM.MemOptions
   , MC.MemWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p sym arch
+  , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   CS.GlobalVar CLM.Mem ->
   MS.MemModelConfig p sym arch CLM.Mem ->
@@ -283,7 +283,7 @@ buildBindOverride memVar mmConf =
 -- the @addr@ struct, ensures that it is concrete, and records it for later
 -- calls to @accept()@. See Note @[The networking story]@ for the full details.
 callBind ::
-  forall sym bak arch w p solver scope st fs ext r args ret.
+  forall sym bak arch w p solver scope st fs ext r args ret cExt.
   ( CB.IsSymBackend sym bak
   , sym ~ WE.ExprBuilder scope st fs
   , bak ~ CBO.OnlineBackend solver scope st fs
@@ -294,7 +294,7 @@ callBind ::
   , MC.MemWidth w
   , w ~ MC.ArchAddrWidth arch
   , ext ~ MS.MacawExt arch
-  , GMSS.HasGreaseSimulatorState p sym arch
+  , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
   CS.GlobalVar CLM.Mem ->
@@ -354,7 +354,7 @@ callBind bak memVar mmConf sockfd addr _addrlen = do
 buildConnectOverride ::
   ( CLM.HasPtrWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p sym arch
+  , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   StubsF.FunctionOverride
     p
@@ -387,7 +387,7 @@ callConnect ::
   , WPO.OnlineSolver solver
   , CLM.HasPtrWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p sym arch
+  , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
   CS.RegEntry sym (CLM.LLVMPointerType w) ->
@@ -399,7 +399,7 @@ callConnect bak sockfd _addr _addrlen = checkSocketFdInUse bak "connect" sockfd
 buildListenOverride ::
   ( CLM.HasPtrWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p sym arch
+  , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   StubsF.FunctionOverride
     p
@@ -426,7 +426,7 @@ callListen ::
   , WPO.OnlineSolver solver
   , CLM.HasPtrWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p sym arch
+  , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
   CS.RegEntry sym (CLM.LLVMPointerType w) ->
@@ -563,7 +563,7 @@ callSend bak fs memVar sockfd buf len _flags = do
 buildSocketOverride ::
   ( CLM.HasPtrWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p sym arch
+  , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   CLSymIo.LLVMFileSystem w ->
   StubsF.FunctionOverride
@@ -592,7 +592,7 @@ callSocket ::
   , WPO.OnlineSolver solver
   , CLM.HasPtrWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p sym arch
+  , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
   CLSymIo.LLVMFileSystem w ->
@@ -725,7 +725,7 @@ checkSocketFdInUse ::
   , WPO.OnlineSolver solver
   , CLM.HasPtrWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p sym arch
+  , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
   Text.Text ->

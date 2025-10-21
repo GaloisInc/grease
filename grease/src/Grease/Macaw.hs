@@ -409,7 +409,7 @@ memConfigInitial bak arch ptrTable skipUnsupportedRelocs relocs =
 --   'mkMacawOverrideMap' would in turn need the 'Symbolic.MemModelConfig' that
 --   the combined function would produce, leading to a cycle.)
 memConfigWithHandles ::
-  forall arch sym bak solver scope st fs p.
+  forall arch sym bak solver scope st fs p cExt.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , CB.IsSymBackend sym bak
   , Symbolic.SymArchConstraints arch
@@ -420,7 +420,7 @@ memConfigWithHandles ::
   , Show (ArchReloc arch)
   , ?memOpts :: CLM.MemOptions
   , CLM.HasLLVMAnn sym
-  , HasGreaseSimulatorState p sym arch
+  , HasGreaseSimulatorState p cExt sym arch
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , HasToConcretize p
   ) =>
@@ -502,7 +502,7 @@ assertRelocSupported arch loc (CLM.LLVMPointer _base offset) relocs =
           pure ()
 
 initState ::
-  forall arch sym bak m t solver scope st fs p.
+  forall arch sym bak m t solver scope st fs p cExt.
   ( MonadIO m
   , MonadThrow m
   , CB.IsSymBackend sym bak
@@ -516,7 +516,7 @@ initState ::
   , CLM.HasLLVMAnn sym
   , MSM.MacawProcessAssertion sym
   , ?memOpts :: CLM.MemOptions
-  , HasGreaseSimulatorState p sym arch
+  , HasGreaseSimulatorState p cExt sym arch
   , HasToConcretize p
   ) =>
   bak ->

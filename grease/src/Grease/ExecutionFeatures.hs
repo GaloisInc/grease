@@ -7,13 +7,11 @@ module Grease.ExecutionFeatures (
 ) where
 
 import Data.List qualified as List
-import Data.Maybe qualified as Maybe
 import Data.Time.Clock (secondsToNominalDiffTime)
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Options qualified as GO
 import Grease.Panic (panic)
-import Grease.Pretty (prettyPtrFnMap)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
@@ -23,7 +21,6 @@ import Lang.Crucible.Simulator.BoundedExec qualified as C
 import Lang.Crucible.Simulator.BoundedRecursion qualified as C
 import Lang.Crucible.Simulator.PathSatisfiability qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
-import Lang.Crucible.Types qualified as CT
 import Lang.Crucible.Utils.Seconds qualified as C
 import Prettyprinter qualified as PP
 import What4.Config qualified as W4C
@@ -77,27 +74,18 @@ greaseExecFeats ::
   , bak ~ C.OnlineBackend solver scope st fs
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
   , WPO.OnlineSolver solver
+  , Dbg.HasContext p cExt sym ext ret
   ) =>
   GreaseLogAction ->
   bak ->
   -- | Debugger configuration, if desired
-  Maybe (Dbg.CommandExt cExt, Dbg.ExtImpl cExt p sym ext ret, CT.TypeRepr ret) ->
+  Maybe (Dbg.ExtImpl cExt p sym ext ret) ->
   IO [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)]
 greaseExecFeats la bak dbgOpts = do
-  debuggerFeat <-
-    case dbgOpts of
-      Just (cmdExt, extImpl, retTy) -> do
-        dbgInputs <- Dbg.defaultDebuggerInputs cmdExt
-        Just
-          <$> Dbg.debugger
-            cmdExt
-            extImpl
-            prettyPtrFnMap
-            dbgInputs
-            Dbg.defaultDebuggerOutputs
-            retTy
-      Nothing -> pure Nothing
-  let execFeats_ = Maybe.catMaybes [debuggerFeat]
+  let execFeats_ =
+        case dbgOpts of
+          Just extImpl -> [Dbg.debugger extImpl]
+          Nothing -> []
   pathSat <- pathSatFeat bak
   let execFeats =
         CS.genericToExecutionFeature pathSat
