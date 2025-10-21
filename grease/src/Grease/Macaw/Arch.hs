@@ -29,10 +29,13 @@ module Grease.Macaw.Arch (
   archRegOverrides,
   archOffsetStackPointerPostCall,
   archABIParams,
+  archPCFixup,
+  defaultPCFixup,
 ) where
 
 import Control.Lens.TH (makeLenses)
 import Data.BitVector.Sized qualified as BV
+import Data.Data (Proxy)
 import Data.IntMap (IntMap)
 import Data.Kind (Type)
 import Data.Macaw.Architecture.Info qualified as MI
@@ -253,9 +256,31 @@ data ArchContext arch = ArchContext
   -- ^ The ordered integer and pointer ABI registers for the architecture. I
   -- TODO(#260): In the future this should handle things like stack params.
   -- TODO(#261): In the future this should handle multiple calling conventions.
+  , _archPCFixup ::
+      forall sym bak solver scope st fs.
+      ( CB.IsSymInterface sym
+      , sym ~ W4.ExprBuilder scope st fs
+      , W4.OnlineSolver solver
+      , bak ~ C.OnlineBackend solver scope st fs
+      ) =>
+      bak ->
+      Ctx.Assignment (CS.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
+      MC.ArchSegmentOff arch ->
+      IO (MC.ArchSegmentOff arch)
+  -- ^ A function that fixes up the address of a function (e.g. for thumb mode based on the current register context)
   }
 
 makeLenses ''ArchContext
+
+-- | A default PC fixup function that is a noop.
+-- Requires a proxy of the arch to determine the returned address size
+defaultPCFixup ::
+  Proxy arch ->
+  bak ->
+  regs ->
+  MC.ArchSegmentOff arch ->
+  IO (MC.ArchSegmentOff arch)
+defaultPCFixup _ _ _ addr = pure addr
 
 {-
 Note [Coping with stack protection]

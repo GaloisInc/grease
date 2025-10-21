@@ -17,9 +17,13 @@ import Data.Macaw.AArch32.Symbolic.Regs qualified as ARM.Symbolic.Regs
 import Data.Macaw.ARM qualified as ARM
 import Data.Macaw.ARM.ARMReg ()
 import Data.Macaw.ARM.ARMReg qualified as ARM
+import Data.Macaw.CFG.Core qualified as MC
+import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Macaw.Symbolic.Concretize qualified as Symbolic
 import Data.Map qualified as Map
 import Data.Parameterized.Classes (ixF')
+import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
@@ -30,13 +34,20 @@ import Grease.Macaw.RegName (RegName (..))
 import Grease.Options (ExtraStackSlots)
 import Grease.Panic (panic)
 import Grease.Shape.Pointer (armStackPtrShape)
+import Lang.Crucible.Backend qualified as CB
+import Lang.Crucible.Backend.Online qualified as C
+import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.RegValue qualified as C
 import Stubs.FunctionOverride.AArch32.Linux qualified as Stubs
 import Stubs.Memory.AArch32.Linux qualified as Stubs
 import Stubs.Syscall.AArch32.Linux qualified as Stubs
 import Stubs.Syscall.Names.AArch32.Linux qualified as Stubs
+import What4.Expr qualified as W4
+import What4.Interface qualified as WI
+import What4.Protocol.Online qualified as W4
 
 type instance ArchReloc ARM.ARM = EE.ARM32_RelocationType
 
@@ -86,7 +97,37 @@ armCtx halloc mbReturnAddr stackArgSlots = do
       , _archOffsetStackPointerPostCall = pure
       , -- assumes AAPCS32 https://github.com/ARM-software/abi-aa/blob/main/aapcs32/aapcs32.rst#parameter-passing
         _archABIParams = Some.Some <$> [ARM.r0, ARM.r1, ARM.r2, ARM.r3]
+      , _archPCFixup = armArchPCFixup
       }
+
+-- | This PC fixup fixes call addresses to set the low bit of the address
+-- if the CPU is in thumb mode so that Macaw knows to disassemble the
+-- callee in thumb mode.
+armArchPCFixup ::
+  forall sym bak solver scope st fs arch.
+  ( CB.IsSymInterface sym
+  , sym ~ W4.ExprBuilder scope st fs
+  , W4.OnlineSolver solver
+  , bak ~ C.OnlineBackend solver scope st fs
+  , arch ~ ARM.ARM
+  ) =>
+  bak ->
+  Ctx.Assignment (CS.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
+  MC.ArchSegmentOff arch ->
+  IO (MC.ArchSegmentOff arch)
+armArchPCFixup bak regs origAddr = do
+  let C.RV (CLM.LLVMPointer _base off) = regs ^. ixF' ARM.Symbolic.Regs.pstateT
+  -- TODO(#391): What4 is adding direct concretize functionality.
+  -- We should replace the use of macaw here.
+  raddr <- Symbolic.resolveSymBV bak C.knownNat off
+  pure $ case WI.asBV raddr of
+    Nothing -> panic "armArchPCFixup" ["PSTATE_T should always be concrete"]
+    Just bv ->
+      if BV.testBit' 0 bv
+        then case MM.incSegmentOff origAddr 1 of
+          Nothing -> panic "armArchPCFixup" ["attempted to call last byte of segment in thumb mode"]
+          Just naddr -> naddr
+        else origAddr
 
 armRelocSupported :: EE.ARM32_RelocationType -> Maybe RelocType
 armRelocSupported EE.R_ARM_RELATIVE = Just RelativeReloc

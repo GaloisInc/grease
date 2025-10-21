@@ -24,7 +24,7 @@ import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
 import Data.Word (Word64)
-import Grease.Macaw.Arch (ArchContext (..), ArchRegs, ArchReloc)
+import Grease.Macaw.Arch (ArchContext (..), ArchRegs, ArchReloc, defaultPCFixup)
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Options (ExtraStackSlots)
 import Grease.Panic (panic)
@@ -94,6 +94,7 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
         _archRegOverrides = Map.empty
       , _archOffsetStackPointerPostCall = x64FixupStackPointer
       , _archABIParams = regList
+      , _archPCFixup = defaultPCFixup @X86.X86_64 Proxy
       }
 
 x64RelocSupported :: EE.X86_64_RelocationType -> Maybe RelocType
