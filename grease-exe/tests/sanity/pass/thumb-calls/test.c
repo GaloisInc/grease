@@ -8,4 +8,4 @@ __attribute__((target("thumb"))) int test(int *x) { return callee(x); }
 
 // arm: flags {"--address", "0x1008b"}
 // arm: go(prog)
-// arm: ok()
+// arm: uninit_stack()
