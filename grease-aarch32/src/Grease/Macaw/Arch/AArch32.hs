@@ -101,6 +101,9 @@ armCtx halloc mbReturnAddr stackArgSlots = do
       , _archPCFixup = armArchPCFixup
       }
 
+-- | This PC fixup fixes call addresses to set the low bit of the address
+-- if the CPU is in thumb mode so that Macaw knows to disassemble the
+-- callee in thumb mode.
 armArchPCFixup ::
   forall sym bak solver scope st fs arch.
   ( CB.IsSymInterface sym
