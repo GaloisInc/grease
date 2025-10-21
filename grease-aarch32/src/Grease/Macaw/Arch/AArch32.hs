@@ -29,8 +29,7 @@ import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (..))
 import Data.Word (Word32)
-import GHC.Natural (Natural)
-import Grease.Macaw.Arch (ArchContext (..), ArchReloc, defaultPCFixup)
+import Grease.Macaw.Arch (ArchContext (..), ArchReloc)
 import Grease.Macaw.Load.Relocation (RelocType (..))
 import Grease.Macaw.RegName (RegName (..))
 import Grease.Options (ExtraStackSlots)
@@ -47,7 +46,6 @@ import Stubs.FunctionOverride.AArch32.Linux qualified as Stubs
 import Stubs.Memory.AArch32.Linux qualified as Stubs
 import Stubs.Syscall.AArch32.Linux qualified as Stubs
 import Stubs.Syscall.Names.AArch32.Linux qualified as Stubs
-import System.IO (hPutStrLn, stderr)
 import What4.Expr qualified as W4
 import What4.Interface qualified as WI
 import What4.Protocol.Online qualified as W4
