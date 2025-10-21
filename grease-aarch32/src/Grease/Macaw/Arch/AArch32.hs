@@ -115,6 +115,8 @@ armArchPCFixup ::
   IO (MC.ArchSegmentOff arch)
 armArchPCFixup bak regs origAddr = do
   let C.RV (CLM.LLVMPointer _base off) = regs ^. ixF' ARM.Symbolic.Regs.pstateT
+  -- TODO(#391): What4 is adding direct concretize functionality.
+  -- We should replace the use of macaw here.
   raddr <- Symbolic.resolveSymBV bak C.knownNat off
   pure $ case WI.asBV raddr of
     Nothing -> panic "armArchPCFixup" ["PSTATE_T should always be concrete"]
