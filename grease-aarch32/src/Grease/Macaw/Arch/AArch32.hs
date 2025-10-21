@@ -22,7 +22,6 @@ import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Concretize qualified as Symbolic
 import Data.Map qualified as Map
-import Data.Maybe (fromJust)
 import Data.Parameterized.Classes (ixF')
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
