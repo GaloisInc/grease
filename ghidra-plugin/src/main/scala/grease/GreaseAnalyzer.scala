@@ -224,9 +224,9 @@ class GreaseAnalyzer
     )
 
     options.registerOption(
-      GreaseAnalyzer.USE_IMAGE_BASE_AS_LOAD_BASE_OPT,
+      GreaseAnalyzer.MAX_THREAD_OPT,
       OptionType.INT_TYPE,
-      0L,
+      0,
       null,
       "Set the maximum thread count for the GREASE worker. Default is cpu+1"
     )
