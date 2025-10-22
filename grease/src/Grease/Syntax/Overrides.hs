@@ -9,12 +9,15 @@ module Grease.Syntax.Overrides (
   checkTypedOverrideHandleCompat,
   tryBindTypedOverride,
   freshBytesOverride,
+  concBvOverride,
+  tryConcBvOverride,
 ) where
 
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.BitVector.Sized qualified as BV
 import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.Map qualified as MapF
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -22,10 +25,13 @@ import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Type.Ord (type (<=))
 import Data.Vector qualified as Vec
 import Grease.Concretize.ToConcretize qualified as ToConc
+import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
+import Lang.Crucible.Concretize qualified as Conc
 import Lang.Crucible.FunctionHandle qualified as LCF
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as LCT
+import What4.Concretize qualified as WC
 import What4.Interface qualified as WI
 
 -- | Check if a 'CS.TypedOverride' is compatible with a 'LCF.FnHandle'
@@ -49,6 +55,8 @@ tryBindTypedOverride hdl ov =
     Just (Refl, Refl) -> do
       CS.bindTypedOverride hdl ov
       pure True
+
+---------------------------------------------------------------------
 
 -- | Override for @fresh-bytes@.
 --
@@ -117,3 +125,54 @@ doFreshBytes name len =
     ToConc.addToConcretize name entry
 
     pure v
+
+---------------------------------------------------------------------
+
+-- | See if @conc-bv-*@ is compatible with the given handle.
+tryConcBvOverride ::
+  forall p sym ext bak scope st fs solver args ret w.
+  ( 1 <= w
+  , OnlineSolverAndBackend solver sym bak scope st fs
+  ) =>
+  bak ->
+  WI.NatRepr w ->
+  LCF.FnHandle args ret ->
+  Maybe (CS.Override p sym ext args ret)
+tryConcBvOverride bak w hdl = do
+  let ov = concBvOverride @p @ext bak w
+  (WI.Refl, WI.Refl) <- checkTypedOverrideHandleCompat hdl ov
+  Just (CS.runTypedOverride (LCF.handleName hdl) ov)
+
+-- | Override for @conc-bv-*@.
+--
+-- The number of bytes must be concrete. If a symbolic number is passed this
+-- function will generate an assertion failure.
+concBvOverride ::
+  forall p ext sym bak scope st fs solver w.
+  ( 1 <= w
+  , OnlineSolverAndBackend solver sym bak scope st fs
+  ) =>
+  bak ->
+  NatRepr.NatRepr w ->
+  CS.TypedOverride p sym ext (Ctx.EmptyCtx Ctx.::> LCT.BVType w) (LCT.BVType w)
+concBvOverride bak w =
+  WI.withKnownNat w (CS.typedOverride (Ctx.uncurryAssignment (concBv bak)))
+
+-- | Implementation of @conc-bv-*@ override.
+concBv ::
+  ( 1 <= w
+  , OnlineSolverAndBackend solver sym bak scope st fs
+  ) =>
+  bak ->
+  CS.RegValue' sym (LCT.BVType w) ->
+  CS.OverrideSim p sym ext r args ret (CS.RegValue sym (LCT.BVType w))
+concBv bak (CS.RV bv) = do
+  let w = WI.bvWidth bv
+  mb <- liftIO (Conc.concRegValue bak MapF.empty (LCT.BVRepr w) bv)
+  case mb of
+    Left WC.SolverUnknown ->
+      CS.overrideError (CS.GenericSimError "conc-bv-*: solver returned UNKNOWN")
+    Left WC.UnsatInitialAssumptions ->
+      CS.overrideError (CS.GenericSimError "conc-bv-*: unsat initial assumptions")
+    Right bvLit ->
+      liftIO (WI.bvLit (CB.backendGetSym bak) w bvLit)

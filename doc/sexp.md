@@ -27,8 +27,19 @@ additional types and operations, see:
 There are a few overrides that are only available in S-expression files
 (programs or overrides).
 ```
+(declare @conc-bv-8 ((bv (Bitvector 8))) (Vector (Bitvector 8)))
+(declare @conc-bv-16 ((bv (Bitvector 16))) (Vector (Bitvector 16)))
+(declare @conc-bv-32 ((bv (Bitvector 32))) (Vector (Bitvector 32)))
+(declare @conc-bv-64 ((bv (Bitvector 64))) (Vector (Bitvector 64)))
 (declare @fresh-bytes ((name (String Unicode)) (num (Bitvector w))) (Vector (Bitvector 8)))
 ```
+
+### `@conc-bv-*`
+
+These overrides request a model from the SMT solver and return the value of the
+input bitvector in the model.
+
+### `@fresh-bytes`
 
 The bytes created using `fresh-bytes` will be concretized and printed to the
 terminal if GREASE finds a possible bug.

@@ -20,9 +20,8 @@ import Grease.LLVM.SetupHook (SetupHook (SetupHook))
 import Grease.LLVM.SimulatorHooks (greaseLlvmExtImpl)
 import Grease.Options (ErrorSymbolicFunCalls)
 import Grease.Setup (SetupMem (getSetupMem))
-import Grease.Utility (printHandle)
+import Grease.Utility (OnlineSolverAndBackend, printHandle)
 import Lang.Crucible.Analysis.Postdom qualified as C
-import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.Extension (ArchWidth, LLVM)
@@ -33,14 +32,12 @@ import Lang.Crucible.LLVM.Translation qualified as Trans
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.GlobalState qualified as CS
-import What4.Expr qualified as W4
 
 initState ::
-  forall p sym bak arch m t st fs argTys retTy.
+  forall p sym bak arch m st fs argTys retTy solver scope.
   ( MonadIO m
   , MonadThrow m
-  , CB.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder t st fs
+  , OnlineSolverAndBackend solver sym bak scope st fs
   , 16 C.<= ArchWidth arch
   , ArchWidth arch ~ 64
   , CLM.HasPtrWidth (ArchWidth arch)

@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
@@ -41,6 +42,7 @@ import Grease.Overrides (CantResolveOverrideCallback (..))
 import Grease.Skip (registerSkipOverride)
 import Grease.Syntax (ParseProgramError)
 import Grease.Syntax.Overrides as SExp
+import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
@@ -204,15 +206,12 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
 
 -- | Like 'mkMacawOverrideMap', with 'builtinStubsOverrides'.
 mkMacawOverrideMapWithBuiltins ::
-  ( CB.IsSymInterface sym
-  , W4.OnlineSolver solver
+  ( OnlineSolverAndBackend solver sym bak scope st fs
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
-  , sym ~ W4.ExprBuilder scope st fs
-  , bak ~ C.OnlineBackend solver scope st fs
   , HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
@@ -232,10 +231,7 @@ mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg fs = d
 -- actually call the corresponding Macaw overrides. Treat any calls to unresolved
 -- forward declarations as though the functions were skipped.
 registerMacawSexpProgForwardDeclarations ::
-  ( CB.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder scope st fs
-  , bak ~ C.OnlineBackend solver scope st fs
-  , W4.OnlineSolver solver
+  ( OnlineSolverAndBackend solver sym bak scope st fs
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
@@ -262,10 +258,7 @@ registerMacawSexpProgForwardDeclarations bak la dl mvar errCb funOvs =
 -- actually call the corresponding Macaw overrides. Attempting to call an
 -- unresolved forward declaration will raise an error.
 registerMacawOvForwardDeclarations ::
-  ( CB.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder scope st fs
-  , bak ~ C.OnlineBackend solver scope st fs
-  , W4.OnlineSolver solver
+  ( OnlineSolverAndBackend solver sym bak scope st fs
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
   ) =>
@@ -284,10 +277,7 @@ registerMacawOvForwardDeclarations bak funOvs errCb =
 -- actually call the corresponding Macaw overrides. If a forward declaration
 -- name cannot be resolved to an override, then perform the supplied action.
 registerMacawForwardDeclarations ::
-  ( CB.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder scope st fs
-  , bak ~ C.OnlineBackend solver scope st fs
-  , W4.OnlineSolver solver
+  ( OnlineSolverAndBackend solver sym bak scope st fs
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
   ) =>
@@ -308,10 +298,7 @@ registerMacawForwardDeclarations bak funOvs errCb fwdDecs = do
 -- actually call the corresponding Macaw override. If the forward declaration
 -- name cannot be resolved to an override, then perform the supplied action.
 registerMacawForwardDeclaration ::
-  ( CB.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder scope st fs
-  , bak ~ C.OnlineBackend solver scope st fs
-  , W4.OnlineSolver solver
+  ( OnlineSolverAndBackend solver sym bak scope st fs
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
   ) =>
@@ -337,10 +324,7 @@ registerMacawForwardDeclaration bak funOvs cannotResolve decName hdl =
 -- | Lookup an override for a function handle from a forward declaration.
 lookupMacawForwardDeclarationOverride ::
   forall p sym bak arch scope st fs solver args ret.
-  ( CB.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder scope st fs
-  , bak ~ C.OnlineBackend solver scope st fs
-  , W4.OnlineSolver solver
+  ( OnlineSolverAndBackend solver sym bak scope st fs
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
   ) =>
@@ -354,7 +338,7 @@ lookupMacawForwardDeclarationOverride ::
   Maybe (CS.Override p sym (Symbolic.MacawExt arch) args ret)
 lookupMacawForwardDeclarationOverride bak funOvs decName hdl =
   case Map.lookup decName funOvs of
-    Nothing ->
+    Nothing -> do
       -- These overrides are *only* callable from S-expression files with
       -- forward-declarations of them.
       case decName of
@@ -362,6 +346,10 @@ lookupMacawForwardDeclarationOverride bak funOvs decName hdl =
           let ov = SExp.freshBytesOverride @_ @p @sym @(Symbolic.MacawExt arch) ?ptrWidth
           (C.Refl, C.Refl) <- SExp.checkTypedOverrideHandleCompat hdl ov
           Just (CS.runTypedOverride (C.handleName hdl) ov)
+        "conc-bv-8" -> tryConcBvOverride bak (C.knownNat @8) hdl
+        "conc-bv-16" -> tryConcBvOverride bak (C.knownNat @16) hdl
+        "conc-bv-32" -> tryConcBvOverride bak (C.knownNat @32) hdl
+        "conc-bv-64" -> tryConcBvOverride bak (C.knownNat @64) hdl
         _ -> Nothing
     Just mso -> do
       let someForwardedOv = msoSomeFunctionOverride mso
