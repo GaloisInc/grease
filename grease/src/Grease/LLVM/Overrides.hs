@@ -32,9 +32,8 @@ import Grease.LLVM.Overrides.SExp (LLVMSExpOverride (..))
 import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.Overrides (CantResolveOverrideCallback (..))
 import Grease.Skip (declSkipOverride, registerSkipOverride)
-import Grease.Syntax.Overrides (freshBytesOverride, tryBindTypedOverride)
-import Grease.Utility (llvmOverrideName)
-import Lang.Crucible.Backend qualified as CB
+import Grease.Syntax.Overrides (concBvOverride, freshBytesOverride, tryBindTypedOverride)
+import Grease.Utility (OnlineSolverAndBackend, llvmOverrideName)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout as CLLVM
@@ -111,13 +110,13 @@ forwardDeclDecls m =
 --
 -- * User-defined overrides from S-expressions (see 'loadOverrides')
 registerLLVMOverrides ::
-  forall sym bak arch p rtp as r.
-  ( CB.IsSymBackend sym bak
+  forall sym bak arch p rtp as r scope st fs solver.
+  ( CLM.HasPtrWidth 64
   , CLM.HasLLVMAnn sym
-  , CLM.HasPtrWidth 64
   , ToConc.HasToConcretize p
-  , ?lc :: TypeContext
   , ?memOpts :: CLM.MemOptions
+  , ?lc :: TypeContext
+  , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
@@ -185,7 +184,7 @@ registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls errCb = do
   -- so as to ensure that we get the dependencies correct.
   Foldable.for_ userOvs $ \(_, lso) -> do
     let fwdDecs = lsoForwardDeclarations lso
-    registerLLVMForwardDeclarations mvar allOvs errCb fwdDecs
+    registerLLVMForwardDeclarations bak mvar allOvs errCb fwdDecs
   pure allOvs
  where
   registerOv ::
@@ -203,13 +202,13 @@ registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls errCb = do
 --
 -- * User-defined overrides from S-expressions (see 'loadOverrides')
 registerLLVMSexpOverrides ::
-  forall sym bak arch p rtp as r.
-  ( CB.IsSymBackend sym bak
+  forall sym bak arch p rtp as r scope st fs solver.
+  ( CLM.HasPtrWidth 64
   , CLM.HasLLVMAnn sym
-  , CLM.HasPtrWidth 64
   , ToConc.HasToConcretize p
-  , ?lc :: TypeContext
   , ?memOpts :: CLM.MemOptions
+  , ?lc :: TypeContext
+  , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
@@ -237,13 +236,13 @@ registerLLVMSexpOverrides la builtinOvs sexpOvs bak llvmCtx fs prog errCb = do
 --
 -- * User-defined overrides from S-expressions (see 'loadOverrides')
 registerLLVMModuleOverrides ::
-  forall sym bak arch p rtp as r.
-  ( CB.IsSymBackend sym bak
+  forall sym bak arch p rtp as r scope st fs solver.
+  ( CLM.HasPtrWidth 64
   , CLM.HasLLVMAnn sym
-  , CLM.HasPtrWidth 64
   , ToConc.HasToConcretize p
-  , ?lc :: TypeContext
   , ?memOpts :: CLM.MemOptions
+  , ?lc :: TypeContext
+  , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
@@ -266,13 +265,15 @@ registerLLVMModuleOverrides la builtinOvs sexpOvs bak llvmCtx fs llMod errCb = d
 -- to call the corresponding LLVM overrides. Treat any calls to unresolved
 -- forward declarations as though the functions were skipped.
 registerLLVMSexpProgForwardDeclarations ::
-  ( CB.IsSymInterface sym
+  forall sym bak p rtp as r scope st fs solver.
+  ( CLM.HasPtrWidth 64
   , CLM.HasLLVMAnn sym
-  , CLM.HasPtrWidth 64
   , ToConc.HasToConcretize p
   , ?memOpts :: CLM.MemOptions
+  , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   GreaseLogAction ->
+  bak ->
   CLLVM.DataLayout ->
   C.GlobalVar CLM.Mem ->
   -- | The map of public function names to their overrides.
@@ -282,8 +283,8 @@ registerLLVMSexpProgForwardDeclarations ::
   -- | The map of forward declaration names to their handles.
   Map.Map WFN.FunctionName C.SomeHandle ->
   CS.OverrideSim p sym CLLVM.LLVM rtp as r ()
-registerLLVMSexpProgForwardDeclarations la dl mvar funOvs errCb =
-  registerLLVMForwardDeclarations mvar funOvs $
+registerLLVMSexpProgForwardDeclarations la bak dl mvar funOvs errCb =
+  registerLLVMForwardDeclarations bak mvar funOvs $
     CantResolveOverrideCallback $
       registerSkipOverride la dl mvar errCb
 
@@ -291,12 +292,13 @@ registerLLVMSexpProgForwardDeclarations la dl mvar funOvs errCb =
 -- actually call the corresponding LLVM overrides. If a forward declaration
 -- name cannot be resolved to an override, then perform the supplied action.
 registerLLVMForwardDeclarations ::
-  ( CB.IsSymInterface sym
-  , CLM.HasPtrWidth w
+  ( CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
   , ToConc.HasToConcretize p
   , ?memOpts :: CLM.MemOptions
+  , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
+  bak ->
   C.GlobalVar CLM.Mem ->
   -- | The map of public function names to their overrides.
   Map.Map WFN.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM) ->
@@ -305,7 +307,7 @@ registerLLVMForwardDeclarations ::
   -- | The map of forward declaration names to their handles.
   Map.Map WFN.FunctionName C.SomeHandle ->
   CS.OverrideSim p sym CLLVM.LLVM rtp as r ()
-registerLLVMForwardDeclarations mvar funOvs errCb fwdDecs = do
+registerLLVMForwardDeclarations bak mvar funOvs errCb fwdDecs = do
   let CantResolveOverrideCallback cannotResolve = errCb
   Foldable.for_ (Map.toList fwdDecs) $ \(fwdDecName, C.SomeHandle hdl) ->
     case Map.lookup fwdDecName funOvs of
@@ -315,6 +317,18 @@ registerLLVMForwardDeclarations mvar funOvs errCb fwdDecs = do
         -- These string-manipulating overrides are *only* callable from
         -- S-expression files with forward-declarations of them.
         case fwdDecName of
+          "conc-bv-8" -> do
+            ok <- tryBindTypedOverride hdl (concBvOverride bak (C.knownNat @8))
+            unless ok (cannotResolve fwdDecName hdl)
+          "conc-bv-16" -> do
+            ok <- tryBindTypedOverride hdl (concBvOverride bak (C.knownNat @16))
+            unless ok (cannotResolve fwdDecName hdl)
+          "conc-bv-32" -> do
+            ok <- tryBindTypedOverride hdl (concBvOverride bak (C.knownNat @32))
+            unless ok (cannotResolve fwdDecName hdl)
+          "conc-bv-64" -> do
+            ok <- tryBindTypedOverride hdl (concBvOverride bak (C.knownNat @64))
+            unless ok (cannotResolve fwdDecName hdl)
           "fresh-bytes" -> do
             ok <- tryBindTypedOverride hdl (freshBytesOverride ?ptrWidth)
             unless ok (cannotResolve fwdDecName hdl)

@@ -24,6 +24,7 @@ import Grease.LLVM.Overrides.Builtin (builtinLLVMOverrides)
 import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.LLVM.SetupHook.Diagnostic qualified as Diag
 import Grease.Overrides (CantResolveOverrideCallback (..))
+import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
@@ -53,7 +54,7 @@ doLog la diag = LJ.writeLog la (LLVMSetupHookDiagnostic diag)
 -- c.f. 'Grease.Macaw.SetupHook.SetupHook'
 newtype SetupHook sym arch
   = SetupHook
-      ( forall p bak rtp a r.
+      ( forall p bak rtp a r scope st fs solver.
         ( CB.IsSymBackend sym bak
         , ArchWidth arch ~ 64
         , CLM.HasPtrWidth (ArchWidth arch)
@@ -62,6 +63,7 @@ newtype SetupHook sym arch
         , ?lc :: TCtx.TypeContext
         , ?memOpts :: CLM.MemOptions
         , ?intrinsicsOpts :: CLLVM.IntrinsicsOptions
+        , OnlineSolverAndBackend solver sym bak scope st fs
         ) =>
         bak ->
         C.HandleAllocator ->
@@ -91,14 +93,14 @@ syntaxSetupHook la ovs prog cfgs errCb =
     -- In addition to binding function handles for the user overrides,
     -- we must also redirect function handles resulting from parsing
     -- forward declarations (`declare`) to actually call the overrides.
-    GLO.registerLLVMSexpProgForwardDeclarations la dl mvar funOvs errCb (CSyn.parsedProgForwardDecs prog)
+    GLO.registerLLVMSexpProgForwardDeclarations la bak dl mvar funOvs errCb (CSyn.parsedProgForwardDecs prog)
 
     -- If a startup override exists and it contains forward declarations,
     -- then we redirect the function handles to actually call the respective
     -- overrides.
     Monad.forM_ (Map.elems cfgs) $ \entrypointCfgs ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-        GLO.registerLLVMSexpProgForwardDeclarations la dl mvar funOvs errCb startupOvFwdDecs
+        GLO.registerLLVMSexpProgForwardDeclarations la bak dl mvar funOvs errCb startupOvFwdDecs
 
     -- Register defined functions. If there is a user override of the same
     -- name, use the override's definition instead so that it takes
@@ -144,4 +146,4 @@ moduleSetupHook la ovs trans cfgs errCb =
     -- overrides.
     Monad.forM_ (Map.elems cfgs) $ \entrypointCfgs ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-        GLO.registerLLVMSexpProgForwardDeclarations la dl mvar funOvs errCb startupOvFwdDecs
+        GLO.registerLLVMSexpProgForwardDeclarations la bak dl mvar funOvs errCb startupOvFwdDecs
