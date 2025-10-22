@@ -21,5 +21,5 @@ runs:
             --output ~/ghidra.zip \
             https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.4.2_build/ghidra_11.4.2_PUBLIC_20250826.zip
         cd ~/ && unzip -x ghidra.zip
-        echo "GHIDRA_INSTALL_DIR=$(realpath ~/)/ghidra_11.4_PUBLIC"
-        echo "GHIDRA_INSTALL_DIR=$(realpath ~/)/ghidra_11.4_PUBLIC" >> $GITHUB_ENV      
+        echo "GHIDRA_INSTALL_DIR=$(realpath ~/)/ghidra_11.4.2_PUBLIC"
+        echo "GHIDRA_INSTALL_DIR=$(realpath ~/)/ghidra_11.4.2_PUBLIC" >> $GITHUB_ENV      
