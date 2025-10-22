@@ -26,6 +26,7 @@ import ghidra.util.Msg
 import scala.concurrent.duration._
 import ghidra.app.services.AnalysisPriority
 import ghidra.program.model.listing.CommentType
+import generic.concurrent.GThreadPool
 
 object GreaseBackgroundCmd {
   val GREASE_BOOKMARK_TYPE = "GREASE"
@@ -60,7 +61,8 @@ class GreaseBackgroundCmd(
     val entrypoints: AddressSetView,
     timeout: Option[FiniteDuration],
     loadBase: Option[Long],
-    rawMode: Boolean
+    rawMode: Boolean,
+    maxThread: Option[Int]
 ) extends BackgroundCommand[Program] {
 
   override def applyTo(prog: Program, monitor: TaskMonitor): Boolean = {
@@ -110,12 +112,13 @@ class GreaseBackgroundCmd(
       }
     }
 
-    val pool = AutoAnalysisManager.getSharedAnalsysThreadPool()
+    val pool = GThreadPool.getPrivateThreadPool("GREASE Analyzer")
+    maxThread.foreach(pool.setMaxThreadCount(_))
     val queue = ConcurrentGraphQ(runnable, depGraph, pool, monitor)
     monitor.setMessage("Running grease")
     monitor.initialize(depGraph.size())
     queue.execute()
-
+    pool.shutdownNow()
     true
   }
 
@@ -127,6 +130,7 @@ object GreaseAnalyzer {
   val RAW_MODE_OPT: String = "Raw mode"
   val LOAD_BASE_OPT: String = "Load base"
   val USE_IMAGE_BASE_AS_LOAD_BASE_OPT: String = "Use image base as load base"
+  val MAX_THREAD_OPT: String = "Max thread count"
 
   def getOption[T](options: Options, optName: String): Option[T] = {
     Option(options.getObject(optName, null))
@@ -153,6 +157,7 @@ class GreaseAnalyzer
   var shouldLoadRaw = false
   var useImageBaseAsLoadBase = true
   val supportedProcs: Set[String] = Set("ARM", "PowerPC", "x86")
+  var maxThread: Option[Int] = None
 
   setSupportsOneTimeAnalysis()
 
@@ -180,6 +185,9 @@ class GreaseAnalyzer
     useImageBaseAsLoadBase = GreaseAnalyzer
       .getOption[Boolean](x, GreaseAnalyzer.USE_IMAGE_BASE_AS_LOAD_BASE_OPT)
       .getOrElse(true)
+    maxThread = GreaseAnalyzer
+      .getOption[Int](x, GreaseAnalyzer.MAX_THREAD_OPT)
+      .filter(t => t != 0)
   }
 
   override def registerOptions(options: Options, program: Program): Unit = {
@@ -214,6 +222,14 @@ class GreaseAnalyzer
       null,
       "Uses the image base of this Ghidra binary as the load base when in raw mode (this is the default, disable to use custom image base)"
     )
+
+    options.registerOption(
+      GreaseAnalyzer.USE_IMAGE_BASE_AS_LOAD_BASE_OPT,
+      OptionType.INT_TYPE,
+      0L,
+      null,
+      "Set the maximum thread count for the GREASE worker. Default is cpu+1"
+    )
   }
 
   @throws(classOf[CancelledException])
@@ -223,7 +239,13 @@ class GreaseAnalyzer
       monitor: TaskMonitor,
       log: MessageLog
   ): Boolean = {
-    GreaseBackgroundCmd(set, timeoutDuration, loadBase, shouldLoadRaw)
+    GreaseBackgroundCmd(
+      set,
+      timeoutDuration,
+      loadBase,
+      shouldLoadRaw,
+      maxThread
+    )
       .applyTo(program, monitor)
     true
   }
