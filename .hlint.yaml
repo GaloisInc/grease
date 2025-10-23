@@ -10,6 +10,28 @@
 - error: { name: "Use unless" }
 - error: { name: "Use when" }
 
+# See doc/dev/errors.md
+- error:
+    name: Use Either
+    lhs: throw
+    rhs: Left (MyErrorType relevantData)
+- error:
+    name: Use panic
+    lhs: 'fromJust'
+    rhs: 'panic "functionName" ["Why this is impossible", show relevantData]'
+- error:
+    name: Use panic
+    lhs: 'error'
+    rhs: 'panic "functionName" ["Why this is impossible", show relevantData]'
+- error:
+    name: Use panic
+    lhs: 'Data.List.head'
+    rhs: 'panic "functionName" ["Why this is impossible", show relevantData]'
+- error:
+    name: Use panic
+    lhs: 'undefined'
+    rhs: 'panic "functionName" ["Why this is impossible", show relevantData]'
+
 - error:
     name: Use PP.viaShow
     lhs: "Prettyprinter.pretty (show x)"

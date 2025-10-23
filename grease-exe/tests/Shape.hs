@@ -3,6 +3,9 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
 
+-- `error` is fine in tests
+{- HLINT ignore "Use panic" -}
+
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>

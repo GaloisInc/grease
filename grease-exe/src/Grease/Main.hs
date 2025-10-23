@@ -2240,8 +2240,7 @@ logResults la (Results results) =
 -- about them.
 --
 -- This is part of an overall error-handling strategy that involves avoiding
--- uncaught exceptions. This overall strategy has not yet been documented
--- (TODO(#411)).
+-- uncaught exceptions. See @doc/dev/errors.md@.
 withTopLevelExceptionHandler :: GreaseLogAction -> IO a -> IO a
 withTopLevelExceptionHandler la act =
   X.catches
