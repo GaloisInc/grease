@@ -31,7 +31,12 @@ llvmType =
     C.CharRepr{} -> Nothing
     C.BVRepr w -> Just (intType w)
     C.ComplexRealRepr{} -> Nothing
-    C.FloatRepr{} -> Nothing -- TODO?
+    C.FloatRepr C.HalfFloatRepr -> Just (L.PrimType (L.FloatType L.Half))
+    C.FloatRepr C.SingleFloatRepr -> Just (L.PrimType (L.FloatType L.Float))
+    C.FloatRepr C.DoubleFloatRepr -> Just (L.PrimType (L.FloatType L.Double))
+    C.FloatRepr C.X86_80FloatRepr -> Just (L.PrimType (L.FloatType L.X86_fp80))
+    C.FloatRepr C.DoubleDoubleFloatRepr -> Nothing
+    C.FloatRepr C.QuadFloatRepr -> Nothing
     C.FunctionHandleRepr{} -> Nothing
     C.IEEEFloatRepr{} -> Nothing -- TODO?
     C.IntegerRepr{} -> Nothing
