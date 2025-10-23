@@ -5,6 +5,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
 
+-- TODO(#438): Remove calls to `error`
+{- HLINT ignore "Use panic" -}
+
 -- | Overrides for network-related functions.
 module Grease.Macaw.Overrides.Networking (
   networkOverrides,

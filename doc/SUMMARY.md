@@ -32,6 +32,7 @@
 # Developer documentation
 
 - [Development](dev/dev.md)
+- [Error handling](dev/errors.md)
 - [Fancy Haskell idioms](dev/haskell-idioms.md)
 - [On-boarding](dev/on-boarding.md)
 - [Ghidra Script Development with Type Stubs](dev/ghidra-script-dev.md)

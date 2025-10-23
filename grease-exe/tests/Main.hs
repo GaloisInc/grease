@@ -3,6 +3,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+-- `error` is fine in tests
+{- HLINT ignore "Use panic" -}
+
 -- See @doc/dev.md@ for a description of how tests are organized
 
 -- |

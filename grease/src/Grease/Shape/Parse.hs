@@ -48,7 +48,6 @@ import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Traversable qualified as Traversable
-import Data.Tuple qualified as Tuple
 import Data.Type.Equality (type (:~:) (Refl))
 import Data.Void (Void)
 import Data.Word (Word8)
@@ -304,7 +303,16 @@ parseInitRle = parseRle (MP.single 'X')
 
 -- | Helper, not exported. Requires actual hex 'Char's.
 hexCharsToWord8 :: Char -> Char -> Word8
-hexCharsToWord8 c1 c2 = Tuple.fst (List.head (Numeric.readHex (c1 : c2 : [])))
+hexCharsToWord8 c1 c2 =
+  case Numeric.readHex (c1 : c2 : []) of
+    ((i, "") : []) -> i
+    r ->
+      panic
+        "hexCharsToWord8"
+        [ "Unexpected result from `readHex`:"
+        , "Input: " ++ show (c1 : c2 : [])
+        , "Output: " ++ show r
+        ]
 
 parseExactly :: Parser (Seq Word8)
 parseExactly = mconcat <$> trySepBy1 parseExactlyByte memShapeSep

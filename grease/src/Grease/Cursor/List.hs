@@ -15,6 +15,7 @@ module Grease.Cursor.List (
 import Data.Parameterized.Axiom (unsafeAxiom)
 import Data.Parameterized.List (List (..))
 import Data.Type.Equality ((:~:) (Refl))
+import Grease.Panic (panic)
 
 type family Last (ts :: [k]) :: k where
   Last '[t] = t
@@ -35,11 +36,13 @@ lastSnoc _t _ts = unsafeAxiom
 
 -- Below is some justifiction for the above axioms. Not meant to be exported.
 
--- Can't figure out how to eliminate this one, but it's absurd from the
--- definition of Last - there is no pattern match on the empty list, and it's a
--- closed type family.
 notLast :: Last '[] ~ t => a
-notLast = undefined
+notLast =
+  panic
+    "notLast"
+    [ "Impossible: From the definition of `Last`"
+    , "There is no pattern match on the empty list."
+    ]
 
 -- Termination: Structurally shrinking second parameter
 _lastCons :: Last ts ~ s => proxy t -> List proxy ts -> Last (t ': ts) :~: s

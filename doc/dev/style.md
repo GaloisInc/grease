@@ -13,6 +13,10 @@ tooling such as GHC warnings, hlint, or ad-hoc scripts.
 This is a description of practices we have found useful in the context of
 GREASE, not a recommendation or prescription for other projects or contexts.
 
+## Error handling
+
+See [Error handling](errors.md).
+
 ## Exports
 
 Every module has an explicit [export list].
