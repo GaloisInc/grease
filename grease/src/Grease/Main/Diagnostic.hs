@@ -43,6 +43,8 @@ data Diagnostic where
     Diagnostic
   BitcodeParseWarnings ::
     Seq ParseWarning -> Diagnostic
+  DebuggerOutput ::
+    PP.Doc Void -> Diagnostic
   Exception ::
     PP.Doc Void -> Diagnostic
   LoadedPrecondition ::
@@ -97,6 +99,7 @@ instance PP.Pretty Diagnostic where
           , PP.pretty entry
           ]
       BitcodeParseWarnings warns -> PP.viaShow (ppParseWarnings warns)
+      DebuggerOutput out -> fmap absurd out
       Exception err ->
         "Exception:" PP.<+> fmap absurd err
       FinishedAnalyzingEntrypoint entry duration ->
@@ -150,6 +153,7 @@ severity =
     AnalyzedEntrypoint{} -> Info
     AnalyzingEntrypoint{} -> Info
     BitcodeParseWarnings{} -> Warn
+    DebuggerOutput{} -> Info
     Exception{} -> Error
     FinishedAnalyzingEntrypoint{} -> Debug
     LoadedPrecondition{} -> Debug
