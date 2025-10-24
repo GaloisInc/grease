@@ -18,6 +18,7 @@ module Grease.Options (
   SkipInvalidCallAddrs (..),
   SkipUnsupportedRelocs (..),
   BoundsOpts (..),
+  DebugOpts (..),
   FsOpts (..),
   InitialPreconditionOpts (..),
   SimOpts (..),
@@ -131,6 +132,16 @@ data BoundsOpts
   }
   deriving Show
 
+-- | Options related to the debugger
+data DebugOpts
+  = DebugOpts
+  { debug :: Bool
+  -- ^ Start the debugger at the beginning of simulation
+  , debugCmds :: [Text]
+  -- ^ Commands to prepend to the debugger inputs (like GDB's @-iex@)
+  }
+  deriving Show
+
 data FsOpts
   = FsOpts
   { fsRoot :: Maybe FilePath
@@ -160,7 +171,7 @@ data InitialPreconditionOpts
 -- | Options that affect simulation
 data SimOpts
   = SimOpts
-  { simDebug :: Bool
+  { simDebugOpts :: DebugOpts
   -- ^ Run the debugger execution feature
   , simEntryPoints :: [Entrypoint]
   -- ^ Names or address of function to simulate

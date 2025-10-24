@@ -12,6 +12,7 @@ module Grease.Cli (
   -- * Individual option parsers
   addrOverridesParser,
   boundsOptsParser,
+  debugOptsParser,
   fsOptsParser,
   fsRootParser,
   globalsParser,
@@ -223,6 +224,21 @@ addrOverridesParser =
           <> Opt.help "address overrides, in Crucible S-expression syntax"
       )
 
+debugOptsParser :: Opt.Parser GO.DebugOpts
+debugOptsParser = Opt.parserOptionGroup "Debugger options" $ do
+  debug <- Opt.switch (Opt.long "debug" <> Opt.help "run the debugger")
+  debugCmds <-
+    Opt.many
+      ( Opt.strOption
+          ( mconcat
+              [ Opt.long "debug-cmd"
+              , Opt.metavar "CMD"
+              , Opt.help "Command to pass to the debugger"
+              ]
+          )
+      )
+  pure GO.DebugOpts{..}
+
 fsOptsParser :: Opt.Parser GO.FsOpts
 fsOptsParser = Opt.parserOptionGroup "Symbolic I/O options" $ do
   fsRoot <- fsRootParser
@@ -332,7 +348,7 @@ symStdinParser =
 simOpts :: Opt.Parser GO.SimOpts
 simOpts = do
   simProgPath <- Opt.strArgument (Opt.help "filename of binary" <> Opt.metavar "FILENAME")
-  simDebug <- Opt.switch (Opt.long "debug" <> Opt.help "run the debugger")
+  simDebugOpts <- debugOptsParser
   simEntryPoints <- Opt.many entrypointParser
   simMutGlobs <- globalsParser
   simReqs <-
@@ -447,7 +463,7 @@ processSimOpts sOpts =
         (GO.simBoundsOpts sOpts)
           { GO.simTimeout =
               -- TODO(#37): Fully disable timeout if --debug is passed
-              if GO.simDebug sOpts
+              if GO.debug (GO.simDebugOpts sOpts)
                 then secondsFromInt maxBound
                 else GO.simTimeout (GO.simBoundsOpts sOpts)
           }

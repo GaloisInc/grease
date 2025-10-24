@@ -144,6 +144,7 @@ import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, e
 import Grease.Main.Diagnostic qualified as Diag
 import Grease.MustFail qualified as MustFail
 import Grease.Options
+import Grease.Options qualified as GO
 import Grease.Output
 import Grease.Panic (Grease, panic)
 import Grease.Pretty (prettyPtrFnMap)
@@ -681,7 +682,7 @@ macawExecFeats ::
 macawExecFeats la bak archCtx macawCfgConfig simOpts = do
   profFeatLog <- traverse greaseProfilerFeature (simProfileTo simOpts)
   let dbgOpts =
-        if simDebug simOpts
+        if GO.debug (GO.simDebugOpts simOpts)
           then
             let mbElf = snd . Elf.getElf <$> mcElf macawCfgConfig
                 extImpl = MDebug.macawExtImpl prettyPtrFnMap (archCtx ^. archVals) mbElf
@@ -705,11 +706,32 @@ llvmExecFeats ::
 llvmExecFeats la bak simOpts memVar = do
   profFeatLog <- traverse greaseProfilerFeature (simProfileTo simOpts)
   let dbgOpts =
-        if simDebug simOpts
+        if GO.debug (GO.simDebugOpts simOpts)
           then Just (LDebug.llvmExtImpl memVar)
           else Nothing
   feats <- greaseExecFeats la bak dbgOpts
   pure (feats, snd <$> profFeatLog)
+
+initDebugger ::
+  WI.IsExpr (WI.SymExpr sym) =>
+  PP.Pretty cExt =>
+  PP.Pretty (Dbg.ResponseExt cExt) =>
+  GreaseLogAction ->
+  GO.DebugOpts ->
+  Dbg.CommandExt cExt ->
+  C.TypeRepr t ->
+  IO (Dbg.Context cExt sym ext t)
+initDebugger la dbgOpts cExt t = do
+  inps_ <- Dbg.defaultDebuggerInputs cExt
+  stmts <-
+    forM (GO.debugCmds dbgOpts) $ \cmdTxt ->
+      case Dbg.parse cExt cmdTxt of
+        Left err -> userError la (PP.pretty (Dbg.renderParseError err))
+        Right stmt -> pure stmt
+  inps <- Dbg.prepend stmts inps_
+  let pp = (PP.<> "\n") . PP.pretty
+  let outps = Dbg.Outputs (doLog la . Diag.DebuggerOutput . pp)
+  Dbg.initCtx cExt prettyPtrFnMap inps outps t
 
 macawMemConfig ::
   ( Symbolic.SymArchConstraints arch
@@ -853,15 +875,10 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable s
   -- use an empty map instead. (See gitlab#118 for more discussion on this point.)
   let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` ssaCfgHdl) mbCfgAddr
 
+  let dbgOpts = GO.simDebugOpts simOpts
   let dbgCmdExt = MDebug.macawCommandExt (archCtx ^. archVals)
-  dbgInputs <- Dbg.defaultDebuggerInputs dbgCmdExt
-  dbgCtx <-
-    Dbg.initCtx
-      dbgCmdExt
-      prettyPtrFnMap
-      dbgInputs
-      Dbg.defaultDebuggerOutputs
-      (regStructRepr archCtx)
+  dbgCtx <- initDebugger la dbgOpts dbgCmdExt (regStructRepr archCtx)
+
   let personality =
         emptyGreaseSimulatorState toConcVar dbgCtx
           & discoveredFnHandles .~ discoveredHdls
@@ -1607,15 +1624,9 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
     let opts = simInitPrecondOpts simOpts
      in llvmInitArgShapes la opts llvmMod argNames cfg
 
+  let dbgOpts = GO.simDebugOpts simOpts
   let dbgCmdExt = LDebug.llvmCommandExt
-  dbgInputs <- Dbg.defaultDebuggerInputs dbgCmdExt
-  dbgCtx <-
-    Dbg.initCtx
-      dbgCmdExt
-      prettyPtrFnMap
-      dbgInputs
-      Dbg.defaultDebuggerOutputs
-      (C.cfgReturnType cfg)
+  dbgCtx <- initDebugger la dbgOpts dbgCmdExt (C.cfgReturnType cfg)
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   let bounds = simBoundsOpts simOpts
