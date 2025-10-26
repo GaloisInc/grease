@@ -262,10 +262,21 @@ data ErrorCallbacks sym t
 -- and the Macaw callback is intended to be passed to 'processMacawAssert'.
 -- In this configuration, Macaw and Crucible-LLVM will record errors
 -- to the 'errorMap' as an 'ErrorDescription'
-buildErrMaps :: sym ~ W4.ExprBuilder t st fs => Maybe (IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym))) -> IO (ErrorCallbacks sym t)
+buildErrMaps ::
+  sym ~ W4.ExprBuilder t st fs =>
+  Maybe
+    ( IORef
+        ( Map.Map
+            (Nonce t C.BaseBoolType)
+            (ErrorDescription sym)
+        )
+    ) ->
+  IO (ErrorCallbacks sym t)
 buildErrMaps mbBBMap = do
   bbMapRef <- Maybe.maybe (newIORef Map.empty) pure mbBBMap
-  let recordLLVMAnnotation callStack (Mem.BoolAnn ann) bb = modifyIORef bbMapRef $ Map.insert ann (CrucibleLLVMError bb callStack)
+  let recordLLVMAnnotation callStack (Mem.BoolAnn ann) bb =
+        modifyIORef bbMapRef $
+          Map.insert ann (CrucibleLLVMError bb callStack)
   let processMacawAssert sym p err = do
         (ann, p') <- WI.annotateTerm sym p
         _ <- modifyIORef bbMapRef $ Map.insert ann (MacawMemError err)
