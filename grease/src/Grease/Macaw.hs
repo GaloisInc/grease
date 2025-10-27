@@ -450,7 +450,7 @@ memConfigWithHandles ::
 memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddress errCb' memCfg =
   memCfg
     { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddress lfhd
-    , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd
+    , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch (ResolveCall.stubsSyscallHandleBuilder syscallOvs) errorSymbolicSyscalls lsd
     }
  where
   lfhd = ResolveCall.defaultLookupFunctionHandleDispatch bak logAction halloc arch memory funOvs errCb'

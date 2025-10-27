@@ -22,6 +22,7 @@ module Grease.Macaw.ResolveCall (
 
   -- * Helper functions for looking up handles
   discoverFuncAddr,
+  stubsSyscallHandleBuilder,
 ) where
 
 import Control.Applicative (pure)
@@ -81,7 +82,7 @@ import What4.Expr qualified as W4
 import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 import What4.Protocol.Online qualified as W4
-import Prelude (Integer, fromIntegral, otherwise, toInteger, (++))
+import Prelude (Integer, fromIntegral, otherwise, toInteger, undefined, (++))
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (ResolveCallDiagnostic diag)
@@ -497,6 +498,42 @@ data LookupSyscallResult p sym arch atps rtps where
     Stubs.SomeSyscall p sym (Symbolic.MacawExt arch) ->
     LookupSyscallResult p sym arch atps rtps
 
+newtype SyscallHandleBuilder p sym arch
+  = SyscallHandleBuilder
+      ( forall atps rtps rtp blocks r ctx.
+        ArchContext arch ->
+        Int ->
+        Ctx.Assignment C.TypeRepr atps ->
+        Ctx.Assignment C.TypeRepr rtps ->
+        CS.CrucibleState
+          p
+          sym
+          (Symbolic.MacawExt arch)
+          rtp
+          blocks
+          r
+          ctx ->
+        LookupSyscallResult p sym arch atps rtps
+      )
+
+stubsSyscallHandleBuilder ::
+  Map.Map
+    WFN.FunctionName
+    (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
+  SyscallHandleBuilder p sym arch
+stubsSyscallHandleBuilder syscallOvs =
+  SyscallHandleBuilder $ \arch syscallNum _ _ _ ->
+    case IntMap.lookup syscallNum (arch ^. archSyscallCodeMapping) of
+      Nothing ->
+        SkippedSyscall $ UnknownSyscallNumber syscallNum
+      Just syscallName ->
+        let syscallFnName = WFN.functionNameFromText syscallName
+         in case Map.lookup syscallFnName syscallOvs of
+              Just someSyscall ->
+                NewSyscall syscallName syscallNum someSyscall
+              Nothing ->
+                SkippedSyscall $ SyscallWithoutOverride syscallName syscallNum
+
 -- | Attempt to look up a syscall override.
 --
 -- The behavior of this function is documented in @doc/syscalls.md@.
@@ -506,17 +543,14 @@ lookupSyscallResult ::
   ) =>
   bak ->
   ArchContext arch ->
-  -- | Map of names of overridden syscalls to their implementations
-  Map.Map
-    WFN.FunctionName
-    (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
+  SyscallHandleBuilder p sym arch ->
   ErrorSymbolicSyscalls ->
   Ctx.Assignment C.TypeRepr atps ->
   Ctx.Assignment C.TypeRepr rtps ->
   CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
   CS.RegEntry sym (C.StructType atps) ->
   IO (LookupSyscallResult p sym arch atps rtps)
-lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs = do
+lookupSyscallResult bak arch (SyscallHandleBuilder syscallOvs) errorSymbolicSyscalls atps rtps st regs = do
   symSyscallBV <- (arch ^. archSyscallNumberRegister) bak atps regs
   case WI.asBV (CS.regValue symSyscallBV) of
     Nothing ->
@@ -529,21 +563,11 @@ lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs 
         else pure $ SkippedSyscall SymbolicSyscallNumber
     Just syscallBV ->
       let syscallNum = fromIntegral @Integer @Int $ BV.asUnsigned syscallBV
-       in case IntMap.lookup syscallNum (arch ^. archSyscallCodeMapping) of
-            Nothing ->
-              pure $ SkippedSyscall $ UnknownSyscallNumber syscallNum
-            Just syscallName ->
-              let syscallNumRepr = Stubs.SyscallNumRepr atps rtps (toInteger syscallNum)
-               in case MapF.lookup syscallNumRepr (st ^. stateSyscallHandles) of
-                    Just syscallFnHandle ->
-                      pure $ CachedSyscallFnHandle syscallFnHandle
-                    Nothing ->
-                      let syscallFnName = WFN.functionNameFromText syscallName
-                       in case Map.lookup syscallFnName syscallOvs of
-                            Just someSyscall ->
-                              pure $ NewSyscall syscallName syscallNum someSyscall
-                            Nothing ->
-                              pure $ SkippedSyscall $ SyscallWithoutOverride syscallName syscallNum
+          syscallNumRepr = Stubs.SyscallNumRepr atps rtps (toInteger syscallNum)
+       in case MapF.lookup syscallNumRepr (st ^. stateSyscallHandles) of
+            Just syscallFnHandle ->
+              pure $ CachedSyscallFnHandle syscallFnHandle
+            Nothing -> pure $ syscallOvs arch syscallNum atps rtps st
 
 -- | An implementation of 'Symbolic.LookupSyscallHandle' that attempts to look
 -- up a syscall override and dispatches on the result.
@@ -554,9 +578,7 @@ lookupSyscallHandle ::
   bak ->
   ArchContext arch ->
   -- | Map of names of overridden syscalls to their implementations
-  Map.Map
-    WFN.FunctionName
-    (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
+  SyscallHandleBuilder p sym arch ->
   ErrorSymbolicSyscalls ->
   -- | Dispatch on the result of looking up a syscall override.
   LookupSyscallDispatch p sym arch ->
