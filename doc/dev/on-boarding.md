@@ -6,6 +6,14 @@ This page provides learning resources for new GREASE developers.
 
 ### General background
 
+- LWN:
+  - [How programs get run](https://lwn.net/Articles/630727/)
+  - [How programs get run: ELF binaries](https://lwn.net/Articles/631631/)
+  - [Anatomy of a system call, part 1](https://lwn.net/Articles/604287/)
+  - [Anatomy of a system call, part 2](https://lwn.net/Articles/604515/)
+- [The journey before `main()`](https://amit.prasad.me/blog/before-main):
+  Basically like "How programs get run{,: ELF binaries}" above, but with
+  Rust-focused examples.
 - [GDB in The Architecture of Open-Source Applications](https://aosabook.org/en/v2/gdb.html)
 - [Phrack](https://phrack.org/)
 - [Eli Bendersky's website](https://eli.thegreenplace.net/)
