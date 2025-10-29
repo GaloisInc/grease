@@ -23,6 +23,7 @@ module Grease.Main (
   simulateLlvm,
   simulateLlvmSyntax,
   simulateFile,
+  simulateMacawRaw,
   Results (..),
   logResults,
 ) where
@@ -139,7 +140,7 @@ import Grease.Macaw.Overrides.Address qualified as AddrOv
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.PLT qualified as GMPLT
 import Grease.Macaw.RegName (getRegName, mkRegName, regNameToString, regNames)
-import Grease.Macaw.ResolveCall (PlatformContext (..))
+import Grease.Macaw.ResolveCall (PlatformContext (..), greaseSyscallFromSyscallBuilder, stubsSyscallHandleBuilder)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
 import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, emptyGreaseSimulatorState)
 import Grease.Main.Diagnostic qualified as Diag
@@ -1231,13 +1232,13 @@ simulateMacawCfgs ::
   C.HandleAllocator ->
   MacawCfgConfig arch ->
   ArchContext arch ->
-  SimOpts ->
   PlatformContext arch ->
+  SimOpts ->
   (forall sym. Macaw.SetupHook sym arch) ->
   AddressOverrides arch ->
   Map Entrypoint (MacawEntrypointCfgs arch) ->
   IO Results
-simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts lSyscallHandles setupHook addrOvs cfgs = do
+simulateMacawCfgs la halloc macawCfgConfig archCtx lSyscallHandles simOpts setupHook addrOvs cfgs = do
   let fm = W4.FloatRealRepr
   withSolverOnlineBackend (simSolver simOpts) fm globalNonceGenerator $ \bak -> do
     results <- do
@@ -1436,7 +1437,7 @@ simulateMacawSyntax la halloc archCtx lSyscallHandles simOpts parserHooks = do
           , mcElf = Nothing
           }
   addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
-  simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts lSyscallHandles setupHook addrOvs cfgs'
+  simulateMacawCfgs la halloc macawCfgConfig archCtx lSyscallHandles simOpts setupHook addrOvs cfgs'
 
 simulateMacaw ::
   forall arch.
@@ -1554,7 +1555,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx lSyscallHandles txt
           , mcTxtBounds = txtBounds
           , mcElf = Just elf
           }
-  simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts lSyscallHandles setupHook addrOvs cfgs
+  simulateMacawCfgs la halloc macawCfgConfig archCtx lSyscallHandles simOpts setupHook addrOvs cfgs
 
 -- | Compute the initial 'ArgShapes' for an LLVM CFG.
 --
@@ -1919,7 +1920,7 @@ simulateARMSyntax simOpts la = withMemOptions simOpts $ do
   let ?ptrWidth = knownNat @32
   halloc <- C.newHandleAllocator
   archCtx <- armCtx halloc Nothing (simStackArgumentSlots simOpts)
-  simulateMacawSyntax la halloc archCtx simOpts AArch32Syn.aarch32ParserHooks
+  simulateMacawSyntax la halloc archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) simOpts AArch32Syn.aarch32ParserHooks
 
 simulateMacawRaw ::
   forall arch.
@@ -1934,10 +1935,11 @@ simulateMacawRaw ::
   MM.Memory (MC.ArchAddrWidth arch) ->
   C.HandleAllocator ->
   ArchContext arch ->
+  PlatformContext arch ->
   SimOpts ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
   IO Results
-simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
+simulateMacawRaw la memory halloc archCtx platCtx simOpts parserHooks =
   do
     let entries = simEntryPoints simOpts
     let
@@ -2019,6 +2021,7 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
       halloc
       macawCfgConfig
       archCtx
+      platCtx
       simOpts
       setupHook
       addrOvs
@@ -2053,7 +2056,7 @@ simulateRawArch simOpts la halloc hooks archCtx end = do
   -- TODO: we should allow setting a load offset via an option
   let opts = MML.LoadOptions{MML.loadOffset = Just $ simRawBinaryOffset simOpts}
   lded <- Loader.loadBinary @arch opts ldr
-  simulateMacawRaw la (Loader.memoryImage lded) halloc archCtx simOpts hooks
+  simulateMacawRaw la (Loader.memoryImage lded) halloc archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) simOpts hooks
 
 simulateARMRaw :: SimOpts -> GreaseLogAction -> IO Results
 simulateARMRaw simOpts la = withMemOptions simOpts $ do
@@ -2122,7 +2125,7 @@ simulateARM simOpts la = do
     txtBounds@(starttext, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- armCtx halloc (Just starttext) (simStackArgumentSlots simOpts)
-    simulateMacaw la halloc elf loadedProg (Just ARM.armPLTStubInfo) archCtx txtBounds simOpts AArch32Syn.aarch32ParserHooks
+    simulateMacaw la halloc elf loadedProg (Just ARM.armPLTStubInfo) archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) txtBounds simOpts AArch32Syn.aarch32ParserHooks
 
 simulatePPC32Syntax ::
   SimOpts ->
@@ -2135,7 +2138,7 @@ simulatePPC32Syntax simOpts la = withMemOptions simOpts $ do
   -- default value to put on the stack as the return address, so we use fresh,
   -- symbolic bytes (Nothing).
   archCtx <- ppc32Ctx Nothing (simStackArgumentSlots simOpts)
-  simulateMacawSyntax la halloc archCtx simOpts PPCSyn.ppc32ParserHooks
+  simulateMacawSyntax la halloc archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) simOpts PPCSyn.ppc32ParserHooks
 
 -- | Currently, @.ppc64.cbl@ files are not supported, as the @macaw-ppc@ API
 -- does not make it straightforward to create a PPC64 'MI.ArchitectureInfo'
@@ -2162,7 +2165,7 @@ simulatePPC32 simOpts la = do
     -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
     -- Grease.Macaw.PLT for why we use Nothing here.
     let ppcPltStubInfo = Nothing
-    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx txtBounds simOpts PPCSyn.ppc32ParserHooks
+    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) txtBounds simOpts PPCSyn.ppc32ParserHooks
 
 simulatePPC64 :: SimOpts -> GreaseLogAction -> IO Results
 simulatePPC64 simOpts la = do
@@ -2178,7 +2181,7 @@ simulatePPC64 simOpts la = do
     -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
     -- Grease.Macaw.PLT for why we use Nothing here.
     let ppcPltStubInfo = Nothing
-    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx txtBounds simOpts PPCSyn.ppc64ParserHooks
+    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) txtBounds simOpts PPCSyn.ppc64ParserHooks
 
 simulateX86Syntax ::
   SimOpts ->
@@ -2191,7 +2194,7 @@ simulateX86Syntax simOpts la = withMemOptions simOpts $ do
   -- default value to put on the stack as the return address, so we use fresh,
   -- symbolic bytes (Nothing).
   archCtx <- x86Ctx halloc Nothing (simStackArgumentSlots simOpts)
-  simulateMacawSyntax la halloc archCtx simOpts X86Syn.x86ParserHooks
+  simulateMacawSyntax la halloc archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) simOpts X86Syn.x86ParserHooks
 
 simulateX86 :: SimOpts -> GreaseLogAction -> IO Results
 simulateX86 simOpts la = do
@@ -2204,7 +2207,7 @@ simulateX86 simOpts la = do
     txtBounds@(startText, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- x86Ctx halloc (Just startText) (simStackArgumentSlots simOpts)
-    simulateMacaw la halloc elf loadedProg (Just X86.x86_64PLTStubInfo) archCtx txtBounds simOpts X86Syn.x86ParserHooks
+    simulateMacaw la halloc elf loadedProg (Just X86.x86_64PLTStubInfo) archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) txtBounds simOpts X86Syn.x86ParserHooks
 
 simulateElf ::
   SimOpts ->

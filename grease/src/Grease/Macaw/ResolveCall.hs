@@ -14,6 +14,7 @@ module Grease.Macaw.ResolveCall (
   defaultLookupFunctionHandleDispatch,
   LookupFunctionHandleResult (..),
   PlatformContext (..),
+  greaseSyscallFromSyscallBuilder,
 
   -- * Looking up syscall handles
   lookupSyscallHandle,
@@ -83,7 +84,7 @@ import What4.Expr qualified as W4
 import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 import What4.Protocol.Online qualified as W4
-import Prelude (Integer, fromIntegral, otherwise, toInteger, undefined, (++))
+import Prelude (Integer, fromIntegral, otherwise, toInteger, (++))
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (ResolveCallDiagnostic diag)
