@@ -29,7 +29,7 @@ import Data.Traversable (for)
 import Grease.Cli (optsFromList)
 import Grease.Diagnostic (Diagnostic, GreaseLogAction)
 import Grease.Macaw.ResolveCall (PlatformContext (..))
-import Grease.Main (logResults, simulateFile)
+import Grease.Main (Results, logResults, simulateARMWithPlatform, simulateFile)
 import Grease.Options (SimOpts (..), optsSimOpts)
 import HsLua (Lua)
 import HsLua qualified as Lua
@@ -41,6 +41,7 @@ import Lumberjack qualified as LJ
 import Oughta qualified
 import Prettyprinter qualified as PP
 import Shape (shapeTests)
+import Stubs.Memory.Common qualified as Stubs
 import System.Directory qualified as Dir
 import System.Exit qualified as Exit
 import System.FilePath ((</>))
@@ -94,10 +95,9 @@ withCapturedLogs withLogAction = do
   -- Reverse the list so that logs appear chronologically
   pure (Text.unlines (List.reverse logs))
 
-abortSim :: CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp args retTypes result
+abortSim :: CB.IsSymInterface sym => CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp args retTypes result
 abortSim =
-  let loc = W4.mkProgramLoc "abortSim" (W4.OtherPos "abortSim")
-   in CS.overrideAbort (CB.AssertionFailure $ CS.SimError loc (CS.GenericSimError "abort sim for syscall"))
+  CS.overrideError (CS.GenericSimError "abort sim for syscall")
 
 {-
 macawSyscallHdl <- C.mkHandle' halloc syscallFnName atps (C.StructRepr rtps)
@@ -105,13 +105,15 @@ macawSyscallHdl <- C.mkHandle' halloc syscallFnName atps (C.StructRepr rtps)
     pure $ useFnHandleAndState macawSyscallHdl (CS.UseOverride macawSyscallOv) st-}
 
 alwaysAbortPlatform :: PlatformContext arch
-alwaysAbortPlatform = PlatformContext $ \bak archCtx halloc ->
-  Symbolic.LookupSyscallHandle $ \argTys rTys state args -> do
-    hdl <- C.mkHandle' halloc "abortSim" argTys (C.StructRepr rTys)
-    undefined
+alwaysAbortPlatform = PlatformContext $ \_bak _archCtx halloc ->
+  Symbolic.LookupSyscallHandle $ \argTys rTys state _args -> do
+    let rty = C.StructRepr rTys
+    hdl <- C.mkHandle' halloc "abortSim" argTys rty
+    let ov = CS.mkOverride' "abortSim" rty abortSim
+    pure $ (hdl, Stubs.insertFunctionHandle state hdl (CS.UseOverride ov))
 
-go :: String -> Lua ()
-go prog = do
+simFunc :: (SimOpts -> GreaseLogAction -> IO Results) -> String -> Lua ()
+simFunc simulate prog = do
   strOpts <- getArgs
   Lua.newtable
   Lua.setglobal argsGlobal
@@ -120,7 +122,7 @@ go prog = do
   logTxt <-
     liftIO $
       withCapturedLogs $ \la' -> do
-        res <- simulateFile opts la'
+        res <- simulate opts la'
         logResults la' res
   let path = simProgPath opts
   liftIO (Text.IO.writeFile (FilePath.replaceExtension path "out") logTxt)
@@ -129,6 +131,12 @@ go prog = do
   Lua.pushstring "<out>"
   Lua.pushstring (Text.encodeUtf8 logTxt)
   Lua.call 2 0
+
+goWithAbortSyscalls :: String -> Lua ()
+goWithAbortSyscalls = simFunc (simulateARMWithPlatform alwaysAbortPlatform)
+
+go :: String -> Lua ()
+go = simFunc simulateFile
 
 argsGlobal :: Lua.Name
 argsGlobal = Lua.Name "_grease_args"
@@ -176,6 +184,9 @@ preHook bin = do
 
   Lua.pushHaskellFunction (Lua.toHaskellFunction go)
   Lua.setglobal (Lua.Name "go")
+
+  Lua.pushHaskellFunction (Lua.toHaskellFunction goWithAbortSyscalls)
+  Lua.setglobal (Lua.Name "go_with_abort_syscalls")
 
 -- | Make an "Oughta"-based test
 oughta :: FilePath -> Oughta.LuaProgram -> IO ()

@@ -2,5 +2,6 @@
 
 // TODO: hack for now
 // all: flags {"--symbol", "test_syscall"}
-// arm: go(prog)
+// arm: go_with_abort_syscalls(prog)
 // arm: check_not "Skipped syscall"
+// arm: check "abort sim for syscall"

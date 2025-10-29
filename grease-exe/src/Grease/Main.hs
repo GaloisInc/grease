@@ -24,7 +24,7 @@ module Grease.Main (
   simulateLlvmSyntax,
   simulateFile,
   simulateMacawRaw,
-  simulateARMRawWithPlatform,
+  simulateARMWithPlatform,
   Results (..),
   logResults,
 ) where
@@ -2057,18 +2057,6 @@ simulateRawArch simOpts la halloc hooks archCtx end = do
   lded <- Loader.loadBinary @arch opts ldr
   simulateMacawRaw la (Loader.memoryImage lded) halloc archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) (stubsSyscallHandleBuilder builtinGenericSyscalls)) simOpts hooks
 
-simulateARMRawWithPlatform :: SimOpts -> GreaseLogAction -> PlatformContext ARM.ARM -> IO Results
-simulateARMRawWithPlatform simOpts la platCtx = withMemOptions simOpts $ do
-  let ?ptrWidth = knownNat @32
-  halloc <- C.newHandleAllocator
-  archCtx <- armCtx halloc Nothing (simStackArgumentSlots simOpts)
-  bs <- BS.readFile (simProgPath simOpts)
-  let ldr = Loader.RawBin bs MM.LittleEndian
-  -- TODO: we should allow setting a load offset via an option
-  let opts = MML.LoadOptions{MML.loadOffset = Just $ simRawBinaryOffset simOpts}
-  lded <- Loader.loadBinary @ARM.ARM opts ldr
-  simulateMacawRaw la (Loader.memoryImage lded) halloc archCtx platCtx simOpts AArch32Syn.aarch32ParserHooks
-
 simulateARMRaw :: SimOpts -> GreaseLogAction -> IO Results
 simulateARMRaw simOpts la = withMemOptions simOpts $ do
   let ?ptrWidth = knownNat @32
@@ -2126,7 +2114,12 @@ doLoad la _proxy entries perms elf = do
       Left e@Load.CoreDumpNoEntrypoint{} -> badElf e
 
 simulateARM :: SimOpts -> GreaseLogAction -> IO Results
-simulateARM simOpts la = do
+simulateARM simopts la =
+  let ?ptrWidth = knownNat @32
+   in simulateARMWithPlatform (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simopts) (stubsSyscallHandleBuilder builtinGenericSyscalls)) simopts la
+
+simulateARMWithPlatform :: PlatformContext ARM.ARM -> SimOpts -> GreaseLogAction -> IO Results
+simulateARMWithPlatform platCtx simOpts la = do
   let ?ptrWidth = knownNat @32
   let proxy = Proxy @ARM.ARM
   (perms, elf) <- readElfHeaderInfo la proxy (simProgPath simOpts)
@@ -2136,7 +2129,7 @@ simulateARM simOpts la = do
     txtBounds@(starttext, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- armCtx halloc (Just starttext) (simStackArgumentSlots simOpts)
-    simulateMacaw la halloc elf loadedProg (Just ARM.armPLTStubInfo) archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) (stubsSyscallHandleBuilder builtinGenericSyscalls)) txtBounds simOpts AArch32Syn.aarch32ParserHooks
+    simulateMacaw la halloc elf loadedProg (Just ARM.armPLTStubInfo) archCtx platCtx txtBounds simOpts AArch32Syn.aarch32ParserHooks
 
 simulatePPC32Syntax ::
   SimOpts ->

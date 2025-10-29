@@ -225,6 +225,7 @@ test-suite grease-tests
     , macaw-symbolic
     , crucible
     , what4
+    , stubs-common
 
     -- Hackage dependencies
     , bv-sized ^>= 1.0.6
