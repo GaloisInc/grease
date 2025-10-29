@@ -222,6 +222,10 @@ test-suite grease-tests
       grease-exe
     , grease
     , grease-cli
+    , macaw-symbolic
+    , crucible
+    , what4
+    , stubs-common
 
     -- Hackage dependencies
     , bv-sized ^>= 1.0.6
