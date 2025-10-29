@@ -438,23 +438,21 @@ memConfigWithHandles ::
   -- | Map of names of overridden functions to their implementations
   Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
-  -- | Map of names of overridden syscalls to their implementations
-  Map.Map WFN.FunctionName (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
+  -- | An implementation of Macaw's syscall handle lookup
+  Symbolic.LookupSyscallHandle p sym arch ->
   Opts.ErrorSymbolicFunCalls ->
-  Opts.ErrorSymbolicSyscalls ->
   Opts.SkipInvalidCallAddrs ->
   -- | What to do when a forward declaration cannot be resolved (during symex).
   (WFN.FunctionName -> IO ()) ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
   Symbolic.MemModelConfig p sym arch CLM.Mem
-memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddress errCb' memCfg =
+memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs errorSymbolicFunCalls skipInvalidCallAddress errCb' memCfg =
   memCfg
     { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddress lfhd
-    , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch (ResolveCall.stubsSyscallHandleBuilder syscallOvs) errorSymbolicSyscalls lsd
+    , Symbolic.lookupSyscallHandle = syscallOvs
     }
  where
   lfhd = ResolveCall.defaultLookupFunctionHandleDispatch bak logAction halloc arch memory funOvs errCb'
-  lsd = ResolveCall.defaultLookupSyscallDispatch bak logAction halloc arch
 
 -- | Check whether a pointer points to a relocation address, and if so, assert
 -- that the underlying relocation type is supported. If not, throw an exception.

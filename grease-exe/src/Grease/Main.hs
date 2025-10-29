@@ -139,6 +139,7 @@ import Grease.Macaw.Overrides.Address qualified as AddrOv
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.PLT qualified as GMPLT
 import Grease.Macaw.RegName (getRegName, mkRegName, regNameToString, regNames)
+import Grease.Macaw.ResolveCall (GreaseSyscallLookup (..))
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
 import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, emptyGreaseSimulatorState)
 import Grease.Main.Diagnostic qualified as Diag
@@ -747,7 +748,7 @@ macawMemConfig ::
   , MSM.MacawProcessAssertion sym
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
-  , p ~ GreaseSimulatorState cExt sym arch
+  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch
   ) =>
   GreaseLogAction ->
   C.GlobalVar CLM.Mem ->
@@ -757,12 +758,13 @@ macawMemConfig ::
   MacawCfgConfig arch ->
   ArchContext arch ->
   SimOpts ->
+  GreaseSyscallLookup arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   IO
     ( Symbolic.MemModelConfig p sym arch CLM.Mem
     , Map WFN.FunctionName (MacawSExpOverride p sym arch)
     )
-macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable = do
+macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts lSyscallHandles memPtrTable = do
   let MacawCfgConfig
         { mcLoadOptions = loadOpts
         , mcSymMap = symMap
@@ -796,7 +798,6 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
       Left e@GSyn.FunctionNameNotFound{} -> userError la (PP.pretty e)
       Right ok -> pure ok
   let errorSymbolicFunCalls = simErrorSymbolicFunCalls simOpts
-  let errorSymbolicSyscalls = simErrorSymbolicSyscalls simOpts
   let skipInvalidCallAddrs = simSkipInvalidCallAddrs simOpts
   let memCfg =
         memConfigWithHandles
@@ -810,9 +811,8 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
           dynFunMap
           fnOvsMap
           fnAddrOvs
-          builtinGenericSyscalls
+          (macawSyscallLookup lSyscallHandles bak archCtx)
           errorSymbolicFunCalls
-          errorSymbolicSyscalls
           skipInvalidCallAddrs
           (declaredFunNotFound la)
           memCfg_
@@ -831,10 +831,10 @@ macawInitState ::
   , wptr ~ MC.ArchAddrWidth arch
   , ext ~ Symbolic.MacawExt arch
   , ret ~ Symbolic.ArchRegStruct arch
-  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
+  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch
   ) =>
   GreaseLogAction ->
   ArchContext arch ->
@@ -843,6 +843,7 @@ macawInitState ::
   SimOpts ->
   bak ->
   C.GlobalVar CLM.Mem ->
+  GreaseSyscallLookup arch ->
   Symbolic.MemPtrTable sym wptr ->
   Macaw.SetupHook sym arch ->
   AddressOverrides arch ->
@@ -855,7 +856,7 @@ macawInitState ::
   GSIO.InitializedFs sym wptr ->
   Args sym ext (Symbolic.MacawCrucibleRegTypes arch) ->
   IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
-macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConcVar setupMem initFs args = do
+macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar lSyscallHandles memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConcVar setupMem initFs args = do
   let sym = CB.backendGetSym bak
   regs <- liftIO (overrideRegs archCtx sym (argVals args))
   EntrypointCfgs
@@ -865,7 +866,7 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable s
     pure entrypointCfgsSsa
   let mbStartupOvSsaCfg = startupOvCfg <$> mbStartupOvSsa
   let fs = GSIO.initFs initFs
-  (memCfg, fnOvsMap) <- macawMemConfig la memVar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable
+  (memCfg, fnOvsMap) <- macawMemConfig la memVar fs bak halloc macawCfgConfig archCtx simOpts lSyscallHandles memPtrTable
   evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @_ (archCtx ^. archVals) sym pure
   let macawExtImpl = Symbolic.macawExtensions evalFn memVar memCfg
   let ssaCfgHdl = C.cfgHandle ssaCfg
@@ -900,16 +901,17 @@ macawRefineOnce ::
   , wptr ~ MC.ArchAddrWidth arch
   , ext ~ Symbolic.MacawExt arch
   , ret ~ Symbolic.ArchRegStruct arch
-  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
+  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch
   ) =>
   GreaseLogAction ->
   ArchContext arch ->
   SimOpts ->
   C.HandleAllocator ->
   MacawCfgConfig arch ->
+  GreaseSyscallLookup arch ->
   Symbolic.MemPtrTable sym wptr ->
   Macaw.SetupHook sym arch ->
   AddressOverrides arch ->
@@ -925,7 +927,7 @@ macawRefineOnce ::
   Maybe (MC.ArchSegmentOff arch) ->
   EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
   IO (ProveRefineResult sym ext argTys)
-macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
+macawRefineOnce la archCtx simOpts halloc macawCfgConfig lSyscallHandles memPtrTable setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
   let regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
   let rNames = regNames (archCtx ^. archVals)
   let rNameAssign =
@@ -948,7 +950,7 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable setupHook a
     memVar
     heuristics
     execFeats
-    (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
+    (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar lSyscallHandles memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
     `X.catches` [ X.Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
                     pure $ ProveCantRefine $ MissingSemantics $ pshow ex
                 , X.Handler
@@ -962,7 +964,7 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable setupHook a
                 ]
 
 simulateMacawCfg ::
-  forall sym bak arch solver scope st fm.
+  forall sym bak arch solver scope st fm p.
   ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
   , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
@@ -975,6 +977,7 @@ simulateMacawCfg ::
   , Show (ArchReloc arch)
   , ?memOpts :: CLM.MemOptions
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
+  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch
   ) =>
   GreaseLogAction ->
   bak ->
@@ -983,6 +986,7 @@ simulateMacawCfg ::
   MacawCfgConfig arch ->
   ArchContext arch ->
   SimOpts ->
+  GreaseSyscallLookup arch ->
   Macaw.SetupHook sym arch ->
   AddressOverrides arch ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
@@ -991,7 +995,7 @@ simulateMacawCfg ::
   -- | The entrypoint-related CFGs.
   EntrypointCfgs (C.Reg.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   IO BatchStatus
-simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs mbCfgAddr entrypointCfgs = do
+simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts lSyscallHandles setupHook addrOvs mbCfgAddr entrypointCfgs = do
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   globs <-
     case simMutGlobs simOpts of
@@ -1039,6 +1043,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
       simOpts
       halloc
       macawCfgConfig
+      lSyscallHandles
       memPtrTable
       setupHook
       addrOvs
@@ -1062,6 +1067,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
       simOpts
       setupHook
       addrOvs
+      lSyscallHandles
       memPtrTable
       initMem
       initArgShapes
@@ -1081,7 +1087,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
 
 -- | See @doc/requirements.md@.
 simulateRewrittenCfg ::
-  forall sym bak arch solver scope st fm.
+  forall sym bak arch solver scope st fm p.
   ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
   , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
@@ -1096,6 +1102,7 @@ simulateRewrittenCfg ::
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
+  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch
   ) =>
   GreaseLogAction ->
   bak ->
@@ -1106,6 +1113,7 @@ simulateRewrittenCfg ::
   SimOpts ->
   Macaw.SetupHook sym arch ->
   AddressOverrides arch ->
+  GreaseSyscallLookup arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   InitialMem sym ->
   ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
@@ -1119,7 +1127,7 @@ simulateRewrittenCfg ::
   -- | The SSA entrypoint-related CFGs.
   EntrypointCfgs (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   IO BatchStatus
-simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs memPtrTable initMem initArgShapes result execFeats mbCfgAddr entrypointCfgs entrypointCfgsSsa = do
+simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs lSyscallHandles memPtrTable initMem initArgShapes result execFeats mbCfgAddr entrypointCfgs entrypointCfgsSsa = do
   let regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
   let rNames = regNames (archCtx ^. archVals)
   let argNames =
@@ -1169,6 +1177,7 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
             simOpts
             halloc
             macawCfgConfig
+            lSyscallHandles
             memPtrTable
             setupHook
             addrOvs
@@ -1223,11 +1232,12 @@ simulateMacawCfgs ::
   MacawCfgConfig arch ->
   ArchContext arch ->
   SimOpts ->
+  GreaseSyscallLookup arch ->
   (forall sym. Macaw.SetupHook sym arch) ->
   AddressOverrides arch ->
   Map Entrypoint (MacawEntrypointCfgs arch) ->
   IO Results
-simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs = do
+simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts lSyscallHandles setupHook addrOvs cfgs = do
   let fm = W4.FloatRealRepr
   withSolverOnlineBackend (simSolver simOpts) fm globalNonceGenerator $ \bak -> do
     results <- do
@@ -1243,7 +1253,7 @@ simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfg
               Left err@GME.BadArgs{} -> usrErr err
               Left err@GME.BadRet{} -> usrErr err
               Right ok -> pure ok
-          status <- simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs mbCfgAddr entrypointCfgsSome
+          status <- simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts lSyscallHandles setupHook addrOvs mbCfgAddr entrypointCfgsSome
           let result =
                 Batch
                   { batchStatus = status
@@ -1396,10 +1406,11 @@ simulateMacawSyntax ::
   GreaseLogAction ->
   C.HandleAllocator ->
   ArchContext arch ->
+  GreaseSyscallLookup arch ->
   SimOpts ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
   IO Results
-simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
+simulateMacawSyntax la halloc archCtx lSyscallHandles simOpts parserHooks = do
   let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
   prog <- doParse la halloc (simProgPath simOpts)
   CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
@@ -1425,7 +1436,7 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
           , mcElf = Nothing
           }
   addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
-  simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs'
+  simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts lSyscallHandles setupHook addrOvs cfgs'
 
 simulateMacaw ::
   forall arch.
@@ -1444,11 +1455,12 @@ simulateMacaw ::
   Load.LoadedProgram arch ->
   Maybe (PLT.PLTStubInfo (ArchReloc arch)) ->
   ArchContext arch ->
+  GreaseSyscallLookup arch ->
   (Elf.ElfWordType (MC.ArchAddrWidth arch), Elf.ElfWordType (MC.ArchAddrWidth arch)) ->
   SimOpts ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
   IO Results
-simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts parserHooks = do
+simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx lSyscallHandles txtBounds simOpts parserHooks = do
   let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
   let dl = macawDataLayout archCtx
   let memory = Loader.memoryImage $ Load.progLoadedBinary loadedProg
@@ -1542,7 +1554,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
           , mcTxtBounds = txtBounds
           , mcElf = Just elf
           }
-  simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs
+  simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts lSyscallHandles setupHook addrOvs cfgs
 
 -- | Compute the initial 'ArgShapes' for an LLVM CFG.
 --
