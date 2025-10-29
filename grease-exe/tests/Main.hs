@@ -48,7 +48,6 @@ import System.FilePath ((</>))
 import System.FilePath qualified as FilePath
 import Test.Tasty qualified as T
 import Test.Tasty.HUnit qualified as T.U
-import What4.ProgramLoc qualified as W4
 import Prelude hiding (fail)
 
 prelude :: Text.Text

@@ -77,7 +77,6 @@ import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.GlobalState qualified as CS
 import Stubs.Common qualified as Stubs
-import Stubs.Syscall qualified as Stubs
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
