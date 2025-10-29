@@ -19,6 +19,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.FileEmbed (embedFileRelative)
 import Data.IORef qualified as IORef
 import Data.List qualified as List
+import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Maybe qualified as Maybe
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
@@ -27,10 +28,15 @@ import Data.Text.IO qualified as Text.IO
 import Data.Traversable (for)
 import Grease.Cli (optsFromList)
 import Grease.Diagnostic (Diagnostic, GreaseLogAction)
+import Grease.Macaw.ResolveCall (PlatformContext (..))
 import Grease.Main (logResults, simulateFile)
 import Grease.Options (SimOpts (..), optsSimOpts)
 import HsLua (Lua)
 import HsLua qualified as Lua
+import Lang.Crucible.Backend qualified as CB
+import Lang.Crucible.FunctionHandle qualified as C
+import Lang.Crucible.Simulator qualified as CS
+import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
 import Oughta qualified
 import Prettyprinter qualified as PP
@@ -41,6 +47,7 @@ import System.FilePath ((</>))
 import System.FilePath qualified as FilePath
 import Test.Tasty qualified as T
 import Test.Tasty.HUnit qualified as T.U
+import What4.ProgramLoc qualified as W4
 import Prelude hiding (fail)
 
 prelude :: Text.Text
@@ -86,6 +93,22 @@ withCapturedLogs withLogAction = do
   logs <- map (Text.pack . show . PP.pretty) <$> IORef.readIORef logRef
   -- Reverse the list so that logs appear chronologically
   pure (Text.unlines (List.reverse logs))
+
+abortSim :: CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp args retTypes result
+abortSim =
+  let loc = W4.mkProgramLoc "abortSim" (W4.OtherPos "abortSim")
+   in CS.overrideAbort (CB.AssertionFailure $ CS.SimError loc (CS.GenericSimError "abort sim for syscall"))
+
+{-
+macawSyscallHdl <- C.mkHandle' halloc syscallFnName atps (C.StructRepr rtps)
+    let macawSyscallOv = macawSyscallOverride bak arch atps rtps syscallOv
+    pure $ useFnHandleAndState macawSyscallHdl (CS.UseOverride macawSyscallOv) st-}
+
+alwaysAbortPlatform :: PlatformContext arch
+alwaysAbortPlatform = PlatformContext $ \bak archCtx halloc ->
+  Symbolic.LookupSyscallHandle $ \argTys rTys state args -> do
+    hdl <- C.mkHandle' halloc "abortSim" argTys (C.StructRepr rTys)
+    undefined
 
 go :: String -> Lua ()
 go prog = do

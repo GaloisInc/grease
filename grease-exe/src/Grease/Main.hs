@@ -24,6 +24,7 @@ module Grease.Main (
   simulateLlvmSyntax,
   simulateFile,
   simulateMacawRaw,
+  simulateARMRawWithPlatform,
   Results (..),
   logResults,
 ) where
@@ -812,7 +813,7 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts lSyscallHand
           dynFunMap
           fnOvsMap
           fnAddrOvs
-          (macawSyscallLookup lSyscallHandles bak archCtx)
+          (macawSyscallLookup lSyscallHandles bak archCtx halloc)
           errorSymbolicFunCalls
           skipInvalidCallAddrs
           (declaredFunNotFound la)
@@ -1918,7 +1919,7 @@ simulateARMSyntax simOpts la = withMemOptions simOpts $ do
   let ?ptrWidth = knownNat @32
   halloc <- C.newHandleAllocator
   archCtx <- armCtx halloc Nothing (simStackArgumentSlots simOpts)
-  simulateMacawSyntax la halloc archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) simOpts AArch32Syn.aarch32ParserHooks
+  simulateMacawSyntax la halloc archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) (stubsSyscallHandleBuilder builtinGenericSyscalls)) simOpts AArch32Syn.aarch32ParserHooks
 
 simulateMacawRaw ::
   forall arch.
@@ -2054,7 +2055,19 @@ simulateRawArch simOpts la halloc hooks archCtx end = do
   -- TODO: we should allow setting a load offset via an option
   let opts = MML.LoadOptions{MML.loadOffset = Just $ simRawBinaryOffset simOpts}
   lded <- Loader.loadBinary @arch opts ldr
-  simulateMacawRaw la (Loader.memoryImage lded) halloc archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) simOpts hooks
+  simulateMacawRaw la (Loader.memoryImage lded) halloc archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) (stubsSyscallHandleBuilder builtinGenericSyscalls)) simOpts hooks
+
+simulateARMRawWithPlatform :: SimOpts -> GreaseLogAction -> PlatformContext ARM.ARM -> IO Results
+simulateARMRawWithPlatform simOpts la platCtx = withMemOptions simOpts $ do
+  let ?ptrWidth = knownNat @32
+  halloc <- C.newHandleAllocator
+  archCtx <- armCtx halloc Nothing (simStackArgumentSlots simOpts)
+  bs <- BS.readFile (simProgPath simOpts)
+  let ldr = Loader.RawBin bs MM.LittleEndian
+  -- TODO: we should allow setting a load offset via an option
+  let opts = MML.LoadOptions{MML.loadOffset = Just $ simRawBinaryOffset simOpts}
+  lded <- Loader.loadBinary @ARM.ARM opts ldr
+  simulateMacawRaw la (Loader.memoryImage lded) halloc archCtx platCtx simOpts AArch32Syn.aarch32ParserHooks
 
 simulateARMRaw :: SimOpts -> GreaseLogAction -> IO Results
 simulateARMRaw simOpts la = withMemOptions simOpts $ do
@@ -2123,7 +2136,7 @@ simulateARM simOpts la = do
     txtBounds@(starttext, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- armCtx halloc (Just starttext) (simStackArgumentSlots simOpts)
-    simulateMacaw la halloc elf loadedProg (Just ARM.armPLTStubInfo) archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) txtBounds simOpts AArch32Syn.aarch32ParserHooks
+    simulateMacaw la halloc elf loadedProg (Just ARM.armPLTStubInfo) archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) (stubsSyscallHandleBuilder builtinGenericSyscalls)) txtBounds simOpts AArch32Syn.aarch32ParserHooks
 
 simulatePPC32Syntax ::
   SimOpts ->
@@ -2136,7 +2149,7 @@ simulatePPC32Syntax simOpts la = withMemOptions simOpts $ do
   -- default value to put on the stack as the return address, so we use fresh,
   -- symbolic bytes (Nothing).
   archCtx <- ppc32Ctx Nothing (simStackArgumentSlots simOpts)
-  simulateMacawSyntax la halloc archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) simOpts PPCSyn.ppc32ParserHooks
+  simulateMacawSyntax la halloc archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) (stubsSyscallHandleBuilder builtinGenericSyscalls)) simOpts PPCSyn.ppc32ParserHooks
 
 -- | Currently, @.ppc64.cbl@ files are not supported, as the @macaw-ppc@ API
 -- does not make it straightforward to create a PPC64 'MI.ArchitectureInfo'
@@ -2163,7 +2176,7 @@ simulatePPC32 simOpts la = do
     -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
     -- Grease.Macaw.PLT for why we use Nothing here.
     let ppcPltStubInfo = Nothing
-    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) txtBounds simOpts PPCSyn.ppc32ParserHooks
+    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) (stubsSyscallHandleBuilder builtinGenericSyscalls)) txtBounds simOpts PPCSyn.ppc32ParserHooks
 
 simulatePPC64 :: SimOpts -> GreaseLogAction -> IO Results
 simulatePPC64 simOpts la = do
@@ -2179,7 +2192,7 @@ simulatePPC64 simOpts la = do
     -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
     -- Grease.Macaw.PLT for why we use Nothing here.
     let ppcPltStubInfo = Nothing
-    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) txtBounds simOpts PPCSyn.ppc64ParserHooks
+    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) (stubsSyscallHandleBuilder builtinGenericSyscalls)) txtBounds simOpts PPCSyn.ppc64ParserHooks
 
 simulateX86Syntax ::
   SimOpts ->
@@ -2192,7 +2205,7 @@ simulateX86Syntax simOpts la = withMemOptions simOpts $ do
   -- default value to put on the stack as the return address, so we use fresh,
   -- symbolic bytes (Nothing).
   archCtx <- x86Ctx halloc Nothing (simStackArgumentSlots simOpts)
-  simulateMacawSyntax la halloc archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) simOpts X86Syn.x86ParserHooks
+  simulateMacawSyntax la halloc archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) (stubsSyscallHandleBuilder builtinGenericSyscalls)) simOpts X86Syn.x86ParserHooks
 
 simulateX86 :: SimOpts -> GreaseLogAction -> IO Results
 simulateX86 simOpts la = do
@@ -2205,7 +2218,7 @@ simulateX86 simOpts la = do
     txtBounds@(startText, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- x86Ctx halloc (Just startText) (simStackArgumentSlots simOpts)
-    simulateMacaw la halloc elf loadedProg (Just X86.x86_64PLTStubInfo) archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) halloc (stubsSyscallHandleBuilder builtinGenericSyscalls)) txtBounds simOpts X86Syn.x86ParserHooks
+    simulateMacaw la halloc elf loadedProg (Just X86.x86_64PLTStubInfo) archCtx (greaseSyscallFromSyscallBuilder la (simErrorSymbolicSyscalls simOpts) (stubsSyscallHandleBuilder builtinGenericSyscalls)) txtBounds simOpts X86Syn.x86ParserHooks
 
 simulateElf ::
   SimOpts ->

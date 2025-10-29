@@ -519,7 +519,7 @@ newtype SyscallHandleBuilder p sym arch
       )
 
 newtype PlatformContext arch
-  = GreaseSyscallLookup
+  = PlatformContext
   { macawSyscallLookup ::
       forall bak sym p solver t st fs cExt.
       ( OnlineSolverAndBackend solver sym bak t st fs
@@ -527,6 +527,7 @@ newtype PlatformContext arch
       ) =>
       bak ->
       ArchContext arch ->
+      C.HandleAllocator ->
       Symbolic.LookupSyscallHandle p sym arch
   }
 
@@ -548,8 +549,8 @@ stubsSyscallHandleBuilder syscallOvs =
               Nothing ->
                 SkippedSyscall $ SyscallWithoutOverride syscallName syscallNum
 
-greaseSyscallFromSyscallBuilder :: GreaseLogAction -> ErrorSymbolicSyscalls -> C.HandleAllocator -> (forall p sym. SyscallHandleBuilder p sym arch) -> PlatformContext arch
-greaseSyscallFromSyscallBuilder gla errSymbSyscalls halloc sysBuilder = GreaseSyscallLookup $ \bak arch -> lookupSyscallHandle bak arch sysBuilder errSymbSyscalls (defaultLookupSyscallDispatch bak gla halloc arch)
+greaseSyscallFromSyscallBuilder :: GreaseLogAction -> ErrorSymbolicSyscalls -> (forall p sym. SyscallHandleBuilder p sym arch) -> PlatformContext arch
+greaseSyscallFromSyscallBuilder gla errSymbSyscalls sysBuilder = PlatformContext $ \bak arch halloc -> lookupSyscallHandle bak arch sysBuilder errSymbSyscalls (defaultLookupSyscallDispatch bak gla halloc arch)
 
 -- | Attempt to look up a syscall override.
 --
