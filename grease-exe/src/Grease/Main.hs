@@ -675,17 +675,18 @@ macawExecFeats ::
   ) =>
   GreaseLogAction ->
   bak ->
+  C.GlobalVar CLM.Mem ->
   ArchContext arch ->
   MacawCfgConfig arch ->
   SimOpts ->
   IO ([CS.ExecutionFeature p sym (Symbolic.MacawExt arch) (CS.RegEntry sym (Symbolic.ArchRegStruct arch))], Maybe (Async ()))
-macawExecFeats la bak archCtx macawCfgConfig simOpts = do
+macawExecFeats la bak memVar archCtx macawCfgConfig simOpts = do
   profFeatLog <- traverse greaseProfilerFeature (simProfileTo simOpts)
   let dbgOpts =
         if GO.debug (GO.simDebugOpts simOpts)
           then
             let mbElf = snd . Elf.getElf <$> mcElf macawCfgConfig
-                extImpl = MDebug.macawExtImpl prettyPtrFnMap (archCtx ^. archVals) mbElf
+                extImpl = MDebug.macawExtImpl prettyPtrFnMap memVar (archCtx ^. archVals) mbElf
              in Just extImpl
           else Nothing
   feats <- greaseExecFeats la bak dbgOpts
