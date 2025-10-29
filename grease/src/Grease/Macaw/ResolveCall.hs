@@ -13,7 +13,7 @@ module Grease.Macaw.ResolveCall (
   LookupFunctionHandleDispatch (..),
   defaultLookupFunctionHandleDispatch,
   LookupFunctionHandleResult (..),
-  GreaseSyscallLookup (..),
+  PlatformContext (..),
 
   -- * Looking up syscall handles
   lookupSyscallHandle,
@@ -517,7 +517,7 @@ newtype SyscallHandleBuilder p sym arch
         LookupSyscallResult p sym arch atps rtps
       )
 
-newtype GreaseSyscallLookup arch
+newtype PlatformContext arch
   = GreaseSyscallLookup
   { macawSyscallLookup ::
       forall bak sym p solver t st fs cExt.
@@ -547,7 +547,7 @@ stubsSyscallHandleBuilder syscallOvs =
               Nothing ->
                 SkippedSyscall $ SyscallWithoutOverride syscallName syscallNum
 
-greaseSyscallFromSyscallBuilder :: GreaseLogAction -> ErrorSymbolicSyscalls -> C.HandleAllocator -> (forall p sym. SyscallHandleBuilder p sym arch) -> GreaseSyscallLookup arch
+greaseSyscallFromSyscallBuilder :: GreaseLogAction -> ErrorSymbolicSyscalls -> C.HandleAllocator -> (forall p sym. SyscallHandleBuilder p sym arch) -> PlatformContext arch
 greaseSyscallFromSyscallBuilder gla errSymbSyscalls halloc sysBuilder = GreaseSyscallLookup $ \bak arch -> lookupSyscallHandle bak arch sysBuilder errSymbSyscalls (defaultLookupSyscallDispatch bak gla halloc arch)
 
 -- | Attempt to look up a syscall override.

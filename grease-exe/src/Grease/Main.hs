@@ -139,7 +139,7 @@ import Grease.Macaw.Overrides.Address qualified as AddrOv
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.PLT qualified as GMPLT
 import Grease.Macaw.RegName (getRegName, mkRegName, regNameToString, regNames)
-import Grease.Macaw.ResolveCall (GreaseSyscallLookup (..))
+import Grease.Macaw.ResolveCall (PlatformContext (..))
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
 import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, emptyGreaseSimulatorState)
 import Grease.Main.Diagnostic qualified as Diag
@@ -758,7 +758,7 @@ macawMemConfig ::
   MacawCfgConfig arch ->
   ArchContext arch ->
   SimOpts ->
-  GreaseSyscallLookup arch ->
+  PlatformContext arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   IO
     ( Symbolic.MemModelConfig p sym arch CLM.Mem
@@ -843,7 +843,7 @@ macawInitState ::
   SimOpts ->
   bak ->
   C.GlobalVar CLM.Mem ->
-  GreaseSyscallLookup arch ->
+  PlatformContext arch ->
   Symbolic.MemPtrTable sym wptr ->
   Macaw.SetupHook sym arch ->
   AddressOverrides arch ->
@@ -911,7 +911,7 @@ macawRefineOnce ::
   SimOpts ->
   C.HandleAllocator ->
   MacawCfgConfig arch ->
-  GreaseSyscallLookup arch ->
+  PlatformContext arch ->
   Symbolic.MemPtrTable sym wptr ->
   Macaw.SetupHook sym arch ->
   AddressOverrides arch ->
@@ -986,7 +986,7 @@ simulateMacawCfg ::
   MacawCfgConfig arch ->
   ArchContext arch ->
   SimOpts ->
-  GreaseSyscallLookup arch ->
+  PlatformContext arch ->
   Macaw.SetupHook sym arch ->
   AddressOverrides arch ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
@@ -1113,7 +1113,7 @@ simulateRewrittenCfg ::
   SimOpts ->
   Macaw.SetupHook sym arch ->
   AddressOverrides arch ->
-  GreaseSyscallLookup arch ->
+  PlatformContext arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   InitialMem sym ->
   ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
@@ -1232,7 +1232,7 @@ simulateMacawCfgs ::
   MacawCfgConfig arch ->
   ArchContext arch ->
   SimOpts ->
-  GreaseSyscallLookup arch ->
+  PlatformContext arch ->
   (forall sym. Macaw.SetupHook sym arch) ->
   AddressOverrides arch ->
   Map Entrypoint (MacawEntrypointCfgs arch) ->
@@ -1406,7 +1406,7 @@ simulateMacawSyntax ::
   GreaseLogAction ->
   C.HandleAllocator ->
   ArchContext arch ->
-  GreaseSyscallLookup arch ->
+  PlatformContext arch ->
   SimOpts ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
   IO Results
@@ -1455,7 +1455,7 @@ simulateMacaw ::
   Load.LoadedProgram arch ->
   Maybe (PLT.PLTStubInfo (ArchReloc arch)) ->
   ArchContext arch ->
-  GreaseSyscallLookup arch ->
+  PlatformContext arch ->
   (Elf.ElfWordType (MC.ArchAddrWidth arch), Elf.ElfWordType (MC.ArchAddrWidth arch)) ->
   SimOpts ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
