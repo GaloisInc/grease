@@ -1005,7 +1005,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
   let ?lc = tyCtx
   mapM_ (doLog la . Diag.TypeContextError) tyCtxErrs
 
-  (execFeats, profLogTask) <- macawExecFeats la bak archCtx macawCfgConfig simOpts
+  memVar <- CLM.mkMemVar "grease:memmodel" halloc
+  (execFeats, profLogTask) <- macawExecFeats la bak memVar archCtx macawCfgConfig simOpts
   let regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
   let rNames = regNames (archCtx ^. archVals)
   let argNames =
@@ -1022,7 +1023,6 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrO
   doLog la (Diag.TargetCFG ssaCfg)
 
   let bounds = simBoundsOpts simOpts
-  memVar <- CLM.mkMemVar "grease:memmodel" halloc
   -- The order of the heuristics is significant, the 'macawHeuristics'
   -- find a sensible initial memory layout, which is necessary before
   -- applying the 'mustFailHeuristic' (which would otherwise report many
