@@ -965,7 +965,7 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig lSyscallHandles memPtrT
                 ]
 
 simulateMacawCfg ::
-  forall sym bak arch solver scope st fm p.
+  forall sym bak arch solver scope st fm.
   ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
   , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
@@ -978,7 +978,6 @@ simulateMacawCfg ::
   , Show (ArchReloc arch)
   , ?memOpts :: CLM.MemOptions
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
-  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch
   ) =>
   GreaseLogAction ->
   bak ->
@@ -1088,7 +1087,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts lSyscallHandles
 
 -- | See @doc/requirements.md@.
 simulateRewrittenCfg ::
-  forall sym bak arch solver scope st fm p.
+  forall sym bak arch solver scope st fm.
   ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
   , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
@@ -1103,7 +1102,6 @@ simulateRewrittenCfg ::
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
-  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch
   ) =>
   GreaseLogAction ->
   bak ->
