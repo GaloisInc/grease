@@ -219,7 +219,7 @@ $(STANDALONE_SHARED_LIBRARY_X64_SOS): %/test.x64.elf: %/test.c
 $(STANDALONE_SHARED_LIBRARY_PPC32_SOS): %/test.ppc32.elf: %/test.c
 	$(PPC32CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -o $@
 
-$(SHARED_LIBARY_DWARFV4_X64_SOS): %/test.x64.elf: %/test.S
+$(SHARED_LIBARY_DWARFV4_X64_SOS): %/test.x64.elf: %/test.c
 	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -gdwarf-4 -fpic -shared $< -o $@
 
 $(SHARED_LIBARY_DWARFV5_X64_SOS): %/test.x64.elf: %/test.c
