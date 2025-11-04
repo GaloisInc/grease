@@ -373,12 +373,13 @@ tryRunAddressOverride ::
   ) =>
   ArchContext arch ->
   C.GlobalVar CLM.Mem ->
+  C.GlobalVar (Symbolic.ArchRegStruct arch) ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) C.UnitType ->
   IO ()
-tryRunAddressOverride archCtx memVar crucState cfg = do
-  let archFns = archCtx Lens.^. archVals . Lens.to Symbolic.archFunctions
-  case DMSR.simStateRegs archFns crucState of
+tryRunAddressOverride archCtx memVar archRegs crucState cfg = do
+  let mbRegs = C.lookupGlobal archRegs (crucState Lens.^. C.stateGlobals)
+  case mbRegs of
     Nothing -> pure ()
     Just regs ->
       let regsEntry = CS.RegEntry (regStructRepr archCtx) regs
@@ -392,17 +393,18 @@ maybeRunAddressOverride ::
   ) =>
   ArchContext arch ->
   C.GlobalVar CLM.Mem ->
+  C.GlobalVar (Symbolic.ArchRegStruct arch) ->
   C.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r args ->
   -- | Current instruction pointer
   MC.ArchSegmentOff arch ->
   AddressOverrides arch ->
   IO ()
-maybeRunAddressOverride archCtx memVar crucState segOff (AddressOverrides tgtOvs) =
+maybeRunAddressOverride archCtx memVar archRegs crucState segOff (AddressOverrides tgtOvs) =
   case Map.lookup segOff tgtOvs of
     Nothing -> pure ()
     Just tgtOv -> do
       AddressOverride cfg _ _ <- pure tgtOv
-      tryRunAddressOverride archCtx memVar crucState cfg
+      tryRunAddressOverride archCtx memVar archRegs crucState cfg
 
 regStructRepr :: ArchContext arch -> C.TypeRepr (Symbolic.ArchRegStruct arch)
 regStructRepr arch =
