@@ -2,6 +2,7 @@
 
 .text
 .global test
+.type test, %function
 test:
     movq %rdi, %rsi
     nop 
