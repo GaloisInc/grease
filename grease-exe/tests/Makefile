@@ -104,7 +104,7 @@ STANDALONE_SHARED_LIBRARY_PPC32_SOS  = $(addsuffix /test.ppc32.elf,$(STANDALONE_
 
 
 ASSEMBLY_STANDALONE_SHARED_LIBRARY_DIRS = sanity/pass/addr-override-internal-reg-mod
-ASSEMBLY_SHARED_LIBRARY_X64_SOS    = $(addsuffix /test.x64.elf,$(ASSEMBLY_STANDALONE_SHARED_LIBRARY_DIRS))
+ASSEMBLY_SHARED_LIBRARY_X64_SOS    = $(addsuffix /extra/test.x64.elf,$(ASSEMBLY_STANDALONE_SHARED_LIBRARY_DIRS))
 
 SHARED_LIBARY_DWARFV4_DIRS = sanity/pass/dwarf-shapes-dwarfv4
 SHARED_LIBARY_DWARFV4_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV4_DIRS))
@@ -225,7 +225,7 @@ $(SHARED_LIBARY_DWARFV4_X64_SOS): %/test.x64.elf: %/test.S
 $(SHARED_LIBARY_DWARFV5_X64_SOS): %/test.x64.elf: %/test.c
 	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -gdwarf-5 -fpic -shared $< -o $@
 
- $(ASSEMBLY_SHARED_LIBRARY_X64_SOS): %/test.x64.elf: %/test.S
+ $(ASSEMBLY_SHARED_LIBRARY_X64_SOS): %/extra/test.x64.elf: %/test.S
 	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -shared $< -o $@
 
 $(RAW_BINARY_EXES): %/test.armv7l.elf: %/test.c
