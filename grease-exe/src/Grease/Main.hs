@@ -67,6 +67,7 @@ import Data.Macaw.PPC qualified as PPC
 import Data.Macaw.PPC.Symbolic qualified as PPCSymbolic
 import Data.Macaw.PPC.Symbolic.Syntax qualified as PPCSyn
 import Data.Macaw.Symbolic qualified as Symbolic
+import Data.Macaw.Symbolic.Backend qualified as Symbolic
 import Data.Macaw.Symbolic.Debug qualified as MDebug
 import Data.Macaw.Symbolic.Memory qualified as MSM (MacawProcessAssertion)
 import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
@@ -857,6 +858,7 @@ macawInitState ::
   IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
 macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConcVar setupMem initFs args = do
   let sym = CB.backendGetSym bak
+  styVar <- C.freshGlobalVar halloc "grease:archRegs" (Symbolic.crucGenRegStructType $ Symbolic.archFunctions (archCtx ^. archVals))
   regs <- liftIO (overrideRegs archCtx sym (argVals args))
   EntrypointCfgs
     { entrypointStartupOv = mbStartupOvSsa
@@ -886,7 +888,7 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable s
 
   let globals = GSIO.initFsGlobals initFs
   let initFsOv = GSIO.initFsOverride initFs
-  initState bak la macawExtImpl halloc memVar setupMem globals initFsOv archCtx setupHook addrOvs personality regs fnOvsMap mbStartupOvSsaCfg ssa
+  initState bak la macawExtImpl halloc memVar styVar setupMem globals initFsOv archCtx setupHook addrOvs personality regs fnOvsMap mbStartupOvSsaCfg ssa
 
 macawRefineOnce ::
   ( CB.IsSymBackend sym bak

@@ -74,12 +74,13 @@ greaseMacawExtImpl ::
   GreaseLogAction ->
   AddressOverrides arch ->
   CS.GlobalVar CLM.Mem ->
+  CS.GlobalVar (MC.ArchRegStruct arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch)
-greaseMacawExtImpl archCtx bak la tgtOvs memVar macawExtImpl =
+greaseMacawExtImpl archCtx bak la tgtOvs memVar archStruct macawExtImpl =
   macawExtImpl
     { CS.extensionEval = extensionEval macawExtImpl
-    , CS.extensionExec = extensionExec archCtx bak la tgtOvs memVar macawExtImpl
+    , CS.extensionExec = extensionExec archCtx bak la tgtOvs memVar archStruct macawExtImpl
     }
 
 -- | This evaluates a Macaw statement extension in the simulator.

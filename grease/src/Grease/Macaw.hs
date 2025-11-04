@@ -32,6 +32,7 @@ import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader qualified as EL
+import Data.Macaw.Symbolic qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Backend qualified as Symbolic
 import Data.Macaw.Symbolic.Memory qualified as MSM
@@ -524,6 +525,7 @@ initState ::
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   C.HandleAllocator ->
   CS.GlobalVar CLM.Mem ->
+  CS.GlobalVar (MC.ArchRegStruct arch) ->
   SetupMem sym ->
   CS.SymGlobalState sym ->
   SymIO.SomeOverrideSim sym () ->
@@ -542,11 +544,12 @@ initState ::
   -- | The 'C.CFG' of the user-requested entrypoint function.
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch) ->
   m (CS.ExecState p sym (Symbolic.MacawExt arch) (CS.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch))))
-initState bak la macawExtImpl halloc mvar mem0 globs0 (SymIO.SomeOverrideSim initFsOv) arch setupHook tgtOvs initialPersonality initialRegs funOvs mbStartupOvCfg (C.SomeCFG cfg) = do
+initState bak la macawExtImpl halloc mvar archStruct mem0 globs0 (SymIO.SomeOverrideSim initFsOv) arch setupHook tgtOvs initialPersonality initialRegs funOvs mbStartupOvCfg (C.SomeCFG cfg) = do
   let sym = CB.backendGetSym bak
   (mem1, globs1) <- liftIO $ (arch ^. archInitGlobals) (Stubs.Sym sym bak) (getSetupMem mem0) globs0
   let globs2 = CS.insertGlobal mvar mem1 globs1
-  let extImpl = greaseMacawExtImpl arch bak la tgtOvs mvar macawExtImpl
+  let globs3 = CS.insertGlobal archStruct initialRegs globs2
+  let extImpl = greaseMacawExtImpl arch bak la tgtOvs mvar archStruct macawExtImpl
   let cfgHdl = C.cfgHandle cfg
   let bindings =
         CS.FnBindings $
@@ -564,7 +567,7 @@ initState bak la macawExtImpl halloc mvar mem0 globs0 (SymIO.SomeOverrideSim ini
   pure
     $ CS.InitialState
       ctx
-      globs2
+      globs3
       CS.defaultAbortHandler
       sRepr
     $ CS.runOverrideSim sRepr
