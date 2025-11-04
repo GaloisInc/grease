@@ -32,7 +32,6 @@ import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader qualified as EL
-import Data.Macaw.Symbolic qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Backend qualified as Symbolic
 import Data.Macaw.Symbolic.Memory qualified as MSM
@@ -525,7 +524,7 @@ initState ::
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   C.HandleAllocator ->
   CS.GlobalVar CLM.Mem ->
-  CS.GlobalVar (MC.ArchRegStruct arch) ->
+  CS.GlobalVar (Symbolic.ArchRegStruct arch) ->
   SetupMem sym ->
   CS.SymGlobalState sym ->
   SymIO.SomeOverrideSim sym () ->
