@@ -23,7 +23,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
 import Data.Parameterized.TraversableFC qualified as TFC
 import Grease.Diagnostic (Diagnostic (SimulatorHooksDiagnostic), GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext)
+import Grease.Macaw.Arch (ArchContext, archVals)
 import Grease.Macaw.Overrides.Address (AddressOverrides, maybeRunAddressOverride)
 import Grease.Macaw.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Panic (panic)
@@ -185,10 +185,10 @@ extensionExec ::
   GreaseLogAction ->
   AddressOverrides arch ->
   CS.GlobalVar CLM.Mem ->
-  -- CS.GlobalVar (MC.ArchRegStruct arch) ->
+  CS.GlobalVar (MC.ArchRegStruct arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   Symbolic.MacawEvalStmtFunc (C.StmtExtension (Symbolic.MacawExt arch)) p sym (Symbolic.MacawExt arch)
-extensionExec archCtx bak la tgtOvs memVar {-archStruct-} baseExt stmt crucState = do
+extensionExec archCtx bak la tgtOvs memVar archStruct baseExt stmt crucState = do
   let sym = CB.backendGetSym bak
   case stmt of
     Symbolic.PtrAnd _w (CS.RegEntry _ x) (CS.RegEntry _ y) -> do
@@ -225,10 +225,22 @@ extensionExec archCtx bak la tgtOvs memVar {-archStruct-} baseExt stmt crucState
             , show baddr
             , show iaddr
             ]
-    Symbolic.MacawArchStateUpdate _ _ ->
-      let globs = crucState ^. CS.stateGlobals
-       in -- regs = CS.lookupGlobal archStruct globs
-          defaultExec
+    Symbolic.MacawArchStateUpdate _ updates ->
+      let nstate =
+            crucState
+              Lens.& CS.stateGlobals
+                Lens.%~ ( \globs ->
+                            let regs = CS.lookupGlobal archStruct globs
+                                regAssign = Symbolic.crucGenRegAssignment $ Symbolic.archFunctions (archCtx ^. archVals)
+                             in CS.insertGlobal
+                                  archStruct
+                                  ( case regs of
+                                      Just rs -> updateStruct regAssign rs updates
+                                      Nothing -> initStruct regAssign updates
+                                  )
+                                  globs
+                        )
+       in pure ((), nstate)
     _ -> defaultExec
  where
   defaultExec = CS.extensionExec baseExt stmt crucState
