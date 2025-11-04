@@ -103,7 +103,7 @@ STANDALONE_SHARED_LIBRARY_PPC32_SOS  = $(addsuffix /test.ppc32.elf,$(STANDALONE_
 
 
 
-ASSEMBLY_STANDALONE_SHARED_LIBRARY_DIRS = sanity/pass/addr-override-internal-reg-mod
+ASSEMBLY_STANDALONE_SHARED_LIBRARY_DIRS = sanity/pass/addr-override-internal-reg-mod sanity/pass/addr-override-call-mod
 ASSEMBLY_SHARED_LIBRARY_X64_SOS    = $(addsuffix /extra/test.x64.elf,$(ASSEMBLY_STANDALONE_SHARED_LIBRARY_DIRS))
 
 SHARED_LIBARY_DWARFV4_DIRS = sanity/pass/dwarf-shapes-dwarfv4
