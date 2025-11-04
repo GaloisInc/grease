@@ -141,7 +141,8 @@ updateStruct (rstRegs Ctx.:> currReg) (rstVals Ctx.:> currVal) regToNewVal =
   let newVal =
         case MapF.lookup currReg regToNewVal of
           Nothing -> currVal
-          Just (Symbolic.MacawCrucibleValue (CS.RegEntry _ val)) -> CS.RV val
+          Just (Symbolic.MacawCrucibleValue (CS.RegEntry _ val)) ->
+            CS.RV val
    in updateStruct rstRegs rstVals regToNewVal Ctx.:> newVal
 
 extensionExec ::
