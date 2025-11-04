@@ -154,25 +154,6 @@ updateStruct (rstRegs Ctx.:> currReg) (rstVals Ctx.:> currVal) regToNewVal =
           Just (Symbolic.MacawCrucibleValue (CS.RegEntry _ val)) -> CS.RV val
    in updateStruct rstRegs rstVals regToNewVal Ctx.:> newVal
 
--- | This function can only be called in the specific circumstance that we are initializing the reg global.
--- In that case we are guarenteed that the MapF covers all regs by the design of Macaw.
-initStruct ::
-  (C.OrdF (MC.ArchReg arch)) =>
-  Ctx.Assignment (MC.ArchReg arch) (MC.ArchRegContext arch) ->
-  MapF.MapF (MC.ArchReg arch) (Symbolic.MacawCrucibleValue (CS.RegEntry (W4.ExprBuilder t st fs))) ->
-  CS.RegValue (W4.ExprBuilder t st fs) (MC.ArchRegStruct arch)
-initStruct assn regToVal =
-  macawAssignToCruc
-    ( \x ->
-        case MapF.lookup x regToVal of
-          Nothing ->
-            panic
-              "initStruct"
-              ["Init struct should only be called on the first instance of ArchUpdate which should be all registers"]
-          Just (Symbolic.MacawCrucibleValue (CS.RegEntry _ val)) -> CS.RV val
-    )
-    assn
-
 extensionExec ::
   ( CB.IsSymBackend sym bak
   , CLM.HasLLVMAnn sym
@@ -237,7 +218,7 @@ extensionExec archCtx bak la tgtOvs memVar archStruct baseExt stmt crucState = d
                                   archStruct
                                   ( case regs of
                                       Just rs -> updateStruct regAssign rs updates
-                                      Nothing -> initStruct regAssign updates
+                                      Nothing -> panic "extensionExec" ["The register struct global should be initialized during initState."]
                                   )
                                   globs
                         )
