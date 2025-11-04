@@ -21,7 +21,6 @@ import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Backend qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
-import Data.Parameterized.TraversableFC qualified as TFC
 import Grease.Diagnostic (Diagnostic (SimulatorHooksDiagnostic), GreaseLogAction)
 import Grease.Macaw.Arch (ArchContext, archVals)
 import Grease.Macaw.Overrides.Address (AddressOverrides, maybeRunAddressOverride)
@@ -129,15 +128,6 @@ ptrAnd bak x y = do
   blk <- WI.natIte sym xptr xblk yblk
   off <- WI.bvAndBits sym xoff yoff
   pure (CLM.LLVMPointer blk off)
-
-macawAssignToCruc ::
-  (forall tp. f tp -> g (Symbolic.ToCrucibleType tp)) ->
-  Ctx.Assignment f ctx ->
-  Ctx.Assignment g (Symbolic.CtxToCrucibleType ctx)
-macawAssignToCruc f a =
-  case a of
-    Ctx.Empty -> Ctx.empty
-    b Ctx.:> x -> macawAssignToCruc f b Ctx.:> f x
 
 updateStruct ::
   (C.OrdF (MC.ArchReg arch), sym ~ W4.ExprBuilder t st fs) =>
