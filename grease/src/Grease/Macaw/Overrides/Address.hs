@@ -24,7 +24,6 @@ import Control.Monad qualified as Monad
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
-import Data.Macaw.Symbolic.Regs qualified as DMSR
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC qualified as TFC
