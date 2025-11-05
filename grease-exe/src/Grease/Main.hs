@@ -67,7 +67,6 @@ import Data.Macaw.PPC qualified as PPC
 import Data.Macaw.PPC.Symbolic qualified as PPCSymbolic
 import Data.Macaw.PPC.Symbolic.Syntax qualified as PPCSyn
 import Data.Macaw.Symbolic qualified as Symbolic
-import Data.Macaw.Symbolic.Backend qualified as Symbolic
 import Data.Macaw.Symbolic.Debug qualified as MDebug
 import Data.Macaw.Symbolic.Memory qualified as MSM (MacawProcessAssertion)
 import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
