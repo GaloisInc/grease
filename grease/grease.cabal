@@ -207,6 +207,7 @@ library
     Grease.Heuristic
     Grease.Heuristic.Diagnostic
     Grease.Heuristic.Result
+    Grease.Internal
     Grease.LLVM
     Grease.LLVM.DebugInfo
     Grease.LLVM.Overrides

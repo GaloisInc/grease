@@ -1,0 +1,11 @@
+-- See Note [Asserts] in crucible-llvm
+package crucible-llvm
+  ghc-options: -fno-ignore-asserts
+
+-- See Note [Asserts] in grease
+package grease
+  ghc-options: -fno-ignore-asserts
+
+-- See Note [Asserts] in what4
+package what4
+  ghc-options: -fno-ignore-asserts

@@ -105,7 +105,7 @@ We allow:
 - Panics, which are unrecoverable.
 
 We also encourage the use of `Control.Exception.assert`, which will be checked
-when running tests but disabled otherwise (TODO(#435)).
+when running tests but disabled otherwise.
 
 GREASE installs a top-level exception handler that catches any uncaught
 exceptions and asks users to file bugs about them.

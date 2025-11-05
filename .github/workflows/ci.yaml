@@ -89,6 +89,9 @@ jobs:
     - name: Configure build
       run: cabal configure --enable-tests --semaphore
 
+    - name: Enable assertions
+      run: cat cabal/assert.cabal.project >> cabal.project.local
+
     - name: Configure coverage collection
       run: cat cabal/coverage.cabal.project >> cabal.project.local
 
