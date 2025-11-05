@@ -503,9 +503,7 @@ assertRelocSupported arch loc (CLM.LLVMPointer _base offset) relocs =
 
 initState ::
   forall arch sym bak m t solver scope st fs p cExt.
-  ( MonadIO m
-  , MonadThrow m
-  , CB.IsSymBackend sym bak
+  ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ CB.OnlineBackend solver scope st fs
   , W4.OnlineSolver solver
@@ -541,12 +539,14 @@ initState ::
   Maybe (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   -- | The 'C.CFG' of the user-requested entrypoint function.
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch) ->
-  m (CS.ExecState p sym (Symbolic.MacawExt arch) (CS.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch))))
+  IO (CS.ExecState p sym (Symbolic.MacawExt arch) (CS.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch))))
 initState bak la macawExtImpl halloc mvar mem0 globs0 (SymIO.SomeOverrideSim initFsOv) arch setupHook tgtOvs initialPersonality initialRegs funOvs mbStartupOvCfg (C.SomeCFG cfg) = do
   let sym = CB.backendGetSym bak
+  archStruct <- C.freshGlobalVar halloc "grease:archRegs" (Symbolic.crucGenRegStructType $ Symbolic.archFunctions (arch ^. archVals))
   (mem1, globs1) <- liftIO $ (arch ^. archInitGlobals) (Stubs.Sym sym bak) (getSetupMem mem0) globs0
   let globs2 = CS.insertGlobal mvar mem1 globs1
-  let extImpl = greaseMacawExtImpl arch bak la tgtOvs mvar macawExtImpl
+  let globs3 = CS.insertGlobal archStruct initialRegs globs2
+  let extImpl = greaseMacawExtImpl arch bak la tgtOvs mvar archStruct macawExtImpl
   let cfgHdl = C.cfgHandle cfg
   let bindings =
         CS.FnBindings $
@@ -564,7 +564,7 @@ initState bak la macawExtImpl halloc mvar mem0 globs0 (SymIO.SomeOverrideSim ini
   pure
     $ CS.InitialState
       ctx
-      globs2
+      globs3
       CS.defaultAbortHandler
       sRepr
     $ CS.runOverrideSim sRepr

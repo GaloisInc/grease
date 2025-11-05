@@ -11,13 +11,18 @@ module Grease.Macaw.SimulatorHooks (
   greaseMacawExtImpl,
 ) where
 
+import Control.Lens ((^.))
+import Control.Lens qualified as Lens
 import Control.Monad.IO.Class (MonadIO)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Symbolic qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Backend qualified as Symbolic
+import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.Map qualified as MapF
 import Grease.Diagnostic (Diagnostic (SimulatorHooksDiagnostic), GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext)
+import Grease.Macaw.Arch (ArchContext, archVals)
 import Grease.Macaw.Overrides.Address (AddressOverrides, maybeRunAddressOverride)
 import Grease.Macaw.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Panic (panic)
@@ -27,6 +32,8 @@ import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.Evaluation qualified as C
+import Lang.Crucible.Simulator.ExecutionTree qualified as CS
+import Lang.Crucible.Simulator.GlobalState qualified as CS
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import What4.Expr qualified as W4
@@ -66,12 +73,13 @@ greaseMacawExtImpl ::
   GreaseLogAction ->
   AddressOverrides arch ->
   CS.GlobalVar CLM.Mem ->
+  CS.GlobalVar (MC.ArchRegStruct arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch)
-greaseMacawExtImpl archCtx bak la tgtOvs memVar macawExtImpl =
+greaseMacawExtImpl archCtx bak la tgtOvs memVar archStruct macawExtImpl =
   macawExtImpl
     { CS.extensionEval = extensionEval macawExtImpl
-    , CS.extensionExec = extensionExec archCtx bak la tgtOvs memVar macawExtImpl
+    , CS.extensionExec = extensionExec archCtx bak la tgtOvs memVar archStruct macawExtImpl
     }
 
 -- | This evaluates a Macaw statement extension in the simulator.
@@ -121,6 +129,22 @@ ptrAnd bak x y = do
   off <- WI.bvAndBits sym xoff yoff
   pure (CLM.LLVMPointer blk off)
 
+updateStruct ::
+  (C.OrdF (MC.ArchReg arch), sym ~ W4.ExprBuilder t st fs) =>
+  Ctx.Assignment (MC.ArchReg arch) ctx ->
+  Ctx.Assignment (CS.RegValue' sym) (Symbolic.CtxToCrucibleType ctx) ->
+  MapF.MapF (MC.ArchReg arch) (Symbolic.MacawCrucibleValue (CS.RegEntry (W4.ExprBuilder t st fs))) ->
+  Ctx.Assignment (CS.RegValue' sym) (Symbolic.CtxToCrucibleType ctx)
+updateStruct Ctx.Empty Ctx.Empty _ =
+  Ctx.Empty
+updateStruct (rstRegs Ctx.:> currReg) (rstVals Ctx.:> currVal) regToNewVal =
+  let newVal =
+        case MapF.lookup currReg regToNewVal of
+          Nothing -> currVal
+          Just (Symbolic.MacawCrucibleValue (CS.RegEntry _ val)) ->
+            CS.RV val
+   in updateStruct rstRegs rstVals regToNewVal Ctx.:> newVal
+
 extensionExec ::
   ( CB.IsSymBackend sym bak
   , CLM.HasLLVMAnn sym
@@ -134,9 +158,10 @@ extensionExec ::
   GreaseLogAction ->
   AddressOverrides arch ->
   CS.GlobalVar CLM.Mem ->
+  CS.GlobalVar (MC.ArchRegStruct arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   Symbolic.MacawEvalStmtFunc (C.StmtExtension (Symbolic.MacawExt arch)) p sym (Symbolic.MacawExt arch)
-extensionExec archCtx bak la tgtOvs memVar baseExt stmt crucState = do
+extensionExec archCtx bak la tgtOvs memVar archStruct baseExt stmt crucState = do
   let sym = CB.backendGetSym bak
   case stmt of
     Symbolic.PtrAnd _w (CS.RegEntry _ x) (CS.RegEntry _ y) -> do
@@ -164,7 +189,7 @@ extensionExec archCtx bak la tgtOvs memVar baseExt stmt crucState = do
       case MM.incSegmentOff baddr (MM.memWordToUnsigned iaddr) of
         Just segOff -> do
           doLog la (Diag.ExecutingInstruction (PP.pretty segOff) dis)
-          maybeRunAddressOverride archCtx memVar crucState segOff tgtOvs
+          maybeRunAddressOverride archCtx memVar archStruct crucState segOff tgtOvs
           pure ((), crucState)
         Nothing ->
           panic
@@ -173,6 +198,22 @@ extensionExec archCtx bak la tgtOvs memVar baseExt stmt crucState = do
             , show baddr
             , show iaddr
             ]
+    Symbolic.MacawArchStateUpdate _ updates ->
+      let updateRegsInGlobals globs =
+            let regs = CS.lookupGlobal archStruct globs
+                regAssign = Symbolic.crucGenRegAssignment $ Symbolic.archFunctions (archCtx ^. archVals)
+             in CS.insertGlobal
+                  archStruct
+                  ( case regs of
+                      Just rs -> updateStruct regAssign rs updates
+                      Nothing -> panic "extensionExec" ["The register struct global should be initialized during initState."]
+                  )
+                  globs
+          newState =
+            crucState
+              Lens.& CS.stateGlobals
+                Lens.%~ updateRegsInGlobals
+       in pure ((), newState)
     _ -> defaultExec
  where
   defaultExec = CS.extensionExec baseExt stmt crucState
