@@ -199,21 +199,21 @@ extensionExec archCtx bak la tgtOvs memVar archStruct baseExt stmt crucState = d
             , show iaddr
             ]
     Symbolic.MacawArchStateUpdate _ updates ->
-      let nstate =
+      let updateRegsInGlobals globs =
+            let regs = CS.lookupGlobal archStruct globs
+                regAssign = Symbolic.crucGenRegAssignment $ Symbolic.archFunctions (archCtx ^. archVals)
+             in CS.insertGlobal
+                  archStruct
+                  ( case regs of
+                      Just rs -> updateStruct regAssign rs updates
+                      Nothing -> panic "extensionExec" ["The register struct global should be initialized during initState."]
+                  )
+                  globs
+          newState =
             crucState
               Lens.& CS.stateGlobals
-                Lens.%~ ( \globs ->
-                            let regs = CS.lookupGlobal archStruct globs
-                                regAssign = Symbolic.crucGenRegAssignment $ Symbolic.archFunctions (archCtx ^. archVals)
-                             in CS.insertGlobal
-                                  archStruct
-                                  ( case regs of
-                                      Just rs -> updateStruct regAssign rs updates
-                                      Nothing -> panic "extensionExec" ["The register struct global should be initialized during initState."]
-                                  )
-                                  globs
-                        )
-       in pure ((), nstate)
+                Lens.%~ updateRegsInGlobals
+       in pure ((), newState)
     _ -> defaultExec
  where
   defaultExec = CS.extensionExec baseExt stmt crucState

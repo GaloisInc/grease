@@ -887,7 +887,7 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable s
 
   let globals = GSIO.initFsGlobals initFs
   let initFsOv = GSIO.initFsOverride initFs
-  initState bak la macawExtImpl halloc memVar styVar setupMem globals initFsOv archCtx setupHook addrOvs personality regs fnOvsMap mbStartupOvSsaCfg ssa
+  initState bak la macawExtImpl halloc memVar setupMem globals initFsOv archCtx setupHook addrOvs personality regs fnOvsMap mbStartupOvSsaCfg ssa
 
 macawRefineOnce ::
   ( CB.IsSymBackend sym bak
