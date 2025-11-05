@@ -858,7 +858,6 @@ macawInitState ::
   IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
 macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConcVar setupMem initFs args = do
   let sym = CB.backendGetSym bak
-  styVar <- C.freshGlobalVar halloc "grease:archRegs" (Symbolic.crucGenRegStructType $ Symbolic.archFunctions (archCtx ^. archVals))
   regs <- liftIO (overrideRegs archCtx sym (argVals args))
   EntrypointCfgs
     { entrypointStartupOv = mbStartupOvSsa
