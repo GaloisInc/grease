@@ -10,4 +10,7 @@ __attribute__((target("thumb"))) int test(int *x) { return callee(x); }
 
 // arm: flags {"--address", "0x1008b"}
 // arm: go(prog)
-// arm: uninit_stack()
+
+// TODO: Ideally, Macaw's code discovery would be smart enough to figure this
+// out, but it currently isn't.
+// arm: check "Could not identify block"
