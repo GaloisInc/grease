@@ -119,8 +119,19 @@ SHARED_LIBARY_DWARFV5_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV
 RAW_BINARY_DIRS = sanity/pass/simple-static
 RAW_BINARY_EXES = $(addsuffix /test.armv7l.elf,$(RAW_BINARY_DIRS))
 
-
-STATIC_DIRS = $(filter-out $(DYNAMIC_DIRS) $(DYNAMIC_PIE_DIRS) $(STRIPPED_STATIC_DIRS) $(ASSEMBLY_ARM_DIRS) $(ASSEMBLY_STANDALONE_SHARED_LIBRARY_DIRS) $(STATIC_WITH_LIBS_DIRS) $(STACK_PROTECTOR_DIRS) $(SHARED_LIBRARY_DIRS) $(STANDALONE_SHARED_LIBRARY_DIRS) $(SHARED_LIBARY_DWARFV4_DIRS) $(SHARED_LIBARY_DWARFV5_DIRS) $(RAW_BINARY_DIRS), $(DIRS))
+NON_STATIC_DIRS = $(DYNAMIC_DIRS) \
+                  $(DYNAMIC_PIE_DIRS) \
+                  $(STRIPPED_STATIC_DIRS) \
+                  $(ASSEMBLY_ARM_DIRS) \
+                  $(ASSEMBLY_STANDALONE_SHARED_LIBRARY_DIRS) \
+                  $(STATIC_WITH_LIBS_DIRS) \
+                  $(STACK_PROTECTOR_DIRS) \
+                  $(SHARED_LIBRARY_DIRS) \
+                  $(STANDALONE_SHARED_LIBRARY_DIRS) \
+                  $(SHARED_LIBARY_DWARFV4_DIRS) \
+                  $(SHARED_LIBARY_DWARFV5_DIRS) \
+                  $(RAW_BINARY_DIRS)
+STATIC_DIRS = $(filter-out $(NON_STATIC_DIRS), $(DIRS))
 STATIC_ARM_EXES   = $(addsuffix /test.armv7l.elf,$(STATIC_DIRS))
 # See discussion on !288 for why libpng-cve-2018-13785 appears here.
 STATIC_X64_EXES   = $(addsuffix /test.x64.elf,$(STATIC_DIRS) refine/neg/libpng-cve-2018-13785)
