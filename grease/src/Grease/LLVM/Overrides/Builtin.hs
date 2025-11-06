@@ -11,7 +11,6 @@ module Grease.LLVM.Overrides.Builtin (
 
 import Data.List qualified as List
 import Data.Sequence qualified as Seq
-import Grease.LLVM.Overrides.Defs (customLLVMOverrides)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.Intrinsics.LLVM qualified as LLVM
@@ -62,7 +61,6 @@ libcOverrides fs =
   List.concat @[]
     [ Libc.libc_overrides
     , symioLlvmOverrides
-    , customLLVMOverrides
     ]
  where
   symioLlvmOverrides :: [CLI.SomeLLVMOverride p sym ext]
