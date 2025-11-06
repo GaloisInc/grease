@@ -232,7 +232,7 @@ $(RAW_BINARY_EXES): %/test.armv7l.elf: %/test.c
 	$(ARMCC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) $(CFLAGS_STATIC) -c $< -o  $*/test.o
 	objcopy -I elf32-little $*/test.o --dump-section .text=$@
 	rm $*/test.o
-	
+
 $(BCS): %/test.bc: %/test.c
 	$(X64CC) $(shell ./extract-cflags.py $<) -c -o $@ $<
 
