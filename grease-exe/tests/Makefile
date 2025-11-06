@@ -103,6 +103,9 @@ STANDALONE_SHARED_LIBRARY_PPC32_SOS  = $(addsuffix /test.ppc32.elf,$(STANDALONE_
 
 
 
+ASSEMBLY_ARM_DIRS = sanity/pass/push-pop
+ASSEMBLY_ARM_EXES = $(addsuffix /extra/test.armv7l.elf,$(ASSEMBLY_ARM_DIRS))
+
 ASSEMBLY_STANDALONE_SHARED_LIBRARY_DIRS = sanity/pass/addr-override-internal-reg-mod sanity/pass/addr-override-call-mod
 ASSEMBLY_SHARED_LIBRARY_X64_SOS = $(addsuffix /extra/test.x64.elf,$(ASSEMBLY_STANDALONE_SHARED_LIBRARY_DIRS))
 
@@ -116,8 +119,19 @@ SHARED_LIBARY_DWARFV5_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV
 RAW_BINARY_DIRS = sanity/pass/simple-static
 RAW_BINARY_EXES = $(addsuffix /test.armv7l.elf,$(RAW_BINARY_DIRS))
 
-
-STATIC_DIRS = $(filter-out $(DYNAMIC_DIRS) $(DYNAMIC_PIE_DIRS) $(STRIPPED_STATIC_DIRS) $(ASSEMBLY_STANDALONE_SHARED_LIBRARY_DIRS) $(STATIC_WITH_LIBS_DIRS) $(STACK_PROTECTOR_DIRS) $(SHARED_LIBRARY_DIRS) $(STANDALONE_SHARED_LIBRARY_DIRS) $(SHARED_LIBARY_DWARFV4_DIRS) $(SHARED_LIBARY_DWARFV5_DIRS) $(RAW_BINARY_DIRS), $(DIRS))
+NON_STATIC_DIRS = $(DYNAMIC_DIRS) \
+                  $(DYNAMIC_PIE_DIRS) \
+                  $(STRIPPED_STATIC_DIRS) \
+                  $(ASSEMBLY_ARM_DIRS) \
+                  $(ASSEMBLY_STANDALONE_SHARED_LIBRARY_DIRS) \
+                  $(STATIC_WITH_LIBS_DIRS) \
+                  $(STACK_PROTECTOR_DIRS) \
+                  $(SHARED_LIBRARY_DIRS) \
+                  $(STANDALONE_SHARED_LIBRARY_DIRS) \
+                  $(SHARED_LIBARY_DWARFV4_DIRS) \
+                  $(SHARED_LIBARY_DWARFV5_DIRS) \
+                  $(RAW_BINARY_DIRS)
+STATIC_DIRS = $(filter-out $(NON_STATIC_DIRS), $(DIRS))
 STATIC_ARM_EXES   = $(addsuffix /test.armv7l.elf,$(STATIC_DIRS))
 # See discussion on !288 for why libpng-cve-2018-13785 appears here.
 STATIC_X64_EXES   = $(addsuffix /test.x64.elf,$(STATIC_DIRS) refine/neg/libpng-cve-2018-13785)
@@ -131,7 +145,7 @@ EXES = $(DYNAMIC_ARM_EXES) $(DYNAMIC_PPC32_EXES) \
 	   $(STACK_PROTECTOR_ARM_EXES) $(STACK_PROTECTOR_X64_EXES) \
 	   $(SHARED_LIBRARY_ARM_EXES) $(SHARED_LIBRARY_X64_EXES) $(SHARED_LIBRARY_PPC32_EXES) \
 	   $(STANDALONE_SHARED_LIBRARY_ARM_SOS) $(STANDALONE_SHARED_LIBRARY_X64_SOS) $(STANDALONE_SHARED_LIBRARY_PPC32_SOS) $(SHARED_LIBARY_DWARFV4_X64_SOS) $(SHARED_LIBARY_DWARFV5_X64_SOS) \
-	   $(ASSEMBLY_SHARED_LIBRARY_X64_SOS) \
+	   $(ASSEMBLY_ARM_DIRS) $(ASSEMBLY_SHARED_LIBRARY_X64_SOS) \
 	   $(RAW_BINARY_EXES)
 
 SOS = $(SHARED_LIBRARY_ARM_SOS) $(SHARED_LIBRARY_X64_SOS) $(SHARED_LIBRARY_PPC32_EXES)
@@ -225,6 +239,9 @@ $(SHARED_LIBARY_DWARFV4_X64_SOS): %/test.x64.elf: %/test.c
 $(SHARED_LIBARY_DWARFV5_X64_SOS): %/test.x64.elf: %/test.c
 	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -gdwarf-5 -fpic -shared $< -o $@
 
+$(ASSEMBLY_ARM_EXES): %/extra/test.armv7l.elf: %/test.S
+	$(ARMCC) $(CFLAGS) $< -o $@
+
  $(ASSEMBLY_SHARED_LIBRARY_X64_SOS): %/extra/test.x64.elf: %/test.S
 	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -shared $< -o $@
 
@@ -232,7 +249,7 @@ $(RAW_BINARY_EXES): %/test.armv7l.elf: %/test.c
 	$(ARMCC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) $(CFLAGS_STATIC) -c $< -o  $*/test.o
 	objcopy -I elf32-little $*/test.o --dump-section .text=$@
 	rm $*/test.o
-	
+
 $(BCS): %/test.bc: %/test.c
 	$(X64CC) $(shell ./extract-cflags.py $<) -c -o $@ $<
 
