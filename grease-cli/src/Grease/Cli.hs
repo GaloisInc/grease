@@ -45,6 +45,7 @@ import Grease.Diagnostic.Severity qualified as Sev
 import Grease.Entrypoint
 import Grease.Macaw.Overrides.Address (addressOverrideParser)
 import Grease.Macaw.PLT
+import Grease.Options (SimOpts (simDumpCoverage))
 import Grease.Options qualified as GO
 import Grease.Shape.Simple (SimpleShape)
 import Grease.Shape.Simple qualified as Simple
@@ -452,6 +453,22 @@ simOpts = do
   simFsOpts <- fsOptsParser
   simInitPrecondOpts <- initPrecondOptsParser
   simBoundsOpts <- boundsOptsParser
+  simDumpCoverage <-
+    Opt.option
+      Opt.auto
+      ( Opt.long "--dump-coverage"
+          <> Opt.metavar "FILE"
+          <> Opt.value Nothing
+          <> Opt.help "Dump the addresses of executed instructions"
+      )
+  simDumpSectionMap <-
+    Opt.option
+      Opt.auto
+      ( Opt.long "--dump-sections"
+          <> Opt.metavar "FILE"
+          <> Opt.value Nothing
+          <> Opt.help "Dump a mapping from section indexes to addresses"
+      )
   pure GO.SimOpts{..}
  where
   callOptionsGroup = "Call options"
