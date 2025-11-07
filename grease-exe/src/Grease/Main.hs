@@ -198,7 +198,7 @@ import Prettyprinter.Render.Text qualified as PP
 import System.Directory (Permissions, getPermissions)
 import System.Exit as Exit
 import System.FilePath (FilePath)
-import System.IO (Handle, IO, IOMode (WriteMode), withFile)
+import System.IO (Handle, IO, IOMode (WriteMode), hPutStrLn, withFile)
 import Text.LLVM qualified as L
 import Text.Read (readMaybe)
 import Text.Show (Show (..))
@@ -965,11 +965,13 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallbac
                 ]
 
 addressCallBack ::
-  Proxy arch ->
+  MM.MemWidth (MC.RegAddrWidth (MC.ArchReg arch)) =>
+  Proxy
+    arch ->
   Handle ->
   MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)) ->
   IO ()
-addressCallBack = undefined
+addressCallBack _ hdl addr = hPutStrLn hdl (show addr)
 
 withMaybeFile :: Maybe FilePath -> IOMode -> (Maybe Handle -> IO a) -> IO a
 withMaybeFile Nothing _ f = f Nothing
