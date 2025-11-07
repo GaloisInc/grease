@@ -461,25 +461,25 @@ newtype SectionDump = SectionDump [SectionInfo] deriving (Generic, Show)
 
 instance ToJSON SectionDump
 
-dumpSections :: MM.MemWidth (MC.ArchAddrWidth arch) => LoadedProgram arch -> SectionDump
-dumpSections prog =
-  let bin = progLoadedBinary prog
-      mem = BL.memoryImage bin
-      secs = MM.memSectionIndexMap mem
-      sinfo =
-        fmap
-          ( \(secIdx, memSegOff) ->
-              let
-                seg = memSegOffToSectionMemAddr memSegOff
-               in
-                SectionInfo
-                  { secInfoSectionIndex = fromIntegral secIdx
-                  , secInfoSectionAddr =
-                      seg
-                  }
-          )
-          (Map.toList secs)
-   in SectionDump sinfo
+dumpSections :: MM.MemWidth w => MM.Memory w -> SectionDump
+dumpSections mem =
+  let
+    secs = MM.memSectionIndexMap mem
+    sinfo =
+      fmap
+        ( \(secIdx, memSegOff) ->
+            let
+              seg = memSegOffToSectionMemAddr memSegOff
+             in
+              SectionInfo
+                { secInfoSectionIndex = fromIntegral secIdx
+                , secInfoSectionAddr =
+                    seg
+                }
+        )
+        (Map.toList secs)
+   in
+    SectionDump sinfo
 
 -- Helper, not exported
 --

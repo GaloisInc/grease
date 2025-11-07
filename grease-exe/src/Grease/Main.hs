@@ -93,7 +93,7 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.String (String)
 import Data.Text qualified as Text
-import Data.Text.IO (hPutStrLn, putStrLn)
+import Data.Text.IO (putStrLn)
 import Data.Text.IO qualified as Text.IO
 import Data.Traversable (for, traverse)
 import Data.Traversable.WithIndex (iforM)
@@ -198,7 +198,7 @@ import Prettyprinter.Render.Text qualified as PP
 import System.Directory (Permissions, getPermissions)
 import System.Exit as Exit
 import System.FilePath (FilePath)
-import System.IO (Handle, IO, IOMode (WriteMode), withFile)
+import System.IO (Handle, IO, IOMode (WriteMode), hPutStrLn, withFile)
 import Text.LLVM qualified as L
 import Text.Read (readMaybe)
 import Text.Show (Show (..))
@@ -973,7 +973,7 @@ addressCallBack ::
   IO ()
 addressCallBack _ hdl addr =
   let js = renderJSON $ Load.memSegOffToSectionMemAddr addr
-   in hPutStrLn hdl js
+   in Text.IO.hPutStrLn hdl js
 
 withMaybeFile :: Maybe FilePath -> IOMode -> (Maybe Handle -> IO a) -> IO a
 withMaybeFile Nothing _ f = f Nothing
@@ -1250,7 +1250,11 @@ simulateMacawCfgs ::
   IO Results
 simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs = do
   let fm = W4.FloatRealRepr
-  withMaybeFile (simDumpCoverage simOpts) WriteMode $ \covHandle ->
+  withMaybeFile (simDumpCoverage simOpts) WriteMode $ \covHandle -> do
+    withMaybeFile (simDumpSectionMap simOpts) WriteMode $ \secMapHandle -> do
+      let mem = mcMemory macawCfgConfig
+      let secsJson = Load.dumpSections mem
+      Maybe.maybe (pure ()) (\hand -> Text.IO.hPutStrLn hand (renderJSON secsJson)) secMapHandle
     withSolverOnlineBackend (simSolver simOpts) fm globalNonceGenerator $ \bak -> do
       results <- do
         let nEntries = Map.size cfgs
