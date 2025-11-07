@@ -147,6 +147,7 @@ updateStruct (rstRegs Ctx.:> currReg) (rstVals Ctx.:> currVal) regToNewVal =
             CS.RV val
    in updateStruct rstRegs rstVals regToNewVal Ctx.:> newVal
 
+-- | An IO action that observes the starting address of an instruction before it executes.
 newtype ExecutingAddressAction arch = ExecutingAddressAction (MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)) -> IO ())
 
 extensionExec ::

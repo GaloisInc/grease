@@ -434,8 +434,8 @@ resolveCoreDumpEntrypointAddress la loadOpts mem binaryHeaderInfo symMap coreDum
             prStatusPcWithOffset
       pure nearestEntrypointAddr
 
--- | A JSON representation of a MemAddr
--- That is an offset form a region
+-- | A JSON representation of a 'MM.MemAddr'
+-- That is an offset from a relocatable region
 data SectionMemAddr = SectionMemAddr
   { secInfoRegionIndex :: Int
   , secInfoRegionOffset :: Word64
@@ -449,6 +449,9 @@ memSegOffToSectionMemAddr memSegOff =
   let addr = MM.segoffAddr memSegOff
    in SectionMemAddr{secInfoRegionIndex = MM.addrBase addr, secInfoRegionOffset = fromIntegral $ MM.addrOffset addr}
 
+-- | A binding between a section index
+-- and the starting memory address ('MM.MemAddr')
+-- for the section
 data SectionInfo = SectionInfo
   { secInfoSectionIndex :: Int
   , secInfoSectionAddr :: SectionMemAddr
@@ -457,10 +460,15 @@ data SectionInfo = SectionInfo
 
 instance ToJSON SectionInfo
 
+-- | A dump of all sections in the section map that can be rendered as
+-- JSON
 newtype SectionDump = SectionDump [SectionInfo] deriving (Generic, Show)
 
 instance ToJSON SectionDump
 
+-- | Dumps the section map of memory that is a map from SectionIndex->memSegOff in a
+-- format that can be rendered as JSON. Each section index is mapped to a json representation of a
+-- 'MM.MemAddr' that contains the base region of the address along with the offset.
 dumpSections :: MM.MemWidth w => MM.Memory w -> SectionDump
 dumpSections mem =
   let
