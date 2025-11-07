@@ -27,6 +27,11 @@ cabal build exe:grease
 
 See [Test suite](tests.md) for how to run the tests.
 
+To build a binary suitable for releases, run the following before `cabal build`:
+```sh
+cat cabal/release.cabal.project >> cabal.project.local
+```
+
 ## Docker
 
 GREASE also offers a nightly Docker image that gets built after each commit to

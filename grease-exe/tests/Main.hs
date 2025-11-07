@@ -27,10 +27,12 @@ import Data.Text.IO qualified as Text.IO
 import Data.Traversable (for)
 import Grease.Cli (optsFromList)
 import Grease.Diagnostic (Diagnostic, GreaseLogAction)
+import Grease.Internal (assertionsEnabled)
 import Grease.Main (logResults, simulateFile)
 import Grease.Options (SimOpts (..), optsSimOpts)
 import HsLua (Lua)
 import HsLua qualified as Lua
+import Lang.Crucible.LLVM.Internal qualified as CLLVM (assertionsEnabled)
 import Lumberjack qualified as LJ
 import Oughta qualified
 import Prettyprinter qualified as PP
@@ -41,6 +43,7 @@ import System.FilePath ((</>))
 import System.FilePath qualified as FilePath
 import Test.Tasty qualified as T
 import Test.Tasty.HUnit qualified as T.U
+import What4.Internal qualified as WInt (assertionsEnabled)
 import Prelude hiding (fail)
 
 prelude :: Text.Text
@@ -259,6 +262,24 @@ discoverTests d = do
               pure [tests]
             else pure (fileTest d ent)
 
+assertTests :: T.TestTree
+assertTests =
+  T.testGroup
+    "assertions"
+    [ -- See Note [Asserts] in crucible-llvm
+      T.U.testCase "Crucible-LLVM assertions enabled" $ do
+        assertsEnabled <- CLLVM.assertionsEnabled
+        T.U.assertBool "Crucible-LLVM assertions should be enabled" assertsEnabled
+    , -- See Note [Asserts] in grease
+      T.U.testCase "GREASE assertions enabled" $ do
+        assertsEnabled <- assertionsEnabled
+        T.U.assertBool "GREASE assertions should be enabled" assertsEnabled
+    , -- See Note [Asserts] in what4
+      T.U.testCase "What4 assertions enabled" $ do
+        assertsEnabled <- WInt.assertionsEnabled
+        T.U.assertBool "What4 assertions should be enabled" assertsEnabled
+    ]
+
 main :: IO ()
 main = do
   -- Each entry in this list should be documented in doc/dev.md
@@ -274,4 +295,4 @@ main = do
         , "x86"
         ]
   tests <- mapM discoverTests (map ("tests" </>) dirs)
-  T.defaultMain $ T.testGroup "Tests" (shapeTests : tests)
+  T.defaultMain $ T.testGroup "Tests" (assertTests : shapeTests : tests)

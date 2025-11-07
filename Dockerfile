@@ -69,7 +69,8 @@ RUN cabal v2-update
 RUN mkdir -p /home/src
 COPY . /home/src
 WORKDIR /home/src
-RUN cabal configure -w "ghc-${GHC_VER}" --enable-tests -j5 && \
+RUN cabal configure -w "ghc-${GHC_VER}" --enable-tests --semaphore && \
+    cat cabal/release.cabal.project >> cabal.project.local && \
     cabal build pkg:grease-exe
 RUN cabal test pkg:grease-exe
 

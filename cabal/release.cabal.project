@@ -1,0 +1,9 @@
+-- Options suitable for release builds of GREASE.
+--
+-- To enable these options try:
+--
+--     cat cabal/release.cabal.project >> cabal.project.local
+
+-- Ignore `Control.Exception.assert`s.
+-- Overrides `-fno-ignore-asserts` in `../cabal.project`.
+ghc-options: -fignore-asserts
