@@ -14,6 +14,9 @@ module Grease.Macaw.Load (
   LoadError (..),
   load,
   dumpSections,
+  SectionInfo (..),
+  SectionMemAddr (..),
+  memSegOffToSectionMemAddr,
 ) where
 
 import Control.Monad (forM, when)
@@ -441,6 +444,11 @@ data SectionMemAddr = SectionMemAddr
 
 instance ToJSON SectionMemAddr
 
+memSegOffToSectionMemAddr :: (MM.MemWidth w) => MM.MemSegmentOff w -> SectionMemAddr
+memSegOffToSectionMemAddr memSegOff =
+  let addr = MM.segoffAddr memSegOff
+   in SectionMemAddr{secInfoRegionIndex = MM.addrBase addr, secInfoRegionOffset = fromIntegral $ MM.addrOffset addr}
+
 data SectionInfo = SectionInfo
   { secInfoSectionIndex :: Int
   , secInfoSectionAddr :: SectionMemAddr
@@ -461,17 +469,14 @@ dumpSections prog =
       sinfo =
         fmap
           ( \(secIdx, memSegOff) ->
-              let addr = MM.segoffAddr memSegOff
-                  seg =
-                    SectionMemAddr
-                      { secInfoRegionIndex = MM.addrBase addr
-                      , secInfoRegionOffset = fromIntegral $ MM.addrOffset addr
-                      }
-               in SectionInfo
-                    { secInfoSectionIndex = fromIntegral secIdx
-                    , secInfoSectionAddr =
-                        seg
-                    }
+              let
+                seg = memSegOffToSectionMemAddr memSegOff
+               in
+                SectionInfo
+                  { secInfoSectionIndex = fromIntegral secIdx
+                  , secInfoSectionAddr =
+                      seg
+                  }
           )
           (Map.toList secs)
    in SectionDump sinfo

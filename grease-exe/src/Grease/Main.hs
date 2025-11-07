@@ -93,7 +93,7 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.String (String)
 import Data.Text qualified as Text
-import Data.Text.IO (putStrLn)
+import Data.Text.IO (hPutStrLn, putStrLn)
 import Data.Text.IO qualified as Text.IO
 import Data.Traversable (for, traverse)
 import Data.Traversable.WithIndex (iforM)
@@ -198,7 +198,7 @@ import Prettyprinter.Render.Text qualified as PP
 import System.Directory (Permissions, getPermissions)
 import System.Exit as Exit
 import System.FilePath (FilePath)
-import System.IO (Handle, IO, IOMode (WriteMode), hPutStrLn, withFile)
+import System.IO (Handle, IO, IOMode (WriteMode), withFile)
 import Text.LLVM qualified as L
 import Text.Read (readMaybe)
 import Text.Show (Show (..))
@@ -207,7 +207,7 @@ import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
-import Prelude (Int, Integer, Integral, Num (..), fromIntegral, undefined)
+import Prelude (Int, Integer, Integral, Num (..), fromIntegral)
 
 {- Note [Explicitly listed errors]
 
@@ -971,7 +971,9 @@ addressCallBack ::
   Handle ->
   MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)) ->
   IO ()
-addressCallBack _ hdl addr = hPutStrLn hdl (show addr)
+addressCallBack _ hdl addr =
+  let js = renderJSON $ Load.memSegOffToSectionMemAddr addr
+   in hPutStrLn hdl js
 
 withMaybeFile :: Maybe FilePath -> IOMode -> (Maybe Handle -> IO a) -> IO a
 withMaybeFile Nothing _ f = f Nothing
