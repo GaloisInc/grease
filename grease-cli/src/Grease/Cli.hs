@@ -454,20 +454,18 @@ simOpts = do
   simInitPrecondOpts <- initPrecondOptsParser
   simBoundsOpts <- boundsOptsParser
   simDumpCoverage <-
-    Opt.option
-      Opt.auto
-      ( Opt.long "--dump-coverage"
-          <> Opt.metavar "FILE"
-          <> Opt.value Nothing
-          <> Opt.help "Dump the addresses of executed instructions"
+    Opt.optional
+      ( Opt.strOption $
+          Opt.long "dump-coverage"
+            <> Opt.metavar "FILE"
+            <> Opt.help "Dump the addresses of executed instructions"
       )
   simDumpSectionMap <-
-    Opt.option
-      Opt.auto
-      ( Opt.long "--dump-sections"
-          <> Opt.metavar "FILE"
-          <> Opt.value Nothing
-          <> Opt.help "Dump a mapping from section indexes to addresses"
+    Opt.optional
+      ( Opt.strOption $
+          Opt.long "dump-sections"
+            <> Opt.metavar "FILE"
+            <> Opt.help "Dump a mapping from section indexes to addresses"
       )
   pure GO.SimOpts{..}
  where
