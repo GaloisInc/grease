@@ -9,6 +9,7 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.SimulatorHooks (
   greaseMacawExtImpl,
+  ExecutingAddressAction (..),
 ) where
 
 import Control.Lens ((^.))
@@ -71,15 +72,16 @@ greaseMacawExtImpl ::
   ArchContext arch ->
   bak ->
   GreaseLogAction ->
+  ExecutingAddressAction arch ->
   AddressOverrides arch ->
   CS.GlobalVar CLM.Mem ->
   CS.GlobalVar (MC.ArchRegStruct arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch)
-greaseMacawExtImpl archCtx bak la tgtOvs memVar archStruct macawExtImpl =
+greaseMacawExtImpl archCtx bak la execCallback tgtOvs memVar archStruct macawExtImpl =
   macawExtImpl
     { CS.extensionEval = extensionEval macawExtImpl
-    , CS.extensionExec = extensionExec archCtx bak la tgtOvs memVar archStruct macawExtImpl
+    , CS.extensionExec = extensionExec archCtx bak la execCallback tgtOvs memVar archStruct macawExtImpl
     }
 
 -- | This evaluates a Macaw statement extension in the simulator.
@@ -145,6 +147,8 @@ updateStruct (rstRegs Ctx.:> currReg) (rstVals Ctx.:> currVal) regToNewVal =
             CS.RV val
    in updateStruct rstRegs rstVals regToNewVal Ctx.:> newVal
 
+newtype ExecutingAddressAction arch = ExecutingAddressAction (MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)) -> IO ())
+
 extensionExec ::
   ( CB.IsSymBackend sym bak
   , CLM.HasLLVMAnn sym
@@ -156,12 +160,14 @@ extensionExec ::
   ArchContext arch ->
   bak ->
   GreaseLogAction ->
+  -- | Action for logging executed instructions
+  ExecutingAddressAction arch ->
   AddressOverrides arch ->
   CS.GlobalVar CLM.Mem ->
   CS.GlobalVar (MC.ArchRegStruct arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   Symbolic.MacawEvalStmtFunc (C.StmtExtension (Symbolic.MacawExt arch)) p sym (Symbolic.MacawExt arch)
-extensionExec archCtx bak la tgtOvs memVar archStruct baseExt stmt crucState = do
+extensionExec archCtx bak la (ExecutingAddressAction executeInsnAct) tgtOvs memVar archStruct baseExt stmt crucState = do
   let sym = CB.backendGetSym bak
   case stmt of
     Symbolic.PtrAnd _w (CS.RegEntry _ x) (CS.RegEntry _ y) -> do
@@ -189,6 +195,7 @@ extensionExec archCtx bak la tgtOvs memVar archStruct baseExt stmt crucState = d
       case MM.incSegmentOff baddr (MM.memWordToUnsigned iaddr) of
         Just segOff -> do
           doLog la (Diag.ExecutingInstruction (PP.pretty segOff) dis)
+          executeInsnAct segOff
           maybeRunAddressOverride archCtx memVar archStruct crucState segOff tgtOvs
           pure ((), crucState)
         Nothing ->

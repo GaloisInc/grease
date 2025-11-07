@@ -13,16 +13,19 @@ module Grease.Macaw.Load (
   LoadedProgram (..),
   LoadError (..),
   load,
+  dumpSections,
 ) where
 
 import Control.Monad (forM, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
+import Data.Aeson (ToJSON)
 import Data.ByteString qualified as BS
 import Data.ElfEdit qualified as Elf
 import Data.ElfEdit.CoreDump qualified as CoreDump
 import Data.Function ((&))
 import Data.List qualified as List
+import Data.Macaw.BinaryLoader qualified as BL
 import Data.Macaw.BinaryLoader qualified as Loader
 import Data.Macaw.BinaryLoader.ELF qualified as Loader
 import Data.Macaw.CFG qualified as MC
@@ -38,6 +41,7 @@ import Data.Text.Encoding qualified as Text
 import Data.Tuple qualified as Tuple
 import Data.Vector qualified as Vec
 import Data.Word (Word64)
+import GHC.Generics
 import Grease.Diagnostic
 import Grease.Entrypoint (Entrypoint (..), EntrypointLocation (..))
 import Grease.Macaw.Load.Diagnostic qualified as Diag
@@ -426,6 +430,51 @@ resolveCoreDumpEntrypointAddress la loadOpts mem binaryHeaderInfo symMap coreDum
             (functionNameFromByteString nearestEntrypointName)
             prStatusPcWithOffset
       pure nearestEntrypointAddr
+
+-- | A JSON representation of a MemAddr
+-- That is an offset form a region
+data SectionMemAddr = SectionMemAddr
+  { secInfoRegionIndex :: Int
+  , secInfoRegionOffset :: Word64
+  }
+  deriving (Generic, Show)
+
+instance ToJSON SectionMemAddr
+
+data SectionInfo = SectionInfo
+  { secInfoSectionIndex :: Int
+  , secInfoSectionAddr :: SectionMemAddr
+  }
+  deriving (Generic, Show)
+
+instance ToJSON SectionInfo
+
+newtype SectionDump = SectionDump [SectionInfo] deriving (Generic, Show)
+
+instance ToJSON SectionDump
+
+dumpSections :: MM.MemWidth (MC.ArchAddrWidth arch) => LoadedProgram arch -> SectionDump
+dumpSections prog =
+  let bin = progLoadedBinary prog
+      mem = BL.memoryImage bin
+      secs = MM.memSectionIndexMap mem
+      sinfo =
+        fmap
+          ( \(secIdx, memSegOff) ->
+              let addr = MM.segoffAddr memSegOff
+                  seg =
+                    SectionMemAddr
+                      { secInfoRegionIndex = MM.addrBase addr
+                      , secInfoRegionOffset = fromIntegral $ MM.addrOffset addr
+                      }
+               in SectionInfo
+                    { secInfoSectionIndex = fromIntegral secIdx
+                    , secInfoSectionAddr =
+                        seg
+                    }
+          )
+          (Map.toList secs)
+   in SectionDump sinfo
 
 -- Helper, not exported
 --
