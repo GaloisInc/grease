@@ -198,7 +198,7 @@ import Prettyprinter.Render.Text qualified as PP
 import System.Directory (Permissions, getPermissions)
 import System.Exit as Exit
 import System.FilePath (FilePath)
-import System.IO (Handle, IO, IOMode (WriteMode), hPutStrLn, withFile)
+import System.IO (Handle, IO, IOMode (WriteMode), withFile)
 import Text.LLVM qualified as L
 import Text.Read (readMaybe)
 import Text.Show (Show (..))
