@@ -28,7 +28,6 @@ import Data.ElfEdit qualified as Elf
 import Data.ElfEdit.CoreDump qualified as CoreDump
 import Data.Function ((&))
 import Data.List qualified as List
-import Data.Macaw.BinaryLoader qualified as BL
 import Data.Macaw.BinaryLoader qualified as Loader
 import Data.Macaw.BinaryLoader.ELF qualified as Loader
 import Data.Macaw.CFG qualified as MC
