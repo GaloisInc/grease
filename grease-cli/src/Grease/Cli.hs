@@ -24,6 +24,8 @@ module Grease.Cli (
   stackArgSlotsParser,
   symFilesParser,
   symStdinParser,
+  simDumpCoverageParser,
+  simDumpSectionMapParser,
 
   -- * High-level entrypoints
   optsInfo,
@@ -346,6 +348,24 @@ symStdinParser =
         <> Opt.help "populate stdin with this many symbolic bytes"
     )
 
+simDumpCoverageParser :: Opt.Parser (Maybe FilePath)
+simDumpCoverageParser =
+  Opt.optional
+    ( Opt.strOption $
+        Opt.long "dump-coverage"
+          <> Opt.metavar "FILE"
+          <> Opt.help "Dump the addresses of executed instructions"
+    )
+
+simDumpSectionMapParser :: Opt.Parser (Maybe FilePath)
+simDumpSectionMapParser =
+  Opt.optional
+    ( Opt.strOption $
+        Opt.long "dump-sections"
+          <> Opt.metavar "FILE"
+          <> Opt.help "Dump a mapping from section indexes to addresses"
+    )
+
 simOpts :: Opt.Parser GO.SimOpts
 simOpts = do
   simProgPath <- Opt.strArgument (Opt.help "filename of binary" <> Opt.metavar "FILENAME")
@@ -453,20 +473,8 @@ simOpts = do
   simFsOpts <- fsOptsParser
   simInitPrecondOpts <- initPrecondOptsParser
   simBoundsOpts <- boundsOptsParser
-  simDumpCoverage <-
-    Opt.optional
-      ( Opt.strOption $
-          Opt.long "dump-coverage"
-            <> Opt.metavar "FILE"
-            <> Opt.help "Dump the addresses of executed instructions"
-      )
-  simDumpSectionMap <-
-    Opt.optional
-      ( Opt.strOption $
-          Opt.long "dump-sections"
-            <> Opt.metavar "FILE"
-            <> Opt.help "Dump a mapping from section indexes to addresses"
-      )
+  simDumpCoverage <- simDumpCoverageParser
+  simDumpSectionMap <- simDumpSectionMapParser
   pure GO.SimOpts{..}
  where
   callOptionsGroup = "Call options"
