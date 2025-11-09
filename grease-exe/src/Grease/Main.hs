@@ -966,8 +966,7 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallbac
 
 addressCallBack ::
   MM.MemWidth (MC.RegAddrWidth (MC.ArchReg arch)) =>
-  Proxy
-    arch ->
+  Proxy arch ->
   Handle ->
   MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)) ->
   IO ()
