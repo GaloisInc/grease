@@ -354,7 +354,10 @@ simDumpCoverageParser =
     ( Opt.strOption $
         Opt.long "dump-coverage"
           <> Opt.metavar "FILE"
-          <> Opt.help "Dump the addresses of executed instructions"
+          <> Opt.help
+            ( "Dump the addresses of executed instructions. These addresses are relative to a section"
+                ++ "index which can be interpreted with respect to the section address map produced by -- dump-sections"
+            )
     )
 
 simDumpSectionMapParser :: Opt.Parser (Maybe FilePath)
