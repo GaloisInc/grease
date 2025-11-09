@@ -443,6 +443,8 @@ memSegOffToSectionMemAddr memSegOff =
 -- | Dumps the section map of memory that is a map from SectionIndex->memSegOff in a
 -- format that can be rendered as JSON. Each section index is mapped to a json representation of a
 -- 'MM.MemAddr' that contains the base region of the address along with the offset.
+-- By keeping addresses relative to the section index the representation of addresses (e.g. for coverage)
+-- is relocatable for clients that load a PIE at a different base address.
 dumpSections :: MM.MemWidth w => MM.Memory w -> Aeson.Value
 dumpSections mem =
   let
