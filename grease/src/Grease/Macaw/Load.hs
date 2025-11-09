@@ -450,17 +450,14 @@ dumpSections mem =
     sinfo =
       fmap
         ( \(secIdx, memSegOff) ->
-            let
-              seg = memSegOffToSectionMemAddr memSegOff
-              secIdxInt :: Int
-              secIdxInt =
-                fromIntegral secIdx
-             in
-              Aeson.Object $
-                KeyMap.fromList
-                  [ ("section_index", Aeson.toJSON secIdxInt)
-                  , ("section_mem_addr", seg)
-                  ]
+            let seg = memSegOffToSectionMemAddr memSegOff
+                secIdxInt :: Int
+                secIdxInt = fromIntegral secIdx
+             in Aeson.Object $
+                  KeyMap.fromList
+                    [ ("section_index", Aeson.toJSON secIdxInt)
+                    , ("section_mem_addr", seg)
+                    ]
         )
         (Map.toList secs)
    in
