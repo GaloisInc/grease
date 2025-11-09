@@ -14,15 +14,14 @@ module Grease.Macaw.Load (
   LoadError (..),
   load,
   dumpSections,
-  SectionInfo (..),
-  SectionMemAddr (..),
   memSegOffToSectionMemAddr,
 ) where
 
 import Control.Monad (forM, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
-import Data.Aeson (ToJSON)
+import Data.Aeson qualified as Aeson
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString qualified as BS
 import Data.ElfEdit qualified as Elf
 import Data.ElfEdit.CoreDump qualified as CoreDump
@@ -43,7 +42,6 @@ import Data.Text.Encoding qualified as Text
 import Data.Tuple qualified as Tuple
 import Data.Vector qualified as Vec
 import Data.Word (Word64)
-import GHC.Generics
 import Grease.Diagnostic
 import Grease.Entrypoint (Entrypoint (..), EntrypointLocation (..))
 import Grease.Macaw.Load.Diagnostic qualified as Diag
@@ -433,42 +431,19 @@ resolveCoreDumpEntrypointAddress la loadOpts mem binaryHeaderInfo symMap coreDum
             prStatusPcWithOffset
       pure nearestEntrypointAddr
 
--- | A JSON representation of a 'MM.MemAddr'
--- That is an offset from a relocatable region
-data SectionMemAddr = SectionMemAddr
-  { secInfoRegionIndex :: Int
-  , secInfoRegionOffset :: Word64
-  }
-  deriving (Generic, Show)
-
-instance ToJSON SectionMemAddr
-
-memSegOffToSectionMemAddr :: (MM.MemWidth w) => MM.MemSegmentOff w -> SectionMemAddr
+memSegOffToSectionMemAddr :: (MM.MemWidth w) => MM.MemSegmentOff w -> Aeson.Value
 memSegOffToSectionMemAddr memSegOff =
   let addr = MM.segoffAddr memSegOff
-   in SectionMemAddr{secInfoRegionIndex = MM.addrBase addr, secInfoRegionOffset = fromIntegral $ MM.addrOffset addr}
-
--- | A binding between a section index
--- and the starting memory address ('MM.MemAddr')
--- for the section
-data SectionInfo = SectionInfo
-  { secInfoSectionIndex :: Int
-  , secInfoSectionAddr :: SectionMemAddr
-  }
-  deriving (Generic, Show)
-
-instance ToJSON SectionInfo
-
--- | A dump of all sections in the section map that can be rendered as
--- JSON
-newtype SectionDump = SectionDump [SectionInfo] deriving (Generic, Show)
-
-instance ToJSON SectionDump
+   in Aeson.Object $
+        KeyMap.fromList
+          [ ("region_index", Aeson.toJSON $ MM.addrBase addr)
+          , ("region_offset", Aeson.toJSON $ fromIntegral @_ @Word64 $ MM.addrOffset addr)
+          ]
 
 -- | Dumps the section map of memory that is a map from SectionIndex->memSegOff in a
 -- format that can be rendered as JSON. Each section index is mapped to a json representation of a
 -- 'MM.MemAddr' that contains the base region of the address along with the offset.
-dumpSections :: MM.MemWidth w => MM.Memory w -> SectionDump
+dumpSections :: MM.MemWidth w => MM.Memory w -> Aeson.Value
 dumpSections mem =
   let
     secs = MM.memSectionIndexMap mem
@@ -477,16 +452,19 @@ dumpSections mem =
         ( \(secIdx, memSegOff) ->
             let
               seg = memSegOffToSectionMemAddr memSegOff
+              secIdxInt :: Int
+              secIdxInt =
+                fromIntegral secIdx
              in
-              SectionInfo
-                { secInfoSectionIndex = fromIntegral secIdx
-                , secInfoSectionAddr =
-                    seg
-                }
+              Aeson.Object $
+                KeyMap.fromList
+                  [ ("section_index", Aeson.toJSON secIdxInt)
+                  , ("section_mem_addr", seg)
+                  ]
         )
         (Map.toList secs)
    in
-    SectionDump sinfo
+    Aeson.toJSON sinfo
 
 -- Helper, not exported
 --
