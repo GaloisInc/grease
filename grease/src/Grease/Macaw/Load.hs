@@ -448,7 +448,7 @@ dumpSections mem =
   let
     secs = MM.memSectionIndexMap mem
     sinfo =
-      fmap
+      map
         ( \(secIdx, memSegOff) ->
             let seg = memSegOffToSectionMemAddr memSegOff
                 secIdxInt :: Int
