@@ -431,7 +431,7 @@ resolveCoreDumpEntrypointAddress la loadOpts mem binaryHeaderInfo symMap coreDum
             prStatusPcWithOffset
       pure nearestEntrypointAddr
 
-memSegOffToSectionMemAddr :: (MM.MemWidth w) => MM.MemSegmentOff w -> Aeson.Value
+memSegOffToSectionMemAddr :: MM.MemWidth w => MM.MemSegmentOff w -> Aeson.Value
 memSegOffToSectionMemAddr memSegOff =
   let addr = MM.segoffAddr memSegOff
    in Aeson.Object $
