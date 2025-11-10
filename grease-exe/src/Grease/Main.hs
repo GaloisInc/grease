@@ -1249,13 +1249,10 @@ simulateMacawCfgs ::
   IO Results
 simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs = do
   let fm = W4.FloatRealRepr
-  withMaybeFile (simDumpCoverage simOpts) WriteMode $ \covHandle -> do
-    case simDumpSectionMap simOpts of
-      Nothing -> pure ()
-      Just fl -> do
-        let mem = mcMemory macawCfgConfig
-        let secsJson = Load.dumpSections mem
-        withFile fl WriteMode $ \hand -> Text.IO.hPutStrLn hand (renderJSON secsJson)
+  withMaybeFile (simDumpCoverage simOpts) WriteMode $ \mbCovHandle -> do
+    let mem = mcMemory macawCfgConfig
+    let secsJson = Load.dumpSections mem
+    Maybe.maybe (pure ()) (\covHandle -> Text.IO.hPutStrLn covHandle (renderJSON secsJson)) mbCovHandle
     withSolverOnlineBackend (simSolver simOpts) fm globalNonceGenerator $ \bak -> do
       results <- do
         let nEntries = Map.size cfgs
@@ -1272,7 +1269,7 @@ simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfg
                 Right ok -> pure ok
             let
               addressHandle :: ExecutingAddressAction arch
-              addressHandle = ExecutingAddressAction $ Maybe.maybe (\_ -> pure ()) (addressCallBack @arch Proxy) covHandle
+              addressHandle = ExecutingAddressAction $ Maybe.maybe (\_ -> pure ()) (addressCallBack @arch Proxy) mbCovHandle
             status <- simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts addressHandle setupHook addrOvs mbCfgAddr entrypointCfgsSome
             let result =
                   Batch

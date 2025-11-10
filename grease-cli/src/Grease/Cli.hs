@@ -25,7 +25,6 @@ module Grease.Cli (
   symFilesParser,
   symStdinParser,
   simDumpCoverageParser,
-  simDumpSectionMapParser,
 
   -- * High-level entrypoints
   optsInfo,
@@ -356,17 +355,8 @@ simDumpCoverageParser =
           <> Opt.metavar "FILE"
           <> Opt.help
             ( "Dump the addresses of executed instructions. These addresses are relative to a section"
-                ++ "index which can be interpreted with respect to the section address map produced by -- dump-sections"
+                ++ "index which is the first JSON array appended to the file"
             )
-    )
-
-simDumpSectionMapParser :: Opt.Parser (Maybe FilePath)
-simDumpSectionMapParser =
-  Opt.optional
-    ( Opt.strOption $
-        Opt.long "dump-sections"
-          <> Opt.metavar "FILE"
-          <> Opt.help "Dump a mapping from section indexes to addresses"
     )
 
 simOpts :: Opt.Parser GO.SimOpts
@@ -477,7 +467,6 @@ simOpts = do
   simInitPrecondOpts <- initPrecondOptsParser
   simBoundsOpts <- boundsOptsParser
   simDumpCoverage <- simDumpCoverageParser
-  simDumpSectionMap <- simDumpSectionMapParser
   pure GO.SimOpts{..}
  where
   callOptionsGroup = "Call options"
