@@ -13,11 +13,15 @@ module Grease.Macaw.Load (
   LoadedProgram (..),
   LoadError (..),
   load,
+  dumpSections,
+  memSegOffToJson,
 ) where
 
 import Control.Monad (forM, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
+import Data.Aeson qualified as Aeson
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString qualified as BS
 import Data.ElfEdit qualified as Elf
 import Data.ElfEdit.CoreDump qualified as CoreDump
@@ -426,6 +430,40 @@ resolveCoreDumpEntrypointAddress la loadOpts mem binaryHeaderInfo symMap coreDum
             (functionNameFromByteString nearestEntrypointName)
             prStatusPcWithOffset
       pure nearestEntrypointAddr
+
+memSegOffToJson :: MM.MemWidth w => MM.MemSegmentOff w -> Aeson.Value
+memSegOffToJson memSegOff =
+  let addr = MM.segoffAddr memSegOff
+   in Aeson.Object $
+        KeyMap.fromList
+          [ ("region_index", Aeson.toJSON $ MM.addrBase addr)
+          , ("region_offset", Aeson.toJSON $ fromIntegral @_ @Word64 $ MM.addrOffset addr)
+          ]
+
+-- | Dumps the section map of memory that is a map from SectionIndex->memSegOff in a
+-- format that can be rendered as JSON. Each section index is mapped to a json representation of a
+-- 'MM.MemAddr' that contains the base region of the address along with the offset.
+-- By keeping addresses relative to the section index the representation of addresses (e.g. for coverage)
+-- is relocatable for clients that load a PIE at a different base address.
+dumpSections :: MM.MemWidth w => MM.Memory w -> Aeson.Value
+dumpSections mem =
+  let
+    secs = MM.memSectionIndexMap mem
+    sinfo =
+      map
+        ( \(secIdx, memSegOff) ->
+            let seg = memSegOffToJson memSegOff
+                secIdxInt :: Int
+                secIdxInt = fromIntegral secIdx
+             in Aeson.Object $
+                  KeyMap.fromList
+                    [ ("section_index", Aeson.toJSON secIdxInt)
+                    , ("section_mem_addr", seg)
+                    ]
+        )
+        (Map.toList secs)
+   in
+    Aeson.toJSON sinfo
 
 -- Helper, not exported
 --

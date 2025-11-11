@@ -16,6 +16,7 @@ module Grease.Output (
 
 import Control.Lens ((^.))
 import Control.Lens.TH (makeLenses)
+import Data.Aeson (ToJSON)
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as BSL
 import Data.Functor ((<&>))
@@ -145,5 +146,5 @@ data Batch = Batch
 
 instance Aeson.ToJSON Batch
 
-renderJSON :: Batch -> Text
+renderJSON :: ToJSON a => a -> Text
 renderJSON s = Text.decodeUtf8 . BSL.toStrict $ Aeson.encode s

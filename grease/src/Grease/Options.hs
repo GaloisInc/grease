@@ -217,6 +217,7 @@ data SimOpts
   , simBoundsOpts :: BoundsOpts
   , simFsOpts :: FsOpts
   , simInitPrecondOpts :: InitialPreconditionOpts
+  , simDumpCoverage :: Maybe FilePath
   }
   deriving Show
 

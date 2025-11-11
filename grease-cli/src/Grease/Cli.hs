@@ -24,6 +24,7 @@ module Grease.Cli (
   stackArgSlotsParser,
   symFilesParser,
   symStdinParser,
+  simDumpCoverageParser,
 
   -- * High-level entrypoints
   optsInfo,
@@ -45,6 +46,7 @@ import Grease.Diagnostic.Severity qualified as Sev
 import Grease.Entrypoint
 import Grease.Macaw.Overrides.Address (addressOverrideParser)
 import Grease.Macaw.PLT
+import Grease.Options (SimOpts (simDumpCoverage))
 import Grease.Options qualified as GO
 import Grease.Shape.Simple (SimpleShape)
 import Grease.Shape.Simple qualified as Simple
@@ -345,6 +347,18 @@ symStdinParser =
         <> Opt.help "populate stdin with this many symbolic bytes"
     )
 
+simDumpCoverageParser :: Opt.Parser (Maybe FilePath)
+simDumpCoverageParser =
+  Opt.optional
+    ( Opt.strOption $
+        Opt.long "dump-coverage"
+          <> Opt.metavar "FILE"
+          <> Opt.help
+            ( "Produces a JSON lines file of addresses of executed instructions. These addresses are relative to a section"
+                ++ "index which is the first JSON array appended to the file"
+            )
+    )
+
 simOpts :: Opt.Parser GO.SimOpts
 simOpts = do
   simProgPath <- Opt.strArgument (Opt.help "filename of binary" <> Opt.metavar "FILENAME")
@@ -452,6 +466,7 @@ simOpts = do
   simFsOpts <- fsOptsParser
   simInitPrecondOpts <- initPrecondOptsParser
   simBoundsOpts <- boundsOptsParser
+  simDumpCoverage <- simDumpCoverageParser
   pure GO.SimOpts{..}
  where
   callOptionsGroup = "Call options"
