@@ -1252,7 +1252,9 @@ simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfg
   withMaybeFile (simDumpCoverage simOpts) WriteMode $ \mbCovHandle -> do
     let mem = mcMemory macawCfgConfig
     let secsJson = Load.dumpSections mem
-    Maybe.maybe (pure ()) (\covHandle -> Text.IO.hPutStrLn covHandle (renderJSON secsJson)) mbCovHandle
+    case mbCovHandle of
+      Just covHandle -> Text.IO.hPutStrLn covHandle (renderJSON secsJson)
+      Nothing -> pure ()
     withSolverOnlineBackend (simSolver simOpts) fm globalNonceGenerator $ \bak -> do
       results <- do
         let nEntries = Map.size cfgs
