@@ -354,7 +354,7 @@ simDumpCoverageParser =
         Opt.long "dump-coverage"
           <> Opt.metavar "FILE"
           <> Opt.help
-            ( "Dump the addresses of executed instructions. These addresses are relative to a section"
+            ( "Produces a JSON lines file of addresses of executed instructions. These addresses are relative to a section"
                 ++ "index which is the first JSON array appended to the file"
             )
     )
