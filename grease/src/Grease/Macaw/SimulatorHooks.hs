@@ -169,7 +169,8 @@ extensionExec ::
   CS.GlobalVar (MC.ArchRegStruct arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   Symbolic.MacawEvalStmtFunc (C.StmtExtension (Symbolic.MacawExt arch)) p sym (Symbolic.MacawExt arch)
-extensionExec archCtx bak la (ExecutingAddressAction executeInsnAct) tgtOvs memVar archStruct baseExt stmt crucState = do
+extensionExec archCtx bak la insnAct tgtOvs memVar archStruct baseExt stmt crucState = do
+  let ExecutingAddressAction executeInsnAct = insnAct
   let sym = CB.backendGetSym bak
   case stmt of
     Symbolic.PtrAnd _w (CS.RegEntry _ x) (CS.RegEntry _ y) -> do
