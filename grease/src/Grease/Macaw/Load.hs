@@ -14,7 +14,7 @@ module Grease.Macaw.Load (
   LoadError (..),
   load,
   dumpSections,
-  memSegOffToSectionMemAddr,
+  memSegOffToJson,
 ) where
 
 import Control.Monad (forM, when)
@@ -431,8 +431,8 @@ resolveCoreDumpEntrypointAddress la loadOpts mem binaryHeaderInfo symMap coreDum
             prStatusPcWithOffset
       pure nearestEntrypointAddr
 
-memSegOffToSectionMemAddr :: MM.MemWidth w => MM.MemSegmentOff w -> Aeson.Value
-memSegOffToSectionMemAddr memSegOff =
+memSegOffToJson :: MM.MemWidth w => MM.MemSegmentOff w -> Aeson.Value
+memSegOffToJson memSegOff =
   let addr = MM.segoffAddr memSegOff
    in Aeson.Object $
         KeyMap.fromList
@@ -452,7 +452,7 @@ dumpSections mem =
     sinfo =
       map
         ( \(secIdx, memSegOff) ->
-            let seg = memSegOffToSectionMemAddr memSegOff
+            let seg = memSegOffToJson memSegOff
                 secIdxInt :: Int
                 secIdxInt = fromIntegral secIdx
              in Aeson.Object $

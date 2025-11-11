@@ -971,7 +971,7 @@ addressCallBack ::
   MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)) ->
   IO ()
 addressCallBack _ hdl addr =
-  let js = renderJSON $ Load.memSegOffToSectionMemAddr addr
+  let js = renderJSON $ Load.memSegOffToJson addr
    in Text.IO.hPutStrLn hdl js
 
 withMaybeFile :: Maybe FilePath -> IOMode -> (Maybe Handle -> IO a) -> IO a
