@@ -35,7 +35,7 @@ GREASE provides basic overrides for the following socket I/O functions:
 - `send`
 - `socket`
 
-These overrides are quite limited. 
+These overrides are quite limited.
 
 - For successful execution, GREASE must execute the entire
   "chain" of socket-related function calls, e.g., for a server,
