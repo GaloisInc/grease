@@ -502,7 +502,7 @@ assertRelocSupported arch loc (CLM.LLVMPointer _base offset) relocs =
           pure ()
 
 initState ::
-  forall arch sym bak m t solver scope st fs p cExt.
+  forall arch sym bak t solver scope st fs p cExt.
   ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st fs
   , bak ~ CB.OnlineBackend solver scope st fs

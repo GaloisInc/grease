@@ -107,5 +107,7 @@ def go(languages: list[str]):
 
 parser = ArgumentParser()
 parser.add_argument("-l", "--language", action="append")
+# ignore paths passed by ghcid --lint
+parser.add_argument("IGNORED", nargs="*")
 args = parser.parse_args()
 go(args.language)

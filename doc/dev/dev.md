@@ -85,6 +85,15 @@ We do our best to keep this script up-to-date, but the ground truth of which
 linters are run on what files and in what configuration is always supplied by
 the CI system.
 
+When using [ghcid], the linting script can be run on every save with:
+```sh
+ghcid \
+  --command "cabal repl lib:grease pkg:grease-cli pkg:grease-exe" \
+  --lint='./lint -l hs'
+```
+
+[ghcid]: https://github.com/ndmitchell/ghcid
+
 ### Generic scripts
 
 We have a few Python scripts in `scripts/lint/` that perform one-off
