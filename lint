@@ -56,7 +56,11 @@ def lint(rule: str, ins: str):
 
 
 def ls_files(pat: str) -> list[str]:
-    out = run(["git", "ls-files", pat], capture_output=True, shell=False)
+    out = run(
+        ["git", "ls-files", "--exclude-standard", "--", pat],
+        capture_output=True,
+        shell=False,
+    )
     return out.stdout.strip().decode("utf-8").split("\n")
 
 
