@@ -15,23 +15,23 @@ ninja = """
 builddir=.out/
 
 rule hlint
-  command = hlint $in && touch $out
+  command = hlint -- $in && touch $out
   description = hlint
 
 rule ruff-check
-  command = ruff check $in && touch $out
+  command = ruff check -- $in && touch $out
   description = ruff check
 
 rule ruff-fmt
-  command = ruff format --check $in && touch $out
+  command = ruff format --check -- $in && touch $out
   description = ruff format
 
 rule spotless
-  command = cd ghidra-plugin && ./gradlew spotlessCheck $in && touch $out
+  command = cd ghidra-plugin && ./gradlew spotlessCheck && touch $out
   description = spotless
 
 rule todo
-  command = python3 scripts/lint/stale-todo.py $in && touch $out
+  command = python3 scripts/lint/stale-todo.py -- $in && touch $out
   description = todo
 
 rule typos
@@ -39,7 +39,7 @@ rule typos
   description = typos
 
 rule ws
-  command = python3 scripts/lint/whitespace.py $in && touch $out
+  command = python3 scripts/lint/whitespace.py -- $in && touch $out
   description = whitespace
 
 """
