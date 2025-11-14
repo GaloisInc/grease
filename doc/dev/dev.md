@@ -94,6 +94,10 @@ ghcid \
 
 [ghcid]: https://github.com/ndmitchell/ghcid
 
+To create a pre-commit hook, simply add the line `./lint` to the Fourmolu
+pre-commit hook described below.
+
+
 ### Generic scripts
 
 We have a few Python scripts in `scripts/lint/` that perform one-off
