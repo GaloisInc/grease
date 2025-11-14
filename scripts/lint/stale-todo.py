@@ -33,9 +33,13 @@ def status(no):
 r = compile(r"TODO\(#(\d+)\)")
 
 
-def check(dirs):
-    for dir in dirs:
-        for file in dir.rglob("*"):
+def check(paths):
+    for path in paths:
+        if path.is_dir():
+            files = path.rglob("*")
+        else:
+            files = [path]
+        for file in files:
             if not file.is_file():
                 continue
             try:
@@ -51,6 +55,6 @@ def check(dirs):
 
 
 parser = ArgumentParser()
-parser.add_argument("dirs", nargs="+", type=Path)
+parser.add_argument("paths", nargs="+", type=Path)
 args = parser.parse_args()
-check(args.dirs)
+check(args.paths)

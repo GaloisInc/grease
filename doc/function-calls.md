@@ -6,8 +6,9 @@ GREASE's algorithm for handling function calls is as follows:
   - If `--error-symbolic-fun-calls` was provided, an error is generated.
   - Otherwise, the call is skipped.
 - Otherwise, the virtual address is resolved to an address in the binary. If
-  this fails, the call is skipped. <!-- TODO(#137): Make this an error by
-  default -->
+  this fails:
+  - If `--skip-invalid-call-addrs` was provided, the call is skipped.
+  - Otherwise, an error is generated.
 - Once GREASE has an address in the binary, it checks if the address corresponds
   to the beginning of a function.
   - If so, that function is symbolically executed.

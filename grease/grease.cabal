@@ -28,9 +28,10 @@ common shared
 
   -- See doc/style.md
   --
+  -- We can't use `-Werror=missing...` because it interferes with ghcid.
   -- We can't use `-Werror=prepositive...` because of ndmitchell/ghcid#358.
   ghc-options:
-    -Werror=missing-export-lists
+    -Wmissing-export-lists
     -Wprepositive-qualified-module
 
   -- Specifying -Wall and -Werror can cause the project to fail to build on

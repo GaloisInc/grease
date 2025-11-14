@@ -1,6 +1,10 @@
 cabal.project.local
 dist-newstyle/
 
+# see ./lint
+build.ninja
+.out
+
 # hpc files
 *.tix
 *.html
