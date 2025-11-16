@@ -77,7 +77,7 @@ As always, see `--help` for more options.
 GREASE employs a wide variety of linting tools. For the sake of developer
 convenience we provide a best-effort script to generate a [Ninja] configuration
 to run the linters. This parallelizes and incrementalizes all the linters.
-Run it with `./lint`.
+Run it with `./scripts/lint/lint.py`.
 
 [Ninja]: https://ninja-build.org/
 
@@ -89,13 +89,13 @@ When using [ghcid], the linting script can be run on every save with:
 ```sh
 ghcid \
   --command "cabal repl lib:grease pkg:grease-cli pkg:grease-exe" \
-  --lint='./lint -l hs'
+  --lint='./scripts/lint/lint.py -l hs'
 ```
 
 [ghcid]: https://github.com/ndmitchell/ghcid
 
-To create a pre-commit hook, simply add the line `./lint` to the Fourmolu
-pre-commit hook described below.
+To create a pre-commit hook, simply add the line `./scripts/lint/lint.py` to the
+Fourmolu pre-commit hook described below.
 
 
 ### Generic scripts

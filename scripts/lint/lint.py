@@ -5,7 +5,6 @@
 # See doc/dev.md.
 
 from argparse import ArgumentParser
-from itertools import chain
 from os import execvp
 from pathlib import Path
 from subprocess import run
@@ -82,7 +81,7 @@ def md():
 
 
 def py():
-    py = chain(ls_files("*.py"), ["lint"])
+    py = ls_files("*.py")
     for path in py:
         lint("ruff-check", path)
         lint("ruff-fmt", path)
