@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
-# Optional ninja-based script to run all of GREASE's linters
-#
-# See doc/dev.md.
+"""Run linters incrementally and in parallel using Ninja (see ./doc/dev.md)"""
 
 from argparse import ArgumentParser
 from os import execvp
@@ -13,29 +11,48 @@ from subprocess import run
 ninja = """
 builddir=.out/
 
+# ---------------------------------------------------------
+# haskell
+
 rule hlint
   command = hlint -- $in && touch $out
   description = hlint
 
+# ---------------------------------------------------------
+# markdown
+
+rule typos
+  command = typos $in && touch $out
+  description = typos
+
+# ---------------------------------------------------------
+# python
+
 rule ruff-check
-  command = ruff check -- $in && touch $out
+  command = ruff check --quiet -- $in && touch $out
   description = ruff check
 
 rule ruff-fmt
-  command = ruff format --check -- $in && touch $out
+  command = ruff format --check --quiet -- $in && touch $out
   description = ruff format
+
+# ---------------------------------------------------------
+# scala
 
 rule spotless
   command = cd ghidra-plugin && ./gradlew spotlessCheck && touch $out
   description = spotless
 
+# ---------------------------------------------------------
+# text
+
+rule merge
+  command = grep -E '^(<<<<<<<|=======|>>>>>>>)' -- $in && exit 1 || touch $out
+  description = check for merge conflict markers
+
 rule todo
   command = python3 scripts/lint/stale-todo.py -- $in && touch $out
   description = todo
-
-rule typos
-  command = typos $in && touch $out
-  description = typos
 
 rule ws
   command = python3 scripts/lint/whitespace.py -- $in && touch $out
@@ -63,21 +80,26 @@ def ls_files(pat: str) -> list[str]:
     return out.stdout.strip().decode("utf-8").split("\n")
 
 
+def txt(path: str):
+    lint("merge", path)
+    lint("todo", path)
+    lint("ws", path)
+
+
 def hs():
     hs = ls_files("*.hs")
     for path in hs:
         if "elf-edit-core-dump" in path:
             continue
         lint("hlint", path)
-        lint("todo", path)
+        txt(path)
 
 
 def md():
     md = ls_files("*.md")
     for path in md:
-        lint("todo", path)
         lint("typos", path)
-        lint("ws", path)
+        txt(path)
 
 
 def py():
@@ -85,14 +107,14 @@ def py():
     for path in py:
         lint("ruff-check", path)
         lint("ruff-fmt", path)
-        lint("todo", path)
+        txt(path)
 
 
 def scala():
     scala = ls_files("*.scala")
     build("$builddir/spotless", "spotless", " ".join(scala))
     for path in scala:
-        lint("todo", path)
+        txt(path)
 
 
 def go(languages: list[str]):
@@ -108,7 +130,7 @@ def go(languages: list[str]):
     execvp("ninja", ["ninja"])
 
 
-parser = ArgumentParser()
+parser = ArgumentParser(description=__doc__)
 parser.add_argument("-l", "--language", action="append")
 # ignore paths passed by ghcid --lint
 parser.add_argument("IGNORED", nargs="*")
