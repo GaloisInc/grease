@@ -34,7 +34,12 @@ jobs:
 
 
       - name: Check for trailing whitespace
-        run: python3 scripts/lint/whitespace.py $(git ls-files '*.hs') $(git ls-files '*.md')
+        run: >
+          python3 scripts/lint/whitespace.py
+          $(git ls-files '*.hs')
+          $(git ls-files '*.md')
+          $(git ls-files '*.py')
+          $(git ls-files '*.scala')
 
       - name: Install ruff
         uses: astral-sh/ruff-action@v3
@@ -73,3 +78,4 @@ jobs:
           $(git ls-files '*.hs')
           $(git ls-files '*.md')
           $(git ls-files '*.py')
+          $(git ls-files '*.scala')
