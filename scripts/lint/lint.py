@@ -87,6 +87,10 @@ def txt(path: str):
 
 
 def hs():
+    cb = ls_files("*.cabal")
+    for path in cb:
+        txt(path)
+
     hs = ls_files("*.hs")
     for path in hs:
         if "elf-edit-core-dump" in path:
