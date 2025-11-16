@@ -40,10 +40,10 @@ jobs:
         uses: astral-sh/ruff-action@v3
 
       - name: Ensure python files are formatted
-        run: ruff format --check --diff lint $(git ls-files '*.py')
+        run: ruff format --check --diff $(git ls-files '*.py')
 
       - name: Lint python files with ruff
-        run: ruff check lint $(git ls-files '*.py')
+        run: ruff check $(git ls-files '*.py')
 
       - name: Run hlint
         run: |
