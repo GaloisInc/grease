@@ -6,7 +6,7 @@ profiling report, pass `--profile-to <DIR>` to GREASE. This will generate a
 this HTML file presents will be periodically regenerated as GREASE runs on the
 program. A typical example looks like:
 
-![Profiler example](images/profile-example.png)
+![Profiler example](../images/profile-example.png)
 
 The profiling report presents a hierarchical view of the functions that are
 invoked during the simulation of a program. The x-axis represents the time, and

@@ -21,6 +21,10 @@ rule hlint
 # ---------------------------------------------------------
 # markdown
 
+rule mdlynx
+  command = mdlynx $in && touch $out
+  description = mdlynx
+
 rule typos
   command = typos $in && touch $out
   description = typos
@@ -102,6 +106,7 @@ def hs():
 def md():
     md = ls_files("*.md")
     for path in md:
+        lint("mdlynx", path)
         lint("typos", path)
         txt(path)
 

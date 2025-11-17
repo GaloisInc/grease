@@ -143,6 +143,17 @@ We treat a small number of hlint warnings as errors in CI. To run hlint locally,
 hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/src grease-exe/{main,src,tests}
 ```
 
+### mdlynx
+
+We run [mdlynx] on our Markdown files to check for broken links. To run it
+locally, try:
+
+```bash
+mdlynx $(git ls-files '*.md')
+```
+
+[mdlynx]: https://github.com/langston-barrett/mdlynx
+
 ### ruff
 
 We lint and format the Python linting scripts and Ghidra plug-in with [ruff].
