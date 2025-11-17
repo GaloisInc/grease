@@ -66,10 +66,11 @@ jobs:
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           mkdir -p ${{ runner.temp }}/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+          touch "${{ runner.temp }}/digests/${DIGEST#sha256:}"
 
       - name: Upload digest
         uses: actions/upload-artifact@v4
@@ -132,5 +133,7 @@ jobs:
             $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)"
 
       - name: Inspect image
+        env: 
+          VERSION: ${{ steps.meta.outputs.version }}
         run: |
-          docker buildx imagetools inspect ${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect ${{ env.DOCKER_IMAGE }}:${VERSION}
