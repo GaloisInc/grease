@@ -22,6 +22,9 @@ defaults:
   run:
     shell: bash
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: GREASE - GHC v${{ matrix.ghc }} - ${{ matrix.cache-key-prefix }}
