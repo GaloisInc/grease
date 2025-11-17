@@ -72,6 +72,32 @@ As always, see `--help` for more options.
 
 ## Linting
 
+### Ninja runner
+
+GREASE employs a wide variety of linting tools. For the sake of developer
+convenience we provide a best-effort script to generate a [Ninja] configuration
+to run the linters. This parallelizes and incrementalizes all the linters.
+Run it with `./scripts/lint/lint.py`.
+
+[Ninja]: https://ninja-build.org/
+
+We do our best to keep this script up-to-date, but the ground truth of which
+linters are run on what files and in what configuration is always supplied by
+the CI system.
+
+When using [ghcid], the linting script can be run on every save with:
+```sh
+ghcid \
+  --command "cabal repl lib:grease pkg:grease-cli pkg:grease-exe" \
+  --lint='./scripts/lint/lint.py -l hs'
+```
+
+[ghcid]: https://github.com/ndmitchell/ghcid
+
+To create a pre-commit hook, simply add the line `./scripts/lint/lint.py` to the
+Fourmolu pre-commit hook described below.
+
+
 ### Generic scripts
 
 We have a few Python scripts in `scripts/lint/` that perform one-off
@@ -109,14 +135,6 @@ EOF
 chmod +x .git/hooks/pre-commit
 ```
 
-#### Ignoring large repository reformats in git blame
-
-Git blame is often helpful for determining commits related to changing a given line. Unfortunately, large scale code automated code changes (e.g. reformatting) can pollute the blame with a commit that is not functionally relevant to the given line. This repository maintains a `.git-blame-ignore-revs` to ignore this type of commit. The file lists past reformatting commits. To use this file to ignore these commits when running git blame configure git with the following command:
-
-```sh
-git config blame.ignorerevsfile .git-blame-ignore-revs
-```
-
 ### hlint
 
 We treat a small number of hlint warnings as errors in CI. To run hlint locally, try:
@@ -130,8 +148,8 @@ hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/src grease-exe/{main,src,tests}
 We lint and format the Python linting scripts and Ghidra plug-in with [ruff].
 
 ```sh
-ruff format scripts/lint ghidra_scripts
-ruff check scripts/lint ghidra_scripts
+ruff format lint $(git ls-files '*.py')
+ruff check lint $(git ls-files '*.py')
 ```
 
 [ruff]: https://docs.astral.sh/ruff/
@@ -146,6 +164,14 @@ typos doc/
 ```
 
 [typos]: https://github.com/crate-ci/typos
+
+## Ignoring uninteresting changes in git blame
+
+Git blame is often helpful for determining commits related to changing a given line. Unfortunately, large scale code automated code changes (e.g. reformatting) can pollute the blame with a commit that is not functionally relevant to the given line. This repository maintains a `.git-blame-ignore-revs` to ignore this type of commit. The file lists past reformatting commits. To use this file to ignore these commits when running git blame configure git with the following command:
+
+```sh
+git config blame.ignorerevsfile .git-blame-ignore-revs
+```
 
 ## Source code
 

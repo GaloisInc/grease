@@ -34,27 +34,22 @@ jobs:
 
 
       - name: Check for trailing whitespace
-        run: python3 scripts/lint/whitespace.py grease*/**/*.hs doc/**/*.md
+        run: >
+          python3 scripts/lint/whitespace.py
+          $(git ls-files '*.cabal')
+          $(git ls-files '*.hs')
+          $(git ls-files '*.md')
+          $(git ls-files '*.py')
+          $(git ls-files '*.scala')
 
-      - name: Lint the linters with ruff
+      - name: Install ruff
         uses: astral-sh/ruff-action@v3
-        with:
-          src: scripts/lint/
 
-      - name: Ensure linters are formatted
-        run: ruff format --check --diff scripts/lint
+      - name: Ensure python files are formatted
+        run: ruff format --check --diff $(git ls-files '*.py')
 
-      - name: Lint the Ghidra script with ruff
-        run: ruff check ghidra_scripts
-
-      - name: Ensure the Ghidra script is formatted
-        run: ruff format --check --diff ghidra_scripts
-
-      - name: Lint the CFLAGS script with ruff
-        run: ruff check grease-exe/tests/extract-cflags.py
-
-      - name: Ensure the CFLAGS script is formatted
-        run: ruff format --check --diff grease-exe/tests/extract-cflags.py
+      - name: Lint python files with ruff
+        run: ruff check $(git ls-files '*.py')
 
       - name: Run hlint
         run: |
@@ -79,4 +74,10 @@ jobs:
       - name: Find stale TODOs
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/lint/stale-todo.py grease*
+        run: >
+          python3 scripts/lint/stale-todo.py
+          $(git ls-files '*.cabal')
+          $(git ls-files '*.hs')
+          $(git ls-files '*.md')
+          $(git ls-files '*.py')
+          $(git ls-files '*.scala')
