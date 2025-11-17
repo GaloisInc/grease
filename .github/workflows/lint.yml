@@ -39,6 +39,8 @@ jobs:
         shell: bash
         run: cd ghidra-plugin && ./gradlew spotlessCheck
 
+      - name: Check for broken links
+        uses: langston-barrett/mdlynx/.github/actions/mdlynx@v0.3.0
 
       - name: Check for trailing whitespace
         run: >

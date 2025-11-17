@@ -123,7 +123,7 @@ high-quality tests. The GREASE test suite is generally quite similar in
 structure to that of rustc, so almost all of the advice there applies *mutatis
 mutandis*.
 
-[helpful guidance]: (https://github.com/rust-lang/rust/blob/3350c1eb3fd8fe1bee1ed4c76944d707bd256876/src/doc/rustc-dev-guide/src/tests/best-practices.md)
+[helpful guidance]: https://github.com/rust-lang/rust/blob/3350c1eb3fd8fe1bee1ed4c76944d707bd256876/src/doc/rustc-dev-guide/src/tests/best-practices.md
 
 ## Coverage
 
