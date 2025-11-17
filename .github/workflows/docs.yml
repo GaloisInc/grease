@@ -5,6 +5,12 @@ on:
     branches:
     - main
   pull_request:
+    # Don't run on code-only changes
+    paths-ignore:
+    - '**.cabal'
+    - '**.hs'
+    - '**.py'
+    - '**.scala'
 
 concurrency:
   # Only run one of these at a time because they update the global pages.  Don't
@@ -23,6 +29,9 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    # The default is 360 (i.e., 6 hours), which can be wasteful. See:
+    # https://github.com/Cambridge-ICCS/green-ci/blob/b9e942d81e4d6536d69f3cfbffe28fa14b8ae381/README.md#time-limits
+    timeout-minutes: 30
     steps:
     - uses: actions/checkout@v4
       with:
