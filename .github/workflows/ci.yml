@@ -70,6 +70,8 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
       with:
+        # https://github.com/actions/checkout/issues/485
+        persist-credentials: false
         submodules: true
 
     - name: Run pre-hook

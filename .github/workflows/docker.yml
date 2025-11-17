@@ -29,6 +29,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # https://github.com/actions/checkout/issues/485
+          persist-credentials: false
           submodules: true
 
       - name: Generate grease.buildinfo.json
@@ -89,6 +91,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # https://github.com/actions/checkout/issues/485
+          persist-credentials: false
           submodules: true
 
       - name: Download digests
