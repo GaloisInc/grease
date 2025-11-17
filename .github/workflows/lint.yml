@@ -21,7 +21,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: false
-          fetch-depth: 1
       
       - uses: haskell-actions/run-fourmolu@v9
         name: Check formatting with fourmolu
