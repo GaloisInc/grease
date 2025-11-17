@@ -5,6 +5,9 @@ on:
     branches:
     - main
   pull_request:
+    # Don't run on documentation-only changes
+    paths-ignore:
+    - '**.md'
 
 env:
   DOCKER_IMAGE: ghcr.io/galoisinc/grease
@@ -20,6 +23,9 @@ jobs:
       matrix:
         # Cover both x86-64 and ARM64.
         os: [ubuntu-22.04, ubuntu-22.04-arm]
+    # The default is 360 (i.e., 6 hours), which can be wasteful. See:
+    # https://github.com/Cambridge-ICCS/green-ci/blob/b9e942d81e4d6536d69f3cfbffe28fa14b8ae381/README.md#time-limits
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,6 +85,7 @@ jobs:
         github.repository_owner == 'GaloisInc'
     strategy:
       fail-fast: false
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:

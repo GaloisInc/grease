@@ -14,6 +14,9 @@ jobs:
   lint:
     runs-on: ubuntu-22.04
     name: lint
+    # The default is 360 (i.e., 6 hours), which can be wasteful. See:
+    # https://github.com/Cambridge-ICCS/green-ci/blob/b9e942d81e4d6536d69f3cfbffe28fa14b8ae381/README.md#time-limits
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
