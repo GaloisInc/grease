@@ -18,6 +18,11 @@ concurrency:
   group: "greasedoc"
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   docs:
     runs-on: ubuntu-22.04
