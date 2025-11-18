@@ -76,7 +76,7 @@ We run [mdlynx] on our Markdown files to check for broken links. To run it
 locally, try:
 
 ```bash
-mdlynx $(git ls-files '*.md')
+git ls-files -z --exclude-standard '*.md' | xargs -0 mdlynx
 ```
 
 [mdlynx]: https://github.com/langston-barrett/mdlynx
@@ -86,8 +86,8 @@ mdlynx $(git ls-files '*.md')
 We lint and format the Python linting scripts and Ghidra plug-in with [ruff].
 
 ```sh
-ruff format lint $(git ls-files '*.py')
-ruff check lint $(git ls-files '*.py')
+git ls-files -z --exclude-standard '*.py' | xargs -0 ruff format
+git ls-files -z --exclude-standard '*.py' | xargs -0 ruff check
 ```
 
 [ruff]: https://docs.astral.sh/ruff/
