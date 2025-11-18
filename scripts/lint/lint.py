@@ -7,6 +7,7 @@ from os import execvp
 from pathlib import Path
 from subprocess import run
 
+parent = Path(__file__).parent.resolve()
 
 ninja = """
 builddir=.out/
@@ -15,7 +16,7 @@ builddir=.out/
 # haskell
 
 rule hlint
-  command = hlint -- $in && touch $out
+  command = hlint --hint={parent}/../../.hlint.yaml -- $in && touch $out
   description = hlint
 
 # ---------------------------------------------------------
@@ -59,10 +60,10 @@ rule todo
   description = todo
 
 rule ws
-  command = python3 scripts/lint/whitespace.py -- $in && touch $out
+  command = python3 {parent}/whitespace.py -- $in && touch $out
   description = whitespace
 
-"""
+""".format(parent=parent)
 
 
 def build(outs: str, rule: str, ins: str):
