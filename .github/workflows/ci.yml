@@ -8,6 +8,7 @@ on:
     # Don't run on documentation-only changes
     paths-ignore:
     - '**.md'
+    - '**.py'
   workflow_dispatch:
 
 env:
