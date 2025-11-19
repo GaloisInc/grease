@@ -37,7 +37,7 @@ jobs:
         cache-key-prefix: [""]  # see `include` below
         ghc: ["9.6.7", "9.8.4", "9.10.2"]
         haddock: [true]  # see `include` below
-        os: [ubuntu-22.04]
+        os: [ubuntu-24.04]
         pre-hook: [""]  # see `include` below
         include:
         # Include a single build (with latest Linux OS and latest GHC version)
@@ -47,7 +47,7 @@ jobs:
           cache-key-prefix: upper-bounds
           ghc: 9.10.2
           haddock: false
-          os: ubuntu-22.04
+          os: ubuntu-24.04
           pre-hook: |
             curl \
               --fail \
@@ -114,7 +114,7 @@ jobs:
         # The solver package snapshot date. If you update this, make sure to
         # also update it in the Dockerfile. Also make sure to update the version
         # of Yices mentioned in the installation instructions.
-        SOLVER_PKG_VERSION: "snapshot-20241119"
+        SOLVER_PKG_VERSION: "snapshot-20251112"
 
     - name: Test grease-exe
       run: cabal test pkg:grease-exe
