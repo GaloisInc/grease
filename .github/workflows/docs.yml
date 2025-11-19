@@ -11,6 +11,7 @@ on:
     - '**.hs'
     - '**.py'
     - '**.scala'
+  workflow_dispatch:
 
 concurrency:
   # Only run one of these at a time because they update the global pages.  Don't
