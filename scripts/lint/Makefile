@@ -39,6 +39,21 @@ help:
 	@grep '^\.PHONY: ' $(THIS) | cut -d ' ' -f2
 
 # ---------------------------------------------------------
+# format
+
+all: fmt
+.PHONY: fmt
+FMT_HS = $(shell $(LS_FILES) '*.hs')
+
+fmt: fourmolu
+.PHONY: fourmolu
+fourmolu: $(addsuffix .fourmolu, $(addprefix $(OUT)/, $(FMT_HS)))
+$(OUT)/%.hs.fourmolu: %.hs $(THIS)
+	@printf "fourmolu %s\n" '$<'
+	@mkdir -p -- '$(OUT)/$(dir $<)'
+	@fourmolu --mode=inplace --quiet -- '$<' && touch -- '$@'
+
+# ---------------------------------------------------------
 # haskell
 
 all: hs
