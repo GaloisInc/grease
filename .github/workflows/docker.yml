@@ -23,7 +23,7 @@ jobs:
       fail-fast: false
       matrix:
         # Cover both x86-64 and ARM64.
-        os: [ubuntu-22.04, ubuntu-22.04-arm]
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
     # The default is 360 (i.e., 6 hours), which can be wasteful. See:
     # https://github.com/Cambridge-ICCS/green-ci/blob/b9e942d81e4d6536d69f3cfbffe28fa14b8ae381/README.md#time-limits
     timeout-minutes: 120
@@ -82,7 +82,7 @@ jobs:
           retention-days: 1
 
   push-image:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [build-image]
     if: github.ref == 'refs/heads/main' &&
         github.event.pull_request.head.repo.fork == false &&

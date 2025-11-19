@@ -1,6 +1,6 @@
 # Copyright (c) Galois, Inc. 2024
 
-FROM ubuntu:22.04 AS build
+FROM ubuntu:24.04 AS build
 
 RUN apt update && \
     apt install -y \
@@ -26,7 +26,7 @@ ENV LC_ALL=en_US.UTF-8
 ARG TARGETPLATFORM
 # If you update the values below, make sure to also update them in
 # .github/workflows/ci.yaml.
-ENV WHAT4_SOLVERS_VER=snapshot-20241119
+ENV WHAT4_SOLVERS_VER=snapshot-20251112
 ENV GHCUP_VER=0.1.40.0
 ENV CABAL_VER=3.14.2.0
 ENV GHC_VER=9.10.2
@@ -41,7 +41,7 @@ RUN case ${TARGETPLATFORM} in \
         printf "Unsupported architecture: %s\n" "${TARGETPLATFORM}" >&2 \
         exit 1 ;; \
     esac && \
-    curl -o solvers.zip -sL "https://github.com/GaloisInc/what4-solvers/releases/download/${WHAT4_SOLVERS_VER}/ubuntu-22.04-${WHAT4_SOLVERS_ARCH}-bin.zip" && \
+    curl -o solvers.zip -sL "https://github.com/GaloisInc/what4-solvers/releases/download/${WHAT4_SOLVERS_VER}/ubuntu-24.04-${WHAT4_SOLVERS_ARCH}-bin.zip" && \
     unzip solvers.zip && \
     rm solvers.zip && \
     chmod +x *
@@ -78,7 +78,7 @@ RUN cp $(cabal list-bin -v0 exe:grease)        /usr/local/bin/grease && \
     cp $(cabal list-bin -v0 test:grease-tests) /usr/local/bin/grease-tests && \
     rm -rf dist-newstyle/
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 USER root
 RUN apt-get update && \
