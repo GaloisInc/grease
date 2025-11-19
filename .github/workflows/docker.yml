@@ -8,6 +8,7 @@ on:
     # Don't run on documentation-only changes
     paths-ignore:
     - '**.md'
+  workflow_dispatch:
 
 env:
   DOCKER_IMAGE: ghcr.io/galoisinc/grease
