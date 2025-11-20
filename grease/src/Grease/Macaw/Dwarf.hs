@@ -1,4 +1,5 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Dwarf shape parsing and initialization. Currently due to downstream parsing support
@@ -33,6 +34,7 @@ import Data.Proxy (Proxy (..))
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Data.Word (Word64)
+import Debug.Trace qualified as Debug
 import Grease.Macaw.Arch (ArchContext, archABIParams)
 import Grease.Macaw.RegName (RegName (..), mkRegName)
 import Grease.Options (TypeUnrollingBound (..))
@@ -110,13 +112,21 @@ rightToMaybe :: Either a b -> Maybe b
 rightToMaybe (Left _) = Nothing
 rightToMaybe (Right b) = Just b
 
-extractType :: Subprogram -> MDwarf.TypeRef -> Maybe MDwarf.TypeApp
-extractType sprog vrTy =
+extractTypeInternal :: Subprogram -> MDwarf.TypeRef -> Maybe MDwarf.TypeApp
+extractTypeInternal sprog vrTy =
   do
     let mp = MDwarf.subTypeMap sprog
     (mbtypeApp, _) <- Map.lookup vrTy mp
     rightToMaybe mbtypeApp
 
+extractType :: Subprogram -> MDwarf.TypeRef -> Maybe MDwarf.TypeApp
+extractType sprog ref =
+  extractTypeInternal sprog ref
+    >>= ( \case
+            (MDwarf.TypeQualType (MDwarf.TypeQualAnn{MDwarf.tqaType = Just tyref})) -> extractType sprog tyref
+            (MDwarf.TypedefType (MDwarf.Typedef _ _ _ tyref)) -> extractType sprog tyref
+            x -> Just x
+        )
 constructPtrTarget ::
   CLM.HasPtrWidth w =>
   TypeUnrollingBound ->
@@ -155,7 +165,8 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
   -- we could get a missing DWARF member per the format so we have to do something about padding in-front
   -- even if in practice this should not occur.
   shapeSeq (MDwarf.StructType sdecl) =
-    let structSize = MDwarf.structByteSize sdecl
+    let sSize = MDwarf.structByteSize sdecl
+        structSize = Debug.trace "parsing struct shape of some sort" sSize
      in do
           (endLoc, seqs) <-
             foldM
@@ -211,6 +222,8 @@ pointerShapeOfDwarf ::
   Maybe (C.Some (PtrShape ext w NoTag))
 pointerShapeOfDwarf _ _ r _ (MDwarf.SignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ _ r _ (MDwarf.UnsignedIntType _) = intPtrShape r
+pointerShapeOfDwarf archCtx tyUnrollBound r sprog (MDwarf.TypeQualType (MDwarf.TypeQualAnn{MDwarf.tqaType = Just tyref})) =
+  pointerShapeOfDwarf archCtx tyUnrollBound r sprog =<< extractType sprog tyref
 pointerShapeOfDwarf _ tyUnrollBound _ sprog (MDwarf.PointerType _ tyRef) =
   let memShape = constructPtrTarget tyUnrollBound sprog Map.empty =<< extractType sprog =<< tyRef
       pointerShape = ShapePtr NoTag (Offset 0) <$> memShape
