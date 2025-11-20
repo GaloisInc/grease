@@ -112,21 +112,22 @@ rightToMaybe :: Either a b -> Maybe b
 rightToMaybe (Left _) = Nothing
 rightToMaybe (Right b) = Just b
 
-extractTypeInternal :: Subprogram -> MDwarf.TypeRef -> Maybe MDwarf.TypeApp
-extractTypeInternal sprog vrTy =
-  do
-    let mp = MDwarf.subTypeMap sprog
-    (mbtypeApp, _) <- Map.lookup vrTy mp
-    rightToMaybe mbtypeApp
-
 extractType :: Subprogram -> MDwarf.TypeRef -> Maybe MDwarf.TypeApp
 extractType sprog ref =
-  extractTypeInternal sprog ref
+  extractTypeInternal ref
     >>= ( \case
             (MDwarf.TypeQualType (MDwarf.TypeQualAnn{MDwarf.tqaType = Just tyref})) -> extractType sprog tyref
             (MDwarf.TypedefType (MDwarf.Typedef _ _ _ tyref)) -> extractType sprog tyref
             x -> Just x
         )
+ where
+  extractTypeInternal :: MDwarf.TypeRef -> Maybe MDwarf.TypeApp
+  extractTypeInternal vrTy =
+    do
+      let mp = MDwarf.subTypeMap sprog
+      (mbtypeApp, _) <- Map.lookup vrTy mp
+      rightToMaybe mbtypeApp
+
 constructPtrTarget ::
   CLM.HasPtrWidth w =>
   TypeUnrollingBound ->
