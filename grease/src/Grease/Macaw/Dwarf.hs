@@ -34,7 +34,6 @@ import Data.Proxy (Proxy (..))
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Data.Word (Word64)
-import Debug.Trace qualified as Debug
 import Grease.Macaw.Arch (ArchContext, archABIParams)
 import Grease.Macaw.RegName (RegName (..), mkRegName)
 import Grease.Options (TypeUnrollingBound (..))
@@ -166,8 +165,7 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
   -- we could get a missing DWARF member per the format so we have to do something about padding in-front
   -- even if in practice this should not occur.
   shapeSeq (MDwarf.StructType sdecl) =
-    let sSize = MDwarf.structByteSize sdecl
-        structSize = Debug.trace "parsing struct shape of some sort" sSize
+    let structSize = MDwarf.structByteSize sdecl
      in do
           (endLoc, seqs) <-
             foldM
