@@ -50,7 +50,7 @@ fmt: fourmolu
 fourmolu: $(addsuffix .fourmolu, $(addprefix $(OUT)/, $(FMT_HS)))
 $(OUT)/%.hs.fourmolu: %.hs $(THIS)
 	@printf "fourmolu %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(dir $<)'
+	@mkdir -p -- '$(OUT)/$(<D)'
 	@fourmolu --mode=inplace --quiet -- '$<' && touch -- '$@'
 
 # ---------------------------------------------------------
@@ -65,7 +65,7 @@ hs: hlint
 hlint: $(addsuffix .hlint, $(addprefix $(OUT)/, $(HS)))
 $(OUT)/%.hs.hlint: %.hs $(THIS)
 	@printf "hlint %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(dir $<)'
+	@mkdir -p -- '$(OUT)/$(<D)'
 	@hlint --quiet --hint=$(dir $(THIS))/../../.hlint.yaml -- '$<' && touch -- '$@'
 
 # ---------------------------------------------------------
@@ -80,7 +80,7 @@ md: mdlynx
 mdlynx: $(addsuffix .mdlynx, $(addprefix $(OUT)/, $(MD)))
 $(OUT)/%.md.mdlynx: %.md $(THIS)
 	@printf "mdlynx %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(dir $<)'
+	@mkdir -p -- '$(OUT)/$(<D)'
 	@mdlynx -- '$<' && touch -- '$@'
 
 md: typos
@@ -88,7 +88,7 @@ md: typos
 typos: $(addsuffix .typos, $(addprefix $(OUT)/, $(MD)))
 $(OUT)/%.md.typos: %.md $(THIS)
 	@printf "typos %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(dir $<)'
+	@mkdir -p -- '$(OUT)/$(<D)'
 	@typos -- '$<' && touch -- '$@'
 
 # ---------------------------------------------------------
@@ -103,7 +103,7 @@ py: ruff-check
 ruff-check: $(addsuffix .ruff-check, $(addprefix $(OUT)/, $(PY)))
 $(OUT)/%.py.ruff-check: %.py $(THIS)
 	@printf "ruff check %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(dir $<)'
+	@mkdir -p -- '$(OUT)/$(<D)'
 	@ruff check --quiet -- '$<' && touch -- '$@'
 
 py: ruff-format
@@ -111,7 +111,7 @@ py: ruff-format
 ruff-format: $(addsuffix .ruff-format, $(addprefix $(OUT)/, $(PY)))
 $(OUT)/%.py.ruff-format: %.py $(THIS)
 	@printf "ruff format --check %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(dir $<)'
+	@mkdir -p -- '$(OUT)/$(<D)'
 	@ruff format --check --diff --quiet -- '$<' && touch -- '$@'
 
 # ---------------------------------------------------------
@@ -140,7 +140,7 @@ txt: merge
 merge: $(addsuffix .merge, $(addprefix $(OUT)/, $(TXT)))
 $(OUT)/%.merge: % $(THIS)
 	@printf "check for merge conflicts in %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(dir $<)'
+	@mkdir -p -- '$(OUT)/$(<D)'
 	@grep -E '^(<<<<<<<|=======|>>>>>>>)' -- '$<' && exit 1 || touch -- '$@'
 
 # The other rules all run a single linter per input file. This is nice, because
@@ -165,5 +165,5 @@ txt: whitespace
 whitespace: $(addsuffix .whitespace, $(addprefix $(OUT)/, $(TXT)))
 $(OUT)/%.whitespace: % scripts/lint/whitespace.py $(THIS)
 	@printf "check for trailing whitespace in %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(dir $<)'
+	@mkdir -p -- '$(OUT)/$(<D)'
 	@python3 scripts/lint/whitespace.py -- '$<' && touch -- '$@'
