@@ -109,4 +109,3 @@ It is possible for machine code to exhibit behaviors that are not possible at th
 
 [llvm-global-ctors]: https://llvm.org/docs/LangRef.html#the-llvm-global-ctors-global-variable
 [rust-init]: https://users.rust-lang.org/t/generating-a-cdylib-crate-without-an-init/85267
-

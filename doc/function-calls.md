@@ -23,4 +23,3 @@ No registers or memory are havoc'd if a function call is skipped (though this [m
 change] in the future).
 
 [may change]: https://github.com/GaloisInc/grease/issues/6
-

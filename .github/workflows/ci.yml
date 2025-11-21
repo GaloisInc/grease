@@ -157,7 +157,7 @@ jobs:
 
     - name: Setup Ghidra
       uses: ./.github/actions/ghidra-install
-      
+
     - name: Test Ghidra plugin
       run: cd ghidra-plugin && ./gradlew installExtension && ./gradlew test
 

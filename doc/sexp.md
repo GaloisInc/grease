@@ -126,4 +126,3 @@ For LLVM S-expression files (programs or overrides), the following overrides are
 ```
 
 See [the upstream documentation](https://github.com/GaloisInc/crucible/blob/master/crucible-llvm-syntax/README.md#string-manipulation).
-

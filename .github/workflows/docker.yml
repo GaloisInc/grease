@@ -134,7 +134,7 @@ jobs:
             $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)"
 
       - name: Inspect image
-        env: 
+        env:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
           docker buildx imagetools inspect ${{ env.DOCKER_IMAGE }}:${VERSION}
