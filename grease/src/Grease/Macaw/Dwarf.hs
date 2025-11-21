@@ -1,4 +1,5 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Dwarf shape parsing and initialization. Currently due to downstream parsing support
@@ -111,11 +112,20 @@ rightToMaybe (Left _) = Nothing
 rightToMaybe (Right b) = Just b
 
 extractType :: Subprogram -> MDwarf.TypeRef -> Maybe MDwarf.TypeApp
-extractType sprog vrTy =
-  do
-    let mp = MDwarf.subTypeMap sprog
-    (mbtypeApp, _) <- Map.lookup vrTy mp
-    rightToMaybe mbtypeApp
+extractType sprog ref =
+  extractTypeInternal ref
+    >>= ( \case
+            (MDwarf.TypeQualType (MDwarf.TypeQualAnn{MDwarf.tqaType = Just tyref})) -> extractType sprog tyref
+            (MDwarf.TypedefType (MDwarf.Typedef _ _ _ tyref)) -> extractType sprog tyref
+            x -> Just x
+        )
+ where
+  extractTypeInternal :: MDwarf.TypeRef -> Maybe MDwarf.TypeApp
+  extractTypeInternal vrTy =
+    do
+      let mp = MDwarf.subTypeMap sprog
+      (mbtypeApp, _) <- Map.lookup vrTy mp
+      rightToMaybe mbtypeApp
 
 constructPtrTarget ::
   CLM.HasPtrWidth w =>
