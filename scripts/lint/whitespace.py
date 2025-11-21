@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Lint for end-of-line whitespace"""
+"""Find and fix whitespace problems"""
 
 from argparse import ArgumentParser
 from pathlib import Path
@@ -29,17 +29,17 @@ def check_file(path, /, *, fix: bool = False):
     fixed = []
     changed = False
     if not t.endswith("\n"):
-        error(f"No trailing newline in {path}", fix=fix)
+        error(f"{path}: No trailing newline", fix=fix)
         changed = True
     if t.endswith("\n\n"):
-        error(f"Multiple trailing newlines in {path}", fix=fix)
+        error(f"{path}: Multiple trailing newlines", fix=fix)
         changed = True
         t = t.rstrip()
     for no, line in enumerate(t.splitlines()):
         stripped = line.rstrip()
         fixed.append(stripped)
         if line != stripped:
-            error(f"Trailing whitespace at {path}:{no + 1}", fix=fix)
+            error(f"{path}:{no + 1}: Trailing whitespace", fix=fix)
             changed = True
     if changed and fix:
         path.write_text("\n".join(fixed) + "\n")
