@@ -8,9 +8,7 @@ typedef struct bar {
   int x;
 } bar;
 
-int foo(int x, int *restrict y, struct bar *restrict z) {
-  return x + *y + z->x;
-}
+int foo(int x, int *restrict y, bar *restrict z) { return x + *y + z->x; }
 
 // all: flags {"--symbol", "foo", "--use-debug-info-types", "--no-heuristics"}
 // x64: go(prog)
