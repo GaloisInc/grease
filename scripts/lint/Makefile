@@ -69,6 +69,21 @@ $(OUT)/%.hs.hlint: %.hs $(THIS)
 	@hlint --quiet --hint=$(dir $(THIS))/../../.hlint.yaml -- '$<' && $(call touch,$@)
 
 # ---------------------------------------------------------
+# make
+
+all: make
+.PHONY: make
+MAKES = $(shell $(LS_FILES) '**/Makefile' '*.mk')
+
+# this checks make syntax, -n is a POSIX flag that means "don't run"
+make: make-n
+.PHONY: make-n
+make-n: $(addsuffix .make-n, $(addprefix $(OUT)/, $(MAKES)))
+$(OUT)/%.make-n: % $(THIS)
+	@printf "make -n %s\n" '$<'
+	@make -n -- '$<' && $(call touch,$@)
+
+# ---------------------------------------------------------
 # markdown
 
 all: md
@@ -125,11 +140,26 @@ $(OUT)/spotless: $(SCALA) $(THIS)
 	@cd ghidra-plugin && ./gradlew spotlessCheck && $(call touch,$@)
 
 # ---------------------------------------------------------
+# shell
+
+all: sh
+.PHONY: sh
+SH = $(shell $(LS_FILES) '*.sh')
+
+# this checks shell syntax, -n is a POSIX flag that means "don't run"
+sh: sh-n
+.PHONY: sh-n
+sh-n: $(addsuffix .sh-n, $(addprefix $(OUT)/, $(SH)))
+$(OUT)/%.sh.sh-n: %.sh $(THIS)
+	@printf "sh -n %s\n" '$<'
+	@sh -n -- '$<' && $(call touch,$@)
+
+# ---------------------------------------------------------
 # text
 
 all: txt
 .PHONY: txt
-TXT = $(shell $(LS_FILES) 'Makefile' '*.cabal' '*.md' '*.project' '*.py' '*.rs' '*.scala' '*.sh')
+TXT = $(shell $(LS_FILES) '**/Makefile' '*.cabal' '*.md' '*.mk' '*.project' '*.py' '*.scala' '*.sh')
 
 txt: merge
 .PHONY: merge
