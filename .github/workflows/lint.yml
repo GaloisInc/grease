@@ -27,15 +27,15 @@ jobs:
           # https://github.com/actions/checkout/issues/485
           persist-credentials: false
           submodules: false
-      
+
       - uses: haskell-actions/run-fourmolu@v11
         name: Check formatting with fourmolu
         with:
           version: "0.19.0.0"
-       
+
       - name: Setup Ghidra
         uses: ./.github/actions/ghidra-install
-          
+
       - name: Lint Ghidra plugin Scala
         shell: bash
         run: cd ghidra-plugin && ./gradlew spotlessCheck
