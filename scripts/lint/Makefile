@@ -4,8 +4,7 @@
 # generates a rule like:
 #
 #     .out/foo/bar.py: foo/bar.py
-#         mkdir -p .out/foo
-#         ruff check foo/bar.py && touch .out/foo/bar.py
+#         ruff check foo/bar.py && mkdir -p .out/foo && touch .out/foo/bar.py
 #
 # Hence, the rules produce empty output files in `.out/` indicating that the
 # linter has been run.
@@ -38,6 +37,9 @@ help:
 	@printf 'targets:\n'
 	@grep '^\.PHONY: ' $(THIS) | cut -d ' ' -f2
 
+# Used in most of the rules
+touch = mkdir -p -- '$(dir $(1))' && touch -- '$(1)'
+
 # ---------------------------------------------------------
 # format
 
@@ -50,8 +52,7 @@ fmt: fourmolu
 fourmolu: $(addsuffix .fourmolu, $(addprefix $(OUT)/, $(FMT_HS)))
 $(OUT)/%.hs.fourmolu: %.hs $(THIS)
 	@printf "fourmolu %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(<D)'
-	@fourmolu --mode=inplace --quiet -- '$<' && touch -- '$@'
+	@fourmolu --mode=inplace --quiet -- '$<' && $(call touch,$@)
 
 # ---------------------------------------------------------
 # haskell
@@ -65,8 +66,7 @@ hs: hlint
 hlint: $(addsuffix .hlint, $(addprefix $(OUT)/, $(HS)))
 $(OUT)/%.hs.hlint: %.hs $(THIS)
 	@printf "hlint %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(<D)'
-	@hlint --quiet --hint=$(dir $(THIS))/../../.hlint.yaml -- '$<' && touch -- '$@'
+	@hlint --quiet --hint=$(dir $(THIS))/../../.hlint.yaml -- '$<' && $(call touch,$@)
 
 # ---------------------------------------------------------
 # markdown
@@ -80,16 +80,14 @@ md: mdlynx
 mdlynx: $(addsuffix .mdlynx, $(addprefix $(OUT)/, $(MD)))
 $(OUT)/%.md.mdlynx: %.md $(THIS)
 	@printf "mdlynx %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(<D)'
-	@mdlynx -- '$<' && touch -- '$@'
+	@mdlynx -- '$<' && $(call touch,$@)
 
 md: typos
 .PHONY: typos
 typos: $(addsuffix .typos, $(addprefix $(OUT)/, $(MD)))
 $(OUT)/%.md.typos: %.md $(THIS)
 	@printf "typos %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(<D)'
-	@typos -- '$<' && touch -- '$@'
+	@typos -- '$<' && $(call touch,$@)
 
 # ---------------------------------------------------------
 # python
@@ -103,16 +101,14 @@ py: ruff-check
 ruff-check: $(addsuffix .ruff-check, $(addprefix $(OUT)/, $(PY)))
 $(OUT)/%.py.ruff-check: %.py $(THIS)
 	@printf "ruff check %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(<D)'
-	@ruff check --quiet -- '$<' && touch -- '$@'
+	@ruff check --quiet -- '$<' && $(call touch,$@)
 
 py: ruff-format
 .PHONY: ruff-format
 ruff-format: $(addsuffix .ruff-format, $(addprefix $(OUT)/, $(PY)))
 $(OUT)/%.py.ruff-format: %.py $(THIS)
 	@printf "ruff format --check %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(<D)'
-	@ruff format --check --diff --quiet -- '$<' && touch -- '$@'
+	@ruff format --check --diff --quiet -- '$<' && $(call touch,$@)
 
 # ---------------------------------------------------------
 # scala
@@ -126,7 +122,7 @@ scala: spotless
 spotless: $(addsuffix .spotless, $(addprefix $(OUT)/, $(SCALA)))
 $(OUT)/spotless: $(SCALA) $(THIS)
 	@printf "spotless\n"
-	@cd ghidra-plugin && ./gradlew spotlessCheck && touch -- '$@'
+	@cd ghidra-plugin && ./gradlew spotlessCheck && $(call touch,$@)
 
 # ---------------------------------------------------------
 # text
@@ -140,8 +136,7 @@ txt: merge
 merge: $(addsuffix .merge, $(addprefix $(OUT)/, $(TXT)))
 $(OUT)/%.merge: % $(THIS)
 	@printf "check for merge conflicts in %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(<D)'
-	@grep -E '^(<<<<<<<|=======|>>>>>>>)' -- '$<' && exit 1 || touch -- '$@'
+	@grep -E '^(<<<<<<<|=======|>>>>>>>)' -- '$<' && exit 1 || $(call touch,$@)
 
 # The other rules all run a single linter per input file. This is nice, because
 # it lets Make run a bunch of processes in parallel. However, we only want
@@ -158,12 +153,11 @@ txt: todo
 todo: $(OUT)/todo
 $(OUT)/todo: $(TXT) scripts/lint/stale-todo.py $(THIS)
 	@printf "check for outdated TODOs\n"
-	python3 scripts/lint/stale-todo.py -- $? && touch -- '$@'
+	@python3 scripts/lint/stale-todo.py -- $? && $(call touch,$@)
 
 txt: whitespace
 .PHONY: whitespace
 whitespace: $(addsuffix .whitespace, $(addprefix $(OUT)/, $(TXT)))
 $(OUT)/%.whitespace: % scripts/lint/whitespace.py $(THIS)
 	@printf "check for trailing whitespace in %s\n" '$<'
-	@mkdir -p -- '$(OUT)/$(<D)'
-	@python3 scripts/lint/whitespace.py -- '$<' && touch -- '$@'
+	@python3 scripts/lint/whitespace.py -- '$<' && $(call touch,$@)
