@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Use the GitHub CLI to find stale TODOs of the form `TODO(#N)`
+"""Use the GitHub CLI to find stale TODOs of the form `TODO(#N)`"""
 
 from argparse import ArgumentParser
 from functools import cache
@@ -16,7 +16,7 @@ def die(msg):
 
 
 @cache
-def status(no):
+def status(no, /):
     """Get the status (OPEN or CLOSED) of a GitHub issue using the `gh` CLI"""
     result = run(
         ["gh", "issue", "view", no, "--json", "state", "--jq", ".state"],
@@ -33,7 +33,7 @@ def status(no):
 r = compile(r"TODO\(#(\d+)\)")
 
 
-def check(paths):
+def check(paths, /):
     for path in paths:
         if path.is_dir():
             files = path.rglob("*")
@@ -54,7 +54,7 @@ def check(paths):
                     die(f"Stale TODO for {no}!")
 
 
-parser = ArgumentParser()
+parser = ArgumentParser(description=__doc__)
 parser.add_argument("paths", nargs="+", type=Path)
 args = parser.parse_args()
 check(args.paths)
