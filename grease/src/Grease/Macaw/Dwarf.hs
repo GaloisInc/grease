@@ -221,8 +221,6 @@ pointerShapeOfDwarf ::
   Maybe (C.Some (PtrShape ext w NoTag))
 pointerShapeOfDwarf _ _ r _ (MDwarf.SignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ _ r _ (MDwarf.UnsignedIntType _) = intPtrShape r
-pointerShapeOfDwarf archCtx tyUnrollBound r sprog (MDwarf.TypeQualType (MDwarf.TypeQualAnn{MDwarf.tqaType = Just tyref})) =
-  pointerShapeOfDwarf archCtx tyUnrollBound r sprog =<< extractType sprog tyref
 pointerShapeOfDwarf _ tyUnrollBound _ sprog (MDwarf.PointerType _ tyRef) =
   let memShape = constructPtrTarget tyUnrollBound sprog Map.empty =<< extractType sprog =<< tyRef
       pointerShape = ShapePtr NoTag (Offset 0) <$> memShape
