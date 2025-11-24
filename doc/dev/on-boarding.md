@@ -60,13 +60,13 @@ This page provides learning resources for new GREASE developers.
 
 ## Dependently-typed Haskell
 
-GREASE and its underlying libraries are programmed using depedently-typed
+GREASE and its underlying libraries are programmed using dependently-typed
 Haskell.
 
 ### Singletons
 
 This is the name of the approach of combining GADTs and type families to achieve
-depedently-typed programming. The main paper is [Dependently typed programming
+dependently-typed programming. The main paper is [Dependently typed programming
 with singletons](https://dl.acm.org/doi/abs/10.1145/2430532.2364522).
 
 The singletons library uses Template Haskell where parameterized-utils
