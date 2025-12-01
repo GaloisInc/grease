@@ -22,7 +22,7 @@ jobs:
     # https://github.com/Cambridge-ICCS/green-ci/blob/b9e942d81e4d6536d69f3cfbffe28fa14b8ae381/README.md#time-limits
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # https://github.com/actions/checkout/issues/485
           persist-credentials: false
