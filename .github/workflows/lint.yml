@@ -77,7 +77,7 @@ jobs:
       - name: Spell check docs
         # We pin a specific version because updates can come with additional
         # typo fixes. These could break CI unexpectedly if we just pinned @v1.
-        uses: crate-ci/typos@v1.39.2
+        uses: crate-ci/typos@v1.40.0
         with:
           files: doc/
 
