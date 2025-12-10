@@ -46,6 +46,8 @@ import Data.Maybe (Maybe (..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
 import Data.Parameterized.NatRepr (knownNat)
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Type.Equality (type (~))
 import GHC.Word (Word64)
@@ -255,6 +257,8 @@ lookupFunctionHandleResult ::
   -- | Map of names of overridden functions to their implementations
   Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
+  -- | Functions that should be skipped even if they are defined
+  Set WFN.FunctionName ->
   ErrorSymbolicFunCalls ->
   SkipInvalidCallAddrs ->
   CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
@@ -263,7 +267,7 @@ lookupFunctionHandleResult ::
     ( LookupFunctionHandleResult p sym arch
     , CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
     )
-lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddrs st regs = do
+lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns errorSymbolicFunCalls skipInvalidCallAddrs st regs = do
   -- First, obtain the address contained in the instruction pointer.
   symAddr0 <- (arch ^. archGetIP) regs
   -- Next, attempt to concretize the address. We must do this because it is
@@ -320,6 +324,21 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
       Just ovName -> Map.lookup ovName funOvs
       Nothing -> Map.lookup funcName funOvs
 
+  maybeUserSkip ::
+    WFN.FunctionName ->
+    IO
+      ( LookupFunctionHandleResult p sym arch
+      , CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
+      ) ->
+    IO
+      ( LookupFunctionHandleResult p sym arch
+      , CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
+      )
+  maybeUserSkip nm els =
+    if Set.member nm skipFuns
+      then pure (SkippedFunctionCall (UserSkip nm), st)
+      else els
+
   -- Given a resolved function address, compute a
   -- 'LookupFunctionHandleResult'. This function is recursive because we may
   -- need to handle PLT stubs that jump to other addresses within the same
@@ -334,37 +353,40 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
     -- First, check if this is the address of a CFG we have already
     -- discovered
     | Just hdl <- Map.lookup funcAddrOff (st ^. stateDiscoveredFnHandles) =
-        pure
-          ( CachedFnHandle funcAddrOff hdl $
-              lookupOv (C.handleName hdl) funcAddrOff
-          , st
-          )
+        let nm = C.handleName hdl
+         in maybeUserSkip nm $
+              pure
+                ( CachedFnHandle funcAddrOff hdl $
+                    lookupOv nm funcAddrOff
+                , st
+                )
     -- Next, check if this is a PLT stub.
     | Just pltStubName <- Map.lookup funcAddrOff pltStubs =
-        if
-          | -- If a PLT stub jumps to an address within the same binary
-            -- or shared library, resolve it...
-            Just pltCallAddr <- Map.lookup pltStubName dynFunMap ->
-              do
-                doLog la $ Diag.PltCall pltStubName funcAddrOff pltCallAddr
-                go pltCallAddr
-          | otherwise ->
-              case lookupOv pltStubName funcAddrOff of
-                -- ...otherwise, if there is an override for the PLT stub,
-                -- use it...
-                Just macawFnOv ->
-                  pure
-                    ( PltStubOverride funcAddrOff pltStubName macawFnOv
-                    , st
-                    )
-                -- ...otherwise, skip the PLT call entirely.
-                Nothing ->
-                  -- TODO(#182): Option to make this an error
-                  pure
-                    ( SkippedFunctionCall $
-                        PltNoOverride funcAddrOff pltStubName
-                    , st
-                    )
+        maybeUserSkip pltStubName $
+          if
+            | -- If a PLT stub jumps to an address within the same binary
+              -- or shared library, resolve it...
+              Just pltCallAddr <- Map.lookup pltStubName dynFunMap ->
+                do
+                  doLog la $ Diag.PltCall pltStubName funcAddrOff pltCallAddr
+                  go pltCallAddr
+            | otherwise ->
+                case lookupOv pltStubName funcAddrOff of
+                  -- ...otherwise, if there is an override for the PLT stub,
+                  -- use it...
+                  Just macawFnOv ->
+                    pure
+                      ( PltStubOverride funcAddrOff pltStubName macawFnOv
+                      , st
+                      )
+                  -- ...otherwise, skip the PLT call entirely.
+                  Nothing ->
+                    -- TODO(#182): Option to make this an error
+                    pure
+                      ( SkippedFunctionCall $
+                          PltNoOverride funcAddrOff pltStubName
+                      , st
+                      )
     -- Finally, check if this is a function that we should explore, and if
     -- so, use Macaw's code discovery to do so. See Note [Incremental code
     -- discovery] in Grease.Macaw.SimulatorState.
@@ -379,11 +401,13 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
         fixedAddr <- (arch ^. archPCFixup) bak regs funcAddrOff
         (hdl, st') <-
           discoverFuncAddr la halloc arch memory symMap pltStubs fixedAddr st
-        pure
-          ( DiscoveredFnHandle funcAddrOff hdl $
-              lookupOv (C.handleName hdl) funcAddrOff
-          , st'
-          )
+        let nm = C.handleName hdl
+        maybeUserSkip nm $
+          pure
+            ( DiscoveredFnHandle funcAddrOff hdl $
+                lookupOv nm funcAddrOff
+            , st'
+            )
     | otherwise =
         pure (SkippedFunctionCall (NotExecutable funcAddrOff), st)
 
@@ -406,13 +430,15 @@ lookupFunctionHandle ::
   -- | Map of names of overridden functions to their implementations
   Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
+  -- | Functions that should be skipped even if they are defined
+  Set WFN.FunctionName ->
   ErrorSymbolicFunCalls ->
   SkipInvalidCallAddrs ->
   LookupFunctionHandleDispatch p sym arch ->
   Symbolic.LookupFunctionHandle p sym arch
-lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddrs lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
+lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns errorSymbolicFunCalls skipInvalidCallAddrs lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
   let LookupFunctionHandleDispatch dispatch = lfhd
-  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddrs st regs
+  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns errorSymbolicFunCalls skipInvalidCallAddrs st regs
   dispatch st' mem regs res
 
 -- | Dispatch on the result of looking up a syscall override. The

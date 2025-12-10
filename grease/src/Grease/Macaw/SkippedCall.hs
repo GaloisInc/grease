@@ -34,6 +34,9 @@ data SkippedFunctionCall arch where
     (1 WI.<= MC.ArchAddrWidth arch, MemWidth (MC.ArchAddrWidth arch)) =>
     MemSegmentOff (MC.ArchAddrWidth arch) ->
     SkippedFunctionCall arch
+  UserSkip ::
+    WFN.FunctionName ->
+    SkippedFunctionCall arch
 
 -- | The reasons that GREASE might skip a syscall
 data SkippedSyscall where
@@ -61,6 +64,8 @@ instance PP.Pretty (SkippedFunctionCall arch) where
           PP.<+> PP.pretty name
       NotExecutable addr ->
         "Skipped call to a non-executable address:" PP.<+> PP.pretty addr
+      UserSkip name ->
+        "User requested to skip" PP.<+> PP.pretty name
 
 instance PP.Pretty SkippedSyscall where
   pretty =

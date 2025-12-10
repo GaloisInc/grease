@@ -238,6 +238,7 @@ library
     Grease.Macaw.Overrides.SExp
     Grease.Macaw.PLT
     Grease.Macaw.SetupHook
+    Grease.Macaw.SetupHook.Diagnostic
     Grease.Macaw.SimulatorHooks
     Grease.Macaw.SimulatorHooks.Diagnostic
     Grease.Macaw.SimulatorState

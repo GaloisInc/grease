@@ -149,6 +149,7 @@ library
     -- No version bounds are needed, as Cabal will always choose the versions
     -- specified in `cabal.project`, namely, the version in the submodule.
     , crucible
+    , what4
 
   exposed-modules:
     Grease.Cli

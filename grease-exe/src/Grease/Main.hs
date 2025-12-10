@@ -820,6 +820,7 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
           fnOvsMap
           fnAddrOvs
           builtinGenericSyscalls
+          (simSkipFuns simOpts)
           errorSymbolicFunCalls
           errorSymbolicSyscalls
           skipInvalidCallAddrs
@@ -1447,7 +1448,7 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
   let setupHook :: forall sym. Macaw.SetupHook sym arch
       setupHook =
         let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
-         in Macaw.syntaxSetupHook la errCb dl cfgs prog
+         in Macaw.syntaxSetupHook la errCb dl (simSkipFuns simOpts) cfgs prog
   let macawCfgConfig =
         MacawCfgConfig
           { mcDataLayout = dl
@@ -1829,7 +1830,7 @@ simulateLlvmSyntax simOpts la = do
   let llvmMod = Nothing
   let setupHook :: forall sym arch. LLVM.SetupHook sym arch
       setupHook =
-        LLVM.syntaxSetupHook la sexpOvs prog cfgs $
+        LLVM.syntaxSetupHook la sexpOvs (simSkipFuns simOpts) prog cfgs $
           GLO.CantResolveOverrideCallback $
             \nm _hdl -> liftIO (declaredFunNotFound la nm)
   simulateLlvmCfgs la simOpts halloc llvmCtx llvmMod mkMem setupHook cfgs
@@ -1924,7 +1925,7 @@ simulateLlvm transOpts simOpts la = do
     sexpOvs <- loadLLVMSExpOvs la (simOverrides simOpts) halloc mvar
     let setupHook :: forall sym. LLVM.SetupHook sym arch
         setupHook =
-          LLVM.moduleSetupHook la sexpOvs trans cfgs $
+          LLVM.moduleSetupHook la sexpOvs (simSkipFuns simOpts) trans cfgs $
             GLO.CantResolveOverrideCallback $
               \nm _hdl -> liftIO (declaredFunNotFound la nm)
 

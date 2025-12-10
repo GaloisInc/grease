@@ -21,14 +21,17 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Foldable qualified as Foldable
 import Data.List qualified as List
 import Data.Map qualified as Map
+import Data.Maybe qualified as Maybe
 import Data.Sequence qualified as Seq
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text qualified as Text
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (Diagnostic (LLVMOverridesDiagnostic), GreaseLogAction)
 import Grease.LLVM.Overrides.Builtin (basicLLVMOverrides)
 import Grease.LLVM.Overrides.Declare (mkDeclare)
 import Grease.LLVM.Overrides.Diagnostic as Diag
-import Grease.LLVM.Overrides.SExp (LLVMSExpOverride (..))
+import Grease.LLVM.Overrides.SExp (LLVMSExpOverride (..), acfgToAnyLLVMOverride)
 import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.Overrides (CantResolveOverrideCallback (..))
 import Grease.Skip (declSkipOverride, registerSkipOverride)
@@ -100,6 +103,35 @@ forwardDeclDecls m =
     (\(fnm, C.SomeHandle hdl) -> mkDeclare (Text.unpack (WFN.functionName fnm)) (C.handleArgTypes hdl) (C.handleReturnType hdl))
     (Map.toList m)
 
+-- | Construct LLVM declarations corresponding to the @define@s in an
+-- S-expression program. Such declarations are used by the override matching
+-- machinery.
+sexpDefineDecls ::
+  CLM.HasPtrWidth 64 =>
+  CSyn.ParsedProgram CLLVM.LLVM ->
+  Seq.Seq L.Declare
+sexpDefineDecls p =
+  -- the path is only used in error messages, which we are discarding
+  let path = "<unused>"
+   in Seq.fromList $
+        mapRights (fmap getDecl . acfgToAnyLLVMOverride path) (CSyn.parsedProgCFGs p)
+ where
+  getDecl (GLOS.AnyLLVMOverride (CLLVM.SomeLLVMOverride ov)) =
+    CLLVM.llvmOverride_declare ov
+
+-- | Construct LLVM declarations corresponding to the @define@s in an
+-- S-expression override. Such declarations are used by the override matching
+-- machinery.
+sexpOvDefineDecls ::
+  CLM.HasPtrWidth 64 =>
+  LLVMSExpOverride ->
+  Seq.Seq L.Declare
+sexpOvDefineDecls p =
+  Seq.fromList (List.map ovDecl (lsoPublicOverride p : lsoAuxiliaryOverrides p))
+ where
+  ovDecl (GLOS.AnyLLVMOverride (CLLVM.SomeLLVMOverride ov)) =
+    CLLVM.llvmOverride_declare ov
+
 -- | Register function overrides and return a 'Map.Map' of override names to
 -- their corresponding 'CLLVM.SomeLLVMOverride's, suitable for use within
 -- @crucible-llvm@. The overrides are taken from the following sources:
@@ -121,9 +153,13 @@ registerLLVMOverrides ::
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
   Seq.Seq (WFN.FunctionName, LLVMSExpOverride) ->
+  -- | Functions that should be skipped even if they are defined
+  Set WFN.FunctionName ->
   bak ->
   LLVMContext arch ->
   SymIO.LLVMFileSystem 64 ->
+  -- | @declare@s corresponding to @define@s in the target program
+  [L.Declare] ->
   -- | @declare@s in the target program
   [L.Declare] ->
   CantResolveOverrideCallback sym CLLVM.LLVM ->
@@ -131,7 +167,7 @@ registerLLVMOverrides ::
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
   CS.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map WFN.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
-registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls errCb = do
+registerLLVMOverrides la builtinOvs userOvs skipFuns bak llvmCtx fs defns decls errCb = do
   let mvar = CLLVM.llvmMemVar llvmCtx
 
   -- For convenience, we treat all programs and overrides as if they `declare`d
@@ -176,9 +212,35 @@ registerLLVMOverrides la builtinOvs userOvs bak llvmCtx fs decls errCb = do
       registerOv publicOv
       Foldable.traverse_ (\(GLOS.AnyLLVMOverride ov) -> registerOv ov) auxOvs
       pure (nm, publicOv)
+
+  -- Finally, register skip overrides for any functions that should be skipped
+  -- even if they are defined.
+  defnSkips <-
+    fmap Maybe.catMaybes $
+      forM (defns ++ decls) $ \decl -> do
+        let L.Symbol nm = L.decName decl
+        let fNm = WFN.functionNameFromText (Text.pack nm)
+        if Set.member fNm skipFuns
+          then case declSkipOverride la llvmCtx decl of
+            Nothing -> do
+              doLog la (Diag.CantSkip decl)
+              pure Nothing
+            Just ov -> do
+              registerOv ov
+              pure (Just (fNm, ov))
+          else pure Nothing
+
   -- Similarly, we put the user overrides after the built-in overrides here
   -- (Map.fromList will favor later entries over earlier ones).
-  let allOvs = Map.fromList $ Foldable.toList $ Seq.fromList builtinOvs'' <> userOvs'
+  let allOvs =
+        Map.fromList $
+          Foldable.toList $
+            mconcat
+              [ Seq.fromList builtinOvs''
+              , userOvs'
+              , Seq.fromList defnSkips
+              ]
+
   -- Next, register the handles for forward declarations in user-defined
   -- overrides. We only do this after registering all of the public functions
   -- so as to ensure that we get the dependencies correct.
@@ -213,6 +275,8 @@ registerLLVMSexpOverrides ::
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
   Seq.Seq (WFN.FunctionName, LLVMSExpOverride) ->
+  -- | Functions that should be skipped even if they are defined
+  Set WFN.FunctionName ->
   bak ->
   LLVMContext arch ->
   SymIO.LLVMFileSystem 64 ->
@@ -223,9 +287,11 @@ registerLLVMSexpOverrides ::
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
   CS.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map WFN.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
-registerLLVMSexpOverrides la builtinOvs sexpOvs bak llvmCtx fs prog errCb = do
+registerLLVMSexpOverrides la builtinOvs sexpOvs skipFuns bak llvmCtx fs prog errCb = do
+  let ovDefns = Foldable.toList (fmap (\(_, ov) -> sexpOvDefineDecls ov) sexpOvs)
+  let defns = Foldable.toList (mconcat (sexpDefineDecls prog : ovDefns))
   let decls = forwardDeclDecls (CSyn.parsedProgForwardDecs prog)
-  registerLLVMOverrides la builtinOvs sexpOvs bak llvmCtx fs decls errCb
+  registerLLVMOverrides la builtinOvs sexpOvs skipFuns bak llvmCtx fs defns decls errCb
 
 -- | For an LLVM module, register function overrides and return a 'Map.Map' of
 -- override names to their corresponding 'CLLVM.SomeLLVMOverride's, suitable
@@ -247,6 +313,8 @@ registerLLVMModuleOverrides ::
   GreaseLogAction ->
   Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
   Seq.Seq (WFN.FunctionName, LLVMSExpOverride) ->
+  -- | Functions that should be skipped even if they are defined
+  Set WFN.FunctionName ->
   bak ->
   LLVMContext arch ->
   SymIO.LLVMFileSystem 64 ->
@@ -257,9 +325,12 @@ registerLLVMModuleOverrides ::
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
   CS.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map WFN.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
-registerLLVMModuleOverrides la builtinOvs sexpOvs bak llvmCtx fs llMod errCb = do
+registerLLVMModuleOverrides la builtinOvs sexpOvs skipFuns bak llvmCtx fs llMod errCb = do
+  let ovDefns = Foldable.toList (fmap (\(_, ov) -> sexpOvDefineDecls ov) sexpOvs)
+  let modDefns = Seq.fromList (List.map CLLVM.declareFromDefine (L.modDefines llMod))
+  let defns = Foldable.toList (mconcat (modDefns : ovDefns))
   let decls = L.modDeclares llMod
-  registerLLVMOverrides la builtinOvs sexpOvs bak llvmCtx fs decls errCb
+  registerLLVMOverrides la builtinOvs sexpOvs skipFuns bak llvmCtx fs defns decls errCb
 
 -- | Redirect handles for forward declarations in an LLVM S-expression program
 -- to call the corresponding LLVM overrides. Treat any calls to unresolved

@@ -80,6 +80,12 @@ organized into different subdirectories:
 5. `x86`: x86-64 machine-code CFGs (via `macaw-x86-syntax`). Each of these test
    cases has the file extension `*.x64.cbl`.
 
+## Feature tests
+
+Tests located in the `feat/` directory may be binaries, bitcode, or S-expression
+programs. They are intended to focus on features of GREASE other than
+refinement.
+
 ## UX tests
 
 Tests located in the `ux/` directory may be binaries, bitcode, or S-expression programs.

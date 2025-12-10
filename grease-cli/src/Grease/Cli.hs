@@ -25,6 +25,7 @@ module Grease.Cli (
   symFilesParser,
   symStdinParser,
   simDumpCoverageParser,
+  simSkipFunsParser,
 
   -- * High-level entrypoints
   optsInfo,
@@ -37,6 +38,7 @@ import Data.Char qualified as Char
 import Data.List qualified as List
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Data.String qualified as String
 import Data.Text (Text)
 import Data.Void (Void)
@@ -57,6 +59,7 @@ import Lang.Crucible.Utils.Timeout (Timeout (Timeout))
 import Options.Applicative qualified as Opt
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char.Lexer qualified as TMCL
+import What4.FunctionName (FunctionName)
 
 ------------------------------------------------------------
 -- Helpers (not exported)
@@ -359,6 +362,16 @@ simDumpCoverageParser =
             )
     )
 
+simSkipFunsParser :: Opt.Parser (Set.Set FunctionName)
+simSkipFunsParser =
+  fmap Set.fromList $
+    Opt.many $
+      Opt.strOption
+        ( Opt.long "skip"
+            <> Opt.metavar "SYMBOL"
+            <> Opt.help "Skip these functions during execution"
+        )
+
 simOpts :: Opt.Parser GO.SimOpts
 simOpts = do
   simProgPath <- Opt.strArgument (Opt.help "filename of binary" <> Opt.metavar "FILENAME")
@@ -467,6 +480,7 @@ simOpts = do
   simInitPrecondOpts <- initPrecondOptsParser
   simBoundsOpts <- boundsOptsParser
   simDumpCoverage <- simDumpCoverageParser
+  simSkipFuns <- simSkipFunsParser
   pure GO.SimOpts{..}
  where
   callOptionsGroup = "Call options"
