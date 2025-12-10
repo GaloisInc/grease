@@ -21,6 +21,7 @@ import Grease.LLVM.SimulatorHooks.Diagnostic qualified as LLVMSimulatorHooks
 import Grease.Macaw.Dwarf.Diagnostic qualified as Dwarf
 import Grease.Macaw.Load.Diagnostic qualified as Load
 import Grease.Macaw.ResolveCall.Diagnostic qualified as ResolveCall
+import Grease.Macaw.SetupHook.Diagnostic qualified as MacawSetupHook
 import Grease.Macaw.SimulatorHooks.Diagnostic qualified as SimulatorHooks
 import Grease.Main.Diagnostic qualified as Main
 import Grease.Refine.Diagnostic qualified as Refine
@@ -42,6 +43,7 @@ data Diagnostic where
   LLVMSetupHookDiagnostic :: LLVMSetupHook.Diagnostic -> Diagnostic
   LLVMSimulatorHooksDiagnostic :: LLVMSimulatorHooks.Diagnostic -> Diagnostic
   LoadDiagnostic :: Load.Diagnostic -> Diagnostic
+  MacawSetupHookDiagnostic :: MacawSetupHook.Diagnostic -> Diagnostic
   MainDiagnostic :: Main.Diagnostic -> Diagnostic
   RefineDiagnostic :: Refine.Diagnostic -> Diagnostic
   ResolveCallDiagnostic :: ResolveCall.Diagnostic -> Diagnostic
@@ -59,6 +61,7 @@ instance PP.Pretty Diagnostic where
       LLVMSetupHookDiagnostic diag -> PP.pretty diag
       LLVMSimulatorHooksDiagnostic diag -> PP.pretty diag
       LoadDiagnostic diag -> PP.pretty diag
+      MacawSetupHookDiagnostic diag -> PP.pretty diag
       MainDiagnostic diag -> PP.pretty diag
       RefineDiagnostic diag -> PP.pretty diag
       ResolveCallDiagnostic diag -> PP.pretty diag
@@ -76,6 +79,7 @@ severity =
     LLVMSetupHookDiagnostic diag -> LLVMSetupHook.severity diag
     LLVMSimulatorHooksDiagnostic diag -> LLVMSimulatorHooks.severity diag
     LoadDiagnostic diag -> Load.severity diag
+    MacawSetupHookDiagnostic diag -> MacawSetupHook.severity diag
     MainDiagnostic diag -> Main.severity diag
     RefineDiagnostic diag -> Refine.severity diag
     ResolveCallDiagnostic diag -> ResolveCall.severity diag

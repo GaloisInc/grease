@@ -44,6 +44,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.List qualified as P.List
 import Data.Parameterized.Map qualified as MapF
 import Data.Proxy (Proxy (Proxy))
+import Data.Set (Set)
 import Data.Type.Equality ((:~:) (Refl))
 import Data.Word (Word64, Word8)
 import GHC.Stack (HasCallStack, callStack)
@@ -440,6 +441,8 @@ memConfigWithHandles ::
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
   -- | Map of names of overridden syscalls to their implementations
   Map.Map WFN.FunctionName (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
+  -- | Functions that should be skipped even if they are defined
+  Set WFN.FunctionName ->
   Opts.ErrorSymbolicFunCalls ->
   Opts.ErrorSymbolicSyscalls ->
   Opts.SkipInvalidCallAddrs ->
@@ -447,9 +450,9 @@ memConfigWithHandles ::
   (WFN.FunctionName -> IO ()) ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
   Symbolic.MemModelConfig p sym arch CLM.Mem
-memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddress errCb' memCfg =
+memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs skipFuns errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddress errCb' memCfg =
   memCfg
-    { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs errorSymbolicFunCalls skipInvalidCallAddress lfhd
+    { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns errorSymbolicFunCalls skipInvalidCallAddress lfhd
     , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd
     }
  where

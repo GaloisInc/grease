@@ -285,6 +285,7 @@ main = do
   -- Each entry in this list should be documented in doc/dev.md
   let dirs =
         [ "arm"
+        , "feat"
         , "llvm"
         , "llvm-bc"
         , "ppc32"

@@ -11,7 +11,9 @@ GREASE's algorithm for handling function calls is as follows:
   - Otherwise, an error is generated.
 - Once GREASE has an address in the binary, it checks if the address corresponds
   to the beginning of a function.
-  - If so, that function is symbolically executed.
+  - If so,
+    - If the function was passed to `--skip`, the call is skipped.
+    - Otherwise, the function is symbolically executed.
   - If not, GREASE checks if the address corresponds to a PLT stub.
     - If so, GREASE checks if it has an [override](overrides.md) for that
       function. If so, the override is executed. If not, the call is skipped.

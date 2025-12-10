@@ -12,6 +12,7 @@ module Grease.LLVM.Overrides.SExp (
   LLVMSExpOverride (..),
   LLVMSExpOverrideError (..),
   loadOverrides,
+  acfgToAnyLLVMOverride,
 ) where
 
 import Data.Map qualified as Map

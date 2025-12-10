@@ -26,6 +26,7 @@ module Grease.Options (
 ) where
 
 import Data.Map.Strict (Map)
+import Data.Set (Set)
 import Data.Text (Text)
 import Data.Word (Word64)
 import Grease.Diagnostic.Severity (Severity)
@@ -37,6 +38,7 @@ import Grease.Shape.Simple (SimpleShape)
 import Grease.Solver (Solver (..))
 import Lang.Crucible.Utils.Seconds (Seconds)
 import Lang.Crucible.Utils.Timeout (Timeout)
+import What4.FunctionName (FunctionName)
 
 data PathStrategy
   = -- | Depth-first search.
@@ -218,6 +220,7 @@ data SimOpts
   , simFsOpts :: FsOpts
   , simInitPrecondOpts :: InitialPreconditionOpts
   , simDumpCoverage :: Maybe FilePath
+  , simSkipFuns :: Set FunctionName
   }
   deriving Show
 

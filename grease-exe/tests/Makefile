@@ -31,7 +31,10 @@ CFLAGS_NO_LIBS = -nodefaultlibs -nolibc -nostdlib
 # -no-pie: Position-independent executables are typically much larger.
 CFLAGS_STATIC = -static -no-pie
 
-DIRS = $(shell find prop/ -mindepth 3 -maxdepth 3 -type d) $(shell find refine sanity -mindepth 2 -maxdepth 2 -type d)
+DIRS = \
+  $(shell find feat/ -mindepth 1 -maxdepth 1 -type d) \
+  $(shell find prop/ -mindepth 3 -maxdepth 3 -type d) \
+  $(shell feat/ refine/ sanity/ -mindepth 2 -maxdepth 2 -type d)
 
 # These test cases must dynamically link against libc, so we avoid passing
 # CFLAGS_NO_LIBS when compiling them. Sadly, clang will not compile something with
@@ -153,7 +156,7 @@ SOS = $(SHARED_LIBRARY_ARM_SOS) $(SHARED_LIBRARY_X64_SOS) $(SHARED_LIBRARY_PPC32
 
 BC_DIRS = $(shell find llvm-bc/ -mindepth 1 -maxdepth 1 -type d)
 BCS = $(addsuffix /test.bc,$(BC_DIRS))
-STANDALONE_BCS = $(patsubst %.c, %.bc, $(wildcard llvm-bc/*.c))
+STANDALONE_BCS = $(patsubst %.c, %.bc, $(wildcard llvm-bc/*.c) $(shell find feat/ -type f -name '*.llvm.c'))
 
 .PHONY: all fmt clean
 
@@ -252,6 +255,9 @@ $(RAW_BINARY_EXES): %/test.armv7l.elf: %/test.c
 	rm $*/test.o
 
 $(BCS): %/test.bc: %/test.c
+	$(X64CC) $(shell ./extract-cflags.py $<) -c -o $@ $<
+
+feat/%.bc: feat/%.c
 	$(X64CC) $(shell ./extract-cflags.py $<) -c -o $@ $<
 
 llvm-bc/%.bc: llvm-bc/%.c

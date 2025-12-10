@@ -14,29 +14,39 @@ module Grease.Macaw.SetupHook (
 ) where
 
 import Control.Monad qualified as Monad
+import Control.Monad.IO.Class (MonadIO)
 import Data.Macaw.CFG.Core (ArchAddrWidth)
 import Data.Macaw.Symbolic qualified as DMS
 import Data.Map.Strict qualified as Map
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Grease.Concretize.ToConcretize (HasToConcretize)
-import Grease.Diagnostic (GreaseLogAction)
+import Grease.Diagnostic (Diagnostic (MacawSetupHookDiagnostic), GreaseLogAction)
 import Grease.Entrypoint qualified as GE
 import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.Address as GMOA
+import Grease.Macaw.SetupHook.Diagnostic qualified as Diag
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
 import Grease.Overrides (CantResolveOverrideCallback (..))
+import Grease.Skip (createSkipOverride)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as LCB
 import Lang.Crucible.CFG.Core qualified as LCCC
 import Lang.Crucible.CFG.Reg qualified as LCCR
 import Lang.Crucible.CFG.SSAConversion (toSSA)
+import Lang.Crucible.FunctionHandle qualified as CFH
 import Lang.Crucible.LLVM.DataLayout (DataLayout)
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
+import Lumberjack qualified as LJ
 import Stubs.FunctionOverride qualified as Stubs
 import What4.Expr.Builder qualified as WEB
 import What4.FunctionName qualified as WFN
 import What4.Protocol.Online qualified as WPO
+
+doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
+doLog la diag = LJ.writeLog la (MacawSetupHookDiagnostic diag)
 
 -- | Hook to run before executing a CFG.
 --
@@ -196,10 +206,12 @@ syntaxSetupHook ::
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   DataLayout ->
+  -- | Functions that should be skipped even if they are defined
+  Set WFN.FunctionName ->
   Map.Map GE.Entrypoint (GE.EntrypointCfgs (LCCR.AnyCFG (DMS.MacawExt arch))) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   SetupHook sym arch
-syntaxSetupHook la errCb dl cfgs prog =
+syntaxSetupHook la errCb dl skipFuns cfgs prog =
   SetupHook $ \bak mvar funOvs -> do
     registerOverrideHandles bak errCb funOvs
     registerSyntaxHandles bak la errCb dl mvar funOvs prog
@@ -209,6 +221,30 @@ syntaxSetupHook la errCb dl cfgs prog =
     Monad.forM_ (Map.elems cfgs) $ \entrypointCfgs ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
         GMO.registerMacawOvForwardDeclarations bak funOvs errCb startupOvFwdDecs
+
+    registerSkipOverrides mvar funOvs
+ where
+  registerSkipOverrides mvar funOvs = do
+    let maybeSkipHandle nm hdl =
+          Monad.when (Set.member nm skipFuns) $ do
+            let ret = CFH.handleReturnType hdl
+            case createSkipOverride la dl mvar nm ret of
+              Left{} -> doLog la (Diag.CantSkip nm)
+              Right ov -> CS.bindFnHandle hdl (CS.UseOverride ov)
+
+    Monad.forM_ (CSyn.parsedProgCFGs prog) $ \(LCCR.AnyCFG cfg) -> do
+      let hdl = LCCR.cfgHandle cfg
+      let nm = CFH.handleName hdl
+      maybeSkipHandle nm hdl
+
+    Monad.forM_ (Map.toList (CSyn.parsedProgForwardDecs prog)) $ \(fNm, sHdl) -> do
+      CFH.SomeHandle hdl <- pure sHdl
+      maybeSkipHandle fNm hdl
+
+    Monad.forM_ (Map.toList funOvs) $ \(fNm, sexpOv) ->
+      Monad.when (Set.member fNm skipFuns) $ do
+        let hdl = GMO.msoPublicFnHandle sexpOv
+        maybeSkipHandle fNm hdl
 
 -- | A 'SetupHook' for Macaw CFGs from binaries.
 --
