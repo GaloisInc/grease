@@ -12,7 +12,7 @@ data Diagnostic where
 
 instance PP.Pretty Diagnostic where
   pretty = \case
-    FailedToParse subprog msg -> PP.hcat [PP.pretty "Failed to parse dwarf shape in :", PP.viaShow subprog, PP.pretty " with message: ", PP.pretty msg]
+    FailedToParse subprog msg -> PP.hcat [PP.pretty "Failed to parse dwarf shape in:", PP.viaShow subprog, PP.pretty " with message: ", PP.pretty msg]
 
 severity :: Diagnostic -> Severity
 severity = \case
