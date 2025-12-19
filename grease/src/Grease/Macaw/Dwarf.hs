@@ -290,7 +290,7 @@ shapeFromDwarf gla aContext tyUnrollBound sub =
       Maybe.maybe
         (pure ())
         ( \((_, vr), errMsg) ->
-            let msg = "Stopped parsing at variable: " ++ show vr ++ " with msg: " ++ errMsg
+            let msg = "Stopped parsing at variable: \n" ++ show vr ++ "\nVariable error message:\n" ++ errMsg
              in doLog gla $ DwarfDiagnostic.FailedToParse sub msg
         )
         err
