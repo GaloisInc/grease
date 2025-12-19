@@ -13,7 +13,7 @@
 module Grease.Macaw.Dwarf (loadDwarfPreconditions) where
 
 import Control.Lens qualified as Lens
-import Control.Monad (foldM)
+import Control.Monad (foldM, join)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.RWS (MonadTrans (lift))
 import Control.Monad.Trans.Maybe (MaybeT (..), hoistMaybe)
@@ -164,13 +164,27 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
   shapeOfTyApp :: CLM.HasPtrWidth w => MDwarf.TypeRef -> Either String (Seq.Seq (MemShape w NoTag))
   shapeOfTyApp x = shapeSeq =<< extractType sprog =<< pure x
 
+  numOfRange :: MDwarf.SubrangeBounds -> Either String Int
+  numOfRange =
+    \case
+      MDwarf.SubrangeCount val -> Right $ fromIntegral val
+      _ -> Left "Array parser currently only supports DW_AT_count and does not support DW_AT_upperbound"
+
   shapeSeq :: CLM.HasPtrWidth w => MDwarf.TypeApp -> Either String (Seq.Seq (MemShape w NoTag))
   shapeSeq (MDwarf.UnsignedIntType w) = ishape w
   shapeSeq (MDwarf.SignedIntType w) = ishape w
   shapeSeq MDwarf.SignedCharType = ishape (1 :: Int)
   shapeSeq MDwarf.UnsignedCharType = ishape (1 :: Int)
   -- TODO(#263): Need modification to DWARF to collect DW_TAG_count and properly evaluate dwarf ops for upper bounds in subranges
-  shapeSeq (MDwarf.ArrayType _elTy _ub) = Left "Array types currently unsupported due to GREASE's DWARF parser, see https://github.com/GaloisInc/grease/issues/263"
+  shapeSeq (MDwarf.ArrayType elTy ub) =
+    do
+      let onlySubrange = if List.length ub == 1 then Maybe.listToMaybe ub else Nothing
+      ubRange <- case onlySubrange of
+        Just x -> Right x
+        Nothing -> Left "Expected only one DW_AT_subrange_type for DW_TAG_array_type"
+      num <- numOfRange (MDwarf.subrangeUpperBound ubRange)
+      tyShape <- shapeOfTyApp elTy
+      pure $ join $ Seq.replicate num tyShape
   -- need to compute padding between elements, in-front of the first element, and at end
   -- we could get a missing DWARF member per the format so we have to do something about padding in-front
   -- even if in practice this should not occur.
