@@ -15,6 +15,7 @@ module Grease.Macaw.Dwarf (loadDwarfPreconditions) where
 import Control.Lens qualified as Lens
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.RWS (MonadTrans (lift))
 import Control.Monad.Trans.Maybe (MaybeT (..), hoistMaybe)
 import Data.Coerce
 import Data.ElfEdit qualified as Elf
@@ -326,13 +327,12 @@ fromDwarfInfo gla aContext tyUnrollBound addr cus =
               )
               cus
         targetSubProg <- hoistMaybe $ List.find (isInSubProg addr) (cuSubprograms targetCu)
-        MaybeT $
-          Just
-            <$> shapeFromDwarf
-              gla
-              aContext
-              tyUnrollBound
-              targetSubProg
+        lift $
+          shapeFromDwarf
+            gla
+            aContext
+            tyUnrollBound
+            targetSubProg
     )
  where
   isInSubProg ::
