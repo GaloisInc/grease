@@ -146,7 +146,7 @@ jobs:
     - name: Create coverage report artifact
       # See above `if:` for coverage.
       if: ${{ strategy.job-index == 0 }}
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: coverage-report-${{ matrix.ghc }}-${{ matrix.cache-key-prefix }}
         path: coverage-report/
