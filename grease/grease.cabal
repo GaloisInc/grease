@@ -190,6 +190,9 @@ library
 
   exposed-modules:
     Grease.Main.Diagnostic
+    Grease.Assertion.Setup
+    Grease.Assertion.Assrt
+    Grease.Assertion.Pure
     Grease.AssertProperty
     Grease.BranchTracer
     Grease.BranchTracer.Diagnostic
