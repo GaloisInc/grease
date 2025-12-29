@@ -72,6 +72,7 @@ data Assertion sym wptr argTys s
   | Size (LabelNonce s, WI.SymBV sym wptr) -- TODO: Maybe bounds is preferred for compositional reasoning
   | IsPtr (PtrVar argTys wptr s, AssrtPointer sym wptr s) -- we either are constructing this against a var or an index of an arg..., this is because the only pointers can
   -- be existentials or prepopulated we cant make a Ptr
+  | SepConj (Assertion sym wptr argTys s, Assertion sym wptr argTys s)
 
 data ConstructableAssertion sym wptr argTys s = ConstructableAssertion
   { constructableAssertion :: Assertion sym wptr argTys s
