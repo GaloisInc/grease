@@ -1,6 +1,8 @@
 module Grease.Assertion.Ast () where
 
+import Control.Monad.State (StateT)
 import Data.BitVector.Sized (BV)
+import Data.Map qualified as Map
 import Data.Parameterized qualified as Param
 
 {-
@@ -9,7 +11,7 @@ lit :=
     | true
     | false
 
-tyoe :=
+type :=
     | Bool
     | Ptr
     | Bitvector(nat)
@@ -40,7 +42,7 @@ expr :=
     | expr = expr
     // Bool rules
     | !expr
-    | (ite expr expr expr)
+    | ite(expr, expr, expr)
     | expr /\ expr
     | expr \/ expr
     | var
@@ -50,7 +52,7 @@ sepform :=
     | pure(expr) // note this is parser derived not syntactic
     | is_ptr(expr, expr, expr)
     | uninit_cell(expr, expr, expr) // (label, offset, size)
-    | init_cell(expr, expr, expr) (label, offset, memvalue)
+    | init_cell(expr, expr, expr) (label, offset, mem_val)
     | size(expr, expr)
     | sepform * sepform
 
@@ -74,15 +76,56 @@ init_cell(e1, e2, e3)
 
 gamma |- e1 : Label, gamma |- e2 : Bitvector(W)
 ---
-size(e1, e2)
+gamma |- size(e1, e2)
 
 gamma |- s1 : SepBool, gamma |- s2 : SepBool
 ----
 s1 * s2
 
-gamma e1 |- Bitvector(W)
----- arith (%)
-e1 % e2
+gamma e1 |- Bitvector(a), gamma e2 |- Bitvector(b), a = b
+---- compare (#)
+gamma |- e1 # e2 : Bool
+
+gamma |- e1 : t1
+---- typeof
+gamma |- type_of(e1, t1) : t1
+
+gamma |- e1 : Bool, gamma |- e1: Bool
+--- ^ bool binop
+gamma |- e1 ^ e2 : Bool
+
+gamma |- e1 : Bool
+----
+gamma |- !e1 : Bool
+
+gamma |- e1 : Bool, gamma |- e2: A, gamma |- e3: A
+---- ite
+gamma |- ite(e1, e2, e3): A
+
+x : A in gamma
+---
+x : A
+
+---
+\$l : Label
+
+--- true
+true : Bool
+
+--- false
+false : Bool
+
+--- bv
+bv(_, n) : Bitvector(n)
+
+gamma |- e1 : Ptr
+---
+gamma |- e1 : mem_val
+
+gamma |- e1 : Bitvector a
+---
+gamma |- e1 : mem_val
+
 -}
 
 data VarType
@@ -101,9 +144,11 @@ data Lit
   = LitBool Bool
   | forall w. LitBv {width :: Param.NatRepr w, value :: BV w}
 
-data Expr
+data BaseExpr
   = ExprVar Var
   | ExprLit Lit
+
+data Expr t = Expr {baseExpr :: BaseExpr, annotation :: T}
 
 data SepAssert
   = Pure Expr
@@ -112,3 +157,16 @@ data SepAssert
   | InitCell (Expr, Expr, Expr)
   | Size (Expr, Expr)
   | SepConj Expr Expr
+
+data AssrtType
+  = Bool
+  | Ptr
+  | Bitvector Int
+  | LabelTy
+  deriving (Show, Eq, Ord)
+
+type TypeState = Map.Map Var AssrtType
+type TypeMonad = StateT TypeState (Either String)
+
+infer :: TypeState -> Expr t -> TypeMonad Expr AssrtType
+infer = undefined
