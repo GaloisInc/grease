@@ -41,9 +41,7 @@ import What4.Interface qualified as WI
 -- mem_ptr(Ptr) => mem_val
 -- mem_bv(Bv w) => mem_val
 
-data Bindings sym argTys = Bindings
-  { args :: Ctx.Assignment (CS.RegValue' sym) argTys
-  }
+data Bindings sym argTys = Bindings (Ctx.Assignment (CS.RegValue' sym) argTys)
 
 -- current problem we have a bit of a weird situation where to interact with the mem model we have non
 -- symbolic stuff we'd like to do. That is we want to form a ptr(x,a) but this can only be a top, level thing

@@ -192,6 +192,7 @@ library
     Grease.Main.Diagnostic
     Grease.Assertion.Setup
     Grease.Assertion.Assrt
+    Grease.Assertion.Ast
     Grease.Assertion.Pure
     Grease.AssertProperty
     Grease.BranchTracer
