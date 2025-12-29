@@ -42,27 +42,7 @@ import What4.Interface qualified as WI
 -- mem_bv(Bv w) => mem_val
 
 data Bindings sym argTys = Bindings
-  { blocks :: Map.Map (WI.SymNat sym) (WI.SymNat sym)
-  , args :: Ctx.Assignment (CS.RegValue' sym) argTys
-  }
-
-data BindableExpr sym tp argTys = BindableExpr
-  { bexpr :: WI.SymExpr sym tp
-  , bindings :: Bindings sym argTys
-  }
-
--- Unfortunately nat not in Expr due to invariants so separate type
-data BindableNat sym = BindableNat
-  { symNat :: WI.SymNat sym
-  , natBindings :: Map.Map (WI.SymNat sym) (WI.SymNat sym)
-  }
-
--- We only allow pointer introduction and elimination... are there other types we should be representing?
-
--- | We want to be able to perform substitutions in a pointer so we represent them internally
-data BindablePointer sym wptr argTys = BindablePointer
-  { pointerBlock :: BindableNat sym
-  , pointerOffset :: BindableExpr sym (WI.BaseBVType wptr) argTys
+  { args :: Ctx.Assignment (CS.RegValue' sym) argTys
   }
 
 -- current problem we have a bit of a weird situation where to interact with the mem model we have non
@@ -71,20 +51,31 @@ data BindablePointer sym wptr argTys = BindablePointer
 -- imagine if we have a = ptr(l,o)... what does that mean... my view maybe.. is we could in theory do
 -- init_cell_ptr() but then this is restricting ptrs, perhaps we need to unify exprs and ptr exprs
 -- the trouble is making a bindable regValue is... annoying
-data MemVal sym wptr argTys
-  = MemPtr (BindablePointer sym wptr argTys)
-  | forall w. MemBv {memBvWidth :: Param.NatRepr w, memBvExpr :: BindableExpr sym (WI.BaseBVType w) argTys}
+data MemVal sym wptr argTys s
+  = MemPtr (PtrVar argTys wptr s)
+  | forall w. MemBv {memBvWidth :: Param.NatRepr w, memBvExpr :: WI.SymBV sym w}
 
 data PtrVar argTys wptr s
   = PtrVarArg (Ctx.Index argTys (CLM.LLVMPointerType wptr))
   | PtrExistential (Nonce.Nonce s ())
 
+newtype LabelNonce s = LabelNonce (Nonce.Nonce s ())
+
+-- | An assertion pointer is represented by an offset and
+-- a nonce value that represents equivalence classes between malloced blocks
+data AssrtPointer sym wptr s = AssrtPointer {assrtPointer :: LabelNonce s, assrtOffset :: WI.SymBV sym wptr}
+
 data Assertion sym wptr argTys s
-  = Pure (BindableExpr sym WI.BaseBoolType argTys)
+  = Pure (WI.Pred sym)
   | -- a store can be anything at a crucible type... we need to handle pointer types
     -- So we need to be able to bind the RegValue...
-    forall tp. InitCell (BindablePointer sym wptr argTys, MemVal sym wptr argTys)
-  | UninitCell (BindablePointer sym wptr argTys, BindableExpr sym (WI.BaseBVType wptr) argTys)
-  | Size (BindableExpr sym (WI.BaseBVType wptr) argTys) -- TODO: Maybe bounds is preferred for compositional reasoning
-  | IsPtr (PtrVar argTys wptr s) -- we either are constructing this against a var or an index of an arg..., this is because the only pointers can
+    forall tp. InitCell (AssrtPointer sym wptr s, MemVal sym wptr argTys s)
+  | UninitCell (AssrtPointer sym wptr s, WI.SymBV sym wptr)
+  | Size (LabelNonce s, WI.SymBV sym wptr) -- TODO: Maybe bounds is preferred for compositional reasoning
+  | IsPtr (PtrVar argTys wptr s, AssrtPointer sym wptr s) -- we either are constructing this against a var or an index of an arg..., this is because the only pointers can
   -- be existentials or prepopulated we cant make a Ptr
+
+data ConstructableAssertion sym wptr argTys s = ConstructableAssertion
+  { constructableAssertion :: Assertion sym wptr argTys s
+  , constructionBindings :: Bindings sym argTys
+  }
