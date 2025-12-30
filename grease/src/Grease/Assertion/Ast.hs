@@ -1,9 +1,16 @@
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
+
 module Grease.Assertion.Ast () where
 
-import Control.Monad.State (StateT)
+import Control.Lens (makeLenses, (&))
+import Control.Lens.Getter ((^.))
+import Control.Lens.Operators ((.~))
+import Control.Monad.State (MonadTrans (lift), StateT)
 import Data.BitVector.Sized (BV)
 import Data.Map qualified as Map
 import Data.Parameterized qualified as Param
+import Text.LLVM (unreachable)
 
 {-
 lit :=
@@ -144,19 +151,14 @@ data Lit
   = LitBool Bool
   | forall w. LitBv {width :: Param.NatRepr w, value :: BV w}
 
-data BaseExpr
-  = ExprVar Var
-  | ExprLit Lit
+data BoolBinOp
+  = Or
+  | And
 
-data Expr t = Expr {baseExpr :: BaseExpr, annotation :: T}
-
-data SepAssert
-  = Pure Expr
-  | IsPtr (Expr, Expr, Expr)
-  | UninitCell (Expr, Expr)
-  | InitCell (Expr, Expr, Expr)
-  | Size (Expr, Expr)
-  | SepConj Expr Expr
+data BvBinOp
+  = Plus
+  | Minus
+  | Times
 
 data AssrtType
   = Bool
@@ -165,8 +167,56 @@ data AssrtType
   | LabelTy
   deriving (Show, Eq, Ord)
 
+data BaseExpr t
+  = ExprVar Var
+  | ExprLit Lit
+  | BoolBinOpExpr (BoolBinOp, Expr t, Expr t)
+  | BvBinOpExpr (BvBinOp, Expr t, Expr t)
+  | TypeOf (Expr t, AssrtType)
+
+data Expr t = Expr {_baseExpr :: BaseExpr t, _annotation :: t}
+makeLenses ''Expr
+annotedExpr :: BaseExpr t -> t -> Expr t
+annotedExpr b annot = Expr{_baseExpr = b, _annotation = annot}
+
+data SepAssert t
+  = Pure (Expr t)
+  | IsPtr (Expr t, Expr t, Expr t)
+  | UninitCell (Expr t, Expr t)
+  | InitCell (Expr t, Expr t, Expr t)
+  | Size (Expr t, Expr t)
+  | SepConj (Expr t) (Expr t)
+
 type TypeState = Map.Map Var AssrtType
 type TypeMonad = StateT TypeState (Either String)
 
-infer :: TypeState -> Expr t -> TypeMonad Expr AssrtType
-infer = undefined
+infer :: Expr t -> TypeMonad (Expr AssrtType)
+infer eAnnot = do
+  let base = eAnnot ^. baseExpr
+  nbase <- case base of
+    BoolBinOpExpr (op, e1, e2) -> do
+      e1' <- check e1 Bool
+      e2' <- check e2 Bool
+      return $ annotedExpr (BoolBinOpExpr (op, e1', e2')) Bool
+    TypeOf (e1, ty) -> do
+      e1' <- check e1 ty
+      return $ annotedExpr (TypeOf (e1', ty)) ty
+    _ -> lift $ Left "unable to infer type, try to annotate"
+  return nbase
+
+check :: Expr t -> AssrtType -> TypeMonad (Expr AssrtType)
+check eAnnot aty = do
+  let base = eAnnot ^. baseExpr
+  case base of
+    BvBinOpExpr (op, e1, e2) -> do
+      e1' <- check e1 aty
+      e2' <- check e2 aty
+      return $ annotedExpr (BvBinOpExpr (op, e1', e2')) aty
+    _ -> do
+      inferred <- infer eAnnot
+      if inferred ^. annotation == aty
+        then
+          return inferred
+        else
+          -- FIXME: we should use diagnostic or something to give good type errors
+          lift $ Left $ "Expected a type but got another one"
