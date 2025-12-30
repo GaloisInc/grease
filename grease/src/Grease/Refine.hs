@@ -463,6 +463,25 @@ proveAndRefine bak execResult la bbMap refineData goals = do
           Left C.TimedOut -> pure (ProveCantRefine SolverTimeout)
           Right r -> pure r
 
+processExecResult ::
+  CS.ExecResult p sym ext r ->
+  Maybe CantRefine
+processExecResult =
+  \case
+    CS.TimeoutResult _execState ->
+      Just Timeout
+    CS.AbortedResult _ (CS.AbortedExit Exit.ExitSuccess _) ->
+      Just (Exit (Just 0))
+    CS.AbortedResult _ (CS.AbortedExit (Exit.ExitFailure code) _) ->
+      Just (Exit (Just code))
+    CS.AbortedResult _ (CS.AbortedExec (CB.EarlyExit _loc) _gp) ->
+      Just (Exit Nothing)
+    CS.AbortedResult _ (CS.AbortedExec (CB.AssertionFailure (C.SimError _loc (C.ResourceExhausted msg))) _gp) ->
+      Just (Exhausted msg)
+    CS.AbortedResult _ (CS.AbortedExec (CB.AssertionFailure (C.SimError _loc (C.Unsupported _cs feat))) _gp) ->
+      Just (Unsupported feat)
+    _ -> Nothing
+
 execAndRefine ::
   forall ext solver sym bak t st argTys ret w m fm p.
   ( MonadIO m
@@ -488,20 +507,9 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
         (execResult, goals, remaining) <- execCfg bak execData'
         doLog la (Diag.ExecutionResult memVar execResult)
         refineResult <-
-          case execResult of
-            CS.TimeoutResult _execState ->
-              pure (ProveCantRefine Timeout)
-            CS.AbortedResult _ (CS.AbortedExit Exit.ExitSuccess _) ->
-              pure (ProveCantRefine (Exit (Just 0)))
-            CS.AbortedResult _ (CS.AbortedExit (Exit.ExitFailure code) _) ->
-              pure (ProveCantRefine (Exit (Just code)))
-            CS.AbortedResult _ (CS.AbortedExec (CB.EarlyExit _loc) _gp) ->
-              pure (ProveCantRefine (Exit Nothing))
-            CS.AbortedResult _ (CS.AbortedExec (CB.AssertionFailure (C.SimError _loc (C.ResourceExhausted msg))) _gp) ->
-              pure (ProveCantRefine (Exhausted msg))
-            CS.AbortedResult _ (CS.AbortedExec (CB.AssertionFailure (C.SimError _loc (C.Unsupported _cs feat))) _gp) ->
-              pure (ProveCantRefine (Unsupported feat))
-            _ -> do
+          case processExecResult execResult of
+            Just cantRefine -> pure (ProveCantRefine cantRefine)
+            Nothing -> do
               bbMap <- readIORef bbMapRef
               proveAndRefine bak execResult la bbMap refineData goals
         case execPathStrat execData of
