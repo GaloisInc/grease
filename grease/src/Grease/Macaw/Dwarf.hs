@@ -189,7 +189,9 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
           let endPad = if endLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - endLoc)
           Right $ (seqs Seq.>< endPad)
   shapeSeq (MDwarf.PointerType _ maybeRef) =
-    let mshape = constructPtrMemShapeFromRef tyUnrollBound sprog visitCount =<< Maybe.maybe (Left $ "Pointer missing pointee") Right maybeRef
+    let mshape =
+          constructPtrMemShapeFromRef tyUnrollBound sprog visitCount
+            =<< Maybe.maybe (Left $ "Pointer missing pointee") Right maybeRef
      in Seq.singleton <$> mshape
   shapeSeq ty = Left $ "Unsupported dwarf type: " ++ show ty
 
@@ -200,7 +202,13 @@ nullPtr =
   let zbyt = TaggedByte{taggedByteTag = NoTag, taggedByteValue = 0}
    in Exactly (take (fromInteger $ CT.intValue ?ptrWidth `div` 8) $ repeat $ zbyt)
 
-constructPtrMemShapeFromRef :: CLM.HasPtrWidth w => TypeUnrollingBound -> Subprogram -> VisitCount -> MDwarf.TypeRef -> Either String (MemShape w NoTag)
+constructPtrMemShapeFromRef ::
+  CLM.HasPtrWidth w =>
+  TypeUnrollingBound ->
+  Subprogram ->
+  VisitCount ->
+  MDwarf.TypeRef ->
+  Either String (MemShape w NoTag)
 constructPtrMemShapeFromRef bound@(TypeUnrollingBound tyUnrollBound) sprog vcount ref =
   let ct = fromMaybe 0 (Map.lookup ref vcount)
       newMap = Map.insert ref (ct + 1) vcount
