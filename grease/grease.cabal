@@ -225,6 +225,7 @@ library
     Grease.Macaw.Arch
     Grease.Macaw.Discovery
     Grease.Macaw.Dwarf
+    Grease.Macaw.Dwarf.Diagnostic
     Grease.Macaw.Entrypoint
     Grease.Macaw.Load
     Grease.Macaw.Load.Diagnostic

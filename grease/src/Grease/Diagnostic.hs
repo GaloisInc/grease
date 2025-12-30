@@ -18,6 +18,7 @@ import Grease.Heuristic.Diagnostic qualified as Heuristic
 import Grease.LLVM.Overrides.Diagnostic qualified as LLVMOverrides
 import Grease.LLVM.SetupHook.Diagnostic qualified as LLVMSetupHook
 import Grease.LLVM.SimulatorHooks.Diagnostic qualified as LLVMSimulatorHooks
+import Grease.Macaw.Dwarf.Diagnostic qualified as Dwarf
 import Grease.Macaw.Load.Diagnostic qualified as Load
 import Grease.Macaw.ResolveCall.Diagnostic qualified as ResolveCall
 import Grease.Macaw.SimulatorHooks.Diagnostic qualified as SimulatorHooks
@@ -47,6 +48,7 @@ data Diagnostic where
   SetupDiagnostic :: Setup.Diagnostic -> Diagnostic
   SimulatorHooksDiagnostic :: SimulatorHooks.Diagnostic -> Diagnostic
   SkipDiagnostic :: Skip.Diagnostic -> Diagnostic
+  DwarfShapesDiagnostic :: Dwarf.Diagnostic -> Diagnostic
 
 instance PP.Pretty Diagnostic where
   pretty =
@@ -63,6 +65,7 @@ instance PP.Pretty Diagnostic where
       SetupDiagnostic diag -> PP.pretty diag
       SimulatorHooksDiagnostic diag -> PP.pretty diag
       SkipDiagnostic diag -> PP.pretty diag
+      DwarfShapesDiagnostic diag -> PP.pretty diag
 
 severity :: Diagnostic -> Severity
 severity =
@@ -79,6 +82,7 @@ severity =
     SetupDiagnostic diag -> Setup.severity diag
     SimulatorHooksDiagnostic diag -> SimulatorHooks.severity diag
     SkipDiagnostic diag -> Skip.severity diag
+    DwarfShapesDiagnostic diag -> Dwarf.severity diag
 
 -- | The type of @grease@ 'LJ.LogAction's. This must work over any 'MonadIO'
 -- instance to ensure that we can log messages in multiple monads, including

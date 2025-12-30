@@ -35,6 +35,7 @@ import Control.Lens (to, (.~), (^.))
 import Control.Monad (forM, forM_, mapM_, when, (>>=))
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Maybe qualified as MaybeT
 import Data.Bool (Bool (..), not, otherwise, (&&), (||))
 import Data.ByteString qualified as BS
 import Data.Either (Either (..))
@@ -616,18 +617,25 @@ macawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr = do
   initArgs0 <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let shouldUseDwarf = initPrecondUseDebugInfo opts
   let getDwarfArgs = do
-        -- Maybe
-        elfHdr <- mcElf macawCfgConfig
-        addr <- mbCfgAddr
-        loadDwarfPreconditions
-          addr
-          memory
-          (initPrecondTypeUnrollingBound opts)
-          argNames
-          initArgs0
-          elfHdr
-          archCtx
-  let dwarfedArgs = if shouldUseDwarf then fromMaybe initArgs0 getDwarfArgs else initArgs0
+        -- MaybeT IO
+        elfHdr <- MaybeT.hoistMaybe $ mcElf macawCfgConfig
+        addr <- MaybeT.hoistMaybe $ mbCfgAddr
+        MaybeT.MaybeT $
+          loadDwarfPreconditions
+            la
+            addr
+            memory
+            (initPrecondTypeUnrollingBound opts)
+            argNames
+            initArgs0
+            elfHdr
+            archCtx
+  dwarfedArgs <-
+    if shouldUseDwarf
+      then do
+        v <- MaybeT.runMaybeT getDwarfArgs
+        pure $ fromMaybe initArgs0 v
+      else pure initArgs0
   initArgs1 <-
     loadInitialPreconditions la (initPrecondPath opts) argNames dwarfedArgs
   useSimpleShapes la argNames initArgs1 (initPrecondSimpleShapes opts)
