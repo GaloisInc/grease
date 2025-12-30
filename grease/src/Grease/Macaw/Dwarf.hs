@@ -131,7 +131,9 @@ extractType sprog ref =
   extractTypeInternal :: MDwarf.TypeRef -> Either String MDwarf.TypeApp
   extractTypeInternal vrTy =
     let mp = MDwarf.subTypeMap sprog
-     in Maybe.maybe (Left $ "No type for typeref: " ++ show vrTy) (\(a, _) -> a) (Map.lookup vrTy mp)
+     in case Map.lookup vrTy mp of
+          Nothing -> Left $ "No type for typeref: " ++ show vrTy
+          Just (a, _) -> a
 
 constructPtrTarget ::
   CLM.HasPtrWidth w =>
@@ -150,7 +152,9 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
   buildMember :: CLM.HasPtrWidth w => Word64 -> MDwarf.Member -> Either String (Word64, Seq.Seq (MemShape w NoTag))
   buildMember loc member =
     do
-      memLoc <- Maybe.maybe (Left $ "Expected location for member: " ++ show member) Right $ MDwarf.memberLoc member
+      memLoc <- case MDwarf.memberLoc member of
+        Nothing -> Left $ "Expected location for member: " ++ show member
+        Just x -> Right x
       padd <- Right (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
       memberShapes <- shapeOfTyApp $ MDwarf.memberType member
       let memByteSize = sum $ memShapeSize ?ptrWidth <$> memberShapes
