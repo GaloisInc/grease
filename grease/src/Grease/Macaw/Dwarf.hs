@@ -324,19 +324,19 @@ fromDwarfInfo ::
 fromDwarfInfo gla aContext tyUnrollBound addr cus =
   runMaybeT
     ( do
+        let isTargetAddrInCu cu =
+              let rs = cuRanges cu
+                  isInCU range =
+                    let begin = rangeBegin range
+                        end = rangeEnd range
+                     in begin <= addr
+                          && addr
+                            < end
+               in any isInCU rs
         targetCu <-
           hoistMaybe $
             List.find
-              ( \x ->
-                  let rs = cuRanges x
-                      isInCU range =
-                        let begin = rangeBegin range
-                            end = rangeEnd range
-                         in begin <= addr
-                              && addr
-                                < end
-                   in any isInCU rs
-              )
+              isTargetAddrInCu
               cus
         targetSubProg <- hoistMaybe $ List.find (isInSubProg addr) (cuSubprograms targetCu)
         lift $
