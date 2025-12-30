@@ -4,7 +4,7 @@
 ; a possible bug and the other cannot be refined (in this case, due to the loop
 ; bound).
 ;
-; Regression test for #476.
+; Regression test for #493.
 
 (declare @abort () Unit)
 
@@ -21,11 +21,10 @@
 ;; flags {"--symbol", "test"}
 ;; flags {"--path-strategy", "sse"}
 ;; go(prog)
-;; could_not_infer()
+;; check_not "Possible bug(s):"
+;; check 'reached maximum number of loop iterations'
 
 ;; flags {"--symbol", "test"}
 ;; flags {"--path-strategy", "dfs"}
 ;; go(prog)
-; TODO(#476):
-; could_not_infer()
 ;; check 'reached maximum number of loop iterations'
