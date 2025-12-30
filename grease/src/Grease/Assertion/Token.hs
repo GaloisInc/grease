@@ -23,4 +23,6 @@ data Token
   | ProgramVar String
   | NaturalNum Int
   | Bv
-  | HexVal Word64
+
+stringToNat :: String -> Int
+stringToNat s = undefined
