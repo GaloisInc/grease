@@ -209,8 +209,9 @@ constructPtrMemShapeFromRef ::
   VisitCount ->
   MDwarf.TypeRef ->
   Either String (MemShape w NoTag)
-constructPtrMemShapeFromRef bound@(TypeUnrollingBound tyUnrollBound) sprog vcount ref =
-  let ct = fromMaybe 0 (Map.lookup ref vcount)
+constructPtrMemShapeFromRef bound sprog vcount ref =
+  let TypeUnrollingBound tyUnrollBound = bound
+      ct = fromMaybe 0 (Map.lookup ref vcount)
       newMap = Map.insert ref (ct + 1) vcount
    in if ct > tyUnrollBound
         then
