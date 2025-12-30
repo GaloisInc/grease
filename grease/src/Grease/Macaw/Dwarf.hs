@@ -19,7 +19,7 @@ import Control.Monad.RWS (MonadTrans (lift))
 import Control.Monad.Trans.Maybe (MaybeT (..), hoistMaybe)
 import Data.Coerce
 import Data.ElfEdit qualified as Elf
-import Data.Foldable (find)
+import Data.Foldable (find, for_)
 import Data.Functor.Const qualified as Const
 import Data.List qualified as List
 import Data.Macaw.CFG (ArchSegmentOff)
@@ -251,7 +251,7 @@ pointerShapeOfDwarf _ tyUnrollBound _ sprog (MDwarf.PointerType _ tyRef) =
    in (C.Some <$> pointerShape)
 pointerShapeOfDwarf _ _ _ _ ty = Left $ "Unsupported base dwarf type: " ++ show ty
 
--- Stops after the first nothing to avoid adding shapes after
+-- Stops after the first 'Left' to avoid adding shapes after
 -- failing to build some shape (this would result in shapes applying to incorrect registers)
 takeRight :: (a -> Either e b) -> [a] -> ([b], Maybe (a, e))
 takeRight _ [] = ([], Nothing)
@@ -300,13 +300,12 @@ shapeFromDwarf gla aContext tyUnrollBound sub =
         args
    in
     do
-      Maybe.maybe
-        (pure ())
+      for_ @Maybe
+        err
         ( \((_, vr), errMsg) ->
             let msg = List.concat ["Stopped parsing at variable: \n", show vr, "\nVariable error message:\n", errMsg]
              in doLog gla $ DwarfDiagnostic.FailedToParse sub msg
         )
-        err
       pure $ Shape.ParsedShapes{Shape._getParsedShapes = Map.fromList ascParams}
 
 -- | Given a list of `Data.Macaw.Dwarf.CompileUnit` attempts to find a subprogram corresponding to
