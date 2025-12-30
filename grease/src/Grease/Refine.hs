@@ -82,7 +82,7 @@ module Grease.Refine (
   findPredAnnotations,
 ) where
 
-import Control.Applicative (pure)
+import Control.Applicative (pure, (<|>))
 import Control.Exception.Safe qualified as X
 import Control.Lens ((^.))
 import Control.Monad qualified as Monad
@@ -480,6 +480,10 @@ processExecResult =
       Just (Exhausted msg)
     CS.AbortedResult _ (CS.AbortedExec (CB.AssertionFailure (C.SimError _loc (C.Unsupported _cs feat))) _gp) ->
       Just (Unsupported feat)
+    CS.AbortedResult ctx (CS.AbortedBranch _loc _pred r1 r2) ->
+      -- Taking the first 'CantRefine' is consistent with 'consumer'
+      processExecResult (CS.AbortedResult ctx r1)
+        <|> processExecResult (CS.AbortedResult ctx r2)
     _ -> Nothing
 
 execAndRefine ::
