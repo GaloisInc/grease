@@ -14,7 +14,7 @@ import Text.LLVM (unreachable)
 
 {-
 lit :=
-    | bv(hex, nat)
+    | 0xA:width
     | true
     | false
 
