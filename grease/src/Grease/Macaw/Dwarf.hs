@@ -119,7 +119,7 @@ loadDwarfPreconditions gla targetAddr memory tyUnrollBound argNames initShapes e
         hoistMaybe $ either (const Nothing) Just repl
     )
 
-extractType :: Subprogram -> MDwarf.TypeRef -> Either String MDwarf.TypeApp
+extractType :: Subprogram -> MDwarf.TypeRef -> Either DwarfDiagnostic.DwarfShapeParsingError MDwarf.TypeApp
 extractType sprog ref =
   extractTypeInternal ref
     >>= ( \case
@@ -128,12 +128,14 @@ extractType sprog ref =
             x -> Right x
         )
  where
-  extractTypeInternal :: MDwarf.TypeRef -> Either String MDwarf.TypeApp
+  extractTypeInternal :: MDwarf.TypeRef -> Either DwarfDiagnostic.DwarfShapeParsingError MDwarf.TypeApp
   extractTypeInternal vrTy =
     let mp = MDwarf.subTypeMap sprog
      in case Map.lookup vrTy mp of
-          Nothing -> Left $ "No type for typeref: " ++ show vrTy
-          Just (a, _) -> a
+          Nothing -> Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "No type for typeref: " ++ show vrTy
+          Just (a, _) -> case a of
+            Left x -> Left $ DwarfDiagnostic.UnexpectedDWARFForm x
+            Right x -> Right x
 
 constructPtrTarget ::
   CLM.HasPtrWidth w =>
@@ -141,7 +143,7 @@ constructPtrTarget ::
   Subprogram ->
   VisitCount ->
   MDwarf.TypeApp ->
-  Either String (PtrTarget w NoTag)
+  Either DwarfDiagnostic.DwarfShapeParsingError (PtrTarget w NoTag)
 constructPtrTarget tyUnrollBound sprog visitCount tyApp =
   ptrTarget Nothing <$> shapeSeq tyApp
  where
@@ -149,11 +151,11 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
   padding :: Integral a => a -> MemShape w NoTag
   padding w = Uninitialized (toBytes w)
   -- if we dont know where to place members we have to fail/just place some bytes
-  buildMember :: CLM.HasPtrWidth w => Word64 -> MDwarf.Member -> Either String (Word64, Seq.Seq (MemShape w NoTag))
+  buildMember :: CLM.HasPtrWidth w => Word64 -> MDwarf.Member -> Either DwarfDiagnostic.DwarfShapeParsingError (Word64, Seq.Seq (MemShape w NoTag))
   buildMember loc member =
     do
       memLoc <- case MDwarf.memberLoc member of
-        Nothing -> Left $ "Expected location for member: " ++ show member
+        Nothing -> Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Expected location for member: " ++ show member
         Just x -> Right x
       padd <- Right (if memLoc == loc then Seq.empty else Seq.singleton (padding $ memLoc - loc))
       memberShapes <- shapeOfTyApp $ MDwarf.memberType member
@@ -161,16 +163,16 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
       let nextLoc = memLoc + fromIntegral memByteSize
       Right (nextLoc, padd Seq.>< memberShapes)
 
-  shapeOfTyApp :: CLM.HasPtrWidth w => MDwarf.TypeRef -> Either String (Seq.Seq (MemShape w NoTag))
+  shapeOfTyApp :: CLM.HasPtrWidth w => MDwarf.TypeRef -> Either DwarfDiagnostic.DwarfShapeParsingError (Seq.Seq (MemShape w NoTag))
   shapeOfTyApp x = shapeSeq =<< extractType sprog =<< pure x
 
-  numOfRange :: MDwarf.SubrangeBounds -> Either String Int
+  numOfRange :: MDwarf.SubrangeBounds -> Either DwarfDiagnostic.DwarfShapeParsingError Int
   numOfRange =
     \case
       MDwarf.SubrangeCount val -> Right $ fromIntegral val
-      _ -> Left "Array parser currently only supports DW_AT_count and does not support DW_AT_upperbound"
+      _ -> Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Array parser currently only supports DW_AT_count and does not support DW_AT_upperbound"
 
-  shapeSeq :: CLM.HasPtrWidth w => MDwarf.TypeApp -> Either String (Seq.Seq (MemShape w NoTag))
+  shapeSeq :: CLM.HasPtrWidth w => MDwarf.TypeApp -> Either DwarfDiagnostic.DwarfShapeParsingError (Seq.Seq (MemShape w NoTag))
   shapeSeq (MDwarf.UnsignedIntType w) = ishape w
   shapeSeq (MDwarf.SignedIntType w) = ishape w
   shapeSeq MDwarf.SignedCharType = ishape (1 :: Int)
@@ -181,7 +183,7 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
       let onlySubrange = if List.length ub == 1 then Maybe.listToMaybe ub else Nothing
       ubRange <- case onlySubrange of
         Just x -> Right x
-        Nothing -> Left "Expected only one DW_AT_subrange_type for DW_TAG_array_type"
+        Nothing -> Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Expected only one DW_AT_subrange_type for DW_TAG_array_type"
       num <- numOfRange (MDwarf.subrangeUpperBound ubRange)
       tyShape <- shapeOfTyApp elTy
       pure $ join $ Seq.replicate num tyShape
@@ -205,9 +207,9 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
   shapeSeq (MDwarf.PointerType _ maybeRef) =
     let mshape =
           constructPtrMemShapeFromRef tyUnrollBound sprog visitCount
-            =<< Maybe.maybe (Left $ "Pointer missing pointee") Right maybeRef
+            =<< Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Pointer missing pointee") Right maybeRef
      in Seq.singleton <$> mshape
-  shapeSeq ty = Left $ "Unsupported dwarf type: " ++ show ty
+  shapeSeq ty = Left $ DwarfDiagnostic.UnsupportedType ty
 
 type VisitCount = Map.Map MDwarf.TypeRef Int
 
@@ -222,7 +224,7 @@ constructPtrMemShapeFromRef ::
   Subprogram ->
   VisitCount ->
   MDwarf.TypeRef ->
-  Either String (MemShape w NoTag)
+  Either DwarfDiagnostic.DwarfShapeParsingError (MemShape w NoTag)
 constructPtrMemShapeFromRef bound sprog vcount ref =
   let TypeUnrollingBound tyUnrollBound = bound
       ct = fromMaybe 0 (Map.lookup ref vcount)
@@ -238,13 +240,13 @@ constructPtrMemShapeFromRef bound sprog vcount ref =
 intPtrShape ::
   Symbolic.SymArchConstraints arch =>
   MC.ArchReg arch tp ->
-  Either String (C.Some (PtrShape ext w NoTag))
+  Either DwarfDiagnostic.DwarfShapeParsingError (C.Some (PtrShape ext w NoTag))
 intPtrShape reg =
   case MT.typeRepr reg of
     MT.BVTypeRepr w -> Right $ C.Some $ ShapePtrBV NoTag w
     ty ->
       let rname = mkRegName reg
-       in Left $ "Register: " ++ show rname ++ " assigned integer type when has type: " ++ show ty
+       in Left $ DwarfDiagnostic.TypeMistmatchForRegister rname "BVType" ty
 
 doLog :: (MonadIO m) => GreaseLogAction -> DwarfDiagnostic.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (DwarfShapesDiagnostic diag)
@@ -256,14 +258,14 @@ pointerShapeOfDwarf ::
   MC.ArchReg arch tp ->
   Subprogram ->
   MDwarf.TypeApp ->
-  Either String (C.Some (PtrShape ext w NoTag))
+  Either DwarfDiagnostic.DwarfShapeParsingError (C.Some (PtrShape ext w NoTag))
 pointerShapeOfDwarf _ _ r _ (MDwarf.SignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ _ r _ (MDwarf.UnsignedIntType _) = intPtrShape r
 pointerShapeOfDwarf _ tyUnrollBound _ sprog (MDwarf.PointerType _ tyRef) =
-  let memShape = constructPtrTarget tyUnrollBound sprog Map.empty =<< extractType sprog =<< Maybe.maybe (Left $ "Pointer missing pointee") Right tyRef
+  let memShape = constructPtrTarget tyUnrollBound sprog Map.empty =<< extractType sprog =<< Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Pointer missing pointee") Right tyRef
       pointerShape = ShapePtr NoTag (Offset 0) <$> memShape
    in (C.Some <$> pointerShape)
-pointerShapeOfDwarf _ _ _ _ ty = Left $ "Unsupported base dwarf type: " ++ show ty
+pointerShapeOfDwarf _ _ _ _ ty = Left $ DwarfDiagnostic.UnsupportedType ty
 
 -- Stops after the first 'Left' to avoid adding shapes after
 -- failing to build some shape (this would result in shapes applying to incorrect registers)
@@ -284,12 +286,12 @@ shapeFromVar ::
   MC.ArchReg arch tp ->
   Subprogram ->
   MDwarf.Variable ->
-  Either String (C.Some (Shape.Shape ext NoTag))
+  Either DwarfDiagnostic.DwarfShapeParsingError (C.Some (Shape.Shape ext NoTag))
 shapeFromVar arch tyUnrollBound buildingForReg sprog vr =
   C.mapSome Shape.ShapeExt
     <$> ( pointerShapeOfDwarf arch tyUnrollBound buildingForReg sprog
             =<< extractType sprog
-            =<< Maybe.maybe (Left $ "Variable missing type: " ++ show vr) Right (MDwarf.varType vr)
+            =<< Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm "Variable is missing a type") Right (MDwarf.varType vr)
         )
 
 shapeFromDwarf ::
@@ -317,8 +319,7 @@ shapeFromDwarf gla aContext tyUnrollBound sub =
       for_ @Maybe
         err
         ( \((_, vr), errMsg) ->
-            let msg = List.concat ["Stopped parsing at variable: \n", show vr, "\nVariable error message:\n", errMsg]
-             in doLog gla $ DwarfDiagnostic.FailedToParse sub msg
+            doLog gla $ DwarfDiagnostic.FailedToParse sub vr errMsg
         )
       pure $ Shape.ParsedShapes{Shape._getParsedShapes = Map.fromList ascParams}
 
