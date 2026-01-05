@@ -112,7 +112,8 @@ ASSEMBLY_SHARED_LIBRARY_X64_SOS = $(addsuffix /extra/test.x64.elf,$(ASSEMBLY_STA
 SHARED_LIBARY_DWARFV4_DIRS = sanity/pass/dwarf-shapes-dwarfv4
 SHARED_LIBARY_DWARFV4_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV4_DIRS))
 
-SHARED_LIBARY_DWARFV5_DIRS = sanity/pass/dwarf-restrict-ptr-and-typedef sanity/pass/dwarf-shapes sanity/pass/dwarf-shape-recursive sanity/pass/dwarf-shape-recursive-tree sanity/pass/dwarf-fail-to-parse-log
+SHARED_LIBARY_DWARFV5_DIRS = sanity/pass/dwarf-restrict-ptr-and-typedef sanity/pass/dwarf-shapes sanity/pass/dwarf-shape-recursive sanity/pass/dwarf-shape-recursive-tree sanity/pass/dwarf-fail-to-parse-log \
+	sanity/pass/dwarf-array
 SHARED_LIBARY_DWARFV5_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV5_DIRS))
 
 
