@@ -143,13 +143,23 @@ type ShapeParsingM a = ExceptT DwarfDiagnostic.DwarfShapeParsingError IO a
 
 constructPtrTarget ::
   CLM.HasPtrWidth w =>
+  GreaseLogAction ->
   TypeUnrollingBound ->
   Subprogram ->
   VisitCount ->
   MDwarf.TypeApp ->
   ShapeParsingM (PtrTarget w NoTag)
-constructPtrTarget tyUnrollBound sprog visitCount tyApp =
-  ptrTarget Nothing <$> shapeSeq tyApp
+constructPtrTarget gla tyUnrollBound sprog visitCount tyApp =
+  ptrTarget Nothing
+    <$> liftIO
+      ( do
+          mbe <- runExceptT $ shapeSeq tyApp
+          case mbe of
+            Left e -> do
+              doLog gla (DwarfDiagnostic.UsingDefaultForPointer sprog e)
+              pure Seq.empty
+            Right x -> pure x
+      )
  where
   ishape w = except $ Right $ Seq.singleton $ Initialized NoTag (toBytes w)
   padding :: Integral a => a -> MemShape w NoTag
@@ -177,11 +187,6 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
       MDwarf.SubrangeUpperBound val -> case val of
         [MDwarf.DW_OP_const8u w] -> except $ Right $ fromIntegral w
         _ -> except $ Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Array types represented with DW_AT_upper_bound that do not have a value of DW_ATVAL_UINT are not supported"
-
-  mapLeft :: (a -> c) -> Either a b -> Either c b
-  mapLeft f = \case
-    Left a -> Left $ f a
-    Right x -> Right x
 
   shapeSeq :: CLM.HasPtrWidth w => MDwarf.TypeApp -> ShapeParsingM (Seq.Seq (MemShape w NoTag))
   shapeSeq (MDwarf.UnsignedIntType w) = ishape w
@@ -216,7 +221,7 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
           except $ Right $ (seqs Seq.>< endPad)
   shapeSeq (MDwarf.PointerType _ maybeRef) =
     let mshape =
-          constructPtrMemShapeFromRef tyUnrollBound sprog visitCount
+          constructPtrMemShapeFromRef gla tyUnrollBound sprog visitCount
             =<< (except $ Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Pointer missing pointee") Right maybeRef)
      in Seq.singleton <$> mshape
   shapeSeq ty = except $ Left $ DwarfDiagnostic.UnsupportedType ty
@@ -230,12 +235,13 @@ nullPtr =
 
 constructPtrMemShapeFromRef ::
   CLM.HasPtrWidth w =>
+  GreaseLogAction ->
   TypeUnrollingBound ->
   Subprogram ->
   VisitCount ->
   MDwarf.TypeRef ->
   ShapeParsingM (MemShape w NoTag)
-constructPtrMemShapeFromRef bound sprog vcount ref =
+constructPtrMemShapeFromRef gla bound sprog vcount ref =
   let TypeUnrollingBound tyUnrollBound = bound
       ct = fromMaybe 0 (Map.lookup ref vcount)
       newMap = Map.insert ref (ct + 1) vcount
@@ -244,7 +250,7 @@ constructPtrMemShapeFromRef bound sprog vcount ref =
           pure $ nullPtr
         else do
           ty <- extractType sprog ref
-          tgt <- constructPtrTarget bound sprog newMap ty
+          tgt <- constructPtrTarget gla bound sprog newMap ty
           pure $ Pointer NoTag (Offset 0) tgt
 
 intPtrShape ::
@@ -264,18 +270,19 @@ doLog la diag = LJ.writeLog la (DwarfShapesDiagnostic diag)
 pointerShapeOfDwarf ::
   (CLM.HasPtrWidth w, Symbolic.SymArchConstraints arch) =>
   ArchContext arch ->
+  GreaseLogAction ->
   TypeUnrollingBound ->
   MC.ArchReg arch tp ->
   Subprogram ->
   MDwarf.TypeApp ->
   ShapeParsingM (C.Some (PtrShape ext w NoTag))
-pointerShapeOfDwarf _ _ r _ (MDwarf.SignedIntType _) = except $ intPtrShape r
-pointerShapeOfDwarf _ _ r _ (MDwarf.UnsignedIntType _) = except $ intPtrShape r
-pointerShapeOfDwarf _ tyUnrollBound _ sprog (MDwarf.PointerType _ tyRef) =
-  let memShape = constructPtrTarget tyUnrollBound sprog Map.empty =<< extractType sprog =<< (except $ Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Pointer missing pointee") Right tyRef)
+pointerShapeOfDwarf _ _ _ r _ (MDwarf.SignedIntType _) = except $ intPtrShape r
+pointerShapeOfDwarf _ _ _ r _ (MDwarf.UnsignedIntType _) = except $ intPtrShape r
+pointerShapeOfDwarf _ gla tyUnrollBound _ sprog (MDwarf.PointerType _ tyRef) =
+  let memShape = constructPtrTarget gla tyUnrollBound sprog Map.empty =<< extractType sprog =<< (except $ Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Pointer missing pointee") Right tyRef)
       pointerShape = ShapePtr NoTag (Offset 0) <$> memShape
    in (C.Some <$> pointerShape)
-pointerShapeOfDwarf _ _ _ _ ty = except $ Left $ DwarfDiagnostic.UnsupportedType ty
+pointerShapeOfDwarf _ _ _ _ _ ty = except $ Left $ DwarfDiagnostic.UnsupportedType ty
 
 -- Stops after the first 'Left' to avoid adding shapes after
 -- failing to build some shape (this would result in shapes applying to incorrect registers)
@@ -295,14 +302,15 @@ shapeFromVar ::
   , Symbolic.SymArchConstraints arch
   ) =>
   ArchContext arch ->
+  GreaseLogAction ->
   TypeUnrollingBound ->
   MC.ArchReg arch tp ->
   Subprogram ->
   MDwarf.Variable ->
   ShapeParsingM (C.Some (Shape.Shape ext NoTag))
-shapeFromVar arch tyUnrollBound buildingForReg sprog vr =
+shapeFromVar arch gla tyUnrollBound buildingForReg sprog vr =
   C.mapSome Shape.ShapeExt
-    <$> ( pointerShapeOfDwarf arch tyUnrollBound buildingForReg sprog
+    <$> ( pointerShapeOfDwarf arch gla tyUnrollBound buildingForReg sprog
             =<< extractType sprog
             =<< (except $ Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm "Variable is missing a type") Right (MDwarf.varType vr))
         )
@@ -323,7 +331,7 @@ shapeFromDwarf gla aContext tyUnrollBound sub =
     regAssignmentFromDwarfVar reg var =
       do
         C.Some r <- pure reg
-        shp <- shapeFromVar aContext tyUnrollBound r sub var
+        shp <- shapeFromVar aContext gla tyUnrollBound r sub var
         pure (Text.pack $ coerce $ mkRegName r, shp)
    in
     do
@@ -344,7 +352,7 @@ shapeFromDwarf gla aContext tyUnrollBound sub =
 -- the provided PC and synthesize a shape from the DWARF provided prototype for the function.
 -- The provided PC is relative to the base of the image (as is represented in DWARF).
 fromDwarfInfo ::
-  forall m arch ext wptr.
+  forall arch ext wptr.
   (Symbolic.SymArchConstraints arch, ExtShape ext ~ PtrShape ext wptr, CLM.HasPtrWidth wptr) =>
   GreaseLogAction ->
   ArchContext arch ->

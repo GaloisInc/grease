@@ -11,6 +11,7 @@ import Prettyprinter qualified as PP
 
 data Diagnostic where
   FailedToParse :: (PP.Pretty a, Show a) => Dwarf.Subprogram -> Dwarf.Variable -> a -> Diagnostic
+  UsingDefaultForPointer :: (PP.Pretty a, Show a) => Dwarf.Subprogram -> a -> Diagnostic
 
 deriving instance Show Diagnostic
 
@@ -18,10 +19,21 @@ instance PP.Pretty Diagnostic where
   pretty = \case
     FailedToParse subprog var msg ->
       PP.vcat
+        [ PP.pretty
+            "Failure for DWARF parsing at variable: "
+        , PP.viaShow var
+        , formatFailure subprog msg
+        ]
+    UsingDefaultForPointer subprog msg ->
+      PP.vcat
+        [ PP.pretty "Using default for pointer because of DWARF parsing failure:"
+        , formatFailure subprog msg
+        ]
+   where
+    formatFailure subprog msg =
+      PP.vcat
         [ PP.pretty "Failed to parse DWARF shape in:"
         , PP.viaShow subprog
-        , PP.pretty "Stopped at var: "
-        , PP.viaShow var
         , PP.pretty "DWARF error message: "
         , PP.pretty msg
         ]
@@ -29,6 +41,7 @@ instance PP.Pretty Diagnostic where
 severity :: Diagnostic -> Severity
 severity = \case
   FailedToParse _ _ _ -> Warn
+  UsingDefaultForPointer _ _ -> Warn
 
 data DwarfShapeParsingError where
   UnsupportedType :: DWARF.TypeApp -> DwarfShapeParsingError
