@@ -179,7 +179,6 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
   shapeSeq (MDwarf.SignedIntType w) = ishape w
   shapeSeq MDwarf.SignedCharType = ishape (1 :: Int)
   shapeSeq MDwarf.UnsignedCharType = ishape (1 :: Int)
-  -- TODO(#263): Need modification to DWARF to collect DW_TAG_count and properly evaluate dwarf ops for upper bounds in subranges
   shapeSeq (MDwarf.ArrayType elTy ub) =
     do
       let onlySubrange = if List.length ub == 1 then Maybe.listToMaybe ub else Nothing
