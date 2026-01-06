@@ -170,14 +170,15 @@ constructPtrTarget tyUnrollBound sprog visitCount tyApp =
   numOfRange =
     \case
       MDwarf.SubrangeCount val -> Right $ fromIntegral val
-      _ -> Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Array parser currently only supports DW_AT_count and does not support DW_AT_upperbound"
+      MDwarf.SubrangeUpperBound val -> case val of
+        [MDwarf.DW_OP_const8u w] -> Right $ fromIntegral w
+        _ -> Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Array types represented with DW_AT_upper_bound that do not have a value of DW_ATVAL_UINT are not supported"
 
   shapeSeq :: CLM.HasPtrWidth w => MDwarf.TypeApp -> Either DwarfDiagnostic.DwarfShapeParsingError (Seq.Seq (MemShape w NoTag))
   shapeSeq (MDwarf.UnsignedIntType w) = ishape w
   shapeSeq (MDwarf.SignedIntType w) = ishape w
   shapeSeq MDwarf.SignedCharType = ishape (1 :: Int)
   shapeSeq MDwarf.UnsignedCharType = ishape (1 :: Int)
-  -- TODO(#263): Need modification to DWARF to collect DW_TAG_count and properly evaluate dwarf ops for upper bounds in subranges
   shapeSeq (MDwarf.ArrayType elTy ub) =
     do
       let onlySubrange = if List.length ub == 1 then Maybe.listToMaybe ub else Nothing
