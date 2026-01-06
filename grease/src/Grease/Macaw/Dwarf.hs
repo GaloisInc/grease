@@ -14,8 +14,7 @@ module Grease.Macaw.Dwarf (loadDwarfPreconditions) where
 
 import Control.Lens qualified as Lens
 import Control.Monad (foldM, join)
-import Control.Monad.Error.Class (tryError)
-import Control.Monad.Except (MonadError, runExceptT)
+import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.RWS (MonadIO (..), MonadTrans (lift))
 import Control.Monad.Trans.Except (ExceptT, except)
