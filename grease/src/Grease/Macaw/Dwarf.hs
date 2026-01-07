@@ -14,10 +14,10 @@ module Grease.Macaw.Dwarf (loadDwarfPreconditions) where
 
 import Control.Lens qualified as Lens
 import Control.Monad (foldM, join)
-import Control.Monad.Except (runExceptT)
+import Control.Monad.Except (mapExcept, runExceptT, withExceptT)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.RWS (MonadIO (..), MonadTrans (lift))
-import Control.Monad.Trans.Except (ExceptT, except)
+import Control.Monad.Trans.Except (ExceptT, except, withExcept)
 import Control.Monad.Trans.Maybe (MaybeT (..), hoistMaybe)
 import Data.Coerce
 import Data.ElfEdit qualified as Elf
@@ -207,15 +207,21 @@ constructPtrTarget gla tyUnrollBound sprog visitCount tyApp =
   shapeSeq (MDwarf.StructType sdecl) =
     let structSize = MDwarf.structByteSize sdecl
      in do
-          (endLoc, seqs) <-
-            foldM
-              ( \(currLoc, seqs) mem ->
-                  do
-                    (nextLoc, additionalShapes) <- buildMember currLoc mem
-                    except $ Right (nextLoc, seqs Seq.>< additionalShapes)
-              )
-              (0, Seq.empty)
-              (MDwarf.structMembers sdecl)
+          let builtMembers =
+                foldM
+                  ( \(currLoc, seqs) mem ->
+                      do
+                        (nextLoc, additionalShapes) <- withExceptT (\e -> ((currLoc, seqs), e)) (buildMember currLoc mem)
+                        except $ Right (nextLoc, seqs Seq.>< additionalShapes)
+                  )
+                  (0, Seq.empty)
+                  (MDwarf.structMembers sdecl)
+          (endLoc, seqs) <- liftIO $ do
+            x <- runExceptT builtMembers
+            case x of
+              Left ((off, previous), e) -> doLog gla (DwarfDiagnostic.StoppingStruct sprog off e) >> pure (off, previous)
+              Right res -> pure res
+
           let endPad = if endLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - endLoc)
           except $ Right $ (seqs Seq.>< endPad)
   shapeSeq (MDwarf.PointerType _ maybeRef) =
