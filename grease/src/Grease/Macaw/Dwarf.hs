@@ -14,10 +14,10 @@ module Grease.Macaw.Dwarf (loadDwarfPreconditions) where
 
 import Control.Lens qualified as Lens
 import Control.Monad (foldM, join)
-import Control.Monad.Except (mapExcept, runExceptT, withExceptT)
+import Control.Monad.Except (runExceptT, withExceptT)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.RWS (MonadIO (..), MonadTrans (lift))
-import Control.Monad.Trans.Except (ExceptT, except, withExcept)
+import Control.Monad.Trans.Except (ExceptT, except)
 import Control.Monad.Trans.Maybe (MaybeT (..), hoistMaybe)
 import Data.Coerce
 import Data.ElfEdit qualified as Elf
