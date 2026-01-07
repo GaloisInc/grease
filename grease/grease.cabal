@@ -219,6 +219,7 @@ library
     Grease.LLVM.Personality
     Grease.LLVM.SetupHook
     Grease.LLVM.SetupHook.Diagnostic
+    Grease.LLVM.Shapes
     Grease.LLVM.SimulatorHooks
     Grease.LLVM.SimulatorHooks.Diagnostic
     Grease.Macaw

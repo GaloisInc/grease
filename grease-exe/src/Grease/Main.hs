@@ -42,7 +42,7 @@ import Data.Either (Either (..))
 import Data.ElfEdit qualified as Elf
 import Data.Eq ((==))
 import Data.Foldable (traverse_)
-import Data.Function (const, id, ($), (&), (.))
+import Data.Function (id, ($), (&), (.))
 import Data.Functor (fmap, (<$>), (<&>))
 import Data.Functor.Const (Const (..))
 import Data.Functor.Const qualified as Const
@@ -85,7 +85,7 @@ import Data.Parameterized.Classes (IxedF' (ixF'))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Nonce (globalNonceGenerator)
-import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
+import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Parameterized.TraversableFC.WithIndex (imapFC)
 import Data.Proxy (Proxy (..))
 import Data.Semigroup ((<>))
@@ -116,12 +116,12 @@ import Grease.Entrypoint
 import Grease.ExecutionFeatures (greaseExecFeats)
 import Grease.Heuristic
 import Grease.LLVM qualified as LLVM
-import Grease.LLVM.DebugInfo qualified as GLD
 import Grease.LLVM.Overrides qualified as GLO
 import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.LLVM.Personality qualified as GLP
 import Grease.LLVM.SetupHook qualified as LLVM (SetupHook, moduleSetupHook, syntaxSetupHook)
 import Grease.LLVM.SetupHook.Diagnostic qualified as LDiag (Diagnostic (LLVMTranslationWarning))
+import Grease.LLVM.Shapes qualified as GLS
 import Grease.Macaw
 import Grease.Macaw.Arch
 import Grease.Macaw.Arch.AArch32 (armCtx)
@@ -154,10 +154,10 @@ import Grease.Profiler.Feature (greaseProfilerFeature)
 import Grease.Refine
 import Grease.Requirement
 import Grease.Setup
-import Grease.Shape (ArgShapes (..), ExtShape, minimalShapeWithPtrs)
+import Grease.Shape (ArgShapes (..), ExtShape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.Concretize (concShape)
-import Grease.Shape.NoTag (NoTag (NoTag))
+import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Simple qualified as Simple
@@ -1569,16 +1569,8 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
 
 -- | Compute the initial 'ArgShapes' for an LLVM CFG.
 --
--- Sources argument shapes from:
---
--- 1. A default initial shape for each register (via 'minimalShapeWithPtrs')
--- 2. DWARF debug info (via 'GLD.diArgShapes') if
---    'initPrecondUseDebugInfo' is 'True'
--- 3. A shape DSL file (via 'loadInitialPreconditions')
--- 4. Simple shapes from the CLI (via 'useSimpleShapes')
---
--- Later steps override earlier ones.
-llvmInitArgShapes ::
+-- See 'GLS.llvmInitArgShapes' for details.
+getLlvmInitArgShapes ::
   CLM.HasPtrWidth 64 =>
   GreaseLogAction ->
   InitialPreconditionOpts ->
@@ -1587,28 +1579,16 @@ llvmInitArgShapes ::
   -- | The CFG of the user-requested entrypoint function.
   C.CFG CLLVM.LLVM blocks argTys ret ->
   IO (ArgShapes CLLVM.LLVM NoTag argTys)
-llvmInitArgShapes la opts llvmMod argNames cfg = do
-  let argTys = C.cfgArgTypes cfg
-  let initArgs0 =
-        case llvmMod of
-          Just m
-            | initPrecondUseDebugInfo opts ->
-                GLD.diArgShapes (C.handleName (C.cfgHandle cfg)) argTys m
-          _ -> traverseFC (minimalShapeWithPtrs @_ @CLLVM.LLVM (const NoTag)) argTys
-  initArgs1 <-
-    Shape.ArgShapes
-      <$> case initArgs0 of
-        Left err@Shape.MinimalShapeError{} -> unsupported la (PP.pretty err)
-        Right ok -> pure ok
-  initArgs2 <-
+getLlvmInitArgShapes la opts llvmMod argNames cfg = do
+  parsed <-
     case initPrecondPath opts of
-      Nothing -> pure initArgs1
-      Just path -> do
-        parsed <- loadInitialPreconditions la path
-        replaceWithInitialPreconditions la path argNames initArgs1 parsed
-  case Simple.useSimpleShapes argNames initArgs2 (initPrecondSimpleShapes opts) of
-    Left err -> userError la (PP.pretty err)
-    Right shapes -> pure shapes
+      Nothing -> pure Nothing
+      Just path -> Just <$> loadInitialPreconditions la path
+  case GLS.llvmInitArgShapes opts llvmMod argNames parsed cfg of
+    Left (GLS.ParseError err) -> userError la err
+    Left (GLS.MinimalShapeError err) -> unsupported la (PP.pretty err)
+    Left (GLS.TypeMismatch err) -> userError la (PP.pretty err)
+    Right ok -> pure ok
 
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.
@@ -1652,7 +1632,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
       argNames = imapFC (\i _ -> Const ('%' : show i)) argTys
   initArgShapes <-
     let opts = simInitPrecondOpts simOpts
-     in llvmInitArgShapes la opts llvmMod argNames cfg
+     in getLlvmInitArgShapes la opts llvmMod argNames cfg
 
   let dbgOpts = GO.simDebugOpts simOpts
   let dbgCmdExt = LDebug.llvmCommandExt
