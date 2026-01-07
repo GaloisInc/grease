@@ -19,6 +19,8 @@ module Grease.Shape.Parse (
   parseShapes,
   ParsedShapes (..),
   ParseError (..),
+  fromPathAndContent,
+  fromFile,
 ) where
 
 import Control.Applicative qualified as Applicative
@@ -47,6 +49,7 @@ import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.IO qualified as Text.IO
 import Data.Traversable qualified as Traversable
 import Data.Type.Equality (type (:~:) (Refl))
 import Data.Void (Void)
@@ -406,3 +409,31 @@ parseOffset :: Parser PtrShape.Offset
 parseOffset = PtrShape.Offset . (Bytes.toBytes @Int) Functor.<$> MPCL.hexadecimal
 
 -----------------------------------------------------------
+
+-- * Reading from files
+
+-- | Parse shapes from JSON or shapes DSL content, depending on the extension.
+fromPathAndContent ::
+  ExtShape ext ~ PtrShape ext w =>
+  Mem.HasPtrWidth w =>
+  -- | Path to file
+  FilePath ->
+  -- | Content of file
+  Text ->
+  Either (PP.Doc ann) (ParsedShapes ext)
+fromPathAndContent path txt =
+  if ".json" `List.isSuffixOf` path
+    then case Shape.parseJsonShapes path txt of
+      Left err -> Left (PP.pretty err)
+      Right parsed -> Right parsed
+    else case parseShapes path txt of
+      Left err -> Left (PP.pretty err)
+      Right parsed -> Right parsed
+
+-- | Read shapes from a JSON or shapes DSL file, depending on the extension.
+fromFile ::
+  ExtShape ext ~ PtrShape ext w =>
+  Mem.HasPtrWidth w =>
+  FilePath ->
+  IO (Either (PP.Doc ann) (ParsedShapes ext))
+fromFile path = fromPathAndContent path <$> Text.IO.readFile path

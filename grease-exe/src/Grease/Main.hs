@@ -341,31 +341,17 @@ withMemOptions opts k =
           }
    in k
 
--- Initial preconditions loaded from `--initial-precondition`
-newtype InitialPreconditions ext
-  = InitialPreconditions (Shape.ParsedShapes ext)
-
 loadInitialPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
   CLM.HasPtrWidth w =>
   GreaseLogAction ->
   FilePath ->
-  IO (InitialPreconditions ext)
-loadInitialPreconditions la path = do
-  txt <- Text.IO.readFile path
-  parsed <-
-    if ".json" `List.isSuffixOf` path
-      then case Shape.parseJsonShapes path txt of
-        Left err -> userError la (PP.pretty err)
-        Right parsed -> pure parsed
-      else
-        let usrErr = userError la . PP.pretty
-         in case Parse.parseShapes path txt of
-              -- See Note [Explicitly listed errors]
-              Left err@Parse.ParseError{} -> usrErr err
-              Left err@Parse.MissingBlock{} -> usrErr err
-              Right parsed -> pure parsed
-  pure (InitialPreconditions parsed)
+  IO (Parse.ParsedShapes ext)
+loadInitialPreconditions la path =
+  Parse.fromFile path
+    >>= \case
+      Left err -> userError la err
+      Right parsed -> pure parsed
 
 replaceWithInitialPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
@@ -378,11 +364,9 @@ replaceWithInitialPreconditions ::
   Ctx.Assignment (Const.Const String) tys ->
   -- | Initial arguments
   Shape.ArgShapes ext NoTag tys ->
-  -- | Parsed arguments
-  InitialPreconditions ext ->
+  Parse.ParsedShapes ext ->
   IO (Shape.ArgShapes ext NoTag tys)
-replaceWithInitialPreconditions la path names initArgs initPrecond = do
-  let InitialPreconditions parsed = initPrecond
+replaceWithInitialPreconditions la path names initArgs parsed =
   case Shape.replaceShapes names initArgs parsed of
     Left err@Shape.TypeMismatch{} -> userError la (PP.pretty err)
     Right shapes -> do
