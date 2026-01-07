@@ -341,59 +341,54 @@ withMemOptions opts k =
           }
    in k
 
+-- Initial preconditions loaded from `--initial-precondition`
+newtype InitialPreconditions ext
+  = InitialPreconditions (Shape.ParsedShapes ext)
+
 loadInitialPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
   CLM.HasPtrWidth w =>
-  MM.MemWidth w =>
   GreaseLogAction ->
-  Maybe FilePath ->
-  -- | Argument names
-  Ctx.Assignment (Const.Const String) tys ->
-  -- | Initial arguments
-  Shape.ArgShapes ext NoTag tys ->
-  IO (Shape.ArgShapes ext NoTag tys)
-loadInitialPreconditions la preconds names initArgs =
-  case preconds of
-    Nothing -> pure initArgs
-    Just path -> do
-      txt <- Text.IO.readFile path
-      parsed <-
-        if ".json" `List.isSuffixOf` path
-          then case Shape.parseJsonShapes path txt of
-            Left err -> userError la (PP.pretty err)
-            Right parsed -> pure parsed
-          else
-            let usrErr = userError la . PP.pretty
-             in case Parse.parseShapes path txt of
-                  -- See Note [Explicitly listed errors]
-                  Left err@Parse.ParseError{} -> usrErr err
-                  Left err@Parse.MissingBlock{} -> usrErr err
-                  Right parsed -> pure parsed
-      precond <-
-        case Shape.replaceShapes names initArgs parsed of
-          Left err@Shape.TypeMismatch{} -> userError la (PP.pretty err)
-          Right shapes -> pure shapes
-      let addrWidth = MC.addrWidthRepr ?ptrWidth
-      doLog la (Diag.LoadedPrecondition path addrWidth names precond)
-      pure precond
+  FilePath ->
+  IO (InitialPreconditions ext)
+loadInitialPreconditions la path = do
+  txt <- Text.IO.readFile path
+  parsed <-
+    if ".json" `List.isSuffixOf` path
+      then case Shape.parseJsonShapes path txt of
+        Left err -> userError la (PP.pretty err)
+        Right parsed -> pure parsed
+      else
+        let usrErr = userError la . PP.pretty
+         in case Parse.parseShapes path txt of
+              -- See Note [Explicitly listed errors]
+              Left err@Parse.ParseError{} -> usrErr err
+              Left err@Parse.MissingBlock{} -> usrErr err
+              Right parsed -> pure parsed
+  pure (InitialPreconditions parsed)
 
--- | Override 'Shape.ArgShapes' using 'Simple.SimpleShape's from the CLI
-useSimpleShapes ::
+replaceWithInitialPreconditions ::
   ExtShape ext ~ PtrShape ext w =>
   CLM.HasPtrWidth w =>
   MM.MemWidth w =>
   GreaseLogAction ->
+  -- | Path (used in log messages)
+  FilePath ->
   -- | Argument names
   Ctx.Assignment (Const.Const String) tys ->
   -- | Initial arguments
   Shape.ArgShapes ext NoTag tys ->
-  Map Text.Text Simple.SimpleShape ->
+  -- | Parsed arguments
+  InitialPreconditions ext ->
   IO (Shape.ArgShapes ext NoTag tys)
-useSimpleShapes la argNames initArgs simpleShapes = do
-  let parsedShapes = Parse.ParsedShapes (fmap Simple.toShape simpleShapes)
-  case Shape.replaceShapes argNames initArgs parsedShapes of
-    Left err -> userError la (PP.pretty err)
-    Right shapes -> pure shapes
+replaceWithInitialPreconditions la path names initArgs initPrecond = do
+  let InitialPreconditions parsed = initPrecond
+  case Shape.replaceShapes names initArgs parsed of
+    Left err@Shape.TypeMismatch{} -> userError la (PP.pretty err)
+    Right shapes -> do
+      let addrWidth = MC.addrWidthRepr ?ptrWidth
+      doLog la (Diag.LoadedPrecondition path addrWidth names shapes)
+      pure shapes
 
 toBatchBug ::
   CLM.HasPtrWidth wptr =>
@@ -587,7 +582,7 @@ interestingConcretizedShapes names initArgs (ConcArgs cArgs) =
 -- 2. DWARF debug info (via 'loadDwarfPreconditions') if
 --    'initPrecondUseDebugInfo' is 'True'
 -- 3. A shape DSL file (via 'loadInitialPreconditions')
--- 4. Simple shapes from the CLI (via 'useSimpleShapes')
+-- 4. Simple shapes from the CLI (via 'Simple.useSimpleShapes')
 --
 -- Later steps override earlier ones.
 macawInitArgShapes ::
@@ -637,8 +632,14 @@ macawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr = do
         pure $ fromMaybe initArgs0 v
       else pure initArgs0
   initArgs1 <-
-    loadInitialPreconditions la (initPrecondPath opts) argNames dwarfedArgs
-  useSimpleShapes la argNames initArgs1 (initPrecondSimpleShapes opts)
+    case initPrecondPath opts of
+      Nothing -> pure dwarfedArgs
+      Just path -> do
+        parsed <- loadInitialPreconditions la path
+        replaceWithInitialPreconditions la path argNames dwarfedArgs parsed
+  case Simple.useSimpleShapes argNames initArgs1 (initPrecondSimpleShapes opts) of
+    Left err -> userError la (PP.pretty err)
+    Right shapes -> pure shapes
 
 -- | Implement 'archRegOverrides'
 overrideRegs ::
@@ -1609,15 +1610,21 @@ llvmInitArgShapes la opts llvmMod argNames cfg = do
           Just m
             | initPrecondUseDebugInfo opts ->
                 GLD.diArgShapes (C.handleName (C.cfgHandle cfg)) argTys m
-          _ -> traverseFC (minimalShapeWithPtrs (const NoTag)) argTys
+          _ -> traverseFC (minimalShapeWithPtrs @_ @CLLVM.LLVM (const NoTag)) argTys
   initArgs1 <-
-    case initArgs0 of
-      Left err@Shape.MinimalShapeError{} -> unsupported la (PP.pretty err)
-      Right ok -> pure ok
+    Shape.ArgShapes
+      <$> case initArgs0 of
+        Left err@Shape.MinimalShapeError{} -> unsupported la (PP.pretty err)
+        Right ok -> pure ok
   initArgs2 <-
-    let path = initPrecondPath opts
-     in loadInitialPreconditions la path argNames (ArgShapes initArgs1)
-  useSimpleShapes la argNames initArgs2 (initPrecondSimpleShapes opts)
+    case initPrecondPath opts of
+      Nothing -> pure initArgs1
+      Just path -> do
+        parsed <- loadInitialPreconditions la path
+        replaceWithInitialPreconditions la path argNames initArgs1 parsed
+  case Simple.useSimpleShapes argNames initArgs2 (initPrecondSimpleShapes opts) of
+    Left err -> userError la (PP.pretty err)
+    Right shapes -> pure shapes
 
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.

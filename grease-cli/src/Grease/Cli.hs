@@ -17,6 +17,7 @@ module Grease.Cli (
   fsRootParser,
   globalsParser,
   initPrecondParser,
+  initPrecondOptsParser,
   overridesParser,
   overridesYamlParser,
   simpleShapesParser,

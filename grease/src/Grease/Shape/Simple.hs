@@ -17,25 +17,32 @@ module Grease.Shape.Simple (
   parseArgU32,
   parseArgU64,
   toShape,
+  useSimpleShapes,
 ) where
 
 import Control.Applicative (Alternative (empty), asum)
 import Control.Monad qualified as Monad
 import Data.BitVector.Sized (BV)
 import Data.BitVector.Sized qualified as BV
+import Data.Functor.Const qualified as Const
+import Data.Map.Strict (Map)
+import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some (Some (Some))
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import Grease.Shape (Shape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
+import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes (Bytes (..))
 import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
 import Text.Megaparsec.Char.Lexer qualified as TMCL
@@ -114,3 +121,17 @@ toShape =
       Some (Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag (knownNat @32) bv))
     ArgU64 bv ->
       Some (Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag (knownNat @64) bv))
+
+-- | Override 'Shape.ArgShapes' using 'SimpleShape's (generally from the CLI)
+useSimpleShapes ::
+  Shape.ExtShape ext ~ PtrShape ext w =>
+  CLM.HasPtrWidth w =>
+  -- | Argument names
+  Ctx.Assignment (Const.Const String) tys ->
+  -- | Initial arguments
+  Shape.ArgShapes ext NoTag tys ->
+  Map Text.Text SimpleShape ->
+  Either Shape.TypeMismatch (Shape.ArgShapes ext NoTag tys)
+useSimpleShapes argNames initArgs simpleShapes =
+  let parsedShapes = Parse.ParsedShapes (fmap toShape simpleShapes)
+   in Shape.replaceShapes argNames initArgs parsedShapes
