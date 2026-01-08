@@ -240,6 +240,7 @@ library
     Grease.Macaw.PLT
     Grease.Macaw.SetupHook
     Grease.Macaw.SetupHook.Diagnostic
+    Grease.Macaw.Shapes
     Grease.Macaw.SimulatorHooks
     Grease.Macaw.SimulatorHooks.Diagnostic
     Grease.Macaw.SimulatorState
