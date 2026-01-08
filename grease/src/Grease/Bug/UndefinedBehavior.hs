@@ -84,6 +84,11 @@ data PoisonType
   | InsertElementIndex
   | GEPOutOfBounds
   | LLVMAbsIntMin
+  | ZExtNonNegative
+  | UiToFpNonNegative
+  | TruncNoUnsignedWrap
+  | TruncNoSignedWrap
+  | ICmpSameSign
   deriving (Eq, Show, Generic)
 instance Aeson.ToJSON PoisonType
 
@@ -137,6 +142,11 @@ getPoisonType =
     Poison.InsertElementIndex{} -> InsertElementIndex
     Poison.GEPOutOfBounds{} -> GEPOutOfBounds
     Poison.LLVMAbsIntMin{} -> LLVMAbsIntMin
+    Poison.ZExtNonNegative{} -> ZExtNonNegative
+    Poison.UiToFpNonNegative{} -> UiToFpNonNegative
+    Poison.TruncNoUnsignedWrap{} -> TruncNoUnsignedWrap
+    Poison.TruncNoSignedWrap{} -> TruncNoSignedWrap
+    Poison.ICmpSameSign{} -> ICmpSameSign
 
 makeUb ::
   WI.IsExpr (WI.SymExpr sym) =>
