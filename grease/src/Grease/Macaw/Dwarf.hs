@@ -219,7 +219,9 @@ constructPtrTarget gla tyUnrollBound sprog visitCount tyApp =
           (endLoc, seqs) <- liftIO $ do
             x <- runExceptT builtMembers
             case x of
-              Left ((off, previous), e) -> doLog gla (DwarfDiagnostic.StoppingStruct sprog off e) >> pure (off, previous)
+              Left ((off, previous), e) -> do
+                doLog gla (DwarfDiagnostic.StoppingStruct sprog off e)
+                pure (off, previous)
               Right res -> pure res
 
           let endPad = if endLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - endLoc)
