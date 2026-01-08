@@ -286,10 +286,14 @@ pointerShapeOfDwarf ::
 pointerShapeOfDwarf _ _ _ r _ (MDwarf.SignedIntType _) = except $ intPtrShape r
 pointerShapeOfDwarf _ _ _ r _ (MDwarf.UnsignedIntType _) = except $ intPtrShape r
 pointerShapeOfDwarf _ gla tyUnrollBound _ sprog (MDwarf.PointerType _ mbTyRef) =
-  let memShape = do
-        tyRef <- except $ Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Pointer missing pointee") Right mbTyRef
-        typeApp <- extractType sprog tyRef
-        liftIO $ constructPtrTarget gla tyUnrollBound sprog Map.empty typeApp
+  let memShape =
+        case mbTyRef of
+          Nothing -> do
+            liftIO $ doLog gla (DwarfDiagnostic.UsingDefaultForPointer sprog (DwarfDiagnostic.UnexpectedDWARFForm "Pointer missing pointee"))
+            pure $ ptrTarget Nothing Seq.empty
+          Just tyRef -> do
+            typeApp <- extractType sprog tyRef
+            liftIO $ constructPtrTarget gla tyUnrollBound sprog Map.empty typeApp
       pointerShape = ShapePtr NoTag (Offset 0) <$> memShape
    in (C.Some <$> pointerShape)
 pointerShapeOfDwarf _ _ _ _ _ ty = except $ Left $ DwarfDiagnostic.UnsupportedType ty
