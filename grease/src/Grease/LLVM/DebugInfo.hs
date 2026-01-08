@@ -65,7 +65,10 @@ minTypeSize :: CLM.HasPtrWidth w => LDU.Info -> Bytes
 minTypeSize =
   \case
     LDU.ArrInfo _elemTy -> 0 -- arrays can be empty
-    LDU.BaseType _nm dibt -> Bytes.bitsToBytes (L.dibtSize dibt)
+    LDU.BaseType _nm dibt ->
+      case L.dibtSize dibt of
+        Just (L.ValMdValue (L.Typed _ (L.ValInteger sz))) -> Bytes.bitsToBytes sz
+        _ -> 0
     LDU.Pointer _ty -> Bytes.bitsToBytes (natValue ?ptrWidth)
     LDU.Structure _nm fields -> structSize fields
     LDU.Typedef _nm ty -> minTypeSize ty

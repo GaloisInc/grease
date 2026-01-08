@@ -1824,7 +1824,6 @@ simulateLlvmSyntax simOpts la = do
           , Trans._llvmTypeCtx = tyCtx
           , Trans.llvmGlobalAliases = Map.empty
           , Trans.llvmFunctionAliases = Map.empty
-          , Trans.llvmUnnamedMd = IntMap.empty
           }
   sexpOvs <- loadLLVMSExpOvs la (simOverrides simOpts) halloc mvar
   let llvmMod = Nothing
