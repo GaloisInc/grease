@@ -35,7 +35,6 @@ import Control.Lens (to, (.~), (^.))
 import Control.Monad (forM, forM_, mapM_, when, (>>=))
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Trans.Maybe qualified as MaybeT
 import Data.Bool (Bool (..), not, otherwise, (&&), (||))
 import Data.ByteString qualified as BS
 import Data.Either (Either (..))
@@ -45,7 +44,6 @@ import Data.Foldable (traverse_)
 import Data.Function (id, ($), (&), (.))
 import Data.Functor (fmap, (<$>), (<&>))
 import Data.Functor.Const (Const (..))
-import Data.Functor.Const qualified as Const
 import Data.IntMap qualified as IntMap
 import Data.LLVM.BitCode (formatError, parseBitCodeFromFileWithWarnings)
 import Data.List qualified as List
@@ -129,7 +127,6 @@ import Grease.Macaw.Arch.PPC32 (ppc32Ctx)
 import Grease.Macaw.Arch.PPC64 (ppc64Ctx)
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
-import Grease.Macaw.Dwarf (loadDwarfPreconditions)
 import Grease.Macaw.Entrypoint (checkMacawEntrypointCfgsSignatures)
 import Grease.Macaw.Entrypoint qualified as GME
 import Grease.Macaw.Load qualified as Load
@@ -141,6 +138,7 @@ import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.PLT qualified as GMPLT
 import Grease.Macaw.RegName (getRegName, mkRegName, regNameToString, regNames)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
+import Grease.Macaw.Shapes qualified as GMS
 import Grease.Macaw.SimulatorHooks (ExecutingAddressAction (ExecutingAddressAction))
 import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, emptyGreaseSimulatorState)
 import Grease.Main.Diagnostic qualified as Diag
@@ -160,7 +158,6 @@ import Grease.Shape.Concretize (concShape)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
-import Grease.Shape.Simple qualified as Simple
 import Grease.Solver (withSolverOnlineBackend)
 import Grease.SymIO qualified as GSIO
 import Grease.Syntax (parseOverridesYaml, parsedProgramCfgMap, resolveOverridesYaml)
@@ -353,27 +350,6 @@ loadInitialPreconditions la path =
       Left err -> userError la err
       Right parsed -> pure parsed
 
-replaceWithInitialPreconditions ::
-  ExtShape ext ~ PtrShape ext w =>
-  CLM.HasPtrWidth w =>
-  MM.MemWidth w =>
-  GreaseLogAction ->
-  -- | Path (used in log messages)
-  FilePath ->
-  -- | Argument names
-  Ctx.Assignment (Const.Const String) tys ->
-  -- | Initial arguments
-  Shape.ArgShapes ext NoTag tys ->
-  Parse.ParsedShapes ext ->
-  IO (Shape.ArgShapes ext NoTag tys)
-replaceWithInitialPreconditions la path names initArgs parsed =
-  case Shape.replaceShapes names initArgs parsed of
-    Left err@Shape.TypeMismatch{} -> userError la (PP.pretty err)
-    Right shapes -> do
-      let addrWidth = MC.addrWidthRepr ?ptrWidth
-      doLog la (Diag.LoadedPrecondition path addrWidth names shapes)
-      pure shapes
-
 toBatchBug ::
   CLM.HasPtrWidth wptr =>
   (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
@@ -560,16 +536,8 @@ interestingConcretizedShapes names initArgs (ConcArgs cArgs) =
 
 -- | Compute the initial 'ArgShapes' for a Macaw CFG.
 --
--- Sources argument shapes from:
---
--- 1. A default initial shape for each register (via 'minimalArgShapes')
--- 2. DWARF debug info (via 'loadDwarfPreconditions') if
---    'initPrecondUseDebugInfo' is 'True'
--- 3. A shape DSL file (via 'loadInitialPreconditions')
--- 4. Simple shapes from the CLI (via 'Simple.useSimpleShapes')
---
--- Later steps override earlier ones.
-macawInitArgShapes ::
+-- See 'GMS.macawInitArgShapes' for details.
+getMacawInitArgShapes ::
   ( CB.IsSymBackend sym bak
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
@@ -590,40 +558,17 @@ macawInitArgShapes ::
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   IO (ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)))
-macawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr = do
-  let memory = mcMemory macawCfgConfig
-  let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
-  initArgs0 <- minimalArgShapes bak archCtx mdEntryAbsAddr
-  let shouldUseDwarf = initPrecondUseDebugInfo opts
-  let getDwarfArgs = do
-        -- MaybeT IO
-        elfHdr <- MaybeT.hoistMaybe $ mcElf macawCfgConfig
-        addr <- MaybeT.hoistMaybe $ mbCfgAddr
-        MaybeT.MaybeT $
-          loadDwarfPreconditions
-            la
-            addr
-            memory
-            (initPrecondTypeUnrollingBound opts)
-            argNames
-            initArgs0
-            elfHdr
-            archCtx
-  dwarfedArgs <-
-    if shouldUseDwarf
-      then do
-        v <- MaybeT.runMaybeT getDwarfArgs
-        pure $ fromMaybe initArgs0 v
-      else pure initArgs0
-  initArgs1 <-
+getMacawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr = do
+  parsed <-
     case initPrecondPath opts of
-      Nothing -> pure dwarfedArgs
-      Just path -> do
-        parsed <- loadInitialPreconditions la path
-        replaceWithInitialPreconditions la path argNames dwarfedArgs parsed
-  case Simple.useSimpleShapes argNames initArgs1 (initPrecondSimpleShapes opts) of
-    Left err -> userError la (PP.pretty err)
-    Right shapes -> pure shapes
+      Nothing -> pure Nothing
+      Just path -> Just <$> loadInitialPreconditions la path
+  let elf = mcElf macawCfgConfig
+  let memory = mcMemory macawCfgConfig
+  GMS.macawInitArgShapes la bak archCtx opts parsed elf memory argNames mbCfgAddr
+    >>= \case
+      Left err -> userError la (PP.pretty err)
+      Right shapes -> pure shapes
 
 -- | Implement 'archRegOverrides'
 overrideRegs ::
@@ -1028,7 +973,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
 
   initArgShapes <-
     let opts = simInitPrecondOpts simOpts
-     in macawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr
+     in getMacawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr
 
   entrypointCfgsSsa@EntrypointCfgs{entrypointCfg = C.SomeCFG ssaCfg} <-
     pure (entrypointCfgsToSsa entrypointCfgs)
