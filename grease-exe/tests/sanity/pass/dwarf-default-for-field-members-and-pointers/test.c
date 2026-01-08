@@ -14,9 +14,9 @@ struct bar {
   y *blah;
 };
 
-int foo(int x, int *y, struct bar *z) { return x + *y + z->x; }
+int test(int x, int *y, struct bar *z) { return x + *y + z->x; }
 
-// all: flags {"--symbol", "foo", "--use-debug-info-types", "--no-heuristics"}
+// all: flags {"--symbol", "test", "--use-debug-info-types", "--no-heuristics"}
 // x64: go(prog)
 // x64: check("Failed to parse DWARF shape in")
 // x64: ok()
