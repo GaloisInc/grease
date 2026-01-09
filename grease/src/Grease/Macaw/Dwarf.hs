@@ -1,6 +1,8 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
+-- TODO(#162)
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- | Dwarf shape parsing and initialization. Currently due to downstream parsing support
 -- this module only supports parsing DWARFv4. 'loadDwarfPreconditions' will attempt to find a

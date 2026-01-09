@@ -1,4 +1,6 @@
 {-# LANGUAGE ImplicitParams #-}
+-- TODO(#162)
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 module Grease.Macaw.Shapes (
   macawInitArgShapes,

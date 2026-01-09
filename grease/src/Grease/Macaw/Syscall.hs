@@ -1,4 +1,6 @@
 {-# LANGUAGE ExplicitNamespaces #-}
+-- TODO(#162)
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- | Functionality for converting 'Stubs.Syscall's into functions
 -- that can be simulated within @macaw-symbolic@.
