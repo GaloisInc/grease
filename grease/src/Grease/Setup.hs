@@ -94,17 +94,22 @@ safeSymbol = WI.safeSymbol . getValueName
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (SetupDiagnostic diag)
 
--- | The result of setting up a pointer. `setupResPtr` represents the runtime value of the pointer and
--- `setupResTgt` stores the runtime representation of what is stored in that pointer. These
--- results are memoized during setup based on `BlockId` so that a given block is only given
--- one runtime value.
-data SetupRes sym w = SetupRes {setupResPtr :: CS.RegValue sym (CLM.LLVMPointerType w), setupResTgt :: PtrTarget w (CS.RegValue' sym)}
+-- | The result of setting up a pointer. `setupResPtr` represents the runtime
+-- value of the pointer and `setupResTgt` stores the runtime representation of
+-- what is stored in that pointer. These results are memoized during setup based
+-- on `BlockId` so that a given block is only given one runtime value.
+data SetupRes sym w
+  = SetupRes
+  { setupResPtr :: CS.RegValue sym (CLM.LLVMPointerType w)
+  , setupResTgt :: PtrTarget w (CS.RegValue' sym)
+  }
 
 data SetupState sym ext argTys w = SetupState
   { _setupMem :: CLM.MemImpl sym
   , _setupAnns :: Anns.Annotations sym ext argTys
   , _setupRes :: Map.Map BlockId (SetupRes sym w)
-  -- ^ Memoization table that maps observed 'BlockId's from 'setupPtrMem' to observed 'SetupRes' results.
+  -- ^ Memoization table that maps observed 'BlockId's from 'setupPtrMem' to
+  -- observed 'SetupRes' results.
   }
 makeLenses ''SetupState
 
@@ -168,11 +173,12 @@ setupPtrMem la bak dl nm sel tgt@(PtrTarget bid _) =
           case Map.lookup bid' resMap of
             Just memoizeRes -> pure (setupResPtr memoizeRes, setupResTgt memoizeRes)
             Nothing -> do
-              (ptr, rtgt) <- unseenFallback
+              (ptr, rTgt) <- unseenFallback
               s <- get
-              let newmap = Map.insert bid' (SetupRes{setupResPtr = ptr, setupResTgt = rtgt}) resMap
-              _ <- put (s{_setupRes = newmap})
-              pure (ptr, rtgt)
+              let res = SetupRes{setupResPtr = ptr, setupResTgt = rTgt}
+              let newMap = Map.insert bid' res resMap
+              _ <- put (s{_setupRes = newMap})
+              pure (ptr, rTgt)
         Nothing -> unseenFallback
 
 -- | Ignores tags.
