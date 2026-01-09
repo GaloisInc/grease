@@ -4,6 +4,8 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+-- TODO(#162)
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- | Module      : Grease.Heuristic
 --

@@ -5,6 +5,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
+-- TODO(#162)
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024

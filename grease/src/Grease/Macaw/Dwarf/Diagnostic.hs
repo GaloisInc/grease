@@ -1,4 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
+-- TODO(#162)
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 module Grease.Macaw.Dwarf.Diagnostic (Diagnostic (..), severity, DwarfShapeParsingError (..)) where
 

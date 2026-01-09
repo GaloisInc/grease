@@ -1,5 +1,7 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings #-}
+-- TODO(#162)
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- | See @doc/shared-libraries.md@ for user-facing documentation about PLT
 -- stubs.
