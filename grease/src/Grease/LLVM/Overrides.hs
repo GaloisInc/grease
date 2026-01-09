@@ -183,12 +183,17 @@ registerLLVMOverrides la builtinOvs userOvs skipFuns bak llvmCtx fs defns decls 
   let allDecls = decls List.++ basicDecls List.++ fwdDeclLLVMDecls
   Foldable.forM_ allDecls $ \decl -> do
     doLog la (Diag.FoundDeclare decl)
-    let L.Symbol name = L.decName decl
+    let symb = L.decName decl
+    let L.Symbol name = symb
     let aliases = []
     -- See the module comment on "Lang.Crucible.LLVM.Functions" for why this
     -- part is necessary.
     CS.modifyGlobal mvar $ \mem ->
-      liftIO (CLLVM.registerFunPtr bak mem name (L.decName decl) aliases)
+      case Map.lookup symb (CLM.memImplGlobalMap mem) of
+        Just (CLM.SomePointer ptr)
+          | CLM.PtrWidth <- CLM.ptrWidth ptr ->
+              pure (ptr, mem)
+        _ -> liftIO (CLLVM.registerFunPtr bak mem name symb aliases)
 
   -- Note the order here: we register "skip" overrides *first*, so that built-in
   -- overrides and user overrides will take precedence over them.
@@ -254,8 +259,16 @@ registerLLVMOverrides la builtinOvs userOvs skipFuns bak llvmCtx fs defns decls 
   registerOv ::
     CLLVM.SomeLLVMOverride p sym CLLVM.LLVM ->
     CS.OverrideSim p sym CLLVM.LLVM rtp as r ()
-  registerOv (CLLVM.SomeLLVMOverride ov) =
-    CLLVM.alloc_and_register_override bak llvmCtx ov []
+  registerOv (CLLVM.SomeLLVMOverride ov) = do
+    let decl = CLLVM.llvmOverride_declare ov
+    let symb = L.decName decl
+    let mvar = CLLVM.llvmMemVar llvmCtx
+    mem <- CS.readGlobal mvar
+    case Map.lookup symb (CLM.memImplGlobalMap mem) of
+      Just (CLM.SomePointer ptr)
+        | CLM.PtrWidth <- CLM.ptrWidth ptr ->
+            CLLVM.do_register_llvm_override llvmCtx ov
+      _ -> CLLVM.alloc_and_register_override bak llvmCtx ov []
 
 -- | For an S-expression program, register function overrides and return a
 -- 'Map.Map' of override names to their corresponding 'CLLVM.SomeLLVMOverride's,
