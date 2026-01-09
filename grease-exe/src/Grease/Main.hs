@@ -29,22 +29,18 @@ module Grease.Main (
   logResults,
 ) where
 
-import Control.Applicative (pure)
 import Control.Concurrent.Async (Async, cancel)
 import Control.Exception.Safe (MonadThrow)
 import Control.Exception.Safe qualified as X
 import Control.Lens (to, (.~), (^.))
-import Control.Monad (forM, forM_, mapM_, when, (>>=))
+import Control.Monad (forM, forM_, when)
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Bool (Bool (..), not, otherwise, (&&), (||))
 import Data.ByteString qualified as BS
-import Data.Either (Either (..))
 import Data.ElfEdit qualified as Elf
-import Data.Eq ((==))
 import Data.Foldable (traverse_)
-import Data.Function (id, ($), (&), (.))
-import Data.Functor (fmap, (<$>), (<&>))
+import Data.Function ((&))
+import Data.Functor ((<&>))
 import Data.Functor.Const (Const (..))
 import Data.IntMap qualified as IntMap
 import Data.LLVM.BitCode (formatError, parseBitCodeFromFileWithWarnings)
@@ -77,10 +73,8 @@ import Data.Macaw.X86.Crucible qualified as X86Symbolic
 import Data.Macaw.X86.Symbolic.Syntax qualified as X86Syn
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (Maybe (..), fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Maybe qualified as Maybe
-import Data.Monoid (mconcat)
-import Data.Ord ((<=))
 import Data.Parameterized.Classes (IxedF' (ixF'))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
@@ -88,18 +82,15 @@ import Data.Parameterized.Nonce (globalNonceGenerator)
 import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Parameterized.TraversableFC.WithIndex (imapFC)
 import Data.Proxy (Proxy (..))
-import Data.Semigroup ((<>))
 import Data.Sequence qualified as Seq
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Data.String (String)
 import Data.Text qualified as Text
 import Data.Text.IO (putStrLn)
 import Data.Text.IO qualified as Text.IO
-import Data.Traversable (for, traverse)
+import Data.Traversable (for)
 import Data.Traversable.WithIndex (iforM)
-import Data.Tuple (fst, snd)
-import Data.Type.Equality (testEquality, (:~:) (Refl), type (~))
+import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Vector qualified as Vec
 import Data.Void (Void)
 import GHC.TypeNats (KnownNat)
@@ -197,17 +188,15 @@ import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import System.Directory (Permissions, getPermissions)
 import System.Exit as Exit
-import System.FilePath (FilePath)
-import System.IO (Handle, IO, IOMode (WriteMode), withFile)
+import System.IO (Handle, IOMode (WriteMode), withFile)
 import Text.LLVM qualified as L
 import Text.Read (readMaybe)
-import Text.Show (Show (..))
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 import What4.ProgramLoc qualified as W4
 import What4.Protocol.Online qualified as W4
-import Prelude (Int, Integer, Integral, Num (..), fromIntegral)
+import Prelude hiding (log, print, putStrLn, userError)
 
 {- Note [Explicitly listed errors]
 
