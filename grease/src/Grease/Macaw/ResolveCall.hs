@@ -32,6 +32,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.BitVector.Sized qualified as BV
 import Data.Function ((&))
 import Data.IntMap qualified as IntMap
+import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.BinaryLoader.ELF qualified as Loader
 import Data.Macaw.CFG qualified as MC
@@ -699,7 +700,7 @@ extendHandleMap bak allOvs errCb = go
     let auxFns = Stubs.functionAuxiliaryFnBindings fnOv
         fwdDecs = Map.toList $ Stubs.functionForwardDeclarations fnOv
         fnHdlMap1 =
-          foldl'
+          List.foldl'
             ( \binds (CS.FnBinding fnHdl fnSt) ->
                 C.insertHandleMap fnHdl fnSt binds
             )
