@@ -33,6 +33,7 @@ common shared
   ghc-options:
     -Wmissing-export-lists
     -Wprepositive-qualified-module
+    -Werror=missing-import-lists
 
   -- Specifying -Wall and -Werror can cause the project to fail to build on
   -- newer versions of GHC simply due to new warnings being added to -Wall. To
