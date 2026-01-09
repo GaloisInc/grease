@@ -19,11 +19,5 @@ void test() {
   f(0);
 }
 
-// There probably should not be so many allocations for `malloc`...
-/// check "Immutable 1-byte-aligned malloc"
-/// check "Immutable 1-byte-aligned malloc"
-/// check "Immutable 1-byte-aligned malloc"
-/// check "Missing implementation for 'malloc'"
-// TODO(#508):
-// check_not "Missing implementation for 'malloc'"
-// ok()
+/// check_not "Missing implementation for 'malloc'"
+/// ok()
