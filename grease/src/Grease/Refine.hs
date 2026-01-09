@@ -84,37 +84,28 @@ module Grease.Refine (
   findPredAnnotations,
 ) where
 
-import Control.Applicative (pure, (<|>))
+import Control.Applicative ((<|>))
 import Control.Exception.Safe qualified as X
 import Control.Lens ((^.))
 import Control.Monad qualified as Monad
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Bool (Bool (..))
-import Data.Either (Either (..))
-import Data.Function (($), (.))
-import Data.Functor ((<$>))
 import Data.Functor.Const (Const)
 import Data.IORef (IORef, modifyIORef, readIORef)
 import Data.IORef qualified as IORef
-import Data.Int (Int)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic.Memory qualified as MSM
 import Data.Map.Strict qualified as Map
-import Data.Maybe (Maybe (..), maybeToList)
+import Data.Maybe (maybeToList)
 import Data.Maybe qualified as Maybe
-import Data.Ord ((>=))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Nonce (Nonce)
 import Data.Proxy (Proxy (..))
-import Data.Semigroup ((<>))
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
-import Data.String (String)
 import Data.Text qualified as Text
-import Data.Type.Equality (type (~))
 import GHC.IORef (newIORef)
 import Grease.Bug qualified as Bug
 import Grease.Concretize (ConcretizedData)
@@ -153,14 +144,12 @@ import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
 import System.Exit qualified as Exit
-import System.IO (IO)
 import What4.Expr qualified as W4
 import What4.Expr.App qualified as W4
 import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4
 import What4.Solver qualified as W4
-import Prelude (Num (..))
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (RefineDiagnostic diag)

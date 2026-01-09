@@ -24,30 +24,24 @@ module Grease.Setup (
   ValueName (..),
 ) where
 
-import Control.Applicative (pure)
 import Control.Exception.Safe (MonadCatch)
 import Control.Lens (use, (%~), (.=), (^.))
 import Control.Lens.TH (makeLenses)
 import Control.Lens.Zoom (zoom)
-import Control.Monad (foldM, (=<<))
+import Control.Monad (foldM)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.State (StateT (..), evalStateT, get, put)
 import Data.BitVector.Sized qualified as BV
-import Data.Eq (Eq ((==)))
-import Data.Function (flip, ($), (&), (.))
-import Data.Functor (fmap)
+import Data.Function ((&))
 import Data.List qualified as List
 import Data.Map qualified as Map
-import Data.Maybe (Maybe (..))
 import Data.Parameterized.Classes (ixF')
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (NatRepr, natValue)
 import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Proxy (Proxy (Proxy))
-import Data.Semigroup ((<>))
 import Data.Sequence qualified as Seq
-import Data.String (String)
-import Data.Type.Equality ((:~:) (Refl), type (~))
+import Data.Type.Equality ((:~:) (Refl))
 import Data.Vector qualified as Vec
 import Data.Word (Word8)
 import Grease.Cursor qualified as Cursor
@@ -68,10 +62,7 @@ import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
-import System.IO (IO)
-import Text.Show (show)
 import What4.Interface qualified as WI
-import Prelude (Int, Num (..), fromIntegral)
 
 -- | Name for fresh symbolic values, passed to 'WI.safeSymbol'. The phantom
 -- type parameter prevents making recursive calls without changing the name.
