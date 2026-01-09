@@ -1,4 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
+-- TODO(#162)
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- | Functionality for logging diagnostic messages in @grease@
 --

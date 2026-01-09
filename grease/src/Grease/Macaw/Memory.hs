@@ -17,7 +17,7 @@ module Grease.Macaw.Memory (
   loadConcreteString,
 ) where
 
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.BitVector.Sized qualified as BV
 import Data.ByteString qualified as BS
 import Data.Macaw.CFG qualified as MC

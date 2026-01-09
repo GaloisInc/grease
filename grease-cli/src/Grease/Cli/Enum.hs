@@ -17,7 +17,7 @@ import Data.Char qualified as Char
 import Data.List qualified as List
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Proxy (Proxy (..))
+import Data.Proxy (Proxy (Proxy))
 import Options.Applicative qualified as Opt
 
 camelCaseToKebabCase :: String -> String

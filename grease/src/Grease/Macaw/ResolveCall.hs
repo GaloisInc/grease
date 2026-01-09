@@ -3,6 +3,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
+-- TODO(#162)
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -24,15 +26,13 @@ module Grease.Macaw.ResolveCall (
   discoverFuncAddr,
 ) where
 
-import Control.Applicative (pure)
 import Control.Lens (to, (%~), (.~), (^.))
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.BitVector.Sized qualified as BV
-import Data.Foldable (foldl')
-import Data.Function (($), (&), (.))
-import Data.Int (Int)
+import Data.Function ((&))
 import Data.IntMap qualified as IntMap
+import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.BinaryLoader.ELF qualified as Loader
 import Data.Macaw.CFG qualified as MC
@@ -42,14 +42,12 @@ import Data.Macaw.Memory.ElfLoader qualified as EL
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Concretize qualified as Symbolic
 import Data.Map.Strict qualified as Map
-import Data.Maybe (Maybe (..))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
-import Data.Type.Equality (type (~))
 import GHC.Word (Word64)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (Diagnostic (..), GreaseLogAction)
@@ -78,12 +76,10 @@ import Stubs.FunctionOverride qualified as Stubs
 import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
 import Stubs.Memory.Common qualified as Stubs
 import Stubs.Syscall qualified as Stubs
-import System.IO (IO)
 import What4.Expr qualified as W4
 import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 import What4.Protocol.Online qualified as W4
-import Prelude (Integer, fromIntegral, otherwise, toInteger, (++))
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (ResolveCallDiagnostic diag)
@@ -704,7 +700,7 @@ extendHandleMap bak allOvs errCb = go
     let auxFns = Stubs.functionAuxiliaryFnBindings fnOv
         fwdDecs = Map.toList $ Stubs.functionForwardDeclarations fnOv
         fnHdlMap1 =
-          foldl'
+          List.foldl'
             ( \binds (CS.FnBinding fnHdl fnSt) ->
                 C.insertHandleMap fnHdl fnSt binds
             )
