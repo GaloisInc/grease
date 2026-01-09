@@ -56,14 +56,25 @@ import Prelude hiding (print)
 data Allocs
   = Allocs
   { allocs :: IntMap (PP.Doc Void)
+  , aliases :: IntMap Int
+  -- ^ A map from 'BlockId's (from 'PtrShape.PtrTarget's) to keys of 'allocs'
   , maxKey :: {-# UNPACK #-} !Int
   }
 
 allocNext :: Allocs -> (BlockId, Allocs)
 allocNext as = let k = maxKey as in (BlockId k, as{maxKey = k + 1})
 
+aliasNext :: BlockId -> Allocs -> (BlockId, Allocs)
+aliasNext (BlockId bid) as =
+  case IntMap.lookup bid (aliases as) of
+    Just bid' -> (BlockId bid', as)
+    Nothing ->
+      let (bid'@(BlockId bidVal), as') = allocNext as
+       in let as'' = as{aliases = IntMap.insert bid bidVal (aliases as')}
+           in (bid', as'')
+
 emptyAllocs :: Allocs
-emptyAllocs = Allocs IntMap.empty 0
+emptyAllocs = Allocs IntMap.empty IntMap.empty 0
 
 data PrinterConfig w = PrinterConfig
   { cfgAddrWidth :: AddrWidthRepr w
@@ -100,7 +111,7 @@ printerAlloc computeDoc bid = do
   -- is 'Nothing' it is fresh
   let (blk@(BlockId k), as') = case bid of
         Nothing -> allocNext as
-        Just bid' -> (bid', as)
+        Just bid' -> aliasNext bid' as
   State.put as'
   doc <- computeDoc
   State.modify (\as'' -> as''{allocs = IntMap.insert k doc (allocs as'')})
