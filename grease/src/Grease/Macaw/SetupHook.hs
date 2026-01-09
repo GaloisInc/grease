@@ -1,4 +1,6 @@
 {-# LANGUAGE ImplicitParams #-}
+-- TODO(#162)
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- | c.f. "Grease.LLVM.SetupHook"
 module Grease.Macaw.SetupHook (

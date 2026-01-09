@@ -7,7 +7,7 @@ module Grease.Profiler.EmbeddedData (
   profilerDataFiles,
 ) where
 
-import Data.Bifunctor (Bifunctor (..))
+import Data.Bifunctor (Bifunctor (first))
 import Data.ByteString (ByteString)
 import Data.FileEmbed (embedDir, embedFileRelative, makeRelativeToProject)
 import Grease.Profiler.Paths (profileHtmlPath, profilerDir)

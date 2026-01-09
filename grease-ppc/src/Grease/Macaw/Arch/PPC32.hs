@@ -2,6 +2,8 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
+-- TODO(#162)
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 -- Due to the orphan ArchReloc instance below
 {-# OPTIONS_GHC -Wno-orphans #-}
 

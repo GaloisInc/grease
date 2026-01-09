@@ -6,6 +6,8 @@
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+-- TODO(#162)
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 module Grease.Macaw.SimulatorState.Networking (
   -- * @ServerSocketInfo@ and friends
