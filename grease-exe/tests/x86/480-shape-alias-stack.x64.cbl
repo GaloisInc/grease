@@ -8,7 +8,6 @@
   (start start:
     (return regs)))
 
-; TODO(#480): These should not alias
 ;; check "rsp: 000000+"
-;; check "rdi: 000000+"
+;; check "rdi: 000001+"
 ;; ok()
