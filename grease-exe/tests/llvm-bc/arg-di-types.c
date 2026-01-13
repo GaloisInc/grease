@@ -3,7 +3,7 @@
 // CFLAGS: $LLVM -g
 
 /// flags {"--symbol", "test"}
-/// flags {"--use-debug-info-types"}
+/// flags {"--debug-info-types", "precise-debug-info-shapes"}
 /// go(prog)
 
 #include <stdbool.h>
