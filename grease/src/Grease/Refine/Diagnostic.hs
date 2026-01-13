@@ -130,7 +130,9 @@ instance PP.Pretty Diagnostic where
           ]
       RefinementFinishedPath loc result ->
         PP.hsep
-          [ "Path ended at"
+          [ "Path ended in"
+          , PP.pretty (W4.plFunction loc)
+          , "at"
           , PP.pretty (W4.plSourceLoc loc)
           , "with result"
           , PP.pretty result
