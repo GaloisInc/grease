@@ -9,6 +9,6 @@ struct bar {
 
 int foo(int x, int *y, struct bar *z) { return x + *y + z->x + z->arr[50]; }
 
-// all: flags {"--symbol", "foo", "--debug-info-types", "--precise-debug-info-shapes", "--no-heuristics"}
+// all: flags {"--symbol", "foo", "--debug-info-types", "precise-debug-info-shapes", "--no-heuristics"}
 // x64: go(prog)
 // x64: ok()
