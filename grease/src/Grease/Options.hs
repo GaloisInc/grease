@@ -107,7 +107,7 @@ newtype ErrorSymbolicSyscalls
   -- See Note [Derive Read/Show instances the with newtype strategy]
   deriving newtype (Enum, Eq, Ord, Read, Show)
 
-data UseDebugInfoShapes = NoDebugInfoShapes | ConservativeDebugInfoShapes | PreciceDebugInfoShapes
+data UseDebugInfoShapes = NoDebugInfoShapes | ConservativeDebugInfoShapes | PreciseDebugInfoShapes
   deriving (Bounded, Enum, Show)
 
 {-
