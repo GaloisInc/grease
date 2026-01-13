@@ -177,7 +177,13 @@ boundsOptsParser = Opt.parserOptionGroup "Bounds, limits, and timeouts" $ do
 initPrecondOptsParser :: Opt.Parser GO.InitialPreconditionOpts
 initPrecondOptsParser = Opt.parserOptionGroup "Initial precondition options" $ do
   initPrecondUseDebugInfo <-
-    Opt.switch (Opt.long "use-debug-info-types" <> Opt.help "Use types in debug info to infer initial preconditions. Can be (partially) overridden --initial-precondition, --arg-*, and/or --*-startup-override.")
+    GCE.enumParserDefault
+      GO.NoDebugInfoShapes
+      [ Opt.long "debug-info-types"
+      , Opt.help
+          "Use types in debug info to infer initial preconditions. \
+          \  Can be (partially) overridden --initial-precondition, --arg-*, and/or --*-startup-override."
+      ]
   initPrecondTypeUnrollingBound <-
     GO.TypeUnrollingBound
       <$> Opt.option

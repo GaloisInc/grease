@@ -18,6 +18,7 @@ import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw (minimalArgShapes)
 import Grease.Macaw.Arch (ArchContext, ArchReloc)
 import Grease.Macaw.Dwarf (loadDwarfPreconditions)
+import Grease.Macaw.Dwarf qualified as Dwarf
 import Grease.Options qualified as GO
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag)
@@ -64,7 +65,7 @@ macawInitArgShapes la bak archCtx opts parsed elf memory argNames mbCfgAddr = do
   let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
   initArgs0 <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let shouldUseDwarf = GO.initPrecondUseDebugInfo opts
-  let getDwarfArgs = do
+  let getDwarfArgsMb shouldBeConservative = do
         -- MaybeT IO
         elfHdr <- MaybeT.hoistMaybe elf
         addr <- MaybeT.hoistMaybe $ mbCfgAddr
@@ -78,12 +79,15 @@ macawInitArgShapes la bak archCtx opts parsed elf memory argNames mbCfgAddr = do
             initArgs0
             elfHdr
             archCtx
-  dwarfedArgs <-
-    if shouldUseDwarf
-      then do
-        v <- MaybeT.runMaybeT getDwarfArgs
+            shouldBeConservative
+  let getDwarfArgs shouldBeConservative = do
+        v <- MaybeT.runMaybeT $ getDwarfArgsMb shouldBeConservative
         pure $ Maybe.fromMaybe initArgs0 v
-      else pure initArgs0
+  dwarfedArgs <-
+    case shouldUseDwarf of
+      GO.NoDebugInfoShapes -> pure initArgs0
+      GO.ConservativeDebugInfoShapes -> getDwarfArgs (Dwarf.ShouldUseConservativeDebugShapes True)
+      GO.PreciceDebugInfoShapes -> getDwarfArgs (Dwarf.ShouldUseConservativeDebugShapes True)
   pure $ do
     -- Either
     initArgs1 <-
