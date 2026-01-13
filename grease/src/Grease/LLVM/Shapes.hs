@@ -52,7 +52,7 @@ llvmInitArgShapes opts llvmMod argNames parsedShapes cfg = do
   let argTys = C.cfgArgTypes cfg
   let initArgs0 =
         case (llvmMod, GO.initPrecondUseDebugInfo opts) of
-          (Just m, GO.PreciceDebugInfoShapes) ->
+          (Just m, GO.PreciseDebugInfoShapes) ->
             GLD.diArgShapes (CFH.handleName (C.cfgHandle cfg)) argTys m
           _ -> traverseFC (Shape.minimalShapeWithPtrs @_ @CLLVM.LLVM (const NoTag)) argTys
   initArgs1 <-
