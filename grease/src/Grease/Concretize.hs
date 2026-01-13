@@ -240,7 +240,6 @@ printConcExtra vals =
             C.VectorRepr (C.BVRepr w)
               | Just C.Refl <- testEquality w (knownNat @8) ->
                   PP.fillSep (List.map (\(Conc.ConcRV' b) -> ppBv8 b) (toList val))
-            -- TODO(#204): Handle more cases
             _ -> PP.pretty "<can't print this value>"
       ]
 
