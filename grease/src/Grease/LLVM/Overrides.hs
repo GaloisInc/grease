@@ -190,9 +190,12 @@ registerLLVMOverrides la builtinOvs userOvs skipFuns bak llvmCtx fs defns decls 
     -- part is necessary.
     CS.modifyGlobal mvar $ \mem ->
       case Map.lookup symb (CLM.memImplGlobalMap mem) of
+        -- Functions from LLVM modules will already have associated allocations,
+        -- don't create new ones
         Just (CLM.SomePointer ptr)
           | CLM.PtrWidth <- CLM.ptrWidth ptr ->
               pure (ptr, mem)
+        -- Functions from S-expression files need allocations
         _ -> liftIO (CLLVM.registerFunPtr bak mem name symb aliases)
 
   -- Note the order here: we register "skip" overrides *first*, so that built-in
@@ -265,9 +268,12 @@ registerLLVMOverrides la builtinOvs userOvs skipFuns bak llvmCtx fs defns decls 
     let mvar = CLLVM.llvmMemVar llvmCtx
     mem <- CS.readGlobal mvar
     case Map.lookup symb (CLM.memImplGlobalMap mem) of
+      -- Functions from LLVM modules will already have associated allocations,
+      -- don't create new ones
       Just (CLM.SomePointer ptr)
         | CLM.PtrWidth <- CLM.ptrWidth ptr ->
             CLLVM.do_register_llvm_override llvmCtx ov
+      -- Functions from S-expression files need allocations
       _ -> CLLVM.alloc_and_register_override bak llvmCtx ov []
 
 -- | For an S-expression program, register function overrides and return a
