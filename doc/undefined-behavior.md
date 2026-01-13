@@ -40,9 +40,6 @@ Further behaviors refer to types that are not available or semantically meaningf
 
 The following table lists the remaining behaviors. It is far from complete, and we hope to expand it over time.
 
-<!-- TODO(#85): The remaining rows -->
-<!-- TODO(#85): Investigate "?"s -->
-
 | Number  | Description | Checked by GREASE | Notes      |
 | ------- | ----------- | ----------------- | ---------- |
 | 5 | The execution of a program contains a data race (5.1.2.5). | No | See [limitations](limitations.md) |
