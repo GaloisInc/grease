@@ -15,8 +15,8 @@ struct bar {
 
 int foo(int x, int *y, struct bar *z) { return x + *y + z->x; }
 
-// all: flags {"--symbol", "foo", "--debug-info-types",
-// "conservative-debug-info-shapes", "--no-heuristics"} x64: go(prog)
+// all: flags {"--symbol", "foo", "--debug-info-types", "conservative-debug-info-shapes", "--no-heuristics"}
+// x64: go(prog)
 
 // Shows that we dont unfold the shape because we dont have a. a separate type
 // for the fields of bar b. we should currently fail on the union
