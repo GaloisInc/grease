@@ -180,8 +180,13 @@ initPrecondOptsParser = Opt.parserOptionGroup "Initial precondition options" $ d
     GCE.enumParserDefault
       GO.NoDebugInfoShapes
       [ Opt.long "debug-info-types"
-      , Opt.help
+      , -- TODO(#519): We should update this when llvm supports conservative shapes.
+        Opt.help
           "Use types in debug info to infer initial preconditions. \
+          \ Conservative shapes will only initialize top level pointers and initialize composites to raw symbolic bytes \
+          \ (this tests paths with null pointers for instance). \
+          \ Precise shapes will attempt to parse type information for pointers and individual fields of arguments. \
+          \ LLVM currently does not support conservative mode and will only be enabled with precise-debug-info-shapes. \
           \  Can be (partially) overridden --initial-precondition, --arg-*, and/or --*-startup-override."
       ]
   initPrecondTypeUnrollingBound <-

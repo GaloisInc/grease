@@ -51,6 +51,8 @@ llvmInitArgShapes ::
 llvmInitArgShapes opts llvmMod argNames parsedShapes cfg = do
   let argTys = C.cfgArgTypes cfg
   let initArgs0 =
+        -- TODO(#519): We should match on the type of debug info usage
+        -- and support conservative debug info
         case (llvmMod, GO.initPrecondUseDebugInfo opts) of
           (Just m, GO.PreciseDebugInfoShapes) ->
             GLD.diArgShapes (CFH.handleName (C.cfgHandle cfg)) argTys m
