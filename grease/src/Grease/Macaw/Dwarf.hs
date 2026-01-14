@@ -160,7 +160,7 @@ constructPtrTarget ::
   MDwarf.TypeApp ->
   UseConservativeDebugShapes ->
   IO (PtrTarget w NoTag)
-constructPtrTarget gla tyUnrollBound sprog visitCount tyApp (UseConservativeDebugShapes shouldBeConservative) =
+constructPtrTarget gla tyUnrollBound sprog visitCount tyApp isConservative =
   ptrTarget Nothing
     <$> liftIO
       ( do
@@ -172,6 +172,7 @@ constructPtrTarget gla tyUnrollBound sprog visitCount tyApp (UseConservativeDebu
             Right x -> pure x
       )
  where
+  UseConservativeDebugShapes shouldBeConservative = isConservative
   ishape w = except $ Right $ Seq.singleton $ Initialized NoTag (toBytes w)
   padding :: Integral a => a -> MemShape w NoTag
   padding w = Uninitialized (toBytes w)
