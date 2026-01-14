@@ -116,7 +116,7 @@ SHARED_LIBARY_DWARFV4_DIRS = sanity/pass/dwarf-shapes-dwarfv4
 SHARED_LIBARY_DWARFV4_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV4_DIRS))
 
 SHARED_LIBARY_DWARFV5_DIRS = sanity/pass/dwarf-restrict-ptr-and-typedef sanity/pass/dwarf-shapes sanity/pass/dwarf-shape-recursive sanity/pass/dwarf-shape-recursive-tree sanity/pass/dwarf-fail-to-parse-log \
-	sanity/pass/dwarf-array sanity/pass/dwarf-default-for-field-members-and-pointers
+	sanity/pass/dwarf-array sanity/pass/dwarf-default-for-field-members-and-pointers sanity/pass/dwarf-conservative-shapes
 SHARED_LIBARY_DWARFV5_X64_SOS = $(addsuffix /test.x64.elf,$(SHARED_LIBARY_DWARFV5_DIRS))
 
 

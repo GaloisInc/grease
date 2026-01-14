@@ -12,7 +12,7 @@
 --
 -- Copyright        : (c) Galois, Inc. 2025
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
-module Grease.Macaw.Dwarf (loadDwarfPreconditions) where
+module Grease.Macaw.Dwarf (loadDwarfPreconditions, UseConservativeDebugShapes (..)) where
 
 import Control.Lens qualified as Lens
 import Control.Monad (foldM, join)
@@ -24,6 +24,7 @@ import Control.Monad.Trans.Maybe (MaybeT (..), hoistMaybe)
 import Data.Coerce
 import Data.ElfEdit qualified as Elf
 import Data.Foldable (find, for_)
+import Data.Foldable qualified as Foldable
 import Data.Functor.Const qualified as Const
 import Data.List qualified as List
 import Data.Macaw.CFG (ArchSegmentOff)
@@ -38,6 +39,7 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Maybe qualified as Maybe
 import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Proxy (Proxy (..))
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
@@ -56,6 +58,10 @@ import Lang.Crucible.LLVM.Bytes (toBytes)
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Types qualified as CT
 import Lumberjack qualified as LJ
+
+-- | Wether to use conservative shapes that do not initialize pointers (allowing for null)
+-- unless they are base pointers
+newtype UseConservativeDebugShapes = UseConservativeDebugShapes Bool
 
 -- | Find the pc for DWARF which is relative to the ELF absent its base load address.
 -- We find this address by finding the segment that corresponds to the target address
@@ -110,14 +116,17 @@ loadDwarfPreconditions ::
   Elf.ElfHeaderInfo (MC.ArchAddrWidth arch) ->
   -- | Architecture-specific information, needed for ABI info
   ArchContext arch ->
+  -- | Whether pointers should be instantiated conservatively (that is just substituting a size)
+  -- or from the precise type when possible.
+  UseConservativeDebugShapes ->
   IO (Maybe (Shape.ArgShapes ext NoTag tys))
-loadDwarfPreconditions gla targetAddr memory tyUnrollBound argNames initShapes elfHdr archContext =
+loadDwarfPreconditions gla targetAddr memory tyUnrollBound argNames initShapes elfHdr archContext shouldBeConservative =
   runMaybeT
     ( do
         let elf = snd $ Elf.getElf elfHdr
         adjustedAddr <- hoistMaybe $ addressToELFAddress elfHdr targetAddr memory (Proxy @arch)
         let (_, cus) = dwarfInfoFromElf elf
-        shps <- MaybeT $ fromDwarfInfo gla archContext tyUnrollBound adjustedAddr cus
+        shps <- MaybeT $ fromDwarfInfo gla archContext tyUnrollBound adjustedAddr cus shouldBeConservative
         let repl = Shape.replaceShapes argNames initShapes shps
         hoistMaybe $ either (const Nothing) Just repl
     )
@@ -149,8 +158,9 @@ constructPtrTarget ::
   Subprogram ->
   VisitCount ->
   MDwarf.TypeApp ->
+  UseConservativeDebugShapes ->
   IO (PtrTarget w NoTag)
-constructPtrTarget gla tyUnrollBound sprog visitCount tyApp =
+constructPtrTarget gla tyUnrollBound sprog visitCount tyApp isConservative =
   ptrTarget Nothing
     <$> liftIO
       ( do
@@ -162,6 +172,7 @@ constructPtrTarget gla tyUnrollBound sprog visitCount tyApp =
             Right x -> pure x
       )
  where
+  UseConservativeDebugShapes shouldBeConservative = isConservative
   ishape w = except $ Right $ Seq.singleton $ Initialized NoTag (toBytes w)
   padding :: Integral a => a -> MemShape w NoTag
   padding w = Uninitialized (toBytes w)
@@ -202,37 +213,49 @@ constructPtrTarget gla tyUnrollBound sprog visitCount tyApp =
         Nothing -> except $ Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Expected only one DW_AT_subrange_type for DW_TAG_array_type"
       num <- numOfRange (MDwarf.subrangeUpperBound ubRange)
       tyShape <- shapeOfTyApp elTy
-      pure $ join $ Seq.replicate num tyShape
+      let sz = Foldable.sum $ fmap (memShapeSize ?ptrWidth) tyShape
+      if shouldBeConservative
+        then
+          ishape sz
+        else
+          pure $ join $ Seq.replicate num tyShape
   -- need to compute padding between elements, in-front of the first element, and at end
   -- we could get a missing DWARF member per the format so we have to do something about padding in-front
   -- even if in practice this should not occur.
   shapeSeq (MDwarf.StructType sdecl) =
     let structSize = MDwarf.structByteSize sdecl
-     in do
-          let builtMembers =
-                foldM
-                  ( \(currLoc, seqs) mem ->
-                      do
-                        (nextLoc, additionalShapes) <- withExceptT (\e -> ((currLoc, seqs), e)) (buildMember currLoc mem)
-                        except $ Right (nextLoc, seqs Seq.>< additionalShapes)
-                  )
-                  (0, Seq.empty)
-                  (MDwarf.structMembers sdecl)
-          (endLoc, seqs) <- liftIO $ do
-            x <- runExceptT builtMembers
-            case x of
-              Left ((off, previous), e) -> do
-                doLog gla (DwarfDiagnostic.StoppingStruct sprog off e)
-                pure (off, previous)
-              Right res -> pure res
+     in if shouldBeConservative
+          then
+            ishape structSize
+          else do
+            let builtMembers =
+                  foldM
+                    ( \(currLoc, seqs) mem ->
+                        do
+                          (nextLoc, additionalShapes) <- withExceptT (\e -> ((currLoc, seqs), e)) (buildMember currLoc mem)
+                          except $ Right (nextLoc, seqs Seq.>< additionalShapes)
+                    )
+                    (0, Seq.empty)
+                    (MDwarf.structMembers sdecl)
+            (endLoc, seqs) <- liftIO $ do
+              x <- runExceptT builtMembers
+              case x of
+                Left ((off, previous), e) -> do
+                  doLog gla (DwarfDiagnostic.StoppingStruct sprog off e)
+                  pure (off, previous)
+                Right res -> pure res
 
-          let endPad = if endLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - endLoc)
-          except $ Right $ (seqs Seq.>< endPad)
+            let endPad = if endLoc >= structSize then Seq.empty else Seq.singleton (padding $ structSize - endLoc)
+            except $ Right $ (seqs Seq.>< endPad)
   shapeSeq (MDwarf.PointerType _ maybeRef) =
-    let mshape =
-          constructPtrMemShapeFromRef gla tyUnrollBound sprog visitCount
-            =<< (except $ Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Pointer missing pointee") Right maybeRef)
-     in Seq.singleton <$> mshape
+    if shouldBeConservative
+      then
+        ishape (NatRepr.natValue ?ptrWidth)
+      else
+        let mshape =
+              constructPtrMemShapeFromRef gla tyUnrollBound sprog visitCount (UseConservativeDebugShapes shouldBeConservative)
+                =<< (except $ Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Pointer missing pointee") Right maybeRef)
+         in Seq.singleton <$> mshape
   shapeSeq ty = except $ Left $ DwarfDiagnostic.UnsupportedType ty
 
 type VisitCount = Map.Map MDwarf.TypeRef Int
@@ -248,9 +271,10 @@ constructPtrMemShapeFromRef ::
   TypeUnrollingBound ->
   Subprogram ->
   VisitCount ->
+  UseConservativeDebugShapes ->
   MDwarf.TypeRef ->
   ShapeParsingM (MemShape w NoTag)
-constructPtrMemShapeFromRef gla bound sprog vcount ref =
+constructPtrMemShapeFromRef gla bound sprog vcount shouldBeConservative ref =
   let TypeUnrollingBound tyUnrollBound = bound
       ct = fromMaybe 0 (Map.lookup ref vcount)
       newMap = Map.insert ref (ct + 1) vcount
@@ -259,7 +283,7 @@ constructPtrMemShapeFromRef gla bound sprog vcount ref =
           pure $ nullPtr
         else do
           ty <- extractType sprog ref
-          tgt <- liftIO $ constructPtrTarget gla bound sprog newMap ty
+          tgt <- liftIO $ constructPtrTarget gla bound sprog newMap ty shouldBeConservative
           pure $ Pointer NoTag (Offset 0) tgt
 
 intPtrShape ::
@@ -283,18 +307,19 @@ pointerShapeOfDwarf ::
   TypeUnrollingBound ->
   MC.ArchReg arch tp ->
   Subprogram ->
+  UseConservativeDebugShapes ->
   MDwarf.TypeApp ->
   ShapeParsingM (C.Some (PtrShape ext w NoTag))
-pointerShapeOfDwarf _ _ _ r _ (MDwarf.SignedIntType _) = except $ intPtrShape r
-pointerShapeOfDwarf _ _ _ r _ (MDwarf.UnsignedIntType _) = except $ intPtrShape r
-pointerShapeOfDwarf _ gla tyUnrollBound _ sprog (MDwarf.PointerType _ mbTyRef) =
+pointerShapeOfDwarf _ _ _ r _ _ (MDwarf.SignedIntType _) = except $ intPtrShape r
+pointerShapeOfDwarf _ _ _ r _ _ (MDwarf.UnsignedIntType _) = except $ intPtrShape r
+pointerShapeOfDwarf _ gla tyUnrollBound _ sprog shouldBeConservative (MDwarf.PointerType _ mbTyRef) =
   let memShape = do
         tyRef <- except $ Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Pointer missing pointee") Right mbTyRef
         typeApp <- extractType sprog tyRef
-        liftIO $ constructPtrTarget gla tyUnrollBound sprog Map.empty typeApp
+        liftIO $ constructPtrTarget gla tyUnrollBound sprog Map.empty typeApp shouldBeConservative
       pointerShape = ShapePtr NoTag (Offset 0) <$> memShape
    in (C.Some <$> pointerShape)
-pointerShapeOfDwarf _ _ _ _ _ ty = except $ Left $ DwarfDiagnostic.UnsupportedType ty
+pointerShapeOfDwarf _ _ _ _ _ _ ty = except $ Left $ DwarfDiagnostic.UnsupportedType ty
 
 -- Stops after the first 'Left' to avoid adding shapes after
 -- failing to build some shape (this would result in shapes applying to incorrect registers)
@@ -319,10 +344,11 @@ shapeFromVar ::
   MC.ArchReg arch tp ->
   Subprogram ->
   MDwarf.Variable ->
+  UseConservativeDebugShapes ->
   ShapeParsingM (C.Some (Shape.Shape ext NoTag))
-shapeFromVar arch gla tyUnrollBound buildingForReg sprog vr =
+shapeFromVar arch gla tyUnrollBound buildingForReg sprog vr shouldBeConservative =
   C.mapSome Shape.ShapeExt
-    <$> ( pointerShapeOfDwarf arch gla tyUnrollBound buildingForReg sprog
+    <$> ( pointerShapeOfDwarf arch gla tyUnrollBound buildingForReg sprog shouldBeConservative
             =<< extractType sprog
             =<< (except $ Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm "Variable is missing a type") Right (MDwarf.varType vr))
         )
@@ -334,8 +360,9 @@ shapeFromDwarf ::
   ArchContext arch ->
   TypeUnrollingBound ->
   Subprogram ->
+  UseConservativeDebugShapes ->
   IO (Shape.ParsedShapes ext)
-shapeFromDwarf gla aContext tyUnrollBound sub =
+shapeFromDwarf gla aContext tyUnrollBound sub shouldBeConservative =
   let
     abiRegs = aContext Lens.^. archABIParams
     args = (zip abiRegs $ snd <$> (toAscList $ subParamMap sub))
@@ -343,7 +370,7 @@ shapeFromDwarf gla aContext tyUnrollBound sub =
     regAssignmentFromDwarfVar reg var =
       do
         C.Some r <- pure reg
-        shp <- shapeFromVar aContext gla tyUnrollBound r sub var
+        shp <- shapeFromVar aContext gla tyUnrollBound r sub var shouldBeConservative
         pure (Text.pack $ coerce $ mkRegName r, shp)
    in
     do
@@ -372,8 +399,9 @@ fromDwarfInfo ::
   -- | The entrypoint PC of the target subprogram relative to the target ELF object.
   Word64 ->
   [Data.Macaw.Dwarf.CompileUnit] ->
+  UseConservativeDebugShapes ->
   IO (Maybe (Shape.ParsedShapes ext))
-fromDwarfInfo gla aContext tyUnrollBound addr cus =
+fromDwarfInfo gla aContext tyUnrollBound addr cus shouldBeConservative =
   runMaybeT
     ( do
         let isTargetAddrInCu cu =
@@ -397,6 +425,7 @@ fromDwarfInfo gla aContext tyUnrollBound addr cus =
             aContext
             tyUnrollBound
             targetSubProg
+            shouldBeConservative
     )
  where
   isInSubProg ::

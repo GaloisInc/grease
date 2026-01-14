@@ -22,18 +22,18 @@ int sum_list(struct llnode *in) {
 
 // Each test checks where the null pointer was placed
 
-// all: flags {"--symbol", "sum_list", "--use-debug-info-types", "--no-heuristics"}
+// all: flags {"--symbol", "sum_list", "--debug-info-types", "precise-debug-info-shapes", "--no-heuristics"}
 // x64: go(prog) 
 // x64: check("000005: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00")
 // x64: check_not "000006:"
 
-// all: flags {"--symbol", "sum_list", "--use-debug-info-types", "--no-heuristics", "--type-unrolling-bound", "12"}
+// all: flags {"--symbol", "sum_list", "--debug-info-types", "precise-debug-info-shapes", "--no-heuristics", "--type-unrolling-bound", "12"}
 // x64: go(prog) 
 // x64: ok()
 // x64: check("00000e: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00")
 // x64: check_not "00000f:"
 
-// all: flags {"--symbol", "sum_list", "--use-debug-info-types", "--no-heuristics", "--type-unrolling-bound", "0"}
+// all: flags {"--symbol", "sum_list", "--debug-info-types", "precise-debug-info-shapes", "--type-unrolling-bound", "0"}
 // x64: go(prog) 
 // x64: ok()
 // x64: check "000002: XX XX XX XX ## ## ## ## 00 00 00 00 00 00 00 00"

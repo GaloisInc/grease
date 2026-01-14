@@ -31,7 +31,7 @@ int sum_tree(struct tree *in) {
 
 // Checks that we have multiple unrollings both of the lhs and rhs
 
-// all: flags {"--symbol", "sum_tree", "--use-debug-info-types", "--no-heuristics"} 
+// all: flags {"--symbol", "sum_tree", "--debug-info-types", "precise-debug-info-shapes", "--no-heuristics"} 
 // x64: go(prog)
 // x64: check "00002b: XX XX XX XX ## ## ## ## 00002c+0000000000000000"
 // x64: check "00002c: 00002d+0000000000000000 00002e+0000000000000000"

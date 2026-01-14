@@ -25,6 +25,7 @@ module Grease.Options (
   InitialPreconditionOpts (..),
   SimOpts (..),
   Opts (..),
+  UseDebugInfoShapes (..),
 ) where
 
 import Data.Map.Strict (Map)
@@ -106,6 +107,9 @@ newtype ErrorSymbolicSyscalls
   -- See Note [Derive Read/Show instances the with newtype strategy]
   deriving newtype (Enum, Eq, Ord, Read, Show)
 
+data UseDebugInfoShapes = NoDebugInfoShapes | ConservativeDebugInfoShapes | PreciseDebugInfoShapes
+  deriving (Bounded, Enum, Show)
+
 {-
 Note [Derive Read/Show instances with newtype strategy]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -162,7 +166,7 @@ data InitialPreconditionOpts
   = InitialPreconditionOpts
   { initPrecondPath :: Maybe FilePath
   -- ^ Path containing initial function preconditions in shapes DSL
-  , initPrecondUseDebugInfo :: Bool
+  , initPrecondUseDebugInfo :: UseDebugInfoShapes
   -- ^ Enables parsing debug info to extract initial shape types. This option is
   -- superseded by `initPrecondPath`.
   , initPrecondTypeUnrollingBound :: TypeUnrollingBound
