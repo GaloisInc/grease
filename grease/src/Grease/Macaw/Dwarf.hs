@@ -116,8 +116,8 @@ loadDwarfPreconditions ::
   Elf.ElfHeaderInfo (MC.ArchAddrWidth arch) ->
   -- | Architecture-specific information, needed for ABI info
   ArchContext arch ->
-  -- | Wether pointers should be instantiated conservatively (that is just substituting a size)
-  -- or form the precise type when possible.
+  -- | Whether pointers should be instantiated conservatively (that is just substituting a size)
+  -- or from the precise type when possible.
   ShouldUseConservativeDebugShapes ->
   IO (Maybe (Shape.ArgShapes ext NoTag tys))
 loadDwarfPreconditions gla targetAddr memory tyUnrollBound argNames initShapes elfHdr archContext shouldBeConservative =
