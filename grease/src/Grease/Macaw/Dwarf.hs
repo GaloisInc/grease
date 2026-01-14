@@ -12,7 +12,7 @@
 --
 -- Copyright        : (c) Galois, Inc. 2025
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
-module Grease.Macaw.Dwarf (loadDwarfPreconditions, ShouldUseConservativeDebugShapes (..)) where
+module Grease.Macaw.Dwarf (loadDwarfPreconditions, UseConservativeDebugShapes (..)) where
 
 import Control.Lens qualified as Lens
 import Control.Monad (foldM, join)
@@ -61,7 +61,7 @@ import Lumberjack qualified as LJ
 
 -- | Wether to use conservative shapes that do not initialize pointers (allowing for null)
 -- unless they are base pointers
-newtype ShouldUseConservativeDebugShapes = ShouldUseConservativeDebugShapes Bool
+newtype UseConservativeDebugShapes = UseConservativeDebugShapes Bool
 
 -- | Find the pc for DWARF which is relative to the ELF absent its base load address.
 -- We find this address by finding the segment that corresponds to the target address
@@ -118,7 +118,7 @@ loadDwarfPreconditions ::
   ArchContext arch ->
   -- | Whether pointers should be instantiated conservatively (that is just substituting a size)
   -- or from the precise type when possible.
-  ShouldUseConservativeDebugShapes ->
+  UseConservativeDebugShapes ->
   IO (Maybe (Shape.ArgShapes ext NoTag tys))
 loadDwarfPreconditions gla targetAddr memory tyUnrollBound argNames initShapes elfHdr archContext shouldBeConservative =
   runMaybeT
@@ -158,9 +158,9 @@ constructPtrTarget ::
   Subprogram ->
   VisitCount ->
   MDwarf.TypeApp ->
-  ShouldUseConservativeDebugShapes ->
+  UseConservativeDebugShapes ->
   IO (PtrTarget w NoTag)
-constructPtrTarget gla tyUnrollBound sprog visitCount tyApp (ShouldUseConservativeDebugShapes shouldBeConservative) =
+constructPtrTarget gla tyUnrollBound sprog visitCount tyApp (UseConservativeDebugShapes shouldBeConservative) =
   ptrTarget Nothing
     <$> liftIO
       ( do
@@ -252,7 +252,7 @@ constructPtrTarget gla tyUnrollBound sprog visitCount tyApp (ShouldUseConservati
         ishape (NatRepr.natValue ?ptrWidth)
       else
         let mshape =
-              constructPtrMemShapeFromRef gla tyUnrollBound sprog visitCount (ShouldUseConservativeDebugShapes shouldBeConservative)
+              constructPtrMemShapeFromRef gla tyUnrollBound sprog visitCount (UseConservativeDebugShapes shouldBeConservative)
                 =<< (except $ Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Pointer missing pointee") Right maybeRef)
          in Seq.singleton <$> mshape
   shapeSeq ty = except $ Left $ DwarfDiagnostic.UnsupportedType ty
@@ -270,7 +270,7 @@ constructPtrMemShapeFromRef ::
   TypeUnrollingBound ->
   Subprogram ->
   VisitCount ->
-  ShouldUseConservativeDebugShapes ->
+  UseConservativeDebugShapes ->
   MDwarf.TypeRef ->
   ShapeParsingM (MemShape w NoTag)
 constructPtrMemShapeFromRef gla bound sprog vcount shouldBeConservative ref =
@@ -306,7 +306,7 @@ pointerShapeOfDwarf ::
   TypeUnrollingBound ->
   MC.ArchReg arch tp ->
   Subprogram ->
-  ShouldUseConservativeDebugShapes ->
+  UseConservativeDebugShapes ->
   MDwarf.TypeApp ->
   ShapeParsingM (C.Some (PtrShape ext w NoTag))
 pointerShapeOfDwarf _ _ _ r _ _ (MDwarf.SignedIntType _) = except $ intPtrShape r
@@ -343,7 +343,7 @@ shapeFromVar ::
   MC.ArchReg arch tp ->
   Subprogram ->
   MDwarf.Variable ->
-  ShouldUseConservativeDebugShapes ->
+  UseConservativeDebugShapes ->
   ShapeParsingM (C.Some (Shape.Shape ext NoTag))
 shapeFromVar arch gla tyUnrollBound buildingForReg sprog vr shouldBeConservative =
   C.mapSome Shape.ShapeExt
@@ -359,7 +359,7 @@ shapeFromDwarf ::
   ArchContext arch ->
   TypeUnrollingBound ->
   Subprogram ->
-  ShouldUseConservativeDebugShapes ->
+  UseConservativeDebugShapes ->
   IO (Shape.ParsedShapes ext)
 shapeFromDwarf gla aContext tyUnrollBound sub shouldBeConservative =
   let
@@ -398,7 +398,7 @@ fromDwarfInfo ::
   -- | The entrypoint PC of the target subprogram relative to the target ELF object.
   Word64 ->
   [Data.Macaw.Dwarf.CompileUnit] ->
-  ShouldUseConservativeDebugShapes ->
+  UseConservativeDebugShapes ->
   IO (Maybe (Shape.ParsedShapes ext))
 fromDwarfInfo gla aContext tyUnrollBound addr cus shouldBeConservative =
   runMaybeT

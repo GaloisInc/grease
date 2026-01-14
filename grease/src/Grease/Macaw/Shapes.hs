@@ -86,8 +86,8 @@ macawInitArgShapes la bak archCtx opts parsed elf memory argNames mbCfgAddr = do
   dwarfedArgs <-
     case shouldUseDwarf of
       GO.NoDebugInfoShapes -> pure initArgs0
-      GO.ConservativeDebugInfoShapes -> getDwarfArgs (Dwarf.ShouldUseConservativeDebugShapes True)
-      GO.PreciseDebugInfoShapes -> getDwarfArgs (Dwarf.ShouldUseConservativeDebugShapes False)
+      GO.ConservativeDebugInfoShapes -> getDwarfArgs (Dwarf.UseConservativeDebugShapes True)
+      GO.PreciseDebugInfoShapes -> getDwarfArgs (Dwarf.UseConservativeDebugShapes False)
   pure $ do
     -- Either
     initArgs1 <-
