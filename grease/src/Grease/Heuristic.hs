@@ -74,6 +74,7 @@ import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Generic qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
+import Lang.Crucible.Simulator.SimError qualified as CS
 import Lumberjack qualified as LJ
 import Numeric.Natural (Natural)
 import Prettyprinter qualified as PP

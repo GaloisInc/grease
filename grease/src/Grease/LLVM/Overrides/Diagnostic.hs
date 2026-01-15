@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -6,41 +7,56 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.LLVM.Overrides.Diagnostic (
   Diagnostic (..),
+  ppType,
   severity,
 ) where
 
+import Data.Functor.Identity (Identity (Identity, runIdentity))
+import Data.Parameterized.TraversableFC qualified as TFC
 import Grease.Diagnostic.Severity (Severity (Debug, Warn))
 import Lang.Crucible.LLVM.Intrinsics qualified as CLI
+import Lang.Crucible.LLVM.Intrinsics.Declare qualified as Decl
+import Lang.Crucible.LLVM.MemModel (ppLLVMIntrinsicTypes)
+import Lang.Crucible.Types (TypeRepr, ppIntrinsicDefault, ppTypeRepr)
 import Prettyprinter qualified as PP
 import Text.LLVM.AST qualified as L
-import Text.LLVM.PP qualified as L
 
 data Diagnostic where
   CantSkip ::
-    L.Declare ->
+    Decl.Declare args ret ->
     Diagnostic
   FoundDeclare ::
-    -- | The declared function
-    L.Declare ->
+    Decl.Declare args ret ->
     Diagnostic
   RegisteredOverride ::
     forall p sym.
-    -- | The override
     CLI.SomeLLVMOverride p sym CLI.LLVM ->
     Diagnostic
-
-ppDeclare :: L.Declare -> PP.Doc a
-ppDeclare d = PP.viaShow (L.ppLLVM38 (L.ppDeclare d))
 
 instance PP.Pretty Diagnostic where
   pretty =
     \case
-      CantSkip d ->
-        "Can't skip function" PP.<+> ppDeclare d
-      FoundDeclare d ->
-        "Found `declare`:" PP.<+> ppDeclare d
-      RegisteredOverride (CLI.SomeLLVMOverride ov) ->
-        "Registered override for:" PP.<+> ppDeclare (CLI.llvmOverride_declare ov)
+      CantSkip decl -> "Can't skip function" PP.<+> ppDecl decl
+      FoundDeclare decl -> "Found `declare`:" PP.<+> ppDecl decl
+      RegisteredOverride sov@(CLI.SomeLLVMOverride _ov) ->
+        case CLI.someLlvmOverrideDeclare sov of
+          Decl.SomeDeclare decl ->
+            "Registered override for:" PP.<+> ppDecl decl
+
+ppType :: TypeRepr tp -> PP.Doc ann
+ppType = runIdentity . ppTypeRepr (ppLLVMIntrinsicTypes (\s ctx -> Identity (ppIntrinsicDefault s ctx)))
+
+ppFuncType :: [PP.Doc x] -> PP.Doc x
+ppFuncType = PP.hsep . zipWith (PP.<+>) ("::" : repeat "->")
+
+ppDecl :: Decl.Declare args ret -> PP.Doc ann
+ppDecl decl =
+  let L.Symbol name = Decl.decName decl
+   in PP.hsep
+        [ PP.pretty name
+        , ppFuncType $
+            TFC.toListFC ppType (Decl.decArgs decl) ++ [ppType (Decl.decRet decl)]
+        ]
 
 severity :: Diagnostic -> Severity
 severity =
