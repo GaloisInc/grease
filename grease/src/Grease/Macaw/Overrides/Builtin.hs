@@ -1,7 +1,6 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |
@@ -11,7 +10,6 @@ module Grease.Macaw.Overrides.Builtin (
   builtinStubsOverrides,
 ) where
 
-import Data.Functor.Identity (Identity (Identity, runIdentity))
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
@@ -19,7 +17,7 @@ import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map qualified as Map
 import Data.Maybe (mapMaybe)
 import Data.Parameterized.Context qualified as Ctx
-import Data.Parameterized.TraversableFC (toListFC)
+import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Sequence qualified as Seq
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -27,7 +25,6 @@ import Grease.LLVM.Overrides.Builtin (libcOverrides)
 import Grease.Macaw.Overrides.Defs (customStubsOverrides)
 import Grease.Macaw.Overrides.Networking (networkOverrides)
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
-import Grease.Panic qualified as Panic
 import Grease.Utility (llvmOverrideName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
@@ -36,6 +33,9 @@ import Lang.Crucible.LLVM.Intrinsics.Cast qualified as Cast
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as SymIO
 import Lang.Crucible.LLVM.TypeContext qualified as TCtx
+import Lang.Crucible.Simulator.OverrideSim qualified as CSO
+import Lang.Crucible.Simulator.RegMap (RegEntry (RegEntry))
+import Lang.Crucible.Simulator.RegValue (RegValue' (RV))
 import Stubs.FunctionOverride qualified as Stubs
 import Text.LLVM.AST qualified as L
 
@@ -44,8 +44,8 @@ import Text.LLVM.AST qualified as L
 -- c.f. 'builtinLLVMOverrides', which includes all of the functions here (i.e.,
 -- from libc) and then some (i.e., LLVM intrinsics).
 builtinStubsOverrides ::
-  forall sym bak p arch cExt.
-  ( CB.IsSymBackend sym bak
+  forall sym p arch cExt.
+  ( CB.IsSymInterface sym
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
   , CLM.HasLLVMAnn sym
@@ -53,12 +53,11 @@ builtinStubsOverrides ::
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , HasGreaseSimulatorState p cExt sym arch
   ) =>
-  bak ->
   C.GlobalVar CLM.Mem ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
   SymIO.LLVMFileSystem (MC.ArchAddrWidth arch) ->
   Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
-builtinStubsOverrides bak mvar mmConf fs =
+builtinStubsOverrides mvar mmConf fs =
   customOvs <> fromLlvmOvs <> networkingOvs
  where
   -- Custom overrides that are only applicable at the machine code level (and
@@ -73,10 +72,10 @@ builtinStubsOverrides bak mvar mmConf fs =
     let ?intrinsicsOpts = CLI.defaultIntrinsicsOptions
      in Seq.fromList
           $ mapMaybe
-            (\(CLI.SomeLLVMOverride ov) -> llvmToStubsOverride bak mvar ov)
+            (\(CLI.SomeLLVMOverride ov) -> llvmToStubsOverride mvar ov)
           $ List.filter
             ( \(CLI.SomeLLVMOverride ov) ->
-                L.decName (CLI.llvmOverride_declare ov)
+                CLI.llvmOverride_name ov
                   `Set.notMember` excludedLibcOverrides
             )
             (libcOverrides fs)
@@ -106,17 +105,6 @@ builtinStubsOverrides bak mvar mmConf fs =
 -- Turn LLVM overrides into Stubs FunctionOverrides
 -----
 
--- | Helper to turn bitvector types into LLVM pointer types.
---
--- See module comment on "Lang.Crucible.LLVM.Intrinsics.Cast".
-bvToPointer ::
-  C.TypeRepr t ->
-  C.Some C.TypeRepr
-bvToPointer =
-  \case
-    C.BVRepr w -> C.Some (CLM.LLVMPointerRepr w)
-    t -> C.Some t
-
 -- | Transform an 'Mem.LLVMOverride' into a 'Stubs.SomeFunctionOverride'.
 --
 -- Does the necessary pipe-fitting of bitvectors to pointers, see module comment
@@ -133,51 +121,36 @@ bvToPointer =
 -- function, as the approach that 'Mem.LLVMOverride' uses to represent varargs
 -- is not easily convertible to the approach that @stubs@ uses.
 llvmToStubsOverride ::
-  CB.IsSymBackend sym bak =>
   CLM.HasLLVMAnn sym =>
-  bak ->
   C.GlobalVar CLM.Mem ->
   CLI.LLVMOverride p sym (Symbolic.MacawExt arch) args ret ->
   Maybe (Stubs.SomeFunctionOverride p sym arch)
-llvmToStubsOverride bak mvar llvmOv
+llvmToStubsOverride mvar llvmOv
   | isVariadic =
       Nothing
   | otherwise =
-      Just $ runIdentity $ do
-        C.Some args <- Identity $ Ctx.fromList (toListFC bvToPointer args0)
-        C.Some ret <- Identity $ bvToPointer ret0
-
-        let nm = llvmOverrideName llvmOv
-        Identity $
-          Stubs.SomeFunctionOverride $
-            Stubs.FunctionOverride
-              { Stubs.functionName = nm
-              , Stubs.functionGlobals = Map.empty
-              , Stubs.functionExterns = Map.empty
-              , Stubs.functionArgTypes = args
-              , Stubs.functionReturnType = ret
-              , Stubs.functionAuxiliaryFnBindings = []
-              , Stubs.functionForwardDeclarations = Map.empty
-              , Stubs.functionOverride =
-                  \_bak argVals _getVarArg _parents -> do
-                    -- This won't panic because we're only using bvToPointer, and those casts
-                    -- are supported by Cast.
-                    let panic = Panic.panic "llvmToStubsOverride"
-                    let fargs =
-                          case Cast.castLLVMArgs nm bak args0 args of
-                            Left err -> panic (Cast.printValCastError err)
-                            Right f -> f
-                    let fret =
-                          case Cast.castLLVMRet nm bak ret0 ret of
-                            Left err -> panic (Cast.printValCastError err)
-                            Right f -> f
-
-                    argVals' <- Cast.applyArgCast fargs argVals
-                    retVal <- CLI.llvmOverride_def llvmOv mvar argVals'
-                    retVal' <- Cast.applyValCast fret retVal
-                    let regChanges = [] -- TODO: havoc registers?
-                    pure (Stubs.OverrideResult regChanges retVal')
-              }
+      Just $
+        let args = Cast.ctxToLLVMType args0
+            ret = Cast.toLLVMType ret0
+            nm = llvmOverrideName llvmOv
+         in Stubs.SomeFunctionOverride $
+              Stubs.FunctionOverride
+                { Stubs.functionName = nm
+                , Stubs.functionGlobals = Map.empty
+                , Stubs.functionExterns = Map.empty
+                , Stubs.functionArgTypes = args
+                , Stubs.functionReturnType = ret
+                , Stubs.functionAuxiliaryFnBindings = []
+                , Stubs.functionForwardDeclarations = Map.empty
+                , Stubs.functionOverride =
+                    \_bak argVals _getVarArg _parents -> do
+                      let lowered = Cast.lowerLLVMOverride llvmOv
+                      let typedOv = CLI.llvmOverrideToTypedOverride mvar lowered
+                      let argVals' = fmapFC (\(RegEntry _ty v) -> RV v) argVals
+                      retVal' <- CSO.typedOverrideHandler typedOv argVals'
+                      let regChanges = [] -- TODO: havoc registers?
+                      pure (Stubs.OverrideResult regChanges retVal')
+                }
  where
   args0 = CLI.llvmOverride_args llvmOv
   ret0 = CLI.llvmOverride_ret llvmOv

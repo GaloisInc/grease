@@ -6,14 +6,13 @@
 ;; go(prog)
 
 ; int close(int filedes)
-(declare @close ((filedes (Ptr 32))) (Ptr 32))
+(declare @close ((filedes (Bitvector 32))) (Bitvector 32))
 
 (defun @test () Unit
   (start start:
-    (let stdin (ptr 32 0 (bv 32 0)))
+    (let stdin (bv 32 0))
     (let closed (funcall @close stdin))
-    (let closed-off (ptr-offset 32 closed))
-    (assert! (not (equal? closed-off (bv 32 0xffffffff))) "close() returned -1!")
+    (assert! (not (equal? closed (bv 32 0xffffffff))) "close() returned -1!")
     (return ())))
 
 ;; ok()
