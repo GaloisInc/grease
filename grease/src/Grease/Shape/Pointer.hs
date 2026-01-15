@@ -244,15 +244,20 @@ initializeMemShape tag =
 {-
 Note [Deduplicating Pointer Targets Based on BlockIDs]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-During parsing of shapes, a given block is parsed as many times as it is needed into a 'PtrTarget'.
-This duplciation of blocks causes 'setup' to lose track of which 'PtrTarget's are identical and should be aliased.
-Indeed, the shapes datastructure does not directly allow for 'PtrTarget's to be aliased. We create aliasing by annotating 'PtrTarget's
-with an optional 'BlockId'.
+During parsing of shapes, a given block is parsed as many times as it is needed
+into a 'PtrTarget'. This duplication of blocks causes 'setup' to lose track
+of which 'PtrTarget's are identical and should be aliased. Indeed, the shapes
+datastructure does not directly allow for 'PtrTarget's to be aliased. We create
+aliasing by annotating 'PtrTarget's with an optional 'BlockId'.
 
-'PtrTarget's with a 'BlockId' are deemed equivalent and during 'setup' each use of a given 'BlockId' will be deduplicated into a single runtime value.
-'PtrTarget's without a 'BlockId' can be thought of as fresh on-the-fly 'BlockId's which is how the printer handles them. Inside of setup, pointer initialization is memoized
-such that the same result is returned for matching 'BlockId's. This behavior means that for a given list of shapes passed to 'setup' any 'PtrTarget' with a matching 'BlockId' is expected
-to have the same shape, otherwise the first observed 'PtrTarget's shape will win.
+'PtrTarget's with a 'BlockId' are deemed equivalent and during 'setup' each
+use of a given 'BlockId' will be deduplicated into a single runtime value.
+'PtrTarget's without a 'BlockId' can be thought of as fresh on-the-fly
+'BlockId's which is how the printer handles them. Inside of setup, pointer
+initialization is memoized such that the same result is returned for matching
+'BlockId's. This behavior means that for a given list of shapes passed to
+'setup' any 'PtrTarget' with a matching 'BlockId' is expected to have the same
+shape, otherwise the first observed 'PtrTarget's shape will win.
 -}
 
 -- | The target of a pointer.
@@ -261,11 +266,13 @@ to have the same shape, otherwise the first observed 'PtrTarget's shape will win
 -- allocated space. Otherwise, the pointer points to an allocation large enough
 -- to hold all the 'MemShape's in the 'Seq' (see 'ptrTargetSize').
 --
--- The `BlockId` is used to deduplicate target blocks during setup. If a `BlockId` is present
--- a single block will be allocated for that identifier. If the identifier is `Nothing` then
--- a fresh identifier will be generated. Invariant: it is expected that any two 'PtrTarget's with the same 'BlockId'
--- used within the same context will have the same shape. Violating this invariant will mean that 'setup' will produce
--- incorrect blocks for the second time a 'BlockId' is used.
+-- The `BlockId` is used to deduplicate target blocks during setup. If a
+-- `BlockId` is present a single block will be allocated for that identifier.
+-- If the identifier is `Nothing` then a fresh identifier will be generated.
+-- Invariant: it is expected that any two 'PtrTarget's with the same 'BlockId'
+-- used within the same context will have the same shape. Violating this
+-- invariant will mean that 'setup' will produce incorrect blocks for the second
+-- time a 'BlockId' is used.
 --
 -- There are \"non-canonical\" instances of this type, e.g., those that involve
 -- @'Uninitialized' 0@ or two 'Initialized' that are adjacent and could be
