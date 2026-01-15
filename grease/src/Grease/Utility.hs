@@ -60,7 +60,7 @@ functionNameFromByteString = WFN.functionNameFromText . Text.decodeUtf8
 
 llvmOverrideName :: CLI.LLVMOverride p sym ext args ret -> WFN.FunctionName
 llvmOverrideName ov =
-  let L.Symbol nm = L.decName (CLI.llvmOverride_declare ov)
+  let L.Symbol nm = CLI.llvmOvSymbol ov
    in WFN.functionNameFromText (Text.pack nm)
 
 -- TODO(lb): Also print the function name?

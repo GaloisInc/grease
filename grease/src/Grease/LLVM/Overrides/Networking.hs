@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TypeOperators #-}
 
 -- TODO(#438): Remove calls to `error`
@@ -16,13 +17,13 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.BitVector.Sized qualified as BV
 import Data.ByteString qualified as BS
 import Data.Parameterized.Context qualified as Ctx
-import Grease.LLVM.Overrides.Declare (mkDeclare)
 import Grease.Overrides.Networking qualified as GON
 import Grease.SimulatorState.Networking qualified as GSN
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as CBO
 import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.MemModel qualified as CLM
+import Lang.Crucible.LLVM.QQ (llvmOvr)
 import Lang.Crucible.LLVM.SymIO qualified as CLSIO
 import Lang.Crucible.Simulator qualified as CS
 import What4.Expr qualified as WE
@@ -67,6 +68,7 @@ socketOverride ::
   , bak ~ CBO.OnlineBackend solver scope st fs
   , WPO.OnlineSolver solver
   , CLM.HasPtrWidth 64
+  , CLM.HasLLVMAnn sym
   , GSN.HasServerSocketFds p
   ) =>
   bak ->
@@ -82,19 +84,8 @@ socketOverride ::
     )
     (CLM.LLVMPointerType 64)
 socketOverride bak fs =
-  case mkDeclare "socket" argTys retTy of
-    Right decl ->
-      CLI.LLVMOverride
-        { CLI.llvmOverride_declare = decl
-        , CLI.llvmOverride_args = argTys
-        , CLI.llvmOverride_ret = retTy
-        , CLI.llvmOverride_def = \_mvar args ->
-            Ctx.uncurryAssignment (GON.callSocket bak fs) args
-        }
-    Left err -> error ("socketOverride: " ++ show err)
- where
-  argTys = Ctx.Empty Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr
-  retTy = CLM.PtrRepr
+  [llvmOvr| i8* @socket( i8*, i8*, i8* ) |]
+    (\_mvar args -> Ctx.uncurryAssignment (GON.callSocket bak fs) args)
 
 bindOverride ::
   ( CB.IsSymBackend sym bak
@@ -120,21 +111,12 @@ bindOverride ::
     )
     (CLM.LLVMPointerType 64)
 bindOverride bak _fs memVar =
-  case mkDeclare "bind" argTys retTy of
-    Right decl ->
-      CLI.LLVMOverride
-        { CLI.llvmOverride_declare = decl
-        , CLI.llvmOverride_args = argTys
-        , CLI.llvmOverride_ret = retTy
-        , CLI.llvmOverride_def = \_mvar args ->
-            Ctx.uncurryAssignment
-              (GON.callBind bak memVar (loadSockaddrUnPath bak memVar))
-              args
-        }
-    Left err -> error ("bindOverride: " ++ show err)
- where
-  argTys = Ctx.Empty Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr
-  retTy = CLM.PtrRepr
+  [llvmOvr| i8* @bind( i8*, i8*, i8* ) |]
+    ( \_mvar args ->
+        Ctx.uncurryAssignment
+          (GON.callBind bak memVar (loadSockaddrUnPath bak memVar))
+          args
+    )
 
 connectOverride ::
   ( CB.IsSymBackend sym bak
@@ -142,6 +124,7 @@ connectOverride ::
   , bak ~ CBO.OnlineBackend solver scope st fs
   , WPO.OnlineSolver solver
   , CLM.HasPtrWidth 64
+  , CLM.HasLLVMAnn sym
   , GSN.HasServerSocketFds p
   ) =>
   bak ->
@@ -156,19 +139,8 @@ connectOverride ::
     )
     (CLM.LLVMPointerType 64)
 connectOverride bak =
-  case mkDeclare "connect" argTys retTy of
-    Right decl ->
-      CLI.LLVMOverride
-        { CLI.llvmOverride_declare = decl
-        , CLI.llvmOverride_args = argTys
-        , CLI.llvmOverride_ret = retTy
-        , CLI.llvmOverride_def = \_mvar args ->
-            Ctx.uncurryAssignment (GON.callConnect bak) args
-        }
-    Left err -> error ("connectOverride: " ++ show err)
- where
-  argTys = Ctx.Empty Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr
-  retTy = CLM.PtrRepr
+  [llvmOvr| i8* @connect( i8*, i8*, i8* ) |]
+    (\_mvar args -> Ctx.uncurryAssignment (GON.callConnect bak) args)
 
 listenOverride ::
   ( CB.IsSymBackend sym bak
@@ -176,6 +148,7 @@ listenOverride ::
   , bak ~ CBO.OnlineBackend solver scope st fs
   , WPO.OnlineSolver solver
   , CLM.HasPtrWidth 64
+  , CLM.HasLLVMAnn sym
   , GSN.HasServerSocketFds p
   ) =>
   bak ->
@@ -189,19 +162,8 @@ listenOverride ::
     )
     (CLM.LLVMPointerType 64)
 listenOverride bak =
-  case mkDeclare "listen" argTys retTy of
-    Right decl ->
-      CLI.LLVMOverride
-        { CLI.llvmOverride_declare = decl
-        , CLI.llvmOverride_args = argTys
-        , CLI.llvmOverride_ret = retTy
-        , CLI.llvmOverride_def = \_mvar args ->
-            Ctx.uncurryAssignment (GON.callListen bak) args
-        }
-    Left err -> error ("listenOverride: " ++ show err)
- where
-  argTys = Ctx.Empty Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr
-  retTy = CLM.PtrRepr
+  [llvmOvr| i8* @listen( i8*, i8* ) |]
+    (\_mvar args -> Ctx.uncurryAssignment (GON.callListen bak) args)
 
 acceptOverride ::
   ( CB.IsSymBackend sym bak
@@ -209,6 +171,7 @@ acceptOverride ::
   , bak ~ CBO.OnlineBackend solver scope st fs
   , WPO.OnlineSolver solver
   , CLM.HasPtrWidth 64
+  , CLM.HasLLVMAnn sym
   , GSN.HasServerSocketFds p
   ) =>
   bak ->
@@ -224,19 +187,8 @@ acceptOverride ::
     )
     (CLM.LLVMPointerType 64)
 acceptOverride bak fs =
-  case mkDeclare "accept" argTys retTy of
-    Right decl ->
-      CLI.LLVMOverride
-        { CLI.llvmOverride_declare = decl
-        , CLI.llvmOverride_args = argTys
-        , CLI.llvmOverride_ret = retTy
-        , CLI.llvmOverride_def = \_mvar args ->
-            Ctx.uncurryAssignment (GON.callAccept bak fs) args
-        }
-    Left err -> error ("acceptOverride: " ++ show err)
- where
-  argTys = Ctx.Empty Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr
-  retTy = CLM.PtrRepr
+  [llvmOvr| i8* @accept( i8*, i8*, i8* ) |]
+    (\_mvar args -> Ctx.uncurryAssignment (GON.callAccept bak fs) args)
 
 recvOverride ::
   ( CB.IsSymBackend sym bak
@@ -258,19 +210,8 @@ recvOverride ::
     )
     (CLM.LLVMPointerType 64)
 recvOverride bak fs memVar =
-  case mkDeclare "recv" argTys retTy of
-    Right decl ->
-      CLI.LLVMOverride
-        { CLI.llvmOverride_declare = decl
-        , CLI.llvmOverride_args = argTys
-        , CLI.llvmOverride_ret = retTy
-        , CLI.llvmOverride_def = \_mvar args ->
-            Ctx.uncurryAssignment (GON.callRecv bak fs memVar) args
-        }
-    Left err -> error ("recvOverride: " ++ show err)
- where
-  argTys = Ctx.Empty Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr
-  retTy = CLM.PtrRepr
+  [llvmOvr| i8* @recv( i8*, i8*, i8*, i8* ) |]
+    (\_mvar args -> Ctx.uncurryAssignment (GON.callRecv bak fs memVar) args)
 
 sendOverride ::
   ( CB.IsSymBackend sym bak
@@ -293,19 +234,8 @@ sendOverride ::
     )
     (CLM.LLVMPointerType 64)
 sendOverride bak fs memVar =
-  case mkDeclare "send" argTys retTy of
-    Right decl ->
-      CLI.LLVMOverride
-        { CLI.llvmOverride_declare = decl
-        , CLI.llvmOverride_args = argTys
-        , CLI.llvmOverride_ret = retTy
-        , CLI.llvmOverride_def = \_mvar args ->
-            Ctx.uncurryAssignment (GON.callSend bak fs memVar) args
-        }
-    Left err -> error ("sendOverride: " ++ show err)
- where
-  argTys = Ctx.Empty Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr Ctx.:> CLM.PtrRepr
-  retTy = CLM.PtrRepr
+  [llvmOvr| i8* @send( i8*, i8*, i8*, i8* ) |]
+    (\_mvar args -> Ctx.uncurryAssignment (GON.callSend bak fs memVar) args)
 
 -----
 -- LLVM-specific helpers
