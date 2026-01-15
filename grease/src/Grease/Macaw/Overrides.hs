@@ -225,7 +225,7 @@ mkMacawOverrideMapWithBuiltins ::
   LLVMFileSystem (MC.ArchAddrWidth arch) ->
   IO (Either MacawSExpOverrideError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
 mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg fs = do
-  let builtinOvs = builtinStubsOverrides bak mvar memCfg fs
+  let builtinOvs = builtinStubsOverrides mvar memCfg fs
   mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
 
 -- | Redirect handles for forward declarations in an S-expression file to
