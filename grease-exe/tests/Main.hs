@@ -92,13 +92,18 @@ withCapturedLogs withLogAction = do
   -- Reverse the list so that logs appear chronologically
   pure (Text.unlines (List.reverse logs))
 
-go :: IORef.IORef [String] -> String -> Lua ()
-go flagsRef prog = do
+go ::
+  -- | Log output, used in failure output
+  IORef.IORef FilePath ->
+  -- | Flags, used in failure output
+  IORef.IORef [String] ->
+  String ->
+  Lua ()
+go logRef flagsRef prog = do
   strOpts <- getArgs
   Lua.newtable
   Lua.setglobal argsGlobal
 
-  -- For manually reproducing a failing test
   let cliOpts = strOpts List.++ ["--", prog]
   liftIO (IORef.writeIORef flagsRef cliOpts)
 
@@ -109,7 +114,9 @@ go flagsRef prog = do
         res <- simulateFile opts la'
         logResults la' res
   let path = simProgPath opts
-  liftIO (Text.IO.writeFile (FilePath.replaceExtension path "out") logTxt)
+  let logPath = FilePath.replaceExtension path "out"
+  liftIO (Text.IO.writeFile logPath logTxt)
+  liftIO (IORef.writeIORef logRef logPath)
 
   Lua.getglobal' "reset"
   Lua.pushstring "<out>"
@@ -149,8 +156,12 @@ flags fs = do
   appendStringArray fs
   Lua.pop 1
 
-preHook :: FilePath -> IORef.IORef [String] -> Lua ()
-preHook bin flagsRef = do
+preHook ::
+  FilePath ->
+  IORef.IORef FilePath ->
+  IORef.IORef [String] ->
+  Lua ()
+preHook bin logRef flagsRef = do
   Lua.newtable
   Lua.setglobal argsGlobal
 
@@ -160,21 +171,26 @@ preHook bin flagsRef = do
   Lua.pushHaskellFunction (Lua.toHaskellFunction flags)
   Lua.setglobal (Lua.Name "flags")
 
-  Lua.pushHaskellFunction (Lua.toHaskellFunction (go flagsRef))
+  Lua.pushHaskellFunction (Lua.toHaskellFunction (go logRef flagsRef))
   Lua.setglobal (Lua.Name "go")
 
+-- | Wrapper around 'Oughta.Failure' with extra info that is helpful when
+-- debugging test failures
 data GreaseTestFailure
   = GreaseTestFailure
   { failureArgs :: [String]
   , failureException :: Oughta.Failure
+  , failureOutput :: FilePath
   }
 
 instance Show GreaseTestFailure where
   show err =
     unlines
       [ show (failureException err)
-      , "help: to reproduce this failure, run:"
+      , "To reproduce this failure, run:"
       , "  " ++ "cabal run exe:grease -- " ++ unwords (failureArgs err)
+      , ""
+      , "Output saved to " ++ failureOutput err
       ]
 
 instance X.Exception GreaseTestFailure
@@ -182,18 +198,22 @@ instance X.Exception GreaseTestFailure
 -- | Make an "Oughta"-based test
 oughta :: FilePath -> Oughta.LuaProgram -> IO ()
 oughta bin prog0 = do
+  logRef <- IORef.newIORef "<no output saved>"
   flagsRef <- IORef.newIORef []
   let output = Oughta.Output "" -- set by `go`
   let prog = Oughta.addPrefix prelude prog0
-  let hooks = Oughta.defaultHooks{Oughta.preHook = preHook bin flagsRef}
+  let hook = preHook bin logRef flagsRef
+  let hooks = Oughta.defaultHooks{Oughta.preHook = hook}
   Oughta.Result r <- Oughta.check hooks prog output
   case r of
     Left err -> do
       fs <- IORef.readIORef flagsRef
+      logPath <- IORef.readIORef logRef
       X.throwIO $
         GreaseTestFailure
           { failureArgs = fs
           , failureException = err
+          , failureOutput = logPath
           }
     Right s ->
       let ms = Oughta.successMatches s
