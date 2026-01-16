@@ -92,11 +92,15 @@ withCapturedLogs withLogAction = do
   -- Reverse the list so that logs appear chronologically
   pure (Text.unlines (List.reverse logs))
 
-go :: String -> Lua ()
-go prog = do
+go :: IORef.IORef [String] -> String -> Lua ()
+go flagsRef prog = do
   strOpts <- getArgs
   Lua.newtable
   Lua.setglobal argsGlobal
+
+  -- For manually reproducing a failing test
+  let cliOpts = strOpts List.++ ["--", prog]
+  liftIO (IORef.writeIORef flagsRef cliOpts)
 
   opts <- liftIO (optsSimOpts <$> optsFromList (prog : strOpts))
   logTxt <-
@@ -145,8 +149,8 @@ flags fs = do
   appendStringArray fs
   Lua.pop 1
 
-preHook :: FilePath -> Lua ()
-preHook bin = do
+preHook :: FilePath -> IORef.IORef [String] -> Lua ()
+preHook bin flagsRef = do
   Lua.newtable
   Lua.setglobal argsGlobal
 
@@ -156,18 +160,41 @@ preHook bin = do
   Lua.pushHaskellFunction (Lua.toHaskellFunction flags)
   Lua.setglobal (Lua.Name "flags")
 
-  Lua.pushHaskellFunction (Lua.toHaskellFunction go)
+  Lua.pushHaskellFunction (Lua.toHaskellFunction (go flagsRef))
   Lua.setglobal (Lua.Name "go")
+
+data GreaseTestFailure
+  = GreaseTestFailure
+  { failureArgs :: [String]
+  , failureException :: Oughta.Failure
+  }
+
+instance Show GreaseTestFailure where
+  show err =
+    unlines
+      [ show (failureException err)
+      , "help: to reproduce this failure, run:"
+      , "  " ++ "cabal run exe:grease -- " ++ unwords (failureArgs err)
+      ]
+
+instance X.Exception GreaseTestFailure
 
 -- | Make an "Oughta"-based test
 oughta :: FilePath -> Oughta.LuaProgram -> IO ()
 oughta bin prog0 = do
+  flagsRef <- IORef.newIORef []
   let output = Oughta.Output "" -- set by `go`
   let prog = Oughta.addPrefix prelude prog0
-  let hooks = Oughta.defaultHooks{Oughta.preHook = preHook bin}
+  let hooks = Oughta.defaultHooks{Oughta.preHook = preHook bin flagsRef}
   Oughta.Result r <- Oughta.check hooks prog output
   case r of
-    Left f -> X.throwIO f
+    Left err -> do
+      fs <- IORef.readIORef flagsRef
+      X.throwIO $
+        GreaseTestFailure
+          { failureArgs = fs
+          , failureException = err
+          }
     Right s ->
       let ms = Oughta.successMatches s
        in T.U.assertBool "Test has some assertions" (not (Seq.null ms))
