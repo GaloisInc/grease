@@ -28,6 +28,7 @@ data Token
 data AnnotatedToken = AnnotatedToken
   { lineNumber :: Int
   , columnNumber :: Int
+  , size :: Int
   , token :: Token
   }
 

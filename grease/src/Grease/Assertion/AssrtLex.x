@@ -40,12 +40,14 @@ tokens :-
 
 {
 constToken :: Tokens.Token -> AlexInput -> Int -> Alex Tokens.AnnotatedToken
-constToken = undefined
+constToken tok (pos, _, _, _) sz =
+  let AlexPn _ line col = pos in
+  pure $ Tokens.AnnotatedToken line col sz tok
 
 
 alexEOF :: Alex Tokens.AnnotatedToken
 alexEOF = do
   (pos, _, _ , _) <- alexGetInput
   let AlexPn _ line col = pos
-  pure $ Tokens.AnnotatedToken line col Tokens.Eof
+  pure $ Tokens.AnnotatedToken line col 0 Tokens.Eof
 }
