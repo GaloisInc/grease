@@ -18,27 +18,32 @@ $ident_end = [a-zA-z0-9\_]
 tokens :-
   $white+ ;
   true {constToken $ Tokens.TokenBool True}
-  -- false {const $ Tokens.TokenBool(False)}
-  -- "(" {const Tokens.LParen}
-  -- ")" {const Tokens.RParen}
-  -- "*" {const Tokens.SepConj}
-  -- "," {const Tokens.Comma}
-  -- typeOf {const Tokens.TypeOf}
-  -- zext {const Tokens.Zext}
-  -- trunc {const Tokens.Trunc}
-  -- "<" {const Tokens.Lt}
-  -- "<=" {const Tokens.Lte}
-  -- "<$" {const Tokens.Slt}
-  -- "<=$" {const Tokens.Slte}
-  -- "=" {const Tokens.Eq}
-  -- "!" {const Tokens.Exclam}
-  -- ite {const Tokens.Ite}
-  -- "#" @ident {\s -> Tokens.ExistentialVar s}
-  -- @ident {\s -> Tokens.ProgramVar s}
-  -- "$" @ident {\s -> Tokens.LabelVar s}
-  -- @hexnum ":" @nat {\s -> undefined}
+  false {constToken $ Tokens.TokenBool False}
+  "(" {constToken Tokens.LParen}
+  ")" {constToken Tokens.RParen}
+  "*" {constToken Tokens.SepConj}
+  "," {constToken Tokens.Comma}
+  typeOf {constToken Tokens.TypeOf}
+  zext {constToken Tokens.Zext}
+  trunc {constToken Tokens.Trunc}
+  "<" {constToken Tokens.Lt}
+  "<=" {constToken Tokens.Lte}
+  "<$" {constToken Tokens.Slt}
+  "<=$" {constToken Tokens.Slte}
+  "=" {constToken Tokens.Eq}
+  "!" {constToken Tokens.Exclam}
+  ite {constToken Tokens.Ite}
+  "#" @ident {tokenOf Tokens.ExistentialVar}
+  @ident {tokenOf Tokens.ProgramVar}
+  "$" @ident {tokenOf Tokens.LabelVar}
+  --@hexnum ":" @nat {tokenOf Tokens.hexStringToNat}
 
 {
+
+tokenOf :: (String -> Tokens.Token) -> AlexInput -> Int -> Alex Tokens.AnnotatedToken
+tokenOf f input@(_, _, _, s) sz =
+  constToken (f s) input sz
+
 constToken :: Tokens.Token -> AlexInput -> Int -> Alex Tokens.AnnotatedToken
 constToken tok (pos, _, _, _) sz =
   let AlexPn _ line col = pos in

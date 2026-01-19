@@ -1,4 +1,4 @@
-module Grease.Assertion.Token (Token (..), AnnotatedToken (..)) where
+module Grease.Assertion.Token (Token (..), AnnotatedToken (..), hexStringToNat) where
 
 import Data.Word (Word64)
 
@@ -32,5 +32,5 @@ data AnnotatedToken = AnnotatedToken
   , token :: Token
   }
 
-stringToNat :: String -> Int
-stringToNat s = undefined
+hexStringToNat :: String -> Int
+hexStringToNat s = undefined
