@@ -1,4 +1,4 @@
-module Grease.Assertion.Token (Token (..)) where
+module Grease.Assertion.Token (Token (..), AnnotatedToken (..)) where
 
 import Data.Word (Word64)
 
@@ -23,6 +23,13 @@ data Token
   | ProgramVar String
   | NaturalNum Int
   | Bv
+  | Eof
+
+data AnnotatedToken = AnnotatedToken
+  { lineNumber :: Int
+  , columnNumber :: Int
+  , token :: Token
+  }
 
 stringToNat :: String -> Int
 stringToNat s = undefined
