@@ -61,17 +61,23 @@ data Allocs
   , maxKey :: {-# UNPACK #-} !Int
   }
 
+-- | Create a fresh block ID
 allocNext :: Allocs -> (BlockId, Allocs)
 allocNext as = let k = maxKey as in (BlockId k, as{maxKey = k + 1})
 
+-- | Check if this block ID is potentially aliased. If so, use its alias.
+-- If not, generate a new alias and use it.
 aliasNext :: BlockId -> Allocs -> (BlockId, Allocs)
 aliasNext (BlockId bid) as =
   case IntMap.lookup bid (aliases as) of
     Just bid' -> (BlockId bid', as)
     Nothing ->
       let (bid'@(BlockId bidVal), as') = allocNext as
-       in let as'' = as{aliases = IntMap.insert bid bidVal (aliases as')}
-           in (bid', as'')
+       in (bid', alias bid bidVal as')
+ where
+  alias :: Int -> Int -> Allocs -> Allocs
+  alias bid' bidVal as' =
+    as{aliases = IntMap.insert bid' bidVal (aliases as')}
 
 emptyAllocs :: Allocs
 emptyAllocs = Allocs IntMap.empty IntMap.empty 0
