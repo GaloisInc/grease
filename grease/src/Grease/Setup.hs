@@ -29,7 +29,7 @@ import Control.Lens.TH (makeLenses)
 import Control.Lens.Zoom (zoom)
 import Control.Monad (foldM, (=<<))
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Trans.State (StateT (..), evalStateT, get, put)
+import Control.Monad.Trans.State (StateT (..), evalStateT)
 import Data.BitVector.Sized qualified as BV
 import Data.Eq (Eq ((==)))
 import Data.Function (flip, ($), (&), (.))
@@ -174,10 +174,8 @@ setupPtrMem la bak dl nm sel tgt@(PtrTarget bid _) =
             Just memoizeRes -> pure (setupResPtr memoizeRes, setupResTgt memoizeRes)
             Nothing -> do
               (ptr, rTgt) <- unseenFallback
-              s <- get
               let res = SetupRes{setupResPtr = ptr, setupResTgt = rTgt}
-              let newMap = Map.insert bid' res resMap
-              _ <- put (s{_setupRes = newMap})
+              setupRes .= Map.insert bid' res resMap
               pure (ptr, rTgt)
         Nothing -> unseenFallback
 
