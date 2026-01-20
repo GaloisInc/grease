@@ -4,11 +4,9 @@ on:
   push:
     branches:
     - main
+  # Note: We must run on all PR commits (i.e., we can't ignore
+  # documentation-only changes), as this workflow is required for merge.
   pull_request:
-    # Don't run on documentation-only changes
-    paths-ignore:
-    - '**.md'
-    - '**.py'
   workflow_dispatch:
 
 env:
