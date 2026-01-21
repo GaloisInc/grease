@@ -166,6 +166,8 @@ data InitialPreconditionOpts
   = InitialPreconditionOpts
   { initPrecondPath :: Maybe FilePath
   -- ^ Path containing initial function preconditions in shapes DSL
+  , slPrecondPath :: Maybe FilePath
+  -- ^ Path containing initial function preconditions in SL assertions
   , initPrecondUseDebugInfo :: UseDebugInfoShapes
   -- ^ Enables parsing debug info to extract initial shape types. This option is
   -- superseded by `initPrecondPath`.
