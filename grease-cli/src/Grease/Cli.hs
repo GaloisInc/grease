@@ -197,6 +197,7 @@ initPrecondOptsParser = Opt.parserOptionGroup "Initial precondition options" $ d
             <> Opt.value GO.defaultTypeUnrollingBound
         )
   initPrecondPath <- initPrecondParser
+  slPrecondPath <- slPrecondParser
   initPrecondSimpleShapes <- simpleShapesParser
   pure GO.InitialPreconditionOpts{..}
 
@@ -280,6 +281,15 @@ globalsParser =
     [ Opt.long "globals"
     , Opt.help "how to initialize mutable global variables"
     ]
+
+slPrecondParser :: Opt.Parser (Maybe FilePath)
+slPrecondParser =
+  Opt.optional $
+    Opt.strOption
+      ( Opt.long "separation-logic-precondition"
+          <> Opt.metavar "FILE"
+          <> Opt.help "Initial precondition in SL format. Currently disables refinement and is exclusive of all other possible shapes."
+      )
 
 initPrecondParser :: Opt.Parser (Maybe FilePath)
 initPrecondParser =
