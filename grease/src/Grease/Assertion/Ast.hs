@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Grease.Assertion.Ast () where
+module Grease.Assertion.Ast (annotatedExpr, SepAssert (..), Lit (..), Expr (..), BaseExpr (..)) where
 
 import Control.Lens (makeLenses, (&))
 import Control.Lens.Getter ((^.))
@@ -176,8 +176,8 @@ data BaseExpr t
 
 data Expr t = Expr {_baseExpr :: BaseExpr t, _annotation :: t}
 makeLenses ''Expr
-annotedExpr :: BaseExpr t -> t -> Expr t
-annotedExpr b annot = Expr{_baseExpr = b, _annotation = annot}
+annotatedExpr :: BaseExpr t -> t -> Expr t
+annotatedExpr b annot = Expr{_baseExpr = b, _annotation = annot}
 
 data SepAssert t
   = Pure (Expr t)
@@ -185,7 +185,7 @@ data SepAssert t
   | UninitCell (Expr t, Expr t)
   | InitCell (Expr t, Expr t, Expr t)
   | Size (Expr t, Expr t)
-  | SepConj (Expr t) (Expr t)
+  | SepConj (SepAssert t) (SepAssert t)
 
 type TypeState = Map.Map Var AssrtType
 type TypeMonad = StateT TypeState (Either String)
@@ -197,10 +197,10 @@ infer eAnnot = do
     BoolBinOpExpr (op, e1, e2) -> do
       e1' <- check e1 Bool
       e2' <- check e2 Bool
-      return $ annotedExpr (BoolBinOpExpr (op, e1', e2')) Bool
+      return $ annotatedExpr (BoolBinOpExpr (op, e1', e2')) Bool
     TypeOf (e1, ty) -> do
       e1' <- check e1 ty
-      return $ annotedExpr (TypeOf (e1', ty)) ty
+      return $ annotatedExpr (TypeOf (e1', ty)) ty
     _ -> lift $ Left "unable to infer type, try to annotate"
   return nbase
 
@@ -211,7 +211,7 @@ check eAnnot aty = do
     BvBinOpExpr (op, e1, e2) -> do
       e1' <- check e1 aty
       e2' <- check e2 aty
-      return $ annotedExpr (BvBinOpExpr (op, e1', e2')) aty
+      return $ annotatedExpr (BvBinOpExpr (op, e1', e2')) aty
     _ -> do
       inferred <- infer eAnnot
       if inferred ^. annotation == aty

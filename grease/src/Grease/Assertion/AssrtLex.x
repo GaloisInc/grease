@@ -36,7 +36,7 @@ tokens :-
   "#" @ident {tokenOf Tokens.ExistentialVar}
   @ident {tokenOf Tokens.ProgramVar}
   "$" @ident {tokenOf Tokens.LabelVar}
-  --@hexnum ":" @nat {tokenOf Tokens.hexStringToNat}
+  @hexnum ":" @nat {tokenOf (\s -> Tokens.BvValue $ Tokens.parseBv s)}
 
 {
 

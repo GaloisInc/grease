@@ -197,6 +197,7 @@ library
     Grease.Assertion.Assrt
     Grease.Assertion.Ast
     Grease.Assertion.AssrtLex
+    Grease.Assertion.AssrtParse
     Grease.Assertion.Pure
     Grease.Assertion.Token
     Grease.AssertProperty
