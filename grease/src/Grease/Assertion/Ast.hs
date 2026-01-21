@@ -10,6 +10,7 @@ import Control.Monad.State (MonadTrans (lift), StateT)
 import Data.BitVector.Sized (BV)
 import Data.Map qualified as Map
 import Data.Parameterized qualified as Param
+import Error.Diagnose.Position qualified as Pos
 import Text.LLVM (unreachable)
 
 {-
@@ -174,10 +175,15 @@ data BaseExpr t
   | BvBinOpExpr (BvBinOp, Expr t, Expr t)
   | TypeOf (Expr t, AssrtType)
 
-data Expr t = Expr {_baseExpr :: BaseExpr t, _annotation :: t}
+data Expr t = Expr {_baseExpr :: BaseExpr t, _position :: Pos.Position, _annotation :: t}
 makeLenses ''Expr
-annotatedExpr :: BaseExpr t -> t -> Expr t
-annotatedExpr b annot = Expr{_baseExpr = b, _annotation = annot}
+annotatedExpr :: BaseExpr t -> t -> Pos.Position -> Expr t
+annotatedExpr b annot pos =
+  Expr
+    { _baseExpr = b
+    , _annotation = annot
+    , _position = pos
+    }
 
 data SepAssert t
   = Pure (Expr t)
@@ -193,14 +199,15 @@ type TypeMonad = StateT TypeState (Either String)
 infer :: Expr t -> TypeMonad (Expr AssrtType)
 infer eAnnot = do
   let base = eAnnot ^. baseExpr
+  let pos = eAnnot ^. position
   nbase <- case base of
     BoolBinOpExpr (op, e1, e2) -> do
       e1' <- check e1 Bool
       e2' <- check e2 Bool
-      return $ annotatedExpr (BoolBinOpExpr (op, e1', e2')) Bool
+      return $ annotatedExpr (BoolBinOpExpr (op, e1', e2')) Bool pos
     TypeOf (e1, ty) -> do
       e1' <- check e1 ty
-      return $ annotatedExpr (TypeOf (e1', ty)) ty
+      return $ annotatedExpr (TypeOf (e1', ty)) ty pos
     _ -> lift $ Left "unable to infer type, try to annotate"
   return nbase
 
@@ -211,7 +218,7 @@ check eAnnot aty = do
     BvBinOpExpr (op, e1, e2) -> do
       e1' <- check e1 aty
       e2' <- check e2 aty
-      return $ annotatedExpr (BvBinOpExpr (op, e1', e2')) aty
+      return $ annotatedExpr (BvBinOpExpr (op, e1', e2')) aty (eAnnot ^. position)
     _ -> do
       inferred <- infer eAnnot
       if inferred ^. annotation == aty

@@ -1,6 +1,7 @@
 {
 module Grease.Assertion.AssrtLex (alexMonadScan) where
 import Grease.Assertion.Token qualified as Tokens
+import Error.Diagnose.Position qualified as Pos
 }
 
 %wrapper "monad"
@@ -44,15 +45,19 @@ tokenOf :: (String -> Tokens.Token) -> AlexInput -> Int -> Alex Tokens.Annotated
 tokenOf f input@(_, _, _, s) sz =
   constToken (f s) input sz
 
+-- TODO: How to compute the end across lines...
+-- need to have FilePath somehow, could stash in monad state i guess...
+posFromAlexPn :: AlexPosn -> Int -> Pos.Position
+posFromAlexPn (AlexPn _ line col) sz = Pos.Position {Pos.begin = (line, col), Pos.end= (line, col + sz)}
+
 constToken :: Tokens.Token -> AlexInput -> Int -> Alex Tokens.AnnotatedToken
 constToken tok (pos, _, _, _) sz =
-  let AlexPn _ line col = pos in
-  pure $ Tokens.AnnotatedToken line col sz tok
+  pure $ Tokens.AnnotatedToken tok  (posFromAlexPn pos sz) 
 
 
 alexEOF :: Alex Tokens.AnnotatedToken
 alexEOF = do
   (pos, _, _ , _) <- alexGetInput
   let AlexPn _ line col = pos
-  pure $ Tokens.AnnotatedToken line col 0 Tokens.Eof
+  pure $ Tokens.AnnotatedToken Tokens.Eof (Pos.Position {Pos.begin = (line, col), Pos.end= (line, col)})
 }

@@ -1,11 +1,15 @@
-module Grease.Assertion.Token (Token (..), AnnotatedToken (..), parseNat, parseBv) where
+{-# LANGUAGE PatternSynonyms #-}
+
+module Grease.Assertion.Token (Token (..), AnnotatedToken (..), parseNat, parseBv, pattern AnnotatedBool) where
 
 import Data.BitVector.Sized (BV, mkBV)
 import Data.Maybe qualified as Maybe
 import Data.Parameterized qualified as Param
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Word (Word64)
+import Error.Diagnose.Position qualified as Pos
 import GHC.Natural (Natural)
+import Lang.Crucible.Syntax.Monad (position)
 
 data TypedBv w = TypedBv {bvValue :: BV w, bvWidth :: NatRepr.NatRepr w}
 data Token
@@ -33,11 +37,12 @@ data Token
   | Eof
 
 data AnnotatedToken = AnnotatedToken
-  { lineNumber :: Int
-  , columnNumber :: Int
-  , size :: Int
-  , token :: Token
+  { token :: Token
+  , position :: Pos.Position
   }
+
+pattern AnnotatedBool :: Bool -> Pos.Position -> AnnotatedToken
+pattern AnnotatedBool b pos <- AnnotatedToken (TokenBool b) pos
 
 -- These functions should only be used by Alex actions
 -- so the lexer form guarentees existence
