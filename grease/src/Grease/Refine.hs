@@ -145,6 +145,7 @@ import Lang.Crucible.Simulator.PathSplitting qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
+import Prettyprinter qualified as PP
 import System.Exit qualified as Exit
 import What4.Expr qualified as W4
 import What4.Expr.App qualified as W4
@@ -679,22 +680,23 @@ data RefinementSummary sym ext tys precond
   | RefinementBug Bug.BugInstance (ConcretizedData sym ext tys)
 
 refinementLoop ::
-  forall sym ext argTys w precond.
+  forall sym ext argTys w precond fmted.
   ( C.IsSyntaxExtension ext
   , 16 C.<= w
   , CLM.HasPtrWidth w
   , MC.MemWidth w
   , ExtShape ext ~ PtrShape ext w
   , PrettyExt ext NoTag
+  , PP.Pretty fmted
   ) =>
   GreaseLogAction ->
   BoundsOpts ->
-  Ctx.Assignment (Const String) argTys ->
   precond ->
-  -- | This callback is usually 'refineOnce'
+  (precond -> fmted) ->
+  -- \| This callback is usually 'refineOnce'
   (precond -> IO (ProveRefineResult sym ext argTys precond)) ->
   IO (RefinementSummary sym ext argTys precond)
-refinementLoop la boundsOpts argNames initArgShapes go = do
+refinementLoop la boundsOpts initArgShapes formatter go = do
   let
     loop ::
       Int ->
@@ -706,8 +708,7 @@ refinementLoop la boundsOpts argNames initArgShapes go = do
           doLog la Diag.RefinementLoopMaximumIterationsExceeded
           pure RefinementItersExceeded
         else do
-          let addrWidth = MC.addrWidthRepr (Proxy @w)
-          -- doLog la (Diag.RefinementUsingPrecondition addrWidth argNames argShapes)
+          doLog la (Diag.RefinementUsingPrecondition (formatter argShapes))
           new <- go argShapes
           case new of
             ProveBug b cData -> pure (RefinementBug b cData)
@@ -717,7 +718,7 @@ refinementLoop la boundsOpts argNames initArgShapes go = do
               loop (iters + 1) argShapes'
             ProveSuccess -> do
               doLog la Diag.RefinementLoopAllGoalsPassed
-              -- doLog la (Diag.RefinementFinalPrecondition addrWidth argNames argShapes)
+              doLog la (Diag.RefinementFinalPrecondition (formatter argShapes))
               pure $ RefinementSuccess argShapes
             ProveNoHeuristic errs -> do
               doLog la Diag.RefinementLoopNoHeuristic

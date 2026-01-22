@@ -152,6 +152,7 @@ import Grease.Shape.Concretize (concShape)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Print qualified as ShapePrint
 import Grease.Solver (withSolverOnlineBackend)
 import Grease.SymIO qualified as GSIO
 import Grease.Syntax (parseOverridesYaml, parsedProgramCfgMap, resolveOverridesYaml)
@@ -983,7 +984,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
         if simNoHeuristics simOpts
           then [mustFailHeuristic]
           else macawHeuristics la rNames List.++ [mustFailHeuristic]
-  result <- refinementLoop la bounds argNames initArgShapes $ \argShapes ->
+  let addrWidth = MC.addrWidthRepr (Proxy @(MC.ArchAddrWidth arch))
+  result <- refinementLoop la bounds initArgShapes (ShapePrint.PrintableShapes addrWidth argNames) $ \argShapes ->
     macawRefineOnce
       la
       archCtx
@@ -1589,7 +1591,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
           if simNoHeuristics simOpts
             then [mustFailHeuristic]
             else llvmHeuristics la List.++ [mustFailHeuristic]
-    refinementLoop la bounds argNames initArgShapes $ \argShapes ->
+    let addrWidth = MC.addrWidthRepr (Proxy @(CLLVM.ArchWidth arch))
+    refinementLoop la bounds initArgShapes (ShapePrint.PrintableShapes addrWidth argNames) $ \argShapes ->
       refineOnce
         la
         simOpts

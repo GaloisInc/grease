@@ -18,6 +18,7 @@ module Grease.Shape.Print (
   printNamedShapes,
   printNamed,
   print,
+  PrintableShapes (..),
 ) where
 
 import Control.Monad qualified as Monad
@@ -127,6 +128,30 @@ printAllocs aw as =
           (Functor.fmap Void.absurd . Tuple.uncurry printPair)
           (IntMap.toAscList (allocs as))
    in PP.vsep docs
+
+data PrintableShapes where
+  PrintableShapes ::
+    forall w ext tag tys.
+    ( ExtShape ext ~ PtrShape ext w
+    , Shape.PrettyExt ext tag
+    ) =>
+    DMM.AddrWidthRepr
+      w ->
+    Ctx.Assignment (Const.Const String) tys ->
+    Shape.ArgShapes ext tag tys ->
+    PrintableShapes
+
+instance PP.Pretty PrintableShapes where
+  pretty :: PrintableShapes -> PP.Doc ann
+  pretty (PrintableShapes w argNames (Shape.ArgShapes argShapes)) =
+    evalPrinter (printCfg w) (printNamedShapes argNames argShapes)
+   where
+    printCfg :: DMM.AddrWidthRepr w -> PrinterConfig w
+    printCfg w =
+      PrinterConfig
+        { cfgAddrWidth = w
+        , cfgRleThreshold = 8
+        }
 
 -- | Print 'Shape's associated with given names (e.g., register names)
 printNamedShapesFiltered ::
