@@ -145,6 +145,7 @@ import Grease.Profiler.Feature (greaseProfilerFeature)
 import Grease.Refine
 import Grease.Requirement
 import Grease.Setup
+import Grease.Setup qualified as Setup
 import Grease.Shape (ArgShapes (..), ExtShape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.Concretize (concShape)
@@ -836,6 +837,7 @@ macawRefineOnce ::
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
+  , precond ~ ArgShapes ext NoTag argTys
   ) =>
   GreaseLogAction ->
   ArchContext arch ->
@@ -848,16 +850,16 @@ macawRefineOnce ::
   AddressOverrides arch ->
   bak ->
   W4.FloatModeRepr fm ->
-  ArgShapes ext NoTag argTys ->
+  precond ->
   InitialMem sym ->
   C.GlobalVar CLM.Mem ->
-  [RefineHeuristic sym bak ext argTys] ->
+  [RefineHeuristic sym bak ext argTys precond] ->
   [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
-  IO (ProveRefineResult sym ext argTys)
+  IO (ProveRefineResult sym ext argTys precond)
 macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
   let regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
   let rNames = regNames (archCtx ^. archVals)
@@ -876,6 +878,7 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallbac
     rNameAssign
     argNames
     regTypes
+    Setup.setup
     argShapes
     initMem
     memVar
@@ -1030,7 +1033,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
 
 -- | See @doc/requirements.md@.
 simulateRewrittenCfg ::
-  forall sym bak arch solver scope st fm.
+  forall sym bak arch solver scope st fm precond.
   ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
   , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
@@ -1045,6 +1048,7 @@ simulateRewrittenCfg ::
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
+  , precond ~ ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch))
   ) =>
   GreaseLogAction ->
   bak ->
@@ -1057,8 +1061,8 @@ simulateRewrittenCfg ::
   AddressOverrides arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   InitialMem sym ->
-  ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
-  RefinementSummary sym (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
+  precond ->
+  RefinementSummary sym (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) precond ->
   [CS.ExecutionFeature (GreaseSimulatorState MDebug.MacawCommand sym arch) sym (Symbolic.MacawExt arch) (CS.RegEntry sym (Symbolic.ArchRegStruct arch))] ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
@@ -1596,6 +1600,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
         valueNames
         argNames
         argTys
+        Setup.setup
         argShapes
         initMem
         memVar
