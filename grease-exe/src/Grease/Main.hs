@@ -143,14 +143,17 @@ import Grease.Panic (Grease, panic)
 import Grease.Pretty (prettyPtrFnMap)
 import Grease.Profiler.Feature (greaseProfilerFeature)
 import Grease.Refine
+import Grease.Refine qualified as Refine
 import Grease.Requirement
 import Grease.Setup
+import Grease.Setup qualified as Setup
 import Grease.Shape (ArgShapes (..), ExtShape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.Concretize (concShape)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Print qualified as ShapePrint
 import Grease.Solver (withSolverOnlineBackend)
 import Grease.SymIO qualified as GSIO
 import Grease.Syntax (parseOverridesYaml, parsedProgramCfgMap, resolveOverridesYaml)
@@ -529,8 +532,7 @@ interestingConcretizedShapes names initArgs (ConcArgs cArgs) =
 --
 -- See 'GMS.macawInitArgShapes' for details.
 getMacawInitArgShapes ::
-  ( CB.IsSymBackend sym bak
-  , C.IsSyntaxExtension (Symbolic.MacawExt arch)
+  ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
@@ -836,6 +838,7 @@ macawRefineOnce ::
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
+  , precond ~ ArgShapes ext NoTag argTys
   ) =>
   GreaseLogAction ->
   ArchContext arch ->
@@ -848,16 +851,16 @@ macawRefineOnce ::
   AddressOverrides arch ->
   bak ->
   W4.FloatModeRepr fm ->
-  ArgShapes ext NoTag argTys ->
+  precond ->
   InitialMem sym ->
   C.GlobalVar CLM.Mem ->
-  [RefineHeuristic sym bak ext argTys] ->
+  [RefineHeuristic sym bak ext argTys precond] ->
   [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
-  IO (ProveRefineResult sym ext argTys)
+  IO (ProveRefineResult sym ext argTys precond)
 macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
   let regTypes = Symbolic.crucArchRegTypes (archCtx ^. archVals . to Symbolic.archFunctions)
   let rNames = regNames (archCtx ^. archVals)
@@ -876,6 +879,7 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallbac
     rNameAssign
     argNames
     regTypes
+    Setup.setup
     argShapes
     initMem
     memVar
@@ -907,6 +911,56 @@ addressCallBack _ hdl addr =
 withMaybeFile :: Maybe FilePath -> IOMode -> (Maybe Handle -> IO a) -> IO a
 withMaybeFile Nothing _ f = f Nothing
 withMaybeFile (Just pth) imd f = withFile pth imd (f . Just)
+
+data PreconditionEnvironment sym bak ext argTys where
+  PreconditionEnvironment ::
+    (PP.Pretty fmted, pty ~ precond ext tag argTys) =>
+    pty ->
+    (pty -> fmted) ->
+    [RefineHeuristic sym bak ext argTys pty] ->
+    Refine.SetupFn precond ext tag argTys ->
+    PreconditionEnvironment sym bak ext argTys
+
+macawInitPreconditionEnv ::
+  forall sym bak arch scope st fm solver.
+  ( CB.IsSymBackend sym bak
+  , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
+  , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
+  , CLM.HasLLVMAnn sym
+  , W4.OnlineSolver solver
+  , C.IsSyntaxExtension (Symbolic.MacawExt arch)
+  , Symbolic.SymArchConstraints arch
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
+  , MM.MemWidth (MC.ArchAddrWidth arch)
+  , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
+  , Show (ArchReloc arch)
+  , ?memOpts :: CLM.MemOptions
+  , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
+  ) =>
+  GreaseLogAction ->
+  Proxy
+    sym ->
+  bak ->
+  ArchContext arch ->
+  SimOpts ->
+  MacawCfgConfig arch ->
+  Ctx.Assignment (Const String) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
+  -- | If simulating a binary, this is 'Just' the address of the user-requested
+  -- entrypoint function. Otherwise, this is 'Nothing'.
+  Maybe (MC.ArchSegmentOff arch) ->
+  IO (PreconditionEnvironment sym bak (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)))
+macawInitPreconditionEnv la _ bak archCtx simOpts macawCfgConfig argNames mbCfgAddr =
+  do
+    let rNames = regNames (archCtx ^. archVals)
+    let heuristics =
+          if simNoHeuristics simOpts
+            then [mustFailHeuristic]
+            else macawHeuristics la rNames List.++ [mustFailHeuristic]
+    let addrWidth = MC.addrWidthRepr (Proxy @(MC.ArchAddrWidth arch))
+    let opts = simInitPrecondOpts simOpts
+    initArgShapes <- getMacawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr
+    let fmt = ShapePrint.PrintableShapes addrWidth argNames
+    pure $ PreconditionEnvironment initArgShapes fmt heuristics Setup.setup
 
 simulateMacawCfg ::
   forall sym bak arch solver scope st fm.
@@ -980,7 +1034,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
         if simNoHeuristics simOpts
           then [mustFailHeuristic]
           else macawHeuristics la rNames List.++ [mustFailHeuristic]
-  result <- refinementLoop la bounds argNames initArgShapes $ \argShapes ->
+  let addrWidth = MC.addrWidthRepr (Proxy @(MC.ArchAddrWidth arch))
+  result <- refinementLoop la bounds initArgShapes (ShapePrint.PrintableShapes addrWidth argNames) $ \argShapes ->
     macawRefineOnce
       la
       archCtx
@@ -1030,7 +1085,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
 
 -- | See @doc/requirements.md@.
 simulateRewrittenCfg ::
-  forall sym bak arch solver scope st fm.
+  forall sym bak arch solver scope st fm precond.
   ( CB.IsSymBackend sym bak
   , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
   , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
@@ -1045,6 +1100,7 @@ simulateRewrittenCfg ::
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TCtx.TypeContext
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
+  , precond ~ ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch))
   ) =>
   GreaseLogAction ->
   bak ->
@@ -1057,8 +1113,8 @@ simulateRewrittenCfg ::
   AddressOverrides arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   InitialMem sym ->
-  ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
-  RefinementSummary sym (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
+  precond ->
+  RefinementSummary sym (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) precond ->
   [CS.ExecutionFeature (GreaseSimulatorState MDebug.MacawCommand sym arch) sym (Symbolic.MacawExt arch) (CS.RegEntry sym (Symbolic.ArchRegStruct arch))] ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
@@ -1526,6 +1582,40 @@ getLlvmInitArgShapes la opts llvmMod argNames cfg = do
     Left (GLS.TypeMismatch err) -> userError la (PP.pretty err)
     Right ok -> pure ok
 
+llvmInitPreconds ::
+  forall sym bak solver t st fm argTys blocks ret arch.
+  ( CLM.HasPtrWidth (CLLVM.ArchWidth arch)
+  , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
+  , ?parserHooks :: CSyn.ParserHooks CLLVM.LLVM
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
+  ) =>
+  GreaseLogAction ->
+  Proxy arch ->
+  SimOpts ->
+  bak ->
+  Maybe L.Module ->
+  Ctx.Assignment (Const String) argTys ->
+  C.CFG CLLVM.LLVM blocks argTys ret ->
+  IO (PreconditionEnvironment sym bak CLLVM.LLVM argTys)
+llvmInitPreconds la _ simOpts _bak llvmMod argNames cfg =
+  do
+    C.Refl <-
+      case C.testEquality ?ptrWidth (knownNat @64) of
+        Just r -> pure r
+        Nothing -> panic "simulateLlvmCfg" ["Bad pointer width", show ?ptrWidth]
+
+    initArgShapes <-
+      let opts = simInitPrecondOpts simOpts
+       in getLlvmInitArgShapes la opts llvmMod argNames cfg
+    let heuristics =
+          if simNoHeuristics simOpts
+            then [mustFailHeuristic]
+            else llvmHeuristics la List.++ [mustFailHeuristic]
+    let addrWidth = MC.addrWidthRepr (Proxy @(CLLVM.ArchWidth arch))
+    let fmt = ShapePrint.PrintableShapes addrWidth argNames
+    pure $ PreconditionEnvironment initArgShapes fmt heuristics Setup.setup
+
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.
   ( CLM.HasPtrWidth (CLLVM.ArchWidth arch)
@@ -1566,9 +1656,6 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
   let argTys = C.cfgArgTypes cfg
       -- Display the arguments as though they are unnamed LLVM virtual registers.
       argNames = imapFC (\i _ -> Const ('%' : show i)) argTys
-  initArgShapes <-
-    let opts = simInitPrecondOpts simOpts
-     in getLlvmInitArgShapes la opts llvmMod argNames cfg
 
   let dbgOpts = GO.simDebugOpts simOpts
   let dbgCmdExt = LDebug.llvmCommandExt
@@ -1576,74 +1663,74 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   let bounds = simBoundsOpts simOpts
-  result <- withMemOptions simOpts $ do
-    let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
-    let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
-    let dl = TCtx.llvmDataLayout typeCtx
-    -- See comment above on heuristics in 'simulateMacawCfg'
-    let heuristics =
-          if simNoHeuristics simOpts
-            then [mustFailHeuristic]
-            else llvmHeuristics la List.++ [mustFailHeuristic]
-    refinementLoop la bounds argNames initArgShapes $ \argShapes ->
-      refineOnce
-        la
-        simOpts
-        halloc
-        bak
-        fm
-        dl
-        valueNames
-        argNames
-        argTys
-        argShapes
-        initMem
-        memVar
-        heuristics
-        execFeats
-        $ \toConc setupMem initFs args -> do
-          let p =
-                GLP.GreaseLLVMPersonality
-                  { GLP._dbgContext = dbgCtx
-                  , GLP._toConcretize = toConc
-                  }
-          LLVM.initState
-            bak
-            la
-            (CLLVM.llvmExtensionImpl ?memOpts)
-            p
-            halloc
-            (simErrorSymbolicFunCalls simOpts)
-            setupMem
-            -- TODO: just take the whole initFs
-            (GSIO.initFs initFs)
-            (GSIO.initFsGlobals initFs)
-            (GSIO.initFsOverride initFs)
-            llvmCtx
-            setupHook
-            (argVals args)
-            mbStartupOvCfg
-            scfg
+  withMemOptions simOpts $ do
+    PreconditionEnvironment initArgShapes fmt heuristics setupBldr <- llvmInitPreconds la (Proxy @arch) simOpts bak llvmMod argNames cfg
+    result <- withMemOptions simOpts $ do
+      let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
+      let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
+      let dl = TCtx.llvmDataLayout typeCtx
+      -- See comment above on heuristics in 'simulateMacawCfg'
 
-  res <- case result of
-    RefinementBug b cData ->
-      pure (BatchBug (toBatchBug fm MM.Addr64 argNames argTys initArgShapes b cData))
-    RefinementCantRefine b ->
-      pure (BatchCantRefine b)
-    RefinementItersExceeded ->
-      pure BatchItersExceeded
-    RefinementNoHeuristic errs -> do
-      maybeBug <- checkMustFail bak errs
-      case maybeBug of
-        Just bug -> pure (BatchBug bug)
-        Nothing ->
-          pure $
-            BatchCouldNotInfer $
-              errs <&> \noHeuristic ->
-                toFailedPredicate fm MM.Addr64 argNames argTys initArgShapes noHeuristic
-    RefinementSuccess _argShapes -> pure (BatchChecks Map.empty)
-  traverse_ cancel profLogTask
-  pure res
+      refinementLoop la bounds initArgShapes fmt $ \argShapes ->
+        refineOnce
+          la
+          simOpts
+          halloc
+          bak
+          fm
+          dl
+          valueNames
+          argNames
+          argTys
+          setupBldr
+          argShapes
+          initMem
+          memVar
+          heuristics
+          execFeats
+          $ \toConc setupMem initFs args -> do
+            let p =
+                  GLP.GreaseLLVMPersonality
+                    { GLP._dbgContext = dbgCtx
+                    , GLP._toConcretize = toConc
+                    }
+            LLVM.initState
+              bak
+              la
+              (CLLVM.llvmExtensionImpl ?memOpts)
+              p
+              halloc
+              (simErrorSymbolicFunCalls simOpts)
+              setupMem
+              -- TODO: just take the whole initFs
+              (GSIO.initFs initFs)
+              (GSIO.initFsGlobals initFs)
+              (GSIO.initFsOverride initFs)
+              llvmCtx
+              setupHook
+              (argVals args)
+              mbStartupOvCfg
+              scfg
+
+    res <- case result of
+      RefinementBug b cData ->
+        pure (BatchBug (toBatchBug fm MM.Addr64 argNames argTys undefined b cData))
+      RefinementCantRefine b ->
+        pure (BatchCantRefine b)
+      RefinementItersExceeded ->
+        pure BatchItersExceeded
+      RefinementNoHeuristic errs -> do
+        maybeBug <- checkMustFail bak errs
+        case maybeBug of
+          Just bug -> pure (BatchBug bug)
+          Nothing ->
+            pure $
+              BatchCouldNotInfer $
+                errs <&> \noHeuristic ->
+                  toFailedPredicate fm MM.Addr64 argNames argTys undefined noHeuristic
+      RefinementSuccess _argShapes -> pure (BatchChecks Map.empty)
+    traverse_ cancel profLogTask
+    pure res
 
 simulateLlvmCfgs ::
   CLM.HasPtrWidth (CLLVM.ArchWidth arch) =>

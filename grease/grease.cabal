@@ -139,6 +139,9 @@ common shared
 library
   import: shared
   hs-source-dirs: src
+  build-tool-depends: 
+    alex:alex, 
+    happy:happy
   build-depends:
     -- Hackage dependencies
       aeson ^>= 2.2
@@ -146,6 +149,7 @@ library
     , bytestring ^>= { 0.11.5, 0.12.1 }
     , containers ^>= { 0.6.7, 0.7 }
     , directory ^>= 1.3.7.1
+    , diagnose
     , exceptions ^>= 0.10.5
     , file-embed ^>= 0.0.16
     , filepath ^>= { 1.4.2.2, 1.5.4.0 }
@@ -164,7 +168,7 @@ library
     , transformers ^>= { 0.5.6.2, 0.6.1 }
     , vector ^>= 0.13.2
     , yaml ^>= 0.11
-
+    , array
     -- Submodules
     --
     -- No version bounds are needed, as Cabal will always choose the versions
@@ -190,6 +194,14 @@ library
 
   exposed-modules:
     Grease.Main.Diagnostic
+    Grease.Assertion.Setup
+    Grease.Assertion.Assrt
+    Grease.Assertion.Ast
+    Grease.Assertion.AssrtLex
+    Grease.Assertion.AssrtParse
+    Grease.Assertion.LocationErrors
+    Grease.Assertion.Pure
+    Grease.Assertion.Token
     Grease.AssertProperty
     Grease.BranchTracer
     Grease.BranchTracer.Diagnostic
