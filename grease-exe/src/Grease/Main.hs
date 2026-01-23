@@ -911,37 +911,33 @@ withMaybeFile :: Maybe FilePath -> IOMode -> (Maybe Handle -> IO a) -> IO a
 withMaybeFile Nothing _ f = f Nothing
 withMaybeFile (Just pth) imd f = withFile pth imd (f . Just)
 
-data PreconditionEnvironment precond where
+data PreconditionEnvironment sym bak ext argTys where
   PreconditionEnvironment ::
     PP.Pretty fmted =>
     precond ->
     (precond -> fmted) ->
-    RefineHeuristic sym bak ext argTys precond ->
-    PreconditionEnvironment precond
-
-{-
-      let heuristics =
-            ( if simNoHeuristics simOpts
-                then [mustFailHeuristic]
-                else macawHeuristics la rNames List.++ [mustFailHeuristic]
-            )
-             initArgShapes <-
-        ( let opts = simInitPrecondOpts simOpts
-           in getMacawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr
-          )
--}
+    [RefineHeuristic sym bak ext argTys precond] ->
+    PreconditionEnvironment sym bak ext argTys
 
 macawInitPreconditionEnv ::
-  ( Symbolic.SymArchConstraints arch
+  forall sym bak arch scope st fm precond solver.
+  ( CB.IsSymBackend sym bak
+  , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
+  , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
+  , CLM.HasLLVMAnn sym
+  , W4.OnlineSolver solver
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
-  , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
-  , MM.MemWidth (MC.ArchAddrWidth arch)
-  , Show (ArchReloc arch)
+  , Symbolic.SymArchConstraints arch
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
+  , MM.MemWidth (MC.ArchAddrWidth arch)
+  , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
+  , Show (ArchReloc arch)
   , ?memOpts :: CLM.MemOptions
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
   ) =>
   GreaseLogAction ->
+  Proxy
+    sym ->
   bak ->
   ArchContext arch ->
   SimOpts ->
@@ -950,12 +946,19 @@ macawInitPreconditionEnv ::
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
-  IO (PreconditionEnvironment precond)
-macawInitPreconditionEnv la bak archCtx simpots macawCfgConfig argNames mbCfgAddr =
+  IO (PreconditionEnvironment sym bak (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)))
+macawInitPreconditionEnv la _ bak archCtx simOpts macawCfgConfig argNames mbCfgAddr =
   do
-    let opts = simInitPrecondOpts simpots
+    let rNames = regNames (archCtx ^. archVals)
+    let heuristics =
+          if simNoHeuristics simOpts
+            then [mustFailHeuristic]
+            else macawHeuristics la rNames List.++ [mustFailHeuristic]
+    let addrWidth = MC.addrWidthRepr (Proxy @(MC.ArchAddrWidth arch))
+    let opts = simInitPrecondOpts simOpts
     initArgShapes <- getMacawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr
-    undefined
+    let fmt = ShapePrint.PrintableShapes addrWidth argNames
+    pure $ PreconditionEnvironment initArgShapes fmt heuristics
 
 simulateMacawCfg ::
   forall sym bak arch solver scope st fm.
