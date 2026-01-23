@@ -82,6 +82,7 @@ module Grease.Refine (
 
   -- * Implementation details
   findPredAnnotations,
+  SetupFn,
 ) where
 
 import Control.Applicative ((<|>))
@@ -570,7 +571,7 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
       ProveCantRefine (Unsupported{}) -> "unsupported feature"
 
 type SetupFn precond ext tag argTys =
-  forall bak argTys ext sym m w.
+  forall bak sym m w.
   ( MonadIO m
   , X.MonadCatch m
   , CB.IsSymBackend sym bak
