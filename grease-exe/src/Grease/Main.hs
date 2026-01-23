@@ -531,8 +531,7 @@ interestingConcretizedShapes names initArgs (ConcArgs cArgs) =
 --
 -- See 'GMS.macawInitArgShapes' for details.
 getMacawInitArgShapes ::
-  ( CB.IsSymBackend sym bak
-  , C.IsSyntaxExtension (Symbolic.MacawExt arch)
+  ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
@@ -911,6 +910,52 @@ addressCallBack _ hdl addr =
 withMaybeFile :: Maybe FilePath -> IOMode -> (Maybe Handle -> IO a) -> IO a
 withMaybeFile Nothing _ f = f Nothing
 withMaybeFile (Just pth) imd f = withFile pth imd (f . Just)
+
+data PreconditionEnvironment precond where
+  PreconditionEnvironment ::
+    PP.Pretty fmted =>
+    precond ->
+    (precond -> fmted) ->
+    RefineHeuristic sym bak ext argTys precond ->
+    PreconditionEnvironment precond
+
+{-
+      let heuristics =
+            ( if simNoHeuristics simOpts
+                then [mustFailHeuristic]
+                else macawHeuristics la rNames List.++ [mustFailHeuristic]
+            )
+             initArgShapes <-
+        ( let opts = simInitPrecondOpts simOpts
+           in getMacawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr
+          )
+-}
+
+macawInitPreconditionEnv ::
+  ( Symbolic.SymArchConstraints arch
+  , C.IsSyntaxExtension (Symbolic.MacawExt arch)
+  , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
+  , MM.MemWidth (MC.ArchAddrWidth arch)
+  , Show (ArchReloc arch)
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
+  , ?memOpts :: CLM.MemOptions
+  , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
+  ) =>
+  GreaseLogAction ->
+  bak ->
+  ArchContext arch ->
+  SimOpts ->
+  MacawCfgConfig arch ->
+  Ctx.Assignment (Const String) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
+  -- | If simulating a binary, this is 'Just' the address of the user-requested
+  -- entrypoint function. Otherwise, this is 'Nothing'.
+  Maybe (MC.ArchSegmentOff arch) ->
+  IO (PreconditionEnvironment precond)
+macawInitPreconditionEnv la bak archCtx simpots macawCfgConfig argNames mbCfgAddr =
+  do
+    let opts = simInitPrecondOpts simpots
+    initArgShapes <- getMacawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr
+    undefined
 
 simulateMacawCfg ::
   forall sym bak arch solver scope st fm.

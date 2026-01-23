@@ -40,8 +40,7 @@ import Lang.Crucible.Syntax.Concrete qualified as CSyn
 --
 -- Later steps override earlier ones.
 macawInitArgShapes ::
-  ( CB.IsSymBackend sym bak
-  , Symbolic.SymArchConstraints arch
+  ( Symbolic.SymArchConstraints arch
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
