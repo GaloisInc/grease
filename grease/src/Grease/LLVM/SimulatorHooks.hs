@@ -20,14 +20,17 @@ import Grease.Diagnostic (Diagnostic (..), GreaseLogAction)
 import Grease.LLVM.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Options (ErrorSymbolicFunCalls (..))
 import Grease.Panic (panic)
+import Grease.Pretty (prettyPtrFnMap)
 import Grease.Skip (createSkipOverride)
 import Lang.Crucible.Backend qualified as CB
+import Lang.Crucible.CFG.Extension qualified as CCE
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.Extension qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.Pretty qualified as CP
 import Lang.Crucible.Simulator qualified as CS
 import Lumberjack qualified as LJ
 import What4.FunctionName qualified as WFN
@@ -68,7 +71,10 @@ extensionExec ::
   ErrorSymbolicFunCalls ->
   CS.ExtensionImpl p sym LLVM ->
   CS.EvalStmtFunc p sym LLVM
-extensionExec la halloc dl errorSymbolicFunCalls baseExt stmt st =
+extensionExec la halloc dl errorSymbolicFunCalls baseExt stmt st = do
+  let ppRE (CS.RegEntry @sym ty val) =
+        CP.ppRegVal prettyPtrFnMap ty (CS.RV @sym val)
+  doLog la (Diag.Stmt (CCE.ppApp ppRE stmt))
   case stmt of
     -- LLVM_LoadHandle: This statement is invoked any time a function handle
     -- is resolved before calling the function. We override this because
