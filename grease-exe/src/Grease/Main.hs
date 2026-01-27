@@ -124,6 +124,7 @@ import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
 import Grease.Macaw.Overrides.Address (AddressOverrides, loadAddressOverrides)
 import Grease.Macaw.Overrides.Address qualified as AddrOv
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
+import Grease.Macaw.Overrides.SExp qualified as GMOS
 import Grease.Macaw.PLT qualified as GMPLT
 import Grease.Macaw.RegName (getRegName, mkRegName, regNameToString, regNames)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
@@ -703,8 +704,9 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
   fnOvsMap <-
     case fnOvsMap_ of
       -- See Note [Explicitly listed errors]
-      Left e@GSyn.SExpressionParseError{} -> userErr la (PP.pretty e)
-      Left e@GSyn.SyntaxParseError{} -> userErr la (PP.pretty e)
+      Left (GMOS.MacawSExpOverrideParseError e@GSyn.SExpressionParseError{}) -> userErr la (PP.pretty e)
+      Left (GMOS.MacawSExpOverrideParseError e@GSyn.SyntaxParseError{}) -> userErr la (PP.pretty e)
+      Left e@GMOS.MacawSExpOverrideLoaderError{} -> userErr la (PP.pretty e)
       Right ok -> pure ok
   fnAddrOvsRaw_ <-
     fmap mconcat . Monad.sequence

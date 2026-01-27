@@ -12,6 +12,7 @@
 module Grease.Macaw.Overrides (
   CantResolveOverrideCallback (..),
   MacawSExpOverride (..),
+  MacawSExpOverrideError,
   MacawFnHandle,
   MacawOverride,
   macawOverride,
@@ -36,12 +37,12 @@ import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch (ArchContext, archIntegerArguments, archIntegerReturnRegisters, archVals)
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
-import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride, msoPublicFnHandle, msoPublicOverride, msoSomeFunctionOverride), loadOverrides)
+import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride), MacawSExpOverrideError, loadOverrides)
+import Grease.Macaw.Overrides.SExp qualified as GMOS
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, MacawOverride)
 import Grease.Overrides (CantResolveOverrideCallback (CantResolveOverrideCallback))
 import Grease.Skip (registerSkipOverride)
-import Grease.Syntax (ParseProgramError)
-import Grease.Syntax.Overrides qualified as SExp (checkTypedOverrideHandleCompat, freshBytesOverride, tryConcBvOverride)
+import Grease.Syntax.Overrides qualified as SExp
 import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
@@ -164,7 +165,7 @@ mkMacawOverrideMap ::
   C.HandleAllocator ->
   C.GlobalVar CLM.Mem ->
   ArchContext arch ->
-  IO (Either ParseProgramError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
+  IO (Either MacawSExpOverrideError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
 mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
   userOvsResult <- loadOverrides userOvPaths halloc
   case userOvsResult of
@@ -189,9 +190,9 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
                       regsRepr
                 let macawFnOv =
                       MacawSExpOverride
-                        { msoPublicFnHandle = macawPublicHdl
-                        , msoPublicOverride = macawPublicOv
-                        , msoSomeFunctionOverride = someFnOv
+                        { GMOS.msoPublicFnHandle = macawPublicHdl
+                        , GMOS.msoPublicOverride = macawPublicOv
+                        , GMOS.msoSomeFunctionOverride = someFnOv
                         }
                 pure (Stubs.functionName fnOv, macawFnOv)
             )
@@ -222,7 +223,7 @@ mkMacawOverrideMapWithBuiltins ::
   ArchContext arch ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
   LLVMFileSystem (MC.ArchAddrWidth arch) ->
-  IO (Either ParseProgramError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
+  IO (Either MacawSExpOverrideError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
 mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg fs = do
   let builtinOvs = builtinStubsOverrides bak mvar memCfg fs
   mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
@@ -352,7 +353,7 @@ lookupMacawForwardDeclarationOverride bak funOvs decName hdl =
         "conc-bv-64" -> SExp.tryConcBvOverride bak (C.knownNat @64) hdl
         _ -> Nothing
     Just mso -> do
-      let someForwardedOv = msoSomeFunctionOverride mso
+      let someForwardedOv = GMOS.msoSomeFunctionOverride mso
           forwardedOv =
             Stubs.mkForwardDeclarationOverride
               bak
