@@ -47,9 +47,9 @@ import Stubs.FunctionOverride.AArch32.Linux qualified as Stubs
 import Stubs.Memory.AArch32.Linux qualified as Stubs
 import Stubs.Syscall.AArch32.Linux qualified as Stubs
 import Stubs.Syscall.Names.AArch32.Linux qualified as Stubs
-import What4.Expr qualified as W4
+import What4.Expr.Builder qualified as WEB
 import What4.Interface qualified as WI
-import What4.Protocol.Online qualified as W4
+import What4.Protocol.Online qualified as WPO
 
 type instance ArchReloc ARM.ARM = EE.ARM32_RelocationType
 
@@ -108,8 +108,8 @@ armCtx halloc mbReturnAddr stackArgSlots = do
 armArchPCFixup ::
   forall sym bak solver scope st fs arch.
   ( CB.IsSymInterface sym
-  , sym ~ W4.ExprBuilder scope st fs
-  , W4.OnlineSolver solver
+  , sym ~ WEB.ExprBuilder scope st fs
+  , WPO.OnlineSolver solver
   , bak ~ C.OnlineBackend solver scope st fs
   , arch ~ ARM.ARM
   ) =>

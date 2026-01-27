@@ -27,11 +27,11 @@ import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.Extension (ArchWidth, LLVM)
-import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
+import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.LLVM.SymIO qualified as SymIO
-import Lang.Crucible.LLVM.Translation qualified as Trans
-import Lang.Crucible.LLVM.TypeContext qualified as TCtx
+import Lang.Crucible.LLVM.SymIO qualified as CLSIO
+import Lang.Crucible.LLVM.Translation qualified as CLT
+import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.GlobalState qualified as CS
 
@@ -56,10 +56,10 @@ initState ::
   C.HandleAllocator ->
   ErrorSymbolicFunCalls ->
   SetupMem sym ->
-  SymIO.LLVMFileSystem (ArchWidth arch) ->
+  CLSIO.LLVMFileSystem (ArchWidth arch) ->
   CS.SymGlobalState sym ->
-  SymIO.SomeOverrideSim sym () ->
-  Trans.LLVMContext arch ->
+  CLSIO.SomeOverrideSim sym () ->
+  CLT.LLVMContext arch ->
   SetupHook sym arch ->
   -- | The initial arguments to the entrypoint function.
   Ctx.Assignment (CS.RegValue' sym) argTys ->
@@ -68,8 +68,8 @@ initState ::
   -- | The CFG of the user-requested entrypoint function.
   C.SomeCFG LLVM argTys retTy ->
   m (CS.ExecState p sym LLVM (CS.RegEntry sym retTy))
-initState bak la llvmExtImpl p halloc errorSymbolicFunCalls mem fs globs (SymIO.SomeOverrideSim initFsOv) llvmCtx setupHook initArgs mbStartupOvCfg (C.SomeCFG cfg) = do
-  let dl = TCtx.llvmDataLayout (llvmCtx ^. Trans.llvmTypeCtx)
+initState bak la llvmExtImpl p halloc errorSymbolicFunCalls mem fs globs (CLSIO.SomeOverrideSim initFsOv) llvmCtx setupHook initArgs mbStartupOvCfg (C.SomeCFG cfg) = do
+  let dl = CLTC.llvmDataLayout (llvmCtx ^. CLT.llvmTypeCtx)
   let extImpl = greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls llvmExtImpl
   let bindings =
         CS.FnBindings $
@@ -77,7 +77,7 @@ initState bak la llvmExtImpl p halloc errorSymbolicFunCalls mem fs globs (SymIO.
   let ctx =
         CS.initSimContext
           bak
-          (CLLVM.llvmIntrinsicTypes `MapF.union` SymIO.llvmSymIOIntrinsicTypes)
+          (CLI.llvmIntrinsicTypes `MapF.union` CLSIO.llvmSymIOIntrinsicTypes)
           halloc
           printHandle
           bindings
@@ -88,7 +88,7 @@ initState bak la llvmExtImpl p halloc errorSymbolicFunCalls mem fs globs (SymIO.
         Ctx.generate
           (Ctx.size argTys)
           (\i -> CS.RegEntry (argTys ^. C.ixF' i) (CS.unRV (initArgs ^. C.ixF' i)))
-  let mvar = Trans.llvmMemVar llvmCtx
+  let mvar = CLT.llvmMemVar llvmCtx
   pure $
     CS.InitialState
       ctx
@@ -96,8 +96,8 @@ initState bak la llvmExtImpl p halloc errorSymbolicFunCalls mem fs globs (SymIO.
       CS.defaultAbortHandler
       (C.cfgReturnType cfg)
       ( CS.runOverrideSim (C.cfgReturnType cfg) $ do
-          let ?lc = llvmCtx ^. Trans.llvmTypeCtx
-          let ?intrinsicsOpts = CLLVM.defaultIntrinsicsOptions
+          let ?lc = llvmCtx ^. CLT.llvmTypeCtx
+          let ?intrinsicsOpts = CLI.defaultIntrinsicsOptions
           let SetupHook hook = setupHook
           hook bak halloc llvmCtx fs
           initFsOv

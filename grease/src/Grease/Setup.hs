@@ -55,10 +55,10 @@ import Grease.Shape.Selector
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.LLVM.Bytes (Bytes)
-import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.DataLayout qualified as Mem
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
@@ -118,9 +118,9 @@ annotatePtrBv ::
   sym ->
   Selector ext argTys ts regTy ->
   CS.RegValue sym (C.BVType w) ->
-  Setup sym ext argTys w' (Mem.LLVMPtr sym w)
+  Setup sym ext argTys w' (CLMP.LLVMPtr sym w)
 annotatePtrBv sym sel bv = do
-  ptr <- liftIO (Mem.llvmPointer_bv sym bv)
+  ptr <- liftIO (CLMP.llvmPointer_bv sym bv)
   zoom setupAnns (Anns.annotatePtr sym sel ptr)
 
 freshPtrBv ::
@@ -133,7 +133,7 @@ freshPtrBv ::
   Selector ext argTys ts regTy ->
   ValueName (CLM.LLVMPointerType w) ->
   NatRepr w ->
-  Setup sym ext argTys w' (Mem.LLVMPtr sym w)
+  Setup sym ext argTys w' (CLMP.LLVMPtr sym w)
 freshPtrBv sym sel nm w =
   annotatePtrBv sym sel
     =<< liftIO (WI.freshConstant sym (safeSymbol nm) (WI.BaseBVRepr w))
@@ -198,7 +198,7 @@ setupPtr la bak layout nm sel target = do
       -- See Note [Initializing empty pointer shapes]
       ptr <- liftIO $ do
         offset <- WI.freshConstant sym (safeSymbol (addSuffix nm "_offset")) (WI.BaseBVRepr ?ptrWidth)
-        Mem.llvmPointer_bv sym offset
+        CLMP.llvmPointer_bv sym offset
       p <- zoom setupAnns (Anns.annotatePtr sym sel ptr)
       pure (p, PtrTarget bid Seq.Empty)
     PtrTarget bid ms -> do
@@ -219,7 +219,7 @@ setupPtr la bak layout nm sel target = do
     sym ->
     Selector ext argTys ts' regTy ->
     [Word8] ->
-    Setup sym ext argTys w (Vec.Vector (Mem.LLVMPtr sym 8))
+    Setup sym ext argTys w (Vec.Vector (CLMP.LLVMPtr sym 8))
   makeKnownBytes sym sel' bytes =
     flip Vec.unfoldrM (List.zip [(1 :: Int) ..] bytes) $
       \case
@@ -242,11 +242,11 @@ setupPtr la bak layout nm sel target = do
     -- Pointer to write bytes to
     CS.RegValue sym (CLM.LLVMPointerType w) ->
     [Word8] ->
-    Setup sym ext argTys w (CLM.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
+    Setup sym ext argTys w (CLM.MemImpl sym, Vec.Vector (CLMP.LLVMPtr sym 8))
   writeKnownBytes sym m sel' ptr bytes = do
-    let i8 = CLM.bitvectorType (Bytes.toBytes (1 :: Int))
+    let i8 = CLM.bitvectorType (CLB.toBytes (1 :: Int))
     vals <- makeKnownBytes sym sel' bytes
-    let mkInt bv = CLM.LLVMValInt (Mem.llvmPointerBlock bv) (Mem.llvmPointerOffset bv)
+    let mkInt bv = CLM.LLVMValInt (CLMP.llvmPointerBlock bv) (CLMP.llvmPointerOffset bv)
     let val = CLM.LLVMValArray i8 (Vec.map mkInt vals)
     let storTy = CLM.arrayType (fromIntegral (List.length bytes)) i8
     m' <- liftIO $ CLM.storeRaw bak m ptr storTy Mem.noAlignment val
@@ -258,9 +258,9 @@ setupPtr la bak layout nm sel target = do
     sym ->
     Selector ext argTys ts' regTy ->
     Bytes ->
-    Setup sym ext argTys w (Vec.Vector (Mem.LLVMPtr sym 8))
+    Setup sym ext argTys w (Vec.Vector (CLMP.LLVMPtr sym 8))
   makeFreshBytes sym sel' bytes =
-    Vec.generateM (fromIntegral (Bytes.bytesToInteger bytes)) $ \i -> do
+    Vec.generateM (fromIntegral (CLB.bytesToInteger bytes)) $ \i -> do
       let sel'' = sel' & selectorPath %~ PtrCursor.addByteIndex i
       Refl <- pure $ Cursor.lastSnoc (Proxy @(CLM.LLVMPointerType 8)) (Proxy @ts')
       Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @(Cursor.Snoc ts' (CLM.LLVMPointerType 8)))
@@ -277,11 +277,11 @@ setupPtr la bak layout nm sel target = do
     -- Pointer to write bytes to
     CS.RegValue sym (CLM.LLVMPointerType w) ->
     Bytes ->
-    Setup sym ext argTys w (CLM.MemImpl sym, Vec.Vector (Mem.LLVMPtr sym 8))
+    Setup sym ext argTys w (CLM.MemImpl sym, Vec.Vector (CLMP.LLVMPtr sym 8))
   writeFreshBytes sym m sel' ptr bytes = do
-    let i8 = CLM.bitvectorType (Bytes.toBytes (1 :: Int))
+    let i8 = CLM.bitvectorType (CLB.toBytes (1 :: Int))
     vals <- makeFreshBytes sym sel' bytes
-    let mkInt bv = CLM.LLVMValInt (Mem.llvmPointerBlock bv) (Mem.llvmPointerOffset bv)
+    let mkInt bv = CLM.LLVMValInt (CLMP.llvmPointerBlock bv) (CLMP.llvmPointerOffset bv)
     let val = CLM.LLVMValArray i8 (Vec.map mkInt vals)
     let storTy = CLM.arrayType (fromIntegral bytes) i8
     m' <- liftIO $ CLM.storeRaw bak m ptr storTy Mem.noAlignment val
@@ -323,17 +323,17 @@ setupPtr la bak layout nm sel target = do
           -- recursive case
           let nm' = addIndex nm idx
           (val, tgt') <- setupPtrMem la bak layout nm' sel' tgt
-          let storTy = CLM.bitvectorType (Bytes.bitsToBytes (natValue ?ptrWidth))
+          let storTy = CLM.bitvectorType (CLB.bitsToBytes (natValue ?ptrWidth))
           m <- use setupMem
           offsetBv <- liftIO (WI.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset off))))
-          val' <- liftIO $ Mem.ptrAdd sym ?ptrWidth val offsetBv
+          val' <- liftIO $ CLMP.ptrAdd sym ?ptrWidth val offsetBv
           m' <- liftIO $ CLM.doStore bak m ptr (CLM.LLVMPointerRepr ?ptrWidth) storTy Mem.noAlignment val'
           setupMem .= m'
           pure (Pointer (CS.RV val) off tgt')
 
     let offset = memShapeSize ?ptrWidth memShape
     offsetBv <- liftIO (WI.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral offset)))
-    ptr' <- liftIO $ Mem.ptrAdd sym ?ptrWidth ptr offsetBv
+    ptr' <- liftIO $ CLMP.ptrAdd sym ?ptrWidth ptr offsetBv
     pure (idx + 1, ptr', memShape' Seq.<| written)
 
 {-
@@ -411,12 +411,12 @@ setupShape la bak layout nm tRepr sel s = do
       bv <- freshPtrBv sym sel nm w
       pure (ShapeExt (ShapePtrBV (CS.RV bv) w))
     ShapeExt (ShapePtrBVLit _tag w bv) -> do
-      bv' <- liftIO (Mem.llvmPointer_bv sym =<< WI.bvLit sym w bv)
+      bv' <- liftIO (CLMP.llvmPointer_bv sym =<< WI.bvLit sym w bv)
       pure (ShapeExt (ShapePtrBV (CS.RV bv') w))
     ShapeExt (ShapePtr _tag offset target) -> do
       (basePtr, target') <- setupPtrMem la bak layout nm sel target
       offsetBv <- liftIO (WI.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset offset))))
-      p <- liftIO (Mem.ptrAdd sym ?ptrWidth basePtr offsetBv)
+      p <- liftIO (CLMP.ptrAdd sym ?ptrWidth basePtr offsetBv)
       pure (ShapeExt (ShapePtr (CS.RV p) offset target'))
     ShapeStruct _tag fs -> do
       fieldShapes <-

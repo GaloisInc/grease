@@ -22,8 +22,8 @@ import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Simulator qualified as CS
 import Stubs.Syscall qualified as Stubs
-import What4.Expr qualified as W4
-import What4.Protocol.Online qualified as W4
+import What4.Expr qualified as WE
+import What4.Protocol.Online qualified as WPO
 
 -- | Convert a 'Stubs.Syscall' to a 'MacawOverride'. Really, this functionality
 -- ought to be exposed from @stubs-common@. See
@@ -34,8 +34,8 @@ macawSyscallOverride ::
   , -- For silly reasons, `stubs` requires the use of an online SMT solver
     -- connection in order to call `syscallOverride`. See
     -- https://github.com/GaloisInc/stubs/issues/28.
-    W4.OnlineSolver solver
-  , sym ~ W4.ExprBuilder scope st fs
+    WPO.OnlineSolver solver
+  , sym ~ WE.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   ) =>
   bak ->

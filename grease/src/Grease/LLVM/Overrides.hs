@@ -43,12 +43,12 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout as CLLVM
 import Lang.Crucible.LLVM.Functions qualified as CLLVM
-import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
+import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.LLVM.SymIO qualified as SymIO
+import Lang.Crucible.LLVM.SymIO qualified as CLSIO
 import Lang.Crucible.LLVM.Syntax.Overrides.String qualified as StrOv
 import Lang.Crucible.LLVM.Translation (LLVMContext)
-import Lang.Crucible.LLVM.Translation qualified as CLLVM
+import Lang.Crucible.LLVM.Translation qualified as CLT
 import Lang.Crucible.LLVM.TypeContext (TypeContext (..))
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
@@ -59,28 +59,28 @@ import What4.FunctionName qualified as WFN
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMOverridesDiagnostic diag)
 
--- | Bind a 'C.FnHandle' to an 'CLLVM.LLVMOverride'. Note that the argument and
--- result types of the 'C.FnHandle' and the 'CLLVM.LLVMOverride' do not need to
--- be exactly the same, as 'CLLVM.build_llvm_override' handles any necessary
+-- | Bind a 'C.FnHandle' to an 'CLI.LLVMOverride'. Note that the argument and
+-- result types of the 'C.FnHandle' and the 'CLI.LLVMOverride' do not need to
+-- be exactly the same, as 'CLI.build_llvm_override' handles any necessary
 -- type conversions (e.g., converting from bitvectors to pointers).
 bindLLVMOverrideFnHandle ::
   CLM.HasLLVMAnn sym =>
   C.GlobalVar CLM.Mem ->
   C.FnHandle fnArgs fnRet ->
-  CLLVM.LLVMOverride p sym CLLVM.LLVM ovrArgs ovrRet ->
-  CS.OverrideSim p sym CLLVM.LLVM rtp as r ()
+  CLI.LLVMOverride p sym CLI.LLVM ovrArgs ovrRet ->
+  CS.OverrideSim p sym CLI.LLVM rtp as r ()
 bindLLVMOverrideFnHandle mvar hdl llvmOverride = do
   let name = C.handleName hdl
-  let overrideArgs = CLLVM.llvmOverride_args llvmOverride
-  let overrideRet = CLLVM.llvmOverride_ret llvmOverride
+  let overrideArgs = CLI.llvmOverride_args llvmOverride
+  let overrideRet = CLI.llvmOverride_ret llvmOverride
   o <-
-    CLLVM.build_llvm_override
+    CLI.build_llvm_override
       name
       overrideArgs
       overrideRet
       (C.handleArgTypes hdl)
       (C.handleReturnType hdl)
-      (\asgn -> CLLVM.llvmOverride_def llvmOverride mvar asgn)
+      (\asgn -> CLI.llvmOverride_def llvmOverride mvar asgn)
   CS.bindFnHandle hdl (CS.UseOverride o)
 
 -- Private helper, not exported
@@ -95,7 +95,7 @@ mapRights f =
 
 -- | Construct LLVM declarations corresponding to the forward declarations in
 -- an S-expression file. Such declarations are used by the Crucible-LLVM override
--- matching machinery ('CLLVM.register_llvm_overrides_').
+-- matching machinery ('CLI.register_llvm_overrides_').
 forwardDeclDecls ::
   CLM.HasPtrWidth 64 =>
   Map.Map WFN.FunctionName C.SomeHandle ->
@@ -110,7 +110,7 @@ forwardDeclDecls m =
 -- machinery.
 sexpDefineDecls ::
   CLM.HasPtrWidth 64 =>
-  CSyn.ParsedProgram CLLVM.LLVM ->
+  CSyn.ParsedProgram CLI.LLVM ->
   Seq.Seq L.Declare
 sexpDefineDecls p =
   -- the path is only used in error messages, which we are discarding
@@ -118,8 +118,8 @@ sexpDefineDecls p =
    in Seq.fromList $
         mapRights (fmap getDecl . acfgToAnyLLVMOverride path) (CSyn.parsedProgCFGs p)
  where
-  getDecl (GLOS.AnyLLVMOverride (CLLVM.SomeLLVMOverride ov)) =
-    CLLVM.llvmOverride_declare ov
+  getDecl (GLOS.AnyLLVMOverride (CLI.SomeLLVMOverride ov)) =
+    CLI.llvmOverride_declare ov
 
 -- | Construct LLVM declarations corresponding to the @define@s in an
 -- S-expression override. Such declarations are used by the override matching
@@ -131,11 +131,11 @@ sexpOvDefineDecls ::
 sexpOvDefineDecls p =
   Seq.fromList (List.map ovDecl (lsoPublicOverride p : lsoAuxiliaryOverrides p))
  where
-  ovDecl (GLOS.AnyLLVMOverride (CLLVM.SomeLLVMOverride ov)) =
-    CLLVM.llvmOverride_declare ov
+  ovDecl (GLOS.AnyLLVMOverride (CLI.SomeLLVMOverride ov)) =
+    CLI.llvmOverride_declare ov
 
 -- | Register function overrides and return a 'Map.Map' of override names to
--- their corresponding 'CLLVM.SomeLLVMOverride's, suitable for use within
+-- their corresponding 'CLI.SomeLLVMOverride's, suitable for use within
 -- @crucible-llvm@. The overrides are taken from the following sources:
 --
 -- * Overrides that simply skip function calls (from 'declSkipOverride')
@@ -153,30 +153,30 @@ registerLLVMOverrides ::
   , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   GreaseLogAction ->
-  Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
+  Seq.Seq (CLI.OverrideTemplate p sym CLI.LLVM arch) ->
   Seq.Seq (WFN.FunctionName, LLVMSExpOverride) ->
   -- | Functions that should be skipped even if they are defined
   Set WFN.FunctionName ->
   bak ->
   LLVMContext arch ->
-  SymIO.LLVMFileSystem 64 ->
+  CLSIO.LLVMFileSystem 64 ->
   -- | @declare@s corresponding to @define@s in the target program
   [L.Declare] ->
   -- | @declare@s in the target program
   [L.Declare] ->
-  CantResolveOverrideCallback sym CLLVM.LLVM ->
+  CantResolveOverrideCallback sym CLI.LLVM ->
   -- | Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
-  CS.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map WFN.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
+  CS.OverrideSim p sym CLI.LLVM rtp as r (Map.Map WFN.FunctionName (CLI.SomeLLVMOverride p sym CLI.LLVM))
 registerLLVMOverrides la builtinOvs userOvs skipFuns bak llvmCtx fs defns decls errCb = do
-  let mvar = CLLVM.llvmMemVar llvmCtx
+  let mvar = CLT.llvmMemVar llvmCtx
 
   -- For convenience, we treat all programs and overrides as if they `declare`d
   -- all of the libc and "basic" LLVM functions.
   let basicDecls =
         List.map
-          (\(CLLVM.SomeLLVMOverride ov) -> CLLVM.llvmOverride_declare ov)
+          (\(CLI.SomeLLVMOverride ov) -> CLI.llvmOverride_declare ov)
           (Foldable.toList (basicLLVMOverrides fs))
   let fwdDeclLLVMDecls =
         List.concatMap (\(_, lso) -> forwardDeclDecls (lsoForwardDeclarations lso)) userOvs
@@ -208,9 +208,9 @@ registerLLVMOverrides la builtinOvs userOvs skipFuns bak llvmCtx fs defns decls 
   -- Note the order again: user overrides (registered later) will take
   -- precedence over built-in overrides (registered here).
   let ovs = Foldable.toList builtinOvs
-  builtinOvs' <- CLLVM.register_llvm_overrides_ llvmCtx ovs allDecls
+  builtinOvs' <- CLI.register_llvm_overrides_ llvmCtx ovs allDecls
   builtinOvs'' <-
-    forM builtinOvs' $ \sov@(CLLVM.SomeLLVMOverride ov) -> do
+    forM builtinOvs' $ \sov@(CLI.SomeLLVMOverride ov) -> do
       let nm = llvmOverrideName ov
       doLog la (Diag.RegisteredOverride sov)
       pure (nm, sov)
@@ -260,24 +260,24 @@ registerLLVMOverrides la builtinOvs userOvs skipFuns bak llvmCtx fs defns decls 
   pure allOvs
  where
   registerOv ::
-    CLLVM.SomeLLVMOverride p sym CLLVM.LLVM ->
-    CS.OverrideSim p sym CLLVM.LLVM rtp as r ()
-  registerOv (CLLVM.SomeLLVMOverride ov) = do
-    let decl = CLLVM.llvmOverride_declare ov
+    CLI.SomeLLVMOverride p sym CLI.LLVM ->
+    CS.OverrideSim p sym CLI.LLVM rtp as r ()
+  registerOv (CLI.SomeLLVMOverride ov) = do
+    let decl = CLI.llvmOverride_declare ov
     let symb = L.decName decl
-    let mvar = CLLVM.llvmMemVar llvmCtx
+    let mvar = CLT.llvmMemVar llvmCtx
     mem <- CS.readGlobal mvar
     case Map.lookup symb (CLM.memImplGlobalMap mem) of
       -- Functions from LLVM modules will already have associated allocations,
       -- don't create new ones
       Just (CLM.SomePointer ptr)
         | CLM.PtrWidth <- CLM.ptrWidth ptr ->
-            CLLVM.do_register_llvm_override llvmCtx ov
+            CLI.do_register_llvm_override llvmCtx ov
       -- Functions from S-expression files need allocations
-      _ -> CLLVM.alloc_and_register_override bak llvmCtx ov []
+      _ -> CLI.alloc_and_register_override bak llvmCtx ov []
 
 -- | For an S-expression program, register function overrides and return a
--- 'Map.Map' of override names to their corresponding 'CLLVM.SomeLLVMOverride's,
+-- 'Map.Map' of override names to their corresponding 'CLI.SomeLLVMOverride's,
 -- suitable for use within @crucible-llvm@. The overrides are taken from the
 -- following sources:
 --
@@ -294,20 +294,20 @@ registerLLVMSexpOverrides ::
   , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   GreaseLogAction ->
-  Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
+  Seq.Seq (CLI.OverrideTemplate p sym CLI.LLVM arch) ->
   Seq.Seq (WFN.FunctionName, LLVMSExpOverride) ->
   -- | Functions that should be skipped even if they are defined
   Set WFN.FunctionName ->
   bak ->
   LLVMContext arch ->
-  SymIO.LLVMFileSystem 64 ->
-  CSyn.ParsedProgram CLLVM.LLVM ->
+  CLSIO.LLVMFileSystem 64 ->
+  CSyn.ParsedProgram CLI.LLVM ->
   -- | What to do when a forward declaration cannot be resolved.
-  CantResolveOverrideCallback sym CLLVM.LLVM ->
+  CantResolveOverrideCallback sym CLI.LLVM ->
   -- | Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
-  CS.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map WFN.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
+  CS.OverrideSim p sym CLI.LLVM rtp as r (Map.Map WFN.FunctionName (CLI.SomeLLVMOverride p sym CLI.LLVM))
 registerLLVMSexpOverrides la builtinOvs sexpOvs skipFuns bak llvmCtx fs prog errCb = do
   let ovDefns = Foldable.toList (fmap (\(_, ov) -> sexpOvDefineDecls ov) sexpOvs)
   let defns = Foldable.toList (mconcat (sexpDefineDecls prog : ovDefns))
@@ -315,7 +315,7 @@ registerLLVMSexpOverrides la builtinOvs sexpOvs skipFuns bak llvmCtx fs prog err
   registerLLVMOverrides la builtinOvs sexpOvs skipFuns bak llvmCtx fs defns decls errCb
 
 -- | For an LLVM module, register function overrides and return a 'Map.Map' of
--- override names to their corresponding 'CLLVM.SomeLLVMOverride's, suitable
+-- override names to their corresponding 'CLI.SomeLLVMOverride's, suitable
 -- for use within @crucible-llvm@. The overrides are taken from the following
 -- sources:
 --
@@ -332,23 +332,23 @@ registerLLVMModuleOverrides ::
   , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   GreaseLogAction ->
-  Seq.Seq (CLLVM.OverrideTemplate p sym CLLVM.LLVM arch) ->
+  Seq.Seq (CLI.OverrideTemplate p sym CLI.LLVM arch) ->
   Seq.Seq (WFN.FunctionName, LLVMSExpOverride) ->
   -- | Functions that should be skipped even if they are defined
   Set WFN.FunctionName ->
   bak ->
   LLVMContext arch ->
-  SymIO.LLVMFileSystem 64 ->
+  CLSIO.LLVMFileSystem 64 ->
   L.Module ->
   -- | What to do when a forward declaration cannot be resolved.
-  CantResolveOverrideCallback sym CLLVM.LLVM ->
+  CantResolveOverrideCallback sym CLI.LLVM ->
   -- | Return a map of public function names to their overrides. This map does
   -- not include names of auxiliary functions, as they are intentionally hidden
   -- from other overrides.
-  CS.OverrideSim p sym CLLVM.LLVM rtp as r (Map.Map WFN.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM))
+  CS.OverrideSim p sym CLI.LLVM rtp as r (Map.Map WFN.FunctionName (CLI.SomeLLVMOverride p sym CLI.LLVM))
 registerLLVMModuleOverrides la builtinOvs sexpOvs skipFuns bak llvmCtx fs llMod errCb = do
   let ovDefns = Foldable.toList (fmap (\(_, ov) -> sexpOvDefineDecls ov) sexpOvs)
-  let modDefns = Seq.fromList (List.map CLLVM.declareFromDefine (L.modDefines llMod))
+  let modDefns = Seq.fromList (List.map CLT.declareFromDefine (L.modDefines llMod))
   let defns = Foldable.toList (mconcat (modDefns : ovDefns))
   let decls = L.modDeclares llMod
   registerLLVMOverrides la builtinOvs sexpOvs skipFuns bak llvmCtx fs defns decls errCb
@@ -369,12 +369,12 @@ registerLLVMSexpProgForwardDeclarations ::
   CLLVM.DataLayout ->
   C.GlobalVar CLM.Mem ->
   -- | The map of public function names to their overrides.
-  Map.Map WFN.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM) ->
+  Map.Map WFN.FunctionName (CLI.SomeLLVMOverride p sym CLI.LLVM) ->
   -- | What to do when a forward declaration cannot be resolved.
-  CantResolveOverrideCallback sym CLLVM.LLVM ->
+  CantResolveOverrideCallback sym CLI.LLVM ->
   -- | The map of forward declaration names to their handles.
   Map.Map WFN.FunctionName C.SomeHandle ->
-  CS.OverrideSim p sym CLLVM.LLVM rtp as r ()
+  CS.OverrideSim p sym CLI.LLVM rtp as r ()
 registerLLVMSexpProgForwardDeclarations la bak dl mvar funOvs errCb =
   registerLLVMForwardDeclarations bak mvar funOvs $
     CantResolveOverrideCallback $
@@ -393,17 +393,17 @@ registerLLVMForwardDeclarations ::
   bak ->
   C.GlobalVar CLM.Mem ->
   -- | The map of public function names to their overrides.
-  Map.Map WFN.FunctionName (CLLVM.SomeLLVMOverride p sym CLLVM.LLVM) ->
+  Map.Map WFN.FunctionName (CLI.SomeLLVMOverride p sym CLI.LLVM) ->
   -- | What to do when a forward declaration cannot be resolved.
-  CantResolveOverrideCallback sym CLLVM.LLVM ->
+  CantResolveOverrideCallback sym CLI.LLVM ->
   -- | The map of forward declaration names to their handles.
   Map.Map WFN.FunctionName C.SomeHandle ->
-  CS.OverrideSim p sym CLLVM.LLVM rtp as r ()
+  CS.OverrideSim p sym CLI.LLVM rtp as r ()
 registerLLVMForwardDeclarations bak mvar funOvs errCb fwdDecs = do
   let CantResolveOverrideCallback cannotResolve = errCb
   Foldable.for_ (Map.toList fwdDecs) $ \(fwdDecName, C.SomeHandle hdl) ->
     case Map.lookup fwdDecName funOvs of
-      Just (CLLVM.SomeLLVMOverride llvmOverride) ->
+      Just (CLI.SomeLLVMOverride llvmOverride) ->
         bindLLVMOverrideFnHandle mvar hdl llvmOverride
       Nothing ->
         -- These string-manipulating overrides are *only* callable from

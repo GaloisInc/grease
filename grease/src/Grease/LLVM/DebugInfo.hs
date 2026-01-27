@@ -33,7 +33,7 @@ import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (PtrShape (ShapePtrBV))
 import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes (Bytes)
-import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Types as C
 import Text.LLVM.AST as L
@@ -69,9 +69,9 @@ minTypeSize =
     LDU.ArrInfo _elemTy -> 0 -- arrays can be empty
     LDU.BaseType _nm dibt ->
       case L.dibtSize dibt of
-        Just (L.ValMdValue (L.Typed _ (L.ValInteger sz))) -> Bytes.bitsToBytes sz
+        Just (L.ValMdValue (L.Typed _ (L.ValInteger sz))) -> CLB.bitsToBytes sz
         _ -> 0
-    LDU.Pointer _ty -> Bytes.bitsToBytes (natValue ?ptrWidth)
+    LDU.Pointer _ty -> CLB.bitsToBytes (natValue ?ptrWidth)
     LDU.Structure _nm fields -> structSize fields
     LDU.Typedef _nm ty -> minTypeSize ty
     LDU.Union _nm fields -> unionSize fields
@@ -81,7 +81,7 @@ minTypeSize =
     case List.reverse fields of
       [] -> 0
       (lastField : _) ->
-        let lastOffset = Bytes.bitsToBytes (LDU.sfiOffset lastField)
+        let lastOffset = CLB.bitsToBytes (LDU.sfiOffset lastField)
          in lastOffset + minTypeSize (LDU.sfiInfo lastField)
 
   unionSize fields =
@@ -136,9 +136,9 @@ asPtrTarget =
       let
         -- Compute the number of padding bytes needed and the shape of the
         -- field, add them both to the sequence of shapes for the struct.
-        !bitsWritten = fromIntegral (Bytes.bytesToBits bytesWritten)
+        !bitsWritten = fromIntegral (CLB.bytesToBits bytesWritten)
         !missingBits = LDU.sfiOffset sfi - bitsWritten
-        !missingBytes = Bytes.bitsToBytes missingBits
+        !missingBytes = CLB.bitsToBytes missingBits
         !fieldPtrTarget = asPtrTarget (LDU.sfiInfo sfi)
         !fieldSize = PtrShape.ptrTargetSize (knownNat @64) fieldPtrTarget
         !bytesWritten' = bytesWritten + missingBytes + fieldSize

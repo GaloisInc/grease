@@ -30,20 +30,20 @@ import Data.Word (Word32, Word64, Word8)
 import Grease.Panic (panic)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
-import Lang.Crucible.LLVM.Intrinsics qualified as Mem
+import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Prettyprinter qualified as PP
 import System.IO (Handle, stderr)
 import Text.LLVM.AST qualified as L
-import What4.Expr qualified as W4
+import What4.Expr qualified as WE
 import What4.FunctionName qualified as WFN
-import What4.ProgramLoc qualified as W4
-import What4.Protocol.Online qualified as W4
+import What4.ProgramLoc qualified as WPL
+import What4.Protocol.Online qualified as WPO
 
--- | Constraint synonym for using online solver features, e.g. 'W4.checkSatisfiable'
+-- | Constraint synonym for using online solver features, e.g. 'WPO.checkSatisfiable'
 type OnlineSolverAndBackend solver sym bak t st fs =
-  ( W4.OnlineSolver solver
+  ( WPO.OnlineSolver solver
   , CB.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder t st fs
+  , sym ~ WE.ExprBuilder t st fs
   , bak ~ C.OnlineBackend solver t st fs
   )
 
@@ -58,14 +58,14 @@ tshow = Text.pack . show
 functionNameFromByteString :: BS.ByteString -> WFN.FunctionName
 functionNameFromByteString = WFN.functionNameFromText . Text.decodeUtf8
 
-llvmOverrideName :: Mem.LLVMOverride p sym ext args ret -> WFN.FunctionName
+llvmOverrideName :: CLI.LLVMOverride p sym ext args ret -> WFN.FunctionName
 llvmOverrideName ov =
-  let L.Symbol nm = L.decName (Mem.llvmOverride_declare ov)
+  let L.Symbol nm = L.decName (CLI.llvmOverride_declare ov)
    in WFN.functionNameFromText (Text.pack nm)
 
 -- TODO(lb): Also print the function name?
-ppProgramLoc :: W4.ProgramLoc -> Text
-ppProgramLoc = tshow . W4.plSourceLoc
+ppProgramLoc :: WPL.ProgramLoc -> Text
+ppProgramLoc = tshow . WPL.plSourceLoc
 
 -- | The 'Handle' to write Crucible-related messages to. This includes the
 -- output of overrides like @printf@.

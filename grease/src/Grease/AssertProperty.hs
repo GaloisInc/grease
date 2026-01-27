@@ -30,7 +30,7 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Utils.RegRewrite qualified as C
 import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
-import What4.ProgramLoc qualified as W4
+import What4.ProgramLoc qualified as WPL
 
 def ::
   C.TypeRepr ty ->
@@ -116,7 +116,7 @@ strLit lit =
     (C.Reg.EvalApp $ C.StringLit $ WI.UnicodeLiteral lit)
 
 addAssert ::
-  W4.Position ->
+  WPL.Position ->
   -- | Error message
   Text ->
   C.Reg.AtomValue ext src C.BoolType ->
@@ -124,7 +124,7 @@ addAssert ::
 addAssert pos msg expr = do
   s <- strLit msg
   b <- def C.BoolRepr expr
-  C.addStmt $ W4.Posd pos $ C.Reg.Assert b s
+  C.addStmt $ WPL.Posd pos $ C.Reg.Assert b s
 
 -- | Assert that the PC is within the bounds of the @.text@ section, which
 -- powers GREASE's @in-text@ check. We carve out exceptions for PLT stub
@@ -150,10 +150,10 @@ addPCBoundAssertion w pcreg mem lower upper pltStubs =
   C.annotateCFGStmts
     ()
     ( \pstmt -> do
-        case W4.pos_val pstmt of
+        case WPL.pos_val pstmt of
           C.Reg.DefineAtom _ (C.Reg.EvalExt (Symbolic.MacawArchStateUpdate _ ru))
             | Just (Symbolic.MacawCrucibleValue pc) <- MapF.lookup pcreg ru -> do
-                let pos = W4.pos pstmt
+                let pos = WPL.pos pstmt
                 pcAbsAddrPtr <- defPcAbsAddr w pc
 
                 -- Create a predicate that the PC is a PLT stub address.
@@ -225,10 +225,10 @@ addNoDynJumpAssertion w pcreg mem badAddrOff =
   C.annotateCFGStmts
     ()
     ( \pstmt -> do
-        case W4.pos_val pstmt of
+        case WPL.pos_val pstmt of
           C.Reg.DefineAtom _ (C.Reg.EvalExt (Symbolic.MacawArchStateUpdate _ ru))
             | Just (Symbolic.MacawCrucibleValue pc) <- MapF.lookup pcreg ru -> do
-                let pos = W4.pos pstmt
+                let pos = WPL.pos pstmt
                 pcAbsAddrPtr <- defPcAbsAddr w pc
 
                 badAddrPtr <- defMemWordAbsAddr w $ segoffToAbsoluteAddr mem badAddrOff

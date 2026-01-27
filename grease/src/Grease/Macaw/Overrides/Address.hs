@@ -59,7 +59,6 @@ import System.FilePath qualified as FilePath
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
 import Text.Megaparsec.Char.Lexer qualified as TMCL
-import What4.Expr qualified as W4
 import What4.Expr.Builder qualified as WEB
 import What4.FunctionName qualified as WFN
 import What4.Protocol.Online qualified as WPO
@@ -311,7 +310,7 @@ registerAddressOverrideHandles bak errCb funOvs addrOvs = do
 ---------------------------------------------------------------------
 
 toInitialState ::
-  sym ~ W4.ExprBuilder t st fs =>
+  sym ~ WEB.ExprBuilder t st fs =>
   C.GlobalVar CLM.Mem ->
   C.CrucibleState p sym ext rtp blocks r args ->
   C.TypeRepr ret ->
@@ -336,7 +335,7 @@ toInitialState memVar crucState retTy action = do
 -- Instead, they construct a new backend and simulator, and run there. This is
 -- because Crucible can't just start running a CFG from an arbitrary state.
 runAddressOverride ::
-  ( sym ~ W4.ExprBuilder t st fs
+  ( sym ~ WEB.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
   , HasCallStack
   ) =>
@@ -369,7 +368,7 @@ runAddressOverride memVar crucState someCfg regs = do
           CB.throwUnsupported sym msg
 
 tryRunAddressOverride ::
-  ( sym ~ W4.ExprBuilder t st fs
+  ( sym ~ WEB.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
   ) =>
   ArchContext arch ->
@@ -389,7 +388,7 @@ tryRunAddressOverride archCtx memVar archRegs crucState cfg = do
 -- | See if there is an address override corresponding to the current
 -- instruction pointer value, and if so, run it.
 maybeRunAddressOverride ::
-  ( sym ~ W4.ExprBuilder t st fs
+  ( sym ~ WEB.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
   ) =>
   ArchContext arch ->
