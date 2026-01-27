@@ -26,7 +26,7 @@ import Grease.Utility
 import Lang.Crucible.FunctionHandle qualified as C
 import Lumberjack qualified as LJ
 import What4.FunctionName qualified as WFN
-import What4.ProgramLoc qualified as W4
+import What4.ProgramLoc qualified as WPL
 
 -- | We pass this log function to @macaw@ to wrap discovery events in a custom
 -- wrapper that we stream out with the rest of our diagnostics.
@@ -92,7 +92,7 @@ discoverFunction logAction halloc arch mem symMap pltStubs addr = do
         (arch ^. archVals . to Symbolic.archFunctions)
         halloc
         (functionNameFromByteString $ Discovery.discoveredFunName funInfo)
-        (W4.OtherPos . tshow) -- simply use addresses as source positions for now
+        (WPL.OtherPos . tshow) -- simply use addresses as source positions for now
         funInfo
 
 {-

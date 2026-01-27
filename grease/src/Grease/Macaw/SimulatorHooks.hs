@@ -37,7 +37,7 @@ import Lang.Crucible.Simulator.ExecutionTree qualified as CS
 import Lang.Crucible.Simulator.GlobalState qualified as CS
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
-import What4.Expr qualified as W4
+import What4.Expr.Builder qualified as WEB
 import What4.Interface qualified as WI
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
@@ -65,7 +65,7 @@ greaseMacawExtImpl ::
   ( CB.IsSymBackend sym bak
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
-  , sym ~ W4.ExprBuilder t st fs
+  , sym ~ WEB.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
   , 16 C.<= MC.ArchAddrWidth arch
   ) =>
@@ -132,10 +132,10 @@ ptrAnd bak x y = do
   pure (CLM.LLVMPointer blk off)
 
 updateStruct ::
-  (C.OrdF (MC.ArchReg arch), sym ~ W4.ExprBuilder t st fs) =>
+  (C.OrdF (MC.ArchReg arch), sym ~ WEB.ExprBuilder t st fs) =>
   Ctx.Assignment (MC.ArchReg arch) ctx ->
   Ctx.Assignment (CS.RegValue' sym) (Symbolic.CtxToCrucibleType ctx) ->
-  MapF.MapF (MC.ArchReg arch) (Symbolic.MacawCrucibleValue (CS.RegEntry (W4.ExprBuilder t st fs))) ->
+  MapF.MapF (MC.ArchReg arch) (Symbolic.MacawCrucibleValue (CS.RegEntry (WEB.ExprBuilder t st fs))) ->
   Ctx.Assignment (CS.RegValue' sym) (Symbolic.CtxToCrucibleType ctx)
 updateStruct Ctx.Empty Ctx.Empty _ =
   Ctx.Empty
@@ -155,7 +155,7 @@ extensionExec ::
   ( CB.IsSymBackend sym bak
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
-  , sym ~ W4.ExprBuilder t st fs
+  , sym ~ WEB.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
   , 16 C.<= MC.ArchAddrWidth arch
   ) =>

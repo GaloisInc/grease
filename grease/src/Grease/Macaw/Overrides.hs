@@ -56,9 +56,9 @@ import Lang.Crucible.LLVM.TypeContext (TypeContext)
 import Lang.Crucible.Simulator qualified as CS
 import Stubs.FunctionOverride qualified as Stubs
 import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
-import What4.Expr qualified as W4
+import What4.Expr.Builder qualified as WEB
 import What4.FunctionName qualified as WFN
-import What4.Protocol.Online qualified as W4
+import What4.Protocol.Online qualified as WPO
 
 -- | Convert a 'Stubs.FunctionOverride' to a 'MacawOverride'. Really, this
 -- functionality ought to be exposed from @stubs-common@. See
@@ -70,8 +70,8 @@ macawOverride ::
   , -- For silly reasons, `stubs` requires the use of an online SMT solver
     -- connection in order to call `functionOverride`. See
     -- https://github.com/GaloisInc/stubs/issues/28.
-    W4.OnlineSolver solver
-  , sym ~ W4.ExprBuilder scope st fs
+    WPO.OnlineSolver solver
+  , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   ) =>
   bak ->
@@ -149,13 +149,13 @@ massageRegAssignment = CS.unRV . Ctx.last . fmapFC (CS.RV . CS.regValue)
 mkMacawOverrideMap ::
   forall sym bak arch solver scope st fs p.
   ( CB.IsSymInterface sym
-  , W4.OnlineSolver solver
+  , WPO.OnlineSolver solver
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
-  , sym ~ W4.ExprBuilder scope st fs
+  , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   ) =>
   bak ->

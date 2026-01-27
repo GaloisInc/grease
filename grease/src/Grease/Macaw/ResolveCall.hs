@@ -76,10 +76,10 @@ import Stubs.FunctionOverride qualified as Stubs
 import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
 import Stubs.Memory.Common qualified as Stubs
 import Stubs.Syscall qualified as Stubs
-import What4.Expr qualified as W4
+import What4.Expr.Builder qualified as WEB
 import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
-import What4.Protocol.Online qualified as W4
+import What4.Protocol.Online qualified as WPO
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (ResolveCallDiagnostic diag)
@@ -625,8 +625,8 @@ discoverFuncAddr logAction halloc arch memory symMap pltStubs addr st0 = do
 -- and redirect any forward declarations to their corresponding overrides.
 useMacawSExpOverride ::
   ( CB.IsSymBackend sym bak
-  , W4.OnlineSolver solver
-  , sym ~ W4.ExprBuilder scope st fs
+  , WPO.OnlineSolver solver
+  , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , HasToConcretize p
@@ -670,8 +670,8 @@ useMacawSExpOverride bak la halloc arch allOvs errCb mOv st0 =
 extendHandleMap ::
   forall sym bak arch args ret solver scope st fs p.
   ( CB.IsSymBackend sym bak
-  , W4.OnlineSolver solver
-  , sym ~ W4.ExprBuilder scope st fs
+  , WPO.OnlineSolver solver
+  , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , HasToConcretize p

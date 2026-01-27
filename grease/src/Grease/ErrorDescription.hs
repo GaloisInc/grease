@@ -17,18 +17,18 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as CLM
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Prettyprinter qualified as PP
-import What4.Expr qualified as W4
+import What4.Expr qualified as WE
 import What4.Interface qualified as WI
 
 concretizeErrorDescription ::
-  (WI.IsExprBuilder sym, sym ~ W4.ExprBuilder t st fs) =>
+  (WI.IsExprBuilder sym, sym ~ WE.ExprBuilder t st fs) =>
   sym ->
-  W4.GroundEvalFn t ->
+  WE.GroundEvalFn t ->
   ErrorDescription sym ->
   IO (ErrorDescription sym)
 concretizeErrorDescription
   sym
-  (W4.GroundEvalFn gFn) =
+  (WE.GroundEvalFn gFn) =
     \case
       CrucibleLLVMError bb cs -> do
         bb' <- CLM.concBadBehavior sym gFn bb

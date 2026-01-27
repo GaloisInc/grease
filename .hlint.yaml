@@ -168,11 +168,22 @@
     # galois packages
     - { name: Data.BitVector.Sized, as: BV }
     - { name: Lang.Crucible.Backend, as: CB }
-    - { name: Lang.Crucible.Simulator, as: CS }
+    - { name: Lang.Crucible.LLVM.Bytes, as: CLB }
+    - { name: Lang.Crucible.LLVM.Intrinsics, as: CLI }
     - { name: Lang.Crucible.LLVM.MemModel, as: CLM }
+    - { name: Lang.Crucible.LLVM.MemModel.Pointer, as: CLMP }
+    - { name: Lang.Crucible.LLVM.SymIO, as: CLSIO }
+    - { name: Lang.Crucible.LLVM.Translation, as: CLT }
+    - { name: Lang.Crucible.LLVM.TypeContext, as: CLTC }
+    - { name: Lang.Crucible.Simulator, as: CS }
     - { name: Lumberjack, as: LJ }
+    - { name: Text.LLVM.AST, as: L }
+    - { name: What4.Expr, as: WE }
+    - { name: What4.Expr.Builder, as: WEB }
     - { name: What4.FunctionName, as: WFN }
     - { name: What4.Interface, as: WI }
+    - { name: What4.ProgramLoc, as: WPL }
+    - { name: What4.Protocol.Online, as: WPO }
 
     # parameterized-utils
     - { name: Data.Parameterized.Context, as: Ctx }
@@ -183,5 +194,3 @@
     - { name: Data.Parameterized.Map, as: MapF }
     - { name: Data.Parameterized.TraversableF, as: TF }
     - { name: Data.Parameterized.TraversableFC, as: TFC }
-
-

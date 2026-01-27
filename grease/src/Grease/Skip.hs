@@ -31,11 +31,11 @@ import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout as Mem
 import Lang.Crucible.LLVM.Functions as CLLVM
-import Lang.Crucible.LLVM.Intrinsics as CLLVM
+import Lang.Crucible.LLVM.Intrinsics as CLI
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.Translation (LLVMContext)
-import Lang.Crucible.LLVM.Translation qualified as CLLVM
-import Lang.Crucible.LLVM.TypeContext qualified as CLLVM
+import Lang.Crucible.LLVM.Translation qualified as CLT
+import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
@@ -120,20 +120,20 @@ declSkipOverride ::
   GreaseLogAction ->
   LLVMContext arch ->
   L.Declare ->
-  Maybe (CLLVM.SomeLLVMOverride p sym ext)
+  Maybe (CLI.SomeLLVMOverride p sym ext)
 declSkipOverride la llvmCtx decl =
-  let ?lc = llvmCtx ^. CLLVM.llvmTypeCtx
-   in CLLVM.llvmDeclToFunHandleRepr' decl $ \argTys retTy -> do
+  let ?lc = llvmCtx ^. CLT.llvmTypeCtx
+   in CLT.llvmDeclToFunHandleRepr' decl $ \argTys retTy -> do
         shape <-
           case minimalShapeWithPtrs (const NoTag) retTy of
             Left _err -> Nothing
             Right shape -> Just shape
-        let dl = llvmCtx ^. CLLVM.llvmTypeCtx . to CLLVM.llvmDataLayout
+        let dl = llvmCtx ^. CLT.llvmTypeCtx . to CLTC.llvmDataLayout
         let L.Symbol name = L.decName decl
         let fnName = WFN.functionNameFromText (Text.pack name)
         Just $
-          CLLVM.SomeLLVMOverride $
-            CLLVM.LLVMOverride
+          CLI.SomeLLVMOverride $
+            CLI.LLVMOverride
               { llvmOverride_declare = decl
               , llvmOverride_args = argTys
               , llvmOverride_ret = retTy
