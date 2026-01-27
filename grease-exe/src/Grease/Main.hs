@@ -127,7 +127,7 @@ import Grease.Macaw.Load.Relocation (RelocType (..), RelocationError (..), elfRe
 import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
 import Grease.Macaw.Overrides.Address (AddressOverrides, loadAddressOverrides)
 import Grease.Macaw.Overrides.Address qualified as AddrOv
-import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
+import Grease.Macaw.Overrides.SExp (MacawSExpOverride, MacawSExpOverrideError (..))
 import Grease.Macaw.PLT qualified as GMPLT
 import Grease.Macaw.RegName (getRegName, mkRegName, regNameToString, regNames)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
@@ -708,8 +708,9 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
   fnOvsMap <-
     case fnOvsMap_ of
       -- See Note [Explicitly listed errors]
-      Left e@GSyn.SExpressionParseError{} -> userError la (PP.pretty e)
-      Left e@GSyn.SyntaxParseError{} -> userError la (PP.pretty e)
+      Left (MacawSExpOverrideParseError e@GSyn.SExpressionParseError{}) -> userError la (PP.pretty e)
+      Left (MacawSExpOverrideParseError e@GSyn.SyntaxParseError{}) -> userError la (PP.pretty e)
+      Left e@MacawSExpOverrideLoaderError{} -> userError la (PP.pretty e)
       Right ok -> pure ok
   fnAddrOvsRaw_ <-
     fmap mconcat . Monad.sequence
