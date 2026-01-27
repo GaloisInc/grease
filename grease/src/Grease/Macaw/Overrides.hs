@@ -14,6 +14,7 @@
 module Grease.Macaw.Overrides (
   CantResolveOverrideCallback (..),
   MacawSExpOverride (..),
+  MacawSExpOverrideError,
   MacawFnHandle,
   MacawOverride,
   macawOverride,
@@ -38,11 +39,10 @@ import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
-import Grease.Macaw.Overrides.SExp (MacawSExpOverride (..), loadOverrides)
+import Grease.Macaw.Overrides.SExp (MacawSExpOverride (..), MacawSExpOverrideError, loadOverrides)
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, MacawOverride)
 import Grease.Overrides (CantResolveOverrideCallback (..))
 import Grease.Skip (registerSkipOverride)
-import Grease.Syntax (ParseProgramError)
 import Grease.Syntax.Overrides as SExp
 import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
@@ -166,7 +166,7 @@ mkMacawOverrideMap ::
   C.HandleAllocator ->
   C.GlobalVar CLM.Mem ->
   ArchContext arch ->
-  IO (Either ParseProgramError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
+  IO (Either MacawSExpOverrideError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
 mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
   userOvsResult <- loadOverrides userOvPaths halloc
   case userOvsResult of
@@ -224,7 +224,7 @@ mkMacawOverrideMapWithBuiltins ::
   ArchContext arch ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
   LLVMFileSystem (MC.ArchAddrWidth arch) ->
-  IO (Either ParseProgramError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
+  IO (Either MacawSExpOverrideError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
 mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg fs = do
   let builtinOvs = builtinStubsOverrides bak mvar memCfg fs
   mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
