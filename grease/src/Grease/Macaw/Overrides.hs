@@ -3,8 +3,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -25,7 +23,7 @@ module Grease.Macaw.Overrides (
 ) where
 
 import Control.Lens ((^.))
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Foldable qualified as Foldable
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.CFG qualified as MC
@@ -36,14 +34,14 @@ import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Sequence qualified as Seq
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.Macaw.Arch
+import Grease.Macaw.Arch (ArchContext, archIntegerArguments, archIntegerReturnRegisters, archVals)
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
-import Grease.Macaw.Overrides.SExp (MacawSExpOverride (..), loadOverrides)
+import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride, msoPublicFnHandle, msoPublicOverride, msoSomeFunctionOverride), loadOverrides)
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, MacawOverride)
-import Grease.Overrides (CantResolveOverrideCallback (..))
+import Grease.Overrides (CantResolveOverrideCallback (CantResolveOverrideCallback))
 import Grease.Skip (registerSkipOverride)
 import Grease.Syntax (ParseProgramError)
-import Grease.Syntax.Overrides as SExp
+import Grease.Syntax.Overrides qualified as SExp (checkTypedOverrideHandleCompat, freshBytesOverride, tryConcBvOverride)
 import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
@@ -348,10 +346,10 @@ lookupMacawForwardDeclarationOverride bak funOvs decName hdl =
           let ov = SExp.freshBytesOverride @_ @p @sym @(Symbolic.MacawExt arch) ?ptrWidth
           (C.Refl, C.Refl) <- SExp.checkTypedOverrideHandleCompat hdl ov
           Just (CS.runTypedOverride (C.handleName hdl) ov)
-        "conc-bv-8" -> tryConcBvOverride bak (C.knownNat @8) hdl
-        "conc-bv-16" -> tryConcBvOverride bak (C.knownNat @16) hdl
-        "conc-bv-32" -> tryConcBvOverride bak (C.knownNat @32) hdl
-        "conc-bv-64" -> tryConcBvOverride bak (C.knownNat @64) hdl
+        "conc-bv-8" -> SExp.tryConcBvOverride bak (C.knownNat @8) hdl
+        "conc-bv-16" -> SExp.tryConcBvOverride bak (C.knownNat @16) hdl
+        "conc-bv-32" -> SExp.tryConcBvOverride bak (C.knownNat @32) hdl
+        "conc-bv-64" -> SExp.tryConcBvOverride bak (C.knownNat @64) hdl
         _ -> Nothing
     Just mso -> do
       let someForwardedOv = msoSomeFunctionOverride mso

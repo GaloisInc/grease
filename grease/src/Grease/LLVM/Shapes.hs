@@ -1,13 +1,11 @@
 {-# LANGUAGE DataKinds #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 module Grease.LLVM.Shapes (
   InitArgShapesError (..),
   llvmInitArgShapes,
 ) where
 
-import Data.Functor.Const (Const (..))
+import Data.Functor.Const (Const)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (traverseFC)
 import Data.Void (Void)

@@ -1,8 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -42,7 +40,7 @@ import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
-import Lang.Crucible.LLVM.Bytes (Bytes (..))
+import Lang.Crucible.LLVM.Bytes (Bytes)
 import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Text.Megaparsec qualified as TM

@@ -1,7 +1,5 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -13,7 +11,7 @@ module Grease.Syscall (
   callGetppid,
 ) where
 
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Lang.Crucible.Backend qualified as CB

@@ -2,8 +2,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 -- Due to the orphan ArchReloc instance below
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -23,12 +21,13 @@ import Data.Map qualified as Map
 import Data.Parameterized.Classes (ixF')
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some qualified as Some
-import Data.Proxy (Proxy (..))
+import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word64)
 import Dismantle.PPC qualified as D
-import Grease.Macaw.Arch (ArchContext (..), ArchReloc, defaultPCFixup)
-import Grease.Macaw.Load.Relocation (RelocType (..))
-import Grease.Macaw.RegName (RegName (..))
+import Grease.Macaw.Arch (ArchReloc, defaultPCFixup)
+import Grease.Macaw.Arch qualified as Arch
+import Grease.Macaw.Load.Relocation (RelocType (RelativeReloc, SymbolReloc))
+import Grease.Macaw.RegName (RegName (RegName))
 import Grease.Options (ExtraStackSlots)
 import Grease.Panic (panic)
 import Grease.Shape.Pointer (ppcStackPtrShape)
@@ -60,7 +59,7 @@ ppc64Ctx ::
   Maybe Word64 ->
   ExtraStackSlots ->
   Loader.LoadedBinary PPC.PPC64 (EE.ElfHeaderInfo 64) ->
-  IO (ArchContext PPC.PPC64)
+  IO (Arch.ArchContext PPC.PPC64)
 ppc64Ctx mbReturnAddr stackArgSlots loadedBinary = do
   let extOverride = Stubs.ppcLinuxStmtExtensionOverride
   avals <- case Symbolic.genArchVals Proxy Proxy (Just extOverride) of
@@ -76,32 +75,32 @@ ppc64Ctx mbReturnAddr stackArgSlots loadedBinary = do
           Nothing ->
             Map.empty
   return
-    ArchContext
-      { _archInfo = PPC.ppc64_linux_info loadedBinary
-      , _archGetIP = \regs -> do
+    Arch.ArchContext
+      { Arch._archInfo = PPC.ppc64_linux_info loadedBinary
+      , Arch._archGetIP = \regs -> do
           let C.RV (CLM.LLVMPointer _base off) = regs ^. ixF' PPC.Symbolic.Regs.ip
           pure off
-      , _archPcReg = PPC.PPC_IP
-      , _archVals = avals
-      , _archRelocSupported = ppc64RelocSupported
-      , _archIntegerArguments = \bak ->
+      , Arch._archPcReg = PPC.PPC_IP
+      , Arch._archVals = avals
+      , Arch._archRelocSupported = ppc64RelocSupported
+      , Arch._archIntegerArguments = \bak ->
           Stubs.ppcLinuxIntegerArguments bak avals
-      , _archIntegerReturnRegisters = Stubs.ppcLinuxIntegerReturnRegisters
-      , _archFunctionReturnAddr = Stubs.ppcLinuxReturnAddr
-      , _archSyscallArgumentRegisters = Stubs.ppcLinuxSyscallArgumentRegisters PPC.V64Repr
-      , _archSyscallNumberRegister = Stubs.ppcLinuxSyscallNumberRegister
-      , _archSyscallReturnRegisters = Stubs.ppcLinuxSyscallReturnRegisters PPC.V64Repr
-      , _archSyscallCodeMapping = Stubs.syscallMap
-      , _archStackPtrShape = ppcStackPtrShape (bytes64LE <$> mbReturnAddr) stackArgSlots
-      , _archInitGlobals = \_ mem globals -> pure (mem, globals)
-      , _archRegOverrides = regOverrides
-      , _archOffsetStackPointerPostCall = pure
-      , _archABIParams =
+      , Arch._archIntegerReturnRegisters = Stubs.ppcLinuxIntegerReturnRegisters
+      , Arch._archFunctionReturnAddr = Stubs.ppcLinuxReturnAddr
+      , Arch._archSyscallArgumentRegisters = Stubs.ppcLinuxSyscallArgumentRegisters PPC.V64Repr
+      , Arch._archSyscallNumberRegister = Stubs.ppcLinuxSyscallNumberRegister
+      , Arch._archSyscallReturnRegisters = Stubs.ppcLinuxSyscallReturnRegisters PPC.V64Repr
+      , Arch._archSyscallCodeMapping = Stubs.syscallMap
+      , Arch._archStackPtrShape = ppcStackPtrShape (bytes64LE <$> mbReturnAddr) stackArgSlots
+      , Arch._archInitGlobals = \_ mem globals -> pure (mem, globals)
+      , Arch._archRegOverrides = regOverrides
+      , Arch._archOffsetStackPointerPostCall = pure
+      , Arch._archABIParams =
           -- IBM Docs https://www.ibm.com/docs/en/aix/7.1.0?topic=overview-register-usage-conventions
           [ Some.Some (PPC.PPC_GP (D.GPR rnum))
           | rnum <- [3 .. 10]
           ]
-      , _archPCFixup = defaultPCFixup @PPC.PPC64 Proxy
+      , Arch._archPCFixup = defaultPCFixup @PPC.PPC64 Proxy
       }
 
 ppc64RelocSupported :: EE.PPC64_RelocationType -> Maybe RelocType

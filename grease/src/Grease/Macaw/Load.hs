@@ -5,8 +5,6 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -21,7 +19,7 @@ module Grease.Macaw.Load (
 
 import Control.Monad (forM, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
+import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString qualified as BS
@@ -44,10 +42,10 @@ import Data.Text.Encoding qualified as Text
 import Data.Tuple qualified as Tuple
 import Data.Vector qualified as Vec
 import Data.Word (Word64)
-import Grease.Diagnostic
-import Grease.Entrypoint (Entrypoint (..), EntrypointLocation (..))
+import Grease.Diagnostic (Diagnostic (LoadDiagnostic), GreaseLogAction)
+import Grease.Entrypoint (Entrypoint, EntrypointLocation (EntrypointAddress, EntrypointCoreDump, EntrypointSymbolName), entrypointLocation)
 import Grease.Macaw.Load.Diagnostic qualified as Diag
-import Grease.Utility
+import Grease.Utility (functionNameFromByteString, tshow)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lumberjack qualified as LJ

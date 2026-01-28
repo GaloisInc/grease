@@ -2,8 +2,6 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- `error` is fine in tests
 {- HLINT ignore "Use panic" -}
@@ -31,7 +29,7 @@ import Grease.Cli (optsFromList)
 import Grease.Diagnostic (Diagnostic, GreaseLogAction)
 import Grease.Internal (assertionsEnabled)
 import Grease.Main (logResults, simulateFile)
-import Grease.Options (SimOpts (..), optsSimOpts)
+import Grease.Options (SimOpts (simProgPath), optsSimOpts)
 import HsLua (Lua)
 import HsLua qualified as Lua
 import Lang.Crucible.LLVM.Internal qualified as CLLVM (assertionsEnabled)
@@ -46,7 +44,6 @@ import System.FilePath qualified as FilePath
 import Test.Tasty qualified as T
 import Test.Tasty.HUnit qualified as T.U
 import What4.Internal qualified as WInt (assertionsEnabled)
-import Prelude hiding (fail)
 
 prelude :: Text.Text
 prelude = Text.decodeUtf8 $(embedFileRelative "tests/test.lua")

@@ -1,6 +1,4 @@
 {-# LANGUAGE ExplicitNamespaces #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- | Functionality for converting 'Stubs.Syscall's into functions
 -- that can be simulated within @macaw-symbolic@.
@@ -12,11 +10,11 @@ module Grease.Macaw.Syscall (
 ) where
 
 import Control.Lens ((^.))
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (liftIO)
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC)
-import Grease.Macaw.Arch
+import Grease.Macaw.Arch (ArchContext, archSyscallArgumentRegisters, archSyscallReturnRegisters)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C

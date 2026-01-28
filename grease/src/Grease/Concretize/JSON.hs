@@ -3,8 +3,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -27,9 +25,9 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map (MapF)
 import Data.Parameterized.Map qualified as MapF
 import Data.Parameterized.SymbolRepr (SymbolRepr)
-import Data.Parameterized.TraversableFC as TFC
+import Data.Parameterized.TraversableFC qualified as TFC (toListFC)
 import Data.Text.Encoding qualified as Text
-import Grease.Concretize (ConcArgs (..))
+import Grease.Concretize (ConcArgs (ConcArgs))
 import Grease.Panic (panic)
 import Grease.Shape (ExtShape, getTag)
 import Grease.Shape.Pointer (PtrShape, getPtrTag)
@@ -145,7 +143,7 @@ structToJson ::
 structToJson iFns fm tps (Conc.ConcRV' val) =
   let pairs = Ctx.zipWith Pair tps val
    in Aeson.toJSON
-        <$> sequence (toListFC (\(Pair t v) -> concRegValueToJson iFns fm t v) pairs)
+        <$> sequence (TFC.toListFC (\(Pair t v) -> concRegValueToJson iFns fm t v) pairs)
 
 concRegValueToJson ::
   (sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)) =>

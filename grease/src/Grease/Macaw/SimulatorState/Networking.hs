@@ -6,8 +6,6 @@
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 module Grease.Macaw.SimulatorState.Networking (
   -- * @ServerSocketInfo@ and friends
@@ -28,7 +26,7 @@ module Grease.Macaw.SimulatorState.Networking (
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
 import Data.Kind (Type)
-import Data.Parameterized.Some (Some (..))
+import Data.Parameterized.Some (Some (Some))
 import Data.Word (Word16)
 import Prettyprinter qualified as PP
 import System.FilePath qualified as FilePath

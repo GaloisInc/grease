@@ -1,6 +1,4 @@
 {-# LANGUAGE LambdaCase #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- | Functionality for logging diagnostic messages in @grease@
 --
@@ -13,7 +11,7 @@ module Grease.Diagnostic (
   severity,
 ) where
 
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Grease.BranchTracer.Diagnostic qualified as BranchTracer
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Heuristic.Diagnostic qualified as Heuristic

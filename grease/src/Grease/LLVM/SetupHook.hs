@@ -1,8 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- | c.f. "Grease.Macaw.SetupHook"
 module Grease.LLVM.SetupHook (
@@ -13,7 +11,7 @@ module Grease.LLVM.SetupHook (
 
 import Control.Lens ((^.))
 import Control.Monad qualified as Monad
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Sequence qualified as Seq
@@ -26,7 +24,7 @@ import Grease.LLVM.Overrides qualified as GLO
 import Grease.LLVM.Overrides.Builtin (builtinLLVMOverrides)
 import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.LLVM.SetupHook.Diagnostic qualified as Diag
-import Grease.Overrides (CantResolveOverrideCallback (..))
+import Grease.Overrides (CantResolveOverrideCallback)
 import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C

@@ -4,8 +4,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- | Module      : Grease.Heuristic
 --
@@ -25,18 +23,19 @@ module Grease.Heuristic (
   ErrorDescription (..),
 ) where
 
-import Control.Applicative (Alternative ((<|>)), Const (..))
+import Control.Applicative (Alternative ((<|>)))
 import Control.Exception.Safe (MonadThrow)
 import Control.Lens (Lens', (.~), (^.))
 import Data.BitVector.Sized qualified as BV
 import Data.Bool qualified as Bool
 import Data.Function ((&))
+import Data.Functor.Const (Const (Const))
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Memory (MacawError (UnmappedGlobalMemoryAccess))
 import Data.Macaw.Symbolic.Memory qualified as MSM
 import Data.Maybe qualified as Maybe
-import Data.Parameterized.Classes (IxedF' (..))
+import Data.Parameterized.Classes (ixF')
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Sequence qualified as Seq
@@ -47,19 +46,19 @@ import Grease.Bug qualified as Bug
 import Grease.Bug.UndefinedBehavior qualified as UB
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer (Dereference)
-import Grease.Diagnostic
-import Grease.ErrorDescription (ErrorDescription (..))
+import Grease.Diagnostic (Diagnostic (HeuristicDiagnostic), GreaseLogAction)
+import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
 import Grease.Heuristic.Diagnostic qualified as Diag
-import Grease.Heuristic.Result
+import Grease.Heuristic.Result (CantRefine (Exhausted, Exit, MissingFunc, MissingSemantics, MutableGlobal, SolverTimeout, SolverUnknown, Timeout, Unsupported), HeuristicResult (CantRefine, PossibleBug, RefinedPrecondition, Unknown), mergeResultsOptimistic)
 import Grease.Macaw.RegName (RegNames, getRegName, mkRegName)
 import Grease.MustFail qualified as MustFail
 import Grease.Panic (panic)
-import Grease.Setup
+import Grease.Setup (InitialMem (InitialMem))
 import Grease.Setup.Annotations qualified as Anns
-import Grease.Shape
+import Grease.Shape (ArgShapes, ExtShape, Shape (ShapeExt), argShapes)
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer
-import Grease.Shape.Selector
+import Grease.Shape.Pointer (MemShape (Uninitialized), ModifyPtrError, Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget, bytesToPointers, growPtrTarget, growPtrTargetUpTo, initializeOrGrowPtrTarget, modifyPtrTarget, ptrTarget)
+import Grease.Shape.Selector (ArgSelector, Selector (SelectArg, SelectRet), argSelectorIndex, argSelectorPath)
 import Grease.Utility (OnlineSolverAndBackend, ppProgramLoc, tshow)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C

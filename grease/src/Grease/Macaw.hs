@@ -4,8 +4,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -23,7 +21,7 @@ module Grease.Macaw (
 import Control.Exception.Safe (MonadThrow)
 import Control.Lens (to, (^.))
 import Control.Monad qualified as Monad
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.BitVector.Sized qualified as BV
 import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as BSL
@@ -41,7 +39,7 @@ import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
 import Data.Macaw.Types qualified as MT
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
-import Data.Parameterized.Classes (TestEquality (..))
+import Data.Parameterized.Classes (testEquality)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.List qualified as P.List
 import Data.Parameterized.Map qualified as MapF
@@ -51,23 +49,23 @@ import Data.Type.Equality ((:~:) (Refl))
 import Data.Word (Word64, Word8)
 import GHC.Stack (HasCallStack, callStack)
 import Grease.Concretize.ToConcretize (HasToConcretize)
-import Grease.Diagnostic
-import Grease.Macaw.Arch
-import Grease.Macaw.Load.Relocation (RelocType (..))
+import Grease.Diagnostic (GreaseLogAction)
+import Grease.Macaw.Arch (ArchContext, ArchRegs, ArchReloc, archInfo, archInitGlobals, archRelocSupported, archStackPtrShape, archVals)
+import Grease.Macaw.Load.Relocation (RelocType (RelativeReloc, SymbolReloc))
 import Grease.Macaw.Overrides.Address (AddressOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.ResolveCall qualified as ResolveCall
 import Grease.Macaw.SetupHook (SetupHook (SetupHook))
-import Grease.Macaw.SimulatorHooks
+import Grease.Macaw.SimulatorHooks (ExecutingAddressAction, greaseMacawExtImpl)
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
 import Grease.Options qualified as Opts
 import Grease.Panic (panic)
-import Grease.Setup
-import Grease.Shape
+import Grease.Setup (InitialMem (InitialMem), SetupMem, getSetupMem)
+import Grease.Shape (ArgShapes (ArgShapes), Shape (ShapeBool, ShapeExt, ShapeStruct))
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer
+import Grease.Shape.Pointer (PtrShape (ShapePtrBV, ShapePtrBVLit))
 import Grease.Syntax (ResolvedOverridesYaml)
-import Grease.Utility
+import Grease.Utility (printHandle)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as CB
@@ -84,7 +82,7 @@ import Stubs.Syscall qualified as Stubs
 import What4.Expr.Builder qualified as WEB
 import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
-import What4.ProgramLoc as WPL
+import What4.ProgramLoc qualified as WPL
 import What4.Protocol.Online qualified as WPO
 
 emptyMacawMem ::

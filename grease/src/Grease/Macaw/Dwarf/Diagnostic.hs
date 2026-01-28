@@ -1,6 +1,4 @@
 {-# LANGUAGE LambdaCase #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 module Grease.Macaw.Dwarf.Diagnostic (Diagnostic (..), severity, DwarfShapeParsingError (..)) where
 
@@ -8,8 +6,8 @@ import Data.Macaw.Dwarf qualified as DWARF
 import Data.Macaw.Dwarf qualified as Dwarf
 import Data.Macaw.Types (TypeRepr)
 import Data.Word (Word64)
-import Grease.Diagnostic.Severity (Severity (..))
-import Grease.Macaw.RegName
+import Grease.Diagnostic.Severity (Severity (Warn))
+import Grease.Macaw.RegName (RegName)
 import Prettyprinter qualified as PP
 
 data Diagnostic where

@@ -1,7 +1,5 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- | See @doc/shared-libraries.md@ for user-facing documentation about PLT
 -- stubs.
@@ -20,7 +18,7 @@ module Grease.Macaw.PLT (
 import Control.Applicative (empty)
 import Data.ElfEdit qualified as Elf
 import Data.Foldable qualified as Foldable
-import Data.Macaw.BinaryLoader.ELF as Loader
+import Data.Macaw.BinaryLoader.ELF qualified as Loader
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
@@ -31,8 +29,8 @@ import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Void (Void)
 import Data.Word (Word64)
-import Grease.Panic (panic)
-import Grease.Utility
+import Grease.Panic qualified as GP
+import Grease.Utility qualified
 import Prettyprinter qualified as PP
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char qualified as TMC
@@ -84,7 +82,7 @@ pltStubSymbols pltStubInfo loadOptions ehi =
               Just plt ->
                 Elf.elfSectionAddr plt + loadOffset
               Nothing ->
-                panic "pltStubSymbols" [".plt.sec section without .plt section"]
+                GP.panic "pltStubSymbols" [".plt.sec section without .plt section"]
           pltSecBase = Elf.elfSectionAddr pltSec + loadOffset
 
           -- Compute the constant offset that we need to add to each .plt stub
@@ -219,7 +217,7 @@ resolvePltStubs path mbPltStubInfo loadOptions ehi symbolRelocs userPltStubs mem
     pltStubAddrToNameMap =
       case mbPltStubInfo of
         Just pltStubInfo ->
-          Map.map (functionNameFromByteString . Elf.steName . fst) $
+          Map.map (Grease.Utility.functionNameFromByteString . Elf.steName . fst) $
             pltStubSymbols pltStubInfo loadOptions ehi
         Nothing ->
           Map.empty
