@@ -42,10 +42,10 @@ import Grease.Shape.Print qualified as Print
 import Hedgehog qualified as H
 import Hedgehog.Gen qualified as HG
 import Hedgehog.Range qualified as HR
-import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel.Pointer (LLVMPointerType)
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import Test.Tasty qualified as TT
@@ -143,7 +143,7 @@ genShape genExt =
 maxBytes :: Integral a => a
 maxBytes = 32
 
-genPtrShape :: Mem.HasPtrWidth w => H.Gen (Some (PtrShape ext w NoTag))
+genPtrShape :: CLMP.HasPtrWidth w => H.Gen (Some (PtrShape ext w NoTag))
 genPtrShape =
   HG.choice
     [ do
@@ -166,24 +166,24 @@ genPtrShape =
     ]
 
 genPtrTarget ::
-  Mem.HasPtrWidth wptr =>
+  CLMP.HasPtrWidth wptr =>
   H.Gen (PtrShape.PtrTarget wptr NoTag, PtrShape.Offset)
 genPtrTarget = do
   memShapes <- HG.list (HR.linear 0 16) genMemShape
   -- Use smart constructor to avoid "non-canonical" instances
   let tgt = PtrShape.ptrTarget Maybe.Nothing (Seq.fromList memShapes)
   let sz = PtrShape.ptrTargetSize ?ptrWidth tgt
-  offsetInt <- HG.integral (HR.linear 0 (Bytes.bytesToInteger sz))
-  let offset = PtrShape.Offset (Bytes.toBytes offsetInt)
+  offsetInt <- HG.integral (HR.linear 0 (CLB.bytesToInteger sz))
+  let offset = PtrShape.Offset (CLB.toBytes offsetInt)
   pure (tgt, offset)
 
-genMemShape :: Mem.HasPtrWidth wptr => H.Gen (PtrShape.MemShape wptr NoTag)
+genMemShape :: CLMP.HasPtrWidth wptr => H.Gen (PtrShape.MemShape wptr NoTag)
 genMemShape = do
   -- Don't generate zero bytes, because then printing then parsing doesn't
   -- roundtrip
   let minBytes :: Int
       minBytes = 1
-  let bytes = Bytes.toBytes Functor.<$> HG.integral (HR.linear minBytes maxBytes)
+  let bytes = CLB.toBytes Functor.<$> HG.integral (HR.linear minBytes maxBytes)
   HG.recursive
     HG.choice
     [ PtrShape.Uninitialized Functor.<$> bytes

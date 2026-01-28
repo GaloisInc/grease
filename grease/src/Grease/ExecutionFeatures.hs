@@ -24,7 +24,7 @@ import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Utils.Seconds qualified as C
 import Prettyprinter qualified as PP
 import What4.Config qualified as W4C
-import What4.Expr qualified as W4
+import What4.Expr qualified as WE
 import What4.Interface qualified as WI
 import What4.Protocol.Online qualified as WPO
 
@@ -45,7 +45,7 @@ boundedExecFeats boundsOpts = do
 pathSatFeat ::
   ( CB.IsSymBackend sym bak
   , bak ~ C.OnlineBackend solver scope st fs
-  , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
+  , sym ~ WE.ExprBuilder scope st (WE.Flags fm)
   , WPO.OnlineSolver solver
   ) =>
   bak ->
@@ -67,12 +67,12 @@ pathSatFeat bak = do
 greaseExecFeats ::
   ( CB.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
-  , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
+  , sym ~ WE.ExprBuilder scope st (WE.Flags fm)
   , ?parserHooks :: CSyn.ParserHooks ext
   , PP.Pretty cExt
   , PP.Pretty (Dbg.ResponseExt cExt)
   , bak ~ C.OnlineBackend solver scope st fs
-  , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
+  , sym ~ WE.ExprBuilder scope st (WE.Flags fm)
   , WPO.OnlineSolver solver
   , Dbg.HasContext p cExt sym ext ret
   ) =>

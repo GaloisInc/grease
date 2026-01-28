@@ -10,7 +10,7 @@ module Grease.LLVM.Overrides.Diagnostic (
 ) where
 
 import Grease.Diagnostic.Severity (Severity (Debug, Warn))
-import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
+import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Prettyprinter qualified as PP
 import Text.LLVM.AST qualified as L
 import Text.LLVM.PP qualified as L
@@ -26,7 +26,7 @@ data Diagnostic where
   RegisteredOverride ::
     forall p sym.
     -- | The override
-    CLLVM.SomeLLVMOverride p sym CLLVM.LLVM ->
+    CLI.SomeLLVMOverride p sym CLI.LLVM ->
     Diagnostic
 
 ppDeclare :: L.Declare -> PP.Doc a
@@ -39,8 +39,8 @@ instance PP.Pretty Diagnostic where
         "Can't skip function" PP.<+> ppDeclare d
       FoundDeclare d ->
         "Found `declare`:" PP.<+> ppDeclare d
-      RegisteredOverride (CLLVM.SomeLLVMOverride ov) ->
-        "Registered override for:" PP.<+> ppDeclare (CLLVM.llvmOverride_declare ov)
+      RegisteredOverride (CLI.SomeLLVMOverride ov) ->
+        "Registered override for:" PP.<+> ppDeclare (CLI.llvmOverride_declare ov)
 
 severity :: Diagnostic -> Severity
 severity =

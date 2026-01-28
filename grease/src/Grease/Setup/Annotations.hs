@@ -41,7 +41,7 @@ import Grease.Shape.Selector
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Types qualified as C
-import What4.Expr.Builder qualified as W4
+import What4.Expr.Builder qualified as WEB
 import What4.Interface qualified as WI
 
 data SomeBaseSelector ext argTys t
@@ -161,13 +161,13 @@ annotatePtr sym sel ptr = do
 findAnnotations ::
   forall sym brand st fs t t'.
   ( CB.IsSymInterface sym
-  , sym ~ W4.ExprBuilder brand st fs
+  , sym ~ WEB.ExprBuilder brand st fs
   ) =>
   sym ->
   WI.BaseTypeRepr t' ->
   WI.SymExpr sym t ->
   [WI.SymAnnotation sym t']
-findAnnotations sym repr e = case W4.asApp e of
+findAnnotations sym repr e = case WEB.asApp e of
   Just app -> do
     let anns :: [WI.SymAnnotation sym t']
         anns = MC.foldMapFC (Maybe.maybeToList . getAnn) app
@@ -178,7 +178,7 @@ findAnnotations sym repr e = case W4.asApp e of
  where
   getAnn ::
     forall tp.
-    W4.Expr brand tp ->
+    WEB.Expr brand tp ->
     Maybe (WI.SymAnnotation sym t')
   getAnn expr =
     case WI.exprType expr of
@@ -187,7 +187,7 @@ findAnnotations sym repr e = case W4.asApp e of
 
 lookupSomePtrBlockAnnotation ::
   ( CB.IsSymInterface sym
-  , sym ~ W4.ExprBuilder brand st fs
+  , sym ~ WEB.ExprBuilder brand st fs
   ) =>
   Annotations sym ext argTys ->
   sym ->
@@ -204,7 +204,7 @@ lookupSomePtrBlockAnnotation anns sym ptr = do
 
 lookupPtrBlockAnnotation ::
   ( CB.IsSymInterface sym
-  , sym ~ W4.ExprBuilder brand st fs
+  , sym ~ WEB.ExprBuilder brand st fs
   , 1 C.<= w
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w'
   ) =>
@@ -224,7 +224,7 @@ lookupPtrBlockAnnotation anns sym w ptr = do
 
 lookupPtrOffsetAnnotation ::
   ( CB.IsSymInterface sym
-  , sym ~ W4.ExprBuilder brand st fs
+  , sym ~ WEB.ExprBuilder brand st fs
   , 1 C.<= w
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w'
   ) =>
@@ -245,7 +245,7 @@ lookupPtrOffsetAnnotation anns sym w ptr =
 
 lookupPtrAnnotation ::
   ( CB.IsSymInterface sym
-  , sym ~ W4.ExprBuilder brand st fs
+  , sym ~ WEB.ExprBuilder brand st fs
   , 1 C.<= w
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w'
   ) =>

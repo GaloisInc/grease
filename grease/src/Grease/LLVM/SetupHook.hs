@@ -35,11 +35,11 @@ import Lang.Crucible.CFG.SSAConversion qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM qualified as CLLVM
 import Lang.Crucible.LLVM.Extension (ArchWidth, LLVM)
-import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
+import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.LLVM.SymIO qualified as SymIO
-import Lang.Crucible.LLVM.Translation qualified as Trans
-import Lang.Crucible.LLVM.TypeContext qualified as TCtx
+import Lang.Crucible.LLVM.SymIO qualified as CLSIO
+import Lang.Crucible.LLVM.Translation qualified as CLT
+import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lumberjack qualified as LJ
@@ -62,15 +62,15 @@ newtype SetupHook sym arch
         , CLM.HasPtrWidth (ArchWidth arch)
         , CLM.HasLLVMAnn sym
         , HasToConcretize p
-        , ?lc :: TCtx.TypeContext
+        , ?lc :: CLTC.TypeContext
         , ?memOpts :: CLM.MemOptions
-        , ?intrinsicsOpts :: CLLVM.IntrinsicsOptions
+        , ?intrinsicsOpts :: CLI.IntrinsicsOptions
         , OnlineSolverAndBackend solver sym bak scope st fs
         ) =>
         bak ->
         C.HandleAllocator ->
-        Trans.LLVMContext arch ->
-        SymIO.LLVMFileSystem (ArchWidth arch) ->
+        CLT.LLVMContext arch ->
+        CLSIO.LLVMFileSystem (ArchWidth arch) ->
         CS.OverrideSim p sym LLVM rtp a r ()
       )
 
@@ -86,9 +86,9 @@ syntaxSetupHook ::
   SetupHook sym arch
 syntaxSetupHook la ovs skipFuns prog cfgs errCb =
   SetupHook $ \bak _halloc llvmCtx fs -> do
-    let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
-    let dl = TCtx.llvmDataLayout typeCtx
-    let mvar = Trans.llvmMemVar llvmCtx
+    let typeCtx = llvmCtx ^. CLT.llvmTypeCtx
+    let dl = CLTC.llvmDataLayout typeCtx
+    let mvar = CLT.llvmMemVar llvmCtx
 
     -- Register built-in and user overrides.
     funOvs <-
@@ -116,7 +116,7 @@ syntaxSetupHook la ovs skipFuns prog cfgs errCb =
         Nothing -> do
           C.SomeCFG defSsa <- pure $ C.toSSA defCfg
           CS.bindCFG defSsa
-        Just (CLLVM.SomeLLVMOverride llvmOverride) ->
+        Just (CLI.SomeLLVMOverride llvmOverride) ->
           GLO.bindLLVMOverrideFnHandle mvar defHdl llvmOverride
 
 -- | A 'SetupHook' for LLVM CFGs from IR modules.
@@ -125,16 +125,16 @@ moduleSetupHook ::
   Seq.Seq (WFN.FunctionName, GLOS.LLVMSExpOverride) ->
   -- | Functions that should be skipped even if they are defined
   Set WFN.FunctionName ->
-  Trans.ModuleTranslation arch ->
+  CLT.ModuleTranslation arch ->
   Map GE.Entrypoint (GE.EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
   CantResolveOverrideCallback sym CLLVM.LLVM ->
   SetupHook sym arch
 moduleSetupHook la ovs skipFuns trans cfgs errCb =
   SetupHook $ \bak _halloc llvmCtx fs -> do
-    let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
-    let dl = TCtx.llvmDataLayout typeCtx
-    let mvar = Trans.llvmMemVar llvmCtx
-    let llvmMod = trans ^. Trans.modTransModule
+    let typeCtx = llvmCtx ^. CLT.llvmTypeCtx
+    let dl = CLTC.llvmDataLayout typeCtx
+    let mvar = CLT.llvmMemVar llvmCtx
+    let llvmMod = trans ^. CLT.modTransModule
 
     -- Register defined functions...
     let handleTranslationWarning warn = doLog la (Diag.LLVMTranslationWarning warn)

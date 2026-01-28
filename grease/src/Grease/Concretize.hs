@@ -53,13 +53,13 @@ import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Concretize qualified as Conc
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.SymSequence qualified as C
 import Lang.Crucible.SymIO qualified as SymIO
 import Numeric (showHex)
 import Prettyprinter qualified as PP
-import What4.Expr qualified as W4
+import What4.Expr qualified as WE
 import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as WI
 
@@ -88,7 +88,7 @@ newtype ConcArgs sym ext argTys
 concArgsToSym ::
   forall sym ext brand st fm wptr argTys.
   CB.IsSymInterface sym =>
-  (sym ~ W4.ExprBuilder brand st (W4.Flags fm)) =>
+  (sym ~ WE.ExprBuilder brand st (WE.Flags fm)) =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   sym ->
   W4FM.FloatModeRepr fm ->
@@ -100,7 +100,7 @@ concArgsToSym sym fm argTys (ConcArgs cArgs) =
     <$> Ctx.zipWithM
       ( \tp cShape -> do
           let conc = Conc.unConcRV' (Shape.getTag PtrShape.getPtrTag cShape)
-          symb <- Conc.concToSym sym Mem.concToSymPtrFnMap fm tp conc
+          symb <- Conc.concToSym sym CLMP.concToSymPtrFnMap fm tp conc
           pure (CS.RegEntry @sym tp symb)
       )
       argTys
@@ -141,10 +141,10 @@ data ConcretizedData sym ext argTys
 makeConcretizedData ::
   forall solver sym ext wptr bak t st argTys fm.
   OnlineSolverAndBackend solver sym bak t st fm =>
-  Mem.HasPtrWidth wptr =>
+  CLMP.HasPtrWidth wptr =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   bak ->
-  W4.GroundEvalFn t ->
+  WE.GroundEvalFn t ->
   Maybe (ErrorDescription sym) ->
   InitialState sym ext argTys ->
   CS.RegValue sym ToConcretizeType ->
@@ -156,11 +156,11 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
         , initStateMem = InitialMem initMem
         } = initState
   let sym = CB.backendGetSym bak
-  let ctx = Conc.ConcCtx @sym @t groundEvalFn Mem.concPtrFnMap
+  let ctx = Conc.ConcCtx @sym @t groundEvalFn CLMP.concPtrFnMap
   let concRV :: forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)
       concRV t = fmap (Conc.ConcRV' @sym) . Conc.groundRegValue @sym @t ctx t . CS.unRV
   cArgs <- liftIO (traverseFC (Shape.traverseShapeWithType concRV) initArgs)
-  let W4.GroundEvalFn gFn = groundEvalFn
+  let WE.GroundEvalFn gFn = groundEvalFn
   let toWord8 :: BV.BV 8 -> Word8
       toWord8 = fromIntegral . BV.asUnsigned
   let concStruct (Ctx.Empty Ctx.:> anyVal Ctx.:> name) = do
@@ -193,7 +193,7 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
 -- * Pretty-printing
 
 printConcArgs ::
-  Mem.HasPtrWidth wptr =>
+  CLMP.HasPtrWidth wptr =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   MM.AddrWidthRepr wptr ->
   -- | Argument names
@@ -263,7 +263,7 @@ printConcFs cFs =
 
 -- | Pretty-print concretized arguments and the concretized filesystem
 printConcData ::
-  Mem.HasPtrWidth wptr =>
+  CLMP.HasPtrWidth wptr =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   MM.AddrWidthRepr wptr ->
   -- | Argument names

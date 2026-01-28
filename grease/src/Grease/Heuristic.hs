@@ -64,7 +64,7 @@ import Grease.Utility (OnlineSolverAndBackend, ppProgramLoc, tshow)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
-import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.Errors.MemoryError qualified as Mem
 import Lang.Crucible.LLVM.Errors.UndefinedBehavior qualified as Mem
@@ -72,16 +72,16 @@ import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel qualified as CLM hiding (Mem)
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Generic qualified as Mem
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
 import Lumberjack qualified as LJ
 import Numeric.Natural (Natural)
 import Prettyprinter qualified as PP
 import Text.LLVM.AST qualified as L
-import What4.Expr qualified as W4
+import What4.Expr qualified as WE
 import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4
-import What4.ProgramLoc qualified as W4
+import What4.ProgramLoc qualified as WPL
 
 doLog :: GreaseLogAction -> Diag.Diagnostic -> IO ()
 doLog la diag = LJ.writeLog la (HeuristicDiagnostic diag)
@@ -112,10 +112,10 @@ newtype MemoryErrorHeuristic sym ext w argTys
   = MemoryErrorHeuristic
       ( forall ts t.
         ( CB.IsSymInterface sym
-        , Cursor.Last ts ~ Mem.LLVMPointerType w
+        , Cursor.Last ts ~ CLMP.LLVMPointerType w
         ) =>
         sym ->
-        W4.ProgramLoc ->
+        WPL.ProgramLoc ->
         -- Argument names
         Ctx.Assignment (Const String) argTys ->
         ArgShapes ext NoTag argTys ->
@@ -127,12 +127,12 @@ newtype MemoryErrorHeuristic sym ext w argTys
 refinePtrArg ::
   ( ExtShape ext ~ PtrShape ext w
   , Cursor.CursorExt ext ~ Dereference ext w
-  , Mem.HasPtrWidth w
-  , Cursor.Last ts ~ Mem.LLVMPointerType w'
+  , CLMP.HasPtrWidth w
+  , Cursor.Last ts ~ CLMP.LLVMPointerType w'
   ) =>
   GreaseLogAction ->
   ArgShapes ext NoTag argTys ->
-  ((regTy ~ Mem.LLVMPointerType w) => PtrTarget w NoTag -> Either ModifyPtrError (PtrTarget w NoTag)) ->
+  ((regTy ~ CLMP.LLVMPointerType w) => PtrTarget w NoTag -> Either ModifyPtrError (PtrTarget w NoTag)) ->
   ArgSelector ext argTys ts regTy ->
   IO (HeuristicResult ext argTys)
 refinePtrArg la args modify sel =
@@ -162,8 +162,8 @@ refinePtrArg la args modify sel =
 newPointer ::
   ( ExtShape ext ~ PtrShape ext w
   , Cursor.CursorExt ext ~ Dereference ext w
-  , Mem.HasPtrWidth w
-  , Cursor.Last ts ~ Mem.LLVMPointerType 8
+  , CLMP.HasPtrWidth w
+  , Cursor.Last ts ~ CLMP.LLVMPointerType 8
   ) =>
   GreaseLogAction ->
   -- | Argument names
@@ -181,8 +181,8 @@ newPointer la argNames args sel = do
 handleMemErr ::
   ( ExtShape ext ~ PtrShape ext w
   , Cursor.CursorExt ext ~ Dereference ext w
-  , Mem.HasPtrWidth w
-  , Cursor.Last ts ~ Mem.LLVMPointerType w
+  , CLMP.HasPtrWidth w
+  , Cursor.Last ts ~ CLMP.LLVMPointerType w
   ) =>
   GreaseLogAction ->
   -- | Argument names
@@ -212,20 +212,20 @@ handleMemErr la argNames args err sel =
       refinePtrArg la args (modifyPtrTarget ?ptrWidth modifyInner path) sel
 
 testPtrWidth ::
-  ( Mem.HasPtrWidth wptr
+  ( CLMP.HasPtrWidth wptr
   , CB.IsSymInterface sym
   ) =>
-  Mem.LLVMPtr sym w ->
+  CLMP.LLVMPtr sym w ->
   Maybe (w C.:~: wptr)
-testPtrWidth ptr = testEquality (Mem.ptrWidth ptr) ?ptrWidth
+testPtrWidth ptr = testEquality (CLMP.ptrWidth ptr) ?ptrWidth
 
 assertPtrWidth ::
   forall sym wptr w m.
   ( MonadThrow m
-  , Mem.HasPtrWidth wptr
+  , CLMP.HasPtrWidth wptr
   , CB.IsSymInterface sym
   ) =>
-  Mem.LLVMPtr sym w ->
+  CLMP.LLVMPtr sym w ->
   m (w C.:~: wptr)
 assertPtrWidth ptr =
   case testPtrWidth ptr of
@@ -236,7 +236,7 @@ allocInfoLoc ::
   WI.IsExprBuilder sym =>
   sym ->
   Mem.Mem sym ->
-  Mem.LLVMPtr sym w ->
+  CLMP.LLVMPtr sym w ->
   Maybe Text
 allocInfoLoc sym mem ptr = do
   Mem.AllocInfo _aTy _sz _mut _align loc <-
@@ -252,16 +252,16 @@ modPtr ::
   forall sym ext t st fs w w0 argTys.
   ( ExtShape ext ~ PtrShape ext w
   , CB.IsSymInterface sym
-  , sym ~ W4.ExprBuilder t st fs
+  , sym ~ WE.ExprBuilder t st fs
   , Cursor.CursorExt ext ~ Dereference ext w
-  , Mem.HasPtrWidth w
+  , CLMP.HasPtrWidth w
   ) =>
   GreaseLogAction ->
   Anns.Annotations sym ext argTys ->
   sym ->
   ArgShapes ext NoTag argTys ->
   (PtrTarget w NoTag -> PtrTarget w NoTag) ->
-  Mem.LLVMPtr sym w0 ->
+  CLMP.LLVMPtr sym w0 ->
   IO (HeuristicResult ext argTys)
 modPtr la anns sym args modify ptr = do
   Refl <- assertPtrWidth ptr
@@ -277,8 +277,8 @@ modPtr la anns sym args modify ptr = do
 -- | Helper, not exported
 growPtrTargetUpToBv ::
   WI.IsExprBuilder sym =>
-  Mem.HasPtrWidth w =>
-  Semigroup (tag (C.VectorType (Mem.LLVMPointerType 8))) =>
+  CLMP.HasPtrWidth w =>
+  Semigroup (tag (C.VectorType (CLMP.LLVMPointerType 8))) =>
   sym ->
   WI.SymBV sym w' ->
   PtrTarget w tag ->
@@ -287,12 +287,12 @@ growPtrTargetUpToBv sym symBv =
   case WI.asBV (Maybe.fromMaybe symBv (WI.getUnannotatedTerm sym symBv)) of
     Nothing -> growPtrTarget
     Just bv ->
-      let minSz = Bytes.toBytes (BV.asUnsigned bv)
+      let minSz = CLB.toBytes (BV.asUnsigned bv)
        in growPtrTargetUpTo minSz
 
 -- | Helper, not exported
-ptrBytes :: Mem.HasPtrWidth w => Bytes.Bytes
-ptrBytes = Bytes.toBytes (NatRepr.widthVal ?ptrWidth `div` 8)
+ptrBytes :: CLMP.HasPtrWidth w => CLB.Bytes
+ptrBytes = CLB.toBytes (NatRepr.widthVal ?ptrWidth `div` 8)
 
 -- | Heuristics for dealing with undefined behavior.
 --
@@ -301,14 +301,14 @@ handleUB ::
   forall sym ext t st fs w argTys.
   ( ExtShape ext ~ PtrShape ext w
   , CB.IsSymInterface sym
-  , sym ~ W4.ExprBuilder t st fs
+  , sym ~ WE.ExprBuilder t st fs
   , Cursor.CursorExt ext ~ Dereference ext w
-  , Mem.HasPtrWidth w
+  , CLMP.HasPtrWidth w
   ) =>
   GreaseLogAction ->
   Anns.Annotations sym ext argTys ->
   sym ->
-  W4.ProgramLoc ->
+  WPL.ProgramLoc ->
   ArgShapes ext NoTag argTys ->
   Mem.UndefinedBehavior (CS.RegValue' sym) ->
   IO (HeuristicResult ext argTys)
@@ -327,7 +327,7 @@ handleUB la anns sym _loc args =
   -- Turn an argument that was not previous a pointer into one
   makeIntoPointer ::
     forall w'.
-    Mem.LLVMPtr sym w' ->
+    CLMP.LLVMPtr sym w' ->
     IO (HeuristicResult ext argTys)
   makeIntoPointer ptr = do
     Refl <- assertPtrWidth ptr
@@ -349,21 +349,21 @@ applyMemoryHeuristics ::
   , C.IsSyntaxExtension ext
   , ExtShape ext ~ PtrShape ext wptr
   , Cursor.CursorExt ext ~ Dereference ext wptr
-  , sym ~ W4.ExprBuilder t st fs
-  , Mem.HasPtrWidth wptr
+  , sym ~ WE.ExprBuilder t st fs
+  , CLMP.HasPtrWidth wptr
   ) =>
   GreaseLogAction ->
   Anns.Annotations sym ext argTys ->
   sym ->
   MemoryErrorHeuristic sym ext wptr argTys ->
   MemoryErrorHeuristic sym ext 8 argTys ->
-  W4.ProgramLoc ->
+  WPL.ProgramLoc ->
   InitialMem sym ->
   AnyMemError sym ->
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
-  Mem.LLVMPtr sym w ->
+  CLMP.LLVMPtr sym w ->
   IO (HeuristicResult ext argTys)
 applyMemoryHeuristics _la anns sym ptrHeuristic byteHeuristic loc (InitialMem memImpl) memErr argNames args ptr = do
   Refl <- assertPtrWidth ptr
@@ -420,10 +420,10 @@ mustFailHeuristic ::
   forall wptr solver sym bak t st fs ext argTys fm.
   ( OnlineSolverAndBackend solver sym bak t st fs
   , 16 C.<= wptr
-  , Mem.HasPtrWidth wptr
+  , CLMP.HasPtrWidth wptr
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
-  , fs ~ W4.Flags fm
+  , fs ~ WE.Flags fm
   ) =>
   RefineHeuristic sym bak ext argTys
 mustFailHeuristic bak _anns _initMem obligation minfo _argNames _args =
@@ -465,7 +465,7 @@ pointerHeuristic ::
   , Cursor.CursorExt ext ~ Dereference ext wptr
   , OnlineSolverAndBackend solver sym bak t st fs
   , 16 C.<= wptr
-  , Mem.HasPtrWidth wptr
+  , CLMP.HasPtrWidth wptr
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   ) =>
@@ -501,7 +501,7 @@ pointerHeuristic la ptrHeuristic byteHeuristic bak anns initMem obligation minfo
   sym = CB.backendGetSym bak
   labeledPred = CB.proofGoal obligation
   loc = CS.simErrorLoc (labeledPred ^. W4.labeledPredMsg)
-  applyToErr :: AnyMemError sym -> Mem.LLVMPtr sym w -> IO (HeuristicResult ext argTys)
+  applyToErr :: AnyMemError sym -> CLMP.LLVMPtr sym w -> IO (HeuristicResult ext argTys)
   applyToErr e ptr = applyMemoryHeuristics la anns sym ptrHeuristic byteHeuristic loc initMem e argNames args ptr
 
 pointerHeuristics ::
@@ -511,7 +511,7 @@ pointerHeuristics ::
   , Cursor.CursorExt ext ~ Dereference ext wptr
   , OnlineSolverAndBackend solver sym bak t st fs
   , 16 C.<= wptr
-  , Mem.HasPtrWidth wptr
+  , CLMP.HasPtrWidth wptr
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   ) =>
@@ -524,16 +524,16 @@ pointerHeuristics la ptrHeuristic byteHeuristic =
   ]
  where
 
-getConcretePointerBlock :: WI.IsExprBuilder sym => sym -> Mem.LLVMPtr sym w -> Maybe Natural
+getConcretePointerBlock :: WI.IsExprBuilder sym => sym -> CLMP.LLVMPtr sym w -> Maybe Natural
 getConcretePointerBlock sym ptr = tryAnnotated <|> tryUnannotated
  where
-  int = WI.natToIntegerPure (Mem.llvmPointerBlock ptr)
+  int = WI.natToIntegerPure (CLMP.llvmPointerBlock ptr)
   tryAnnotated = fromIntegral <$> WI.asInteger int
   tryUnannotated = do
     term <- WI.getUnannotatedTerm sym int
     fromIntegral <$> WI.asInteger term
 
-allocInfoFromPtr :: WI.IsExprBuilder sym => sym -> Mem.Mem sym -> Mem.LLVMPtr sym w -> Maybe (Mem.AllocInfo sym)
+allocInfoFromPtr :: WI.IsExprBuilder sym => sym -> Mem.Mem sym -> CLMP.LLVMPtr sym w -> Maybe (Mem.AllocInfo sym)
 allocInfoFromPtr sym mem ptr = do
   int <- getConcretePointerBlock sym ptr
   Mem.possibleAllocInfo int (Mem.memAllocs mem)
@@ -542,15 +542,15 @@ allocInfoFromPtr sym mem ptr = do
 -- return the name of the associated global variable. Returns 'Nothing' if the
 -- mutability is wrong, if the pointer is not a global, or if the pointer\'s
 -- block or offset aren\'t concrete.
-globalPtrName :: CB.IsSymInterface sym => sym -> CLM.MemImpl sym -> Mem.Mutability -> Mem.LLVMPtr sym w -> Maybe String
+globalPtrName :: CB.IsSymInterface sym => sym -> CLM.MemImpl sym -> Mem.Mutability -> CLMP.LLVMPtr sym w -> Maybe String
 globalPtrName sym mem mut ptr =
   case allocInfoFromPtr sym (CLM.memImplHeap mem) ptr of
     Just (Mem.AllocInfo Mem.GlobalAlloc _sz actualMut _align _loc) | mut == actualMut -> do
-      L.Symbol nm <- Mem.isGlobalPointer (CLM.memImplSymbolMap mem) ptr
+      L.Symbol nm <- CLMP.isGlobalPointer (CLM.memImplSymbolMap mem) ptr
       Just nm
     _ -> Nothing
 
-memOpPtrs :: Mem.MemoryOp sym w -> [Mem.LLVMPtr sym w]
+memOpPtrs :: Mem.MemoryOp sym w -> [CLMP.LLVMPtr sym w]
 memOpPtrs =
   \case
     Mem.MemLoadOp _ _ ptr _ -> [ptr]
@@ -563,7 +563,7 @@ memOpPtrs =
 llvmHeuristics ::
   forall solver sym bak t st fs wptr argTys.
   ( OnlineSolverAndBackend solver sym bak t st fs
-  , Mem.HasPtrWidth wptr
+  , CLMP.HasPtrWidth wptr
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   , wptr ~ 64 -- TODO(lb): Why is this necessary?
@@ -585,7 +585,7 @@ macawHeuristics ::
   , OnlineSolverAndBackend solver sym bak t st fs
   , Symbolic.SymArchConstraints arch
   , 16 C.<= MC.ArchAddrWidth arch
-  , Mem.HasPtrWidth (MC.ArchAddrWidth arch)
+  , CLMP.HasPtrWidth (MC.ArchAddrWidth arch)
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   ) =>
@@ -599,10 +599,10 @@ macawHeuristics la rNames =
  where
   handleMemErr' ::
     forall ts regTy.
-    (Cursor.Last ts ~ Mem.LLVMPointerType (MC.ArchAddrWidth arch)) =>
+    (Cursor.Last ts ~ CLMP.LLVMPointerType (MC.ArchAddrWidth arch)) =>
     sym ->
-    Cursor.Last ts ~ Mem.LLVMPointerType (MC.ArchAddrWidth arch) =>
-    W4.ProgramLoc ->
+    Cursor.Last ts ~ CLMP.LLVMPointerType (MC.ArchAddrWidth arch) =>
+    WPL.ProgramLoc ->
     -- Argument names
     Ctx.Assignment (Const String) (Symbolic.MacawCrucibleRegTypes arch) ->
     ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.MacawCrucibleRegTypes arch) ->

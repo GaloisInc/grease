@@ -27,7 +27,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.CFG.SSAConversion qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.LLVM.Intrinsics qualified as CLLVM
+import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.Syntax (emptyParserHooks, llvmParserHooks)
 import Lang.Crucible.Simulator qualified as CS
@@ -57,7 +57,7 @@ instance PP.Pretty LLVMSExpOverrideError where
 
 -- | A 'CLLVM.SomeLLVMOverride' quantified at a higher rank over @p@ and @sym@.
 newtype AnyLLVMOverride
-  = AnyLLVMOverride (forall p sym. CLLVM.SomeLLVMOverride p sym CLLVM.LLVM)
+  = AnyLLVMOverride (forall p sym. CLI.SomeLLVMOverride p sym CLI.LLVM)
 
 -- | An LLVM function override, corresponding to a single S-expression file.
 data LLVMSExpOverride
@@ -78,7 +78,7 @@ acfgToAnyLLVMOverride ::
   CLM.HasPtrWidth w =>
   FilePath {- The file which defines the CFG's function.
               This is only used for error messages. -} ->
-  C.Reg.AnyCFG CLLVM.LLVM ->
+  C.Reg.AnyCFG CLI.LLVM ->
   Either LLVMSExpOverrideError AnyLLVMOverride
 acfgToAnyLLVMOverride path (C.Reg.AnyCFG cfg) = do
   let argTys = C.Reg.cfgArgTypes cfg
@@ -91,12 +91,12 @@ acfgToAnyLLVMOverride path (C.Reg.AnyCFG cfg) = do
     Right decl ->
       Right $
         AnyLLVMOverride $
-          CLLVM.SomeLLVMOverride $
-            CLLVM.LLVMOverride
-              { CLLVM.llvmOverride_declare = decl
-              , CLLVM.llvmOverride_args = argTys
-              , CLLVM.llvmOverride_ret = retTy
-              , CLLVM.llvmOverride_def =
+          CLI.SomeLLVMOverride $
+            CLI.LLVMOverride
+              { CLI.llvmOverride_declare = decl
+              , CLI.llvmOverride_args = argTys
+              , CLI.llvmOverride_ret = retTy
+              , CLI.llvmOverride_def =
                   \_mvar args ->
                     CS.regValue <$> CS.callCFG ssa (CS.RegMap args)
               }
@@ -105,7 +105,7 @@ acfgToAnyLLVMOverride path (C.Reg.AnyCFG cfg) = do
 parsedProgToLLVMSExpOverride ::
   CLM.HasPtrWidth w =>
   FilePath ->
-  CSyn.ParsedProgram CLLVM.LLVM ->
+  CSyn.ParsedProgram CLI.LLVM ->
   Either LLVMSExpOverrideError (WFN.FunctionName, LLVMSExpOverride)
 parsedProgToLLVMSExpOverride path prog = do
   let fnNameText = Text.pack $ dropExtensions $ takeBaseName path

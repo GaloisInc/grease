@@ -17,9 +17,9 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.Parameterized.Nonce (NonceGenerator)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
-import What4.Expr qualified as W4
+import What4.Expr qualified as WE
 import What4.ProblemFeatures qualified as W4
-import What4.Protocol.Online qualified as W4
+import What4.Protocol.Online qualified as WPO
 import What4.Solver qualified as W4
 
 -- | The SMT solver to use for solving proof goals.
@@ -44,13 +44,13 @@ withSolverOnlineBackend ::
   forall m a fm scope.
   (MonadIO m, MonadMask m) =>
   Solver ->
-  W4.FloatModeRepr fm ->
+  WE.FloatModeRepr fm ->
   NonceGenerator IO scope ->
   ( forall sym bak solver st.
-    ( sym ~ W4.ExprBuilder scope st (W4.Flags fm)
-    , bak ~ C.OnlineBackend solver scope st (W4.Flags fm)
+    ( sym ~ WE.ExprBuilder scope st (WE.Flags fm)
+    , bak ~ C.OnlineBackend solver scope st (WE.Flags fm)
     , CB.IsSymBackend sym bak
-    , W4.OnlineSolver solver
+    , WPO.OnlineSolver solver
     ) =>
     bak ->
     m a
@@ -73,7 +73,7 @@ withSolverOnlineBackend solver fm ng bakAction =
  where
   withSym ::
     ( forall sym st.
-      ( sym ~ W4.ExprBuilder scope st (W4.Flags fm)
+      ( sym ~ WE.ExprBuilder scope st (WE.Flags fm)
       , CB.IsSymInterface sym
       ) =>
       sym ->
@@ -81,7 +81,7 @@ withSolverOnlineBackend solver fm ng bakAction =
     ) ->
     m a
   withSym symAction = do
-    sym <- liftIO $ W4.newExprBuilder fm W4.EmptyExprBuilderState ng
+    sym <- liftIO $ WE.newExprBuilder fm WE.EmptyExprBuilderState ng
     -- In order for GHC to conclude that `IsSymInterface sym` holds, we must
     -- first prove that there is an `IsInterpretedFloatExprBuilder sym`
     -- instance in scope. Each instance of this class matches on a particular
@@ -89,11 +89,11 @@ withSolverOnlineBackend solver fm ng bakAction =
     -- GHC's instance solver is to pattern match on all possible cases of
     -- `FloatModeRepr`, which we do below.
     case fm of
-      W4.FloatIEEERepr ->
+      WE.FloatIEEERepr ->
         symAction sym
-      W4.FloatRealRepr ->
+      WE.FloatRealRepr ->
         symAction sym
-      W4.FloatUninterpretedRepr ->
+      WE.FloatUninterpretedRepr ->
         symAction sym
 
   unsatFeatures :: C.UnsatFeatures

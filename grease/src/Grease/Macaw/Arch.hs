@@ -61,9 +61,9 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
 import Stubs.Common qualified as Stubs
 import Stubs.FunctionOverride qualified as Stubs
-import What4.Expr qualified as W4
+import What4.Expr qualified as WE
 import What4.Interface qualified as WI
-import What4.Protocol.Online qualified as W4
+import What4.Protocol.Online qualified as WPO
 
 type ArchRegs sym arch = Ctx.Assignment (CS.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch)
 
@@ -146,9 +146,9 @@ data ArchContext arch = ArchContext
     _archFunctionReturnAddr ::
       forall sym bak solver scope st fs mem.
       ( CB.IsSymBackend sym bak
-      , sym ~ W4.ExprBuilder scope st fs
+      , sym ~ WE.ExprBuilder scope st fs
       , bak ~ C.OnlineBackend solver scope st fs
-      , W4.OnlineSolver solver
+      , WPO.OnlineSolver solver
       , CLM.HasLLVMAnn sym
       ) =>
       bak ->
@@ -261,8 +261,8 @@ data ArchContext arch = ArchContext
   , _archPCFixup ::
       forall sym bak solver scope st fs.
       ( CB.IsSymInterface sym
-      , sym ~ W4.ExprBuilder scope st fs
-      , W4.OnlineSolver solver
+      , sym ~ WE.ExprBuilder scope st fs
+      , WPO.OnlineSolver solver
       , bak ~ C.OnlineBackend solver scope st fs
       ) =>
       bak ->

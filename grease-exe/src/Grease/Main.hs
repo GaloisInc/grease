@@ -173,10 +173,10 @@ import Lang.Crucible.LLVM.Debug qualified as LDebug
 import Lang.Crucible.LLVM.Extension qualified as CLLVM
 import Lang.Crucible.LLVM.Globals qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.LLVM.SymIO qualified as CLLVM.SymIO
+import Lang.Crucible.LLVM.SymIO qualified as CLSIO
 import Lang.Crucible.LLVM.Syntax (emptyParserHooks, llvmParserHooks)
-import Lang.Crucible.LLVM.Translation qualified as Trans
-import Lang.Crucible.LLVM.TypeContext qualified as TCtx
+import Lang.Crucible.LLVM.Translation qualified as CLT
+import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
@@ -191,11 +191,12 @@ import System.Exit as Exit
 import System.IO (Handle, IOMode (WriteMode), withFile)
 import Text.LLVM qualified as L
 import Text.Read (readMaybe)
-import What4.Expr qualified as W4
+import What4.Expr qualified as WE
+import What4.Expr.Builder qualified as WEB
 import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
-import What4.ProgramLoc qualified as W4
-import What4.Protocol.Online qualified as W4
+import What4.ProgramLoc qualified as WPL
+import What4.Protocol.Online qualified as WPO
 import Prelude hiding (log, print, putStrLn, userError)
 
 {- Note [Explicitly listed errors]
@@ -343,9 +344,9 @@ loadInitialPreconditions la path =
 
 toBatchBug ::
   CLM.HasPtrWidth wptr =>
-  (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
+  (sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)) =>
   (ExtShape ext ~ PtrShape ext wptr) =>
-  W4.FloatModeRepr fm ->
+  WE.FloatModeRepr fm ->
   MC.AddrWidthRepr wptr ->
   Ctx.Assignment (Const String) args ->
   Ctx.Assignment C.TypeRepr args ->
@@ -366,9 +367,9 @@ toBatchBug fm addrWidth argNames argTys initArgs b cData =
 
 toFailedPredicate ::
   CLM.HasPtrWidth wptr =>
-  (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
+  (sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)) =>
   (ExtShape ext ~ PtrShape ext wptr) =>
-  W4.FloatModeRepr fm ->
+  WE.FloatModeRepr fm ->
   MC.AddrWidthRepr wptr ->
   Ctx.Assignment (Const String) args ->
   Ctx.Assignment C.TypeRepr args ->
@@ -394,7 +395,7 @@ toFailedPredicate fm addrWidth argNames argTys initArgs (NoHeuristic goal cData 
                   )
    in FailedPredicate
         { _failedPredicateLocation =
-            tshow (PP.pretty (W4.plSourceLoc (C.simErrorLoc simErr)))
+            tshow (PP.pretty (WPL.plSourceLoc (C.simErrorLoc simErr)))
         , _failedPredicateMessage = msg
         , _failedPredicateArgs = argsJson
         , _failedPredicateConcShapes =
@@ -403,9 +404,9 @@ toFailedPredicate fm addrWidth argNames argTys initArgs (NoHeuristic goal cData 
 
 checkMustFail ::
   ( CB.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
-  , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
-  , W4.OnlineSolver solver
+  , sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)
+  , bak ~ CB.OnlineBackend solver scope st (WEB.Flags fm)
+  , WPO.OnlineSolver solver
   ) =>
   bak ->
   NE.NonEmpty (NoHeuristic sym ext tys) ->
@@ -598,7 +599,7 @@ overrideRegs archCtx sym =
 
 macawExecFeats ::
   ( Symbolic.SymArchConstraints arch
-  , OnlineSolverAndBackend solver sym bak scope st (W4.Flags fm)
+  , OnlineSolverAndBackend solver sym bak scope st (WEB.Flags fm)
   , ext ~ Symbolic.MacawExt arch
   , ?parserHooks :: CSyn.ParserHooks ext
   , Dbg.HasContext p MDebug.MacawCommand sym ext (Symbolic.ArchRegStruct arch)
@@ -624,7 +625,7 @@ macawExecFeats la bak memVar archCtx macawCfgConfig simOpts = do
 
 llvmExecFeats ::
   forall p sym bak ext ret solver scope st fm.
-  ( OnlineSolverAndBackend solver sym bak scope st (W4.Flags fm)
+  ( OnlineSolverAndBackend solver sym bak scope st (WEB.Flags fm)
   , ext ~ CLLVM.LLVM
   , ?parserHooks :: CSyn.ParserHooks ext
   , Dbg.HasContext p LDebug.LLVMCommand sym ext ret
@@ -669,19 +670,19 @@ macawMemConfig ::
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , CB.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
-  , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
-  , W4.OnlineSolver solver
+  , sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)
+  , bak ~ CB.OnlineBackend solver scope st (WEB.Flags fm)
+  , WPO.OnlineSolver solver
   , Show (ArchReloc arch)
   , CLM.HasLLVMAnn sym
   , MSM.MacawProcessAssertion sym
   , ?memOpts :: CLM.MemOptions
-  , ?lc :: TCtx.TypeContext
+  , ?lc :: CLTC.TypeContext
   , p ~ GreaseSimulatorState cExt sym arch
   ) =>
   GreaseLogAction ->
   C.GlobalVar CLM.Mem ->
-  CLLVM.SymIO.LLVMFileSystem (MC.ArchAddrWidth arch) ->
+  CLSIO.LLVMFileSystem (MC.ArchAddrWidth arch) ->
   bak ->
   C.HandleAllocator ->
   MacawCfgConfig arch ->
@@ -756,7 +757,7 @@ macawInitState ::
   , MM.MemWidth wptr
   , Symbolic.SymArchConstraints arch
   , MSM.MacawProcessAssertion sym
-  , OnlineSolverAndBackend solver sym bak scope st (W4.Flags fm)
+  , OnlineSolverAndBackend solver sym bak scope st (WEB.Flags fm)
   , Show (ArchReloc arch)
   , MSM.MacawProcessAssertion sym
   , wptr ~ MC.ArchAddrWidth arch
@@ -765,7 +766,7 @@ macawInitState ::
   , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
-  , ?lc :: TCtx.TypeContext
+  , ?lc :: CLTC.TypeContext
   ) =>
   GreaseLogAction ->
   ArchContext arch ->
@@ -826,7 +827,7 @@ macawRefineOnce ::
   , CLM.HasPtrWidth wptr
   , MM.MemWidth wptr
   , Symbolic.SymArchConstraints arch
-  , OnlineSolverAndBackend solver sym bak scope st (W4.Flags fm)
+  , OnlineSolverAndBackend solver sym bak scope st (WEB.Flags fm)
   , Show (ArchReloc arch)
   , argTys ~ Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)
   , wptr ~ MC.ArchAddrWidth arch
@@ -835,7 +836,7 @@ macawRefineOnce ::
   , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
-  , ?lc :: TCtx.TypeContext
+  , ?lc :: CLTC.TypeContext
   ) =>
   GreaseLogAction ->
   ArchContext arch ->
@@ -847,7 +848,7 @@ macawRefineOnce ::
   Macaw.SetupHook sym arch ->
   AddressOverrides arch ->
   bak ->
-  W4.FloatModeRepr fm ->
+  WE.FloatModeRepr fm ->
   ArgShapes ext NoTag argTys ->
   InitialMem sym ->
   C.GlobalVar CLM.Mem ->
@@ -911,9 +912,9 @@ withMaybeFile (Just pth) imd f = withFile pth imd (f . Just)
 simulateMacawCfg ::
   forall sym bak arch solver scope st fm.
   ( CB.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
-  , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
-  , W4.OnlineSolver solver
+  , sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)
+  , bak ~ CB.OnlineBackend solver scope st (WEB.Flags fm)
+  , WPO.OnlineSolver solver
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
@@ -925,7 +926,7 @@ simulateMacawCfg ::
   ) =>
   GreaseLogAction ->
   bak ->
-  W4.FloatModeRepr fm ->
+  WE.FloatModeRepr fm ->
   C.HandleAllocator ->
   MacawCfgConfig arch ->
   ArchContext arch ->
@@ -949,7 +950,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
         unsupported la "Macaw does not support uninitialized globals (macaw#372)"
   (initMem, memPtrTable) <- emptyMacawMem bak archCtx memory globs relocs
 
-  let (tyCtxErrs, tyCtx) = TCtx.mkTypeContext dl IntMap.empty []
+  let (tyCtxErrs, tyCtx) = CLTC.mkTypeContext dl IntMap.empty []
   let ?lc = tyCtx
   mapM_ (doLog la . Diag.TypeContextError) tyCtxErrs
 
@@ -1032,9 +1033,9 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
 simulateRewrittenCfg ::
   forall sym bak arch solver scope st fm.
   ( CB.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder scope st (W4.Flags fm)
-  , bak ~ CB.OnlineBackend solver scope st (W4.Flags fm)
-  , W4.OnlineSolver solver
+  , sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)
+  , bak ~ CB.OnlineBackend solver scope st (WEB.Flags fm)
+  , WPO.OnlineSolver solver
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
@@ -1043,12 +1044,12 @@ simulateRewrittenCfg ::
   , Show (ArchReloc arch)
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
-  , ?lc :: TCtx.TypeContext
+  , ?lc :: CLTC.TypeContext
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
   ) =>
   GreaseLogAction ->
   bak ->
-  W4.FloatModeRepr fm ->
+  WE.FloatModeRepr fm ->
   C.HandleAllocator ->
   MacawCfgConfig arch ->
   ArchContext arch ->
@@ -1178,7 +1179,7 @@ simulateMacawCfgs ::
   Map Entrypoint (MacawEntrypointCfgs arch) ->
   IO Results
 simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs = do
-  let fm = W4.FloatRealRepr
+  let fm = WE.FloatRealRepr
   withMaybeFile (simDumpCoverage simOpts) WriteMode $ \mbCovHandle -> do
     let mem = mcMemory macawCfgConfig
     let secsJson = Load.dumpSections mem
@@ -1529,15 +1530,15 @@ getLlvmInitArgShapes la opts llvmMod argNames cfg = do
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.
   ( CLM.HasPtrWidth (CLLVM.ArchWidth arch)
-  , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
+  , OnlineSolverAndBackend solver sym bak t st (WEB.Flags fm)
   , ?parserHooks :: CSyn.ParserHooks CLLVM.LLVM
   ) =>
   GreaseLogAction ->
   SimOpts ->
   bak ->
-  W4.FloatModeRepr fm ->
+  WE.FloatModeRepr fm ->
   C.HandleAllocator ->
-  Trans.LLVMContext arch ->
+  CLT.LLVMContext arch ->
   Maybe L.Module ->
   InitialMem sym ->
   LLVM.SetupHook sym arch ->
@@ -1549,7 +1550,7 @@ simulateLlvmCfg ::
 simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbStartupOvCfg scfg@(C.SomeCFG cfg) = do
   doLog la (Diag.TargetCFG cfg)
 
-  let memVar = Trans.llvmMemVar llvmCtx
+  let memVar = CLT.llvmMemVar llvmCtx
   (execFeats, profLogTask) <-
     llvmExecFeats
       @(GLP.GreaseLLVMPersonality LDebug.LLVMCommand sym ret)
@@ -1578,8 +1579,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
   let bounds = simBoundsOpts simOpts
   result <- withMemOptions simOpts $ do
     let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
-    let typeCtx = llvmCtx ^. Trans.llvmTypeCtx
-    let dl = TCtx.llvmDataLayout typeCtx
+    let typeCtx = llvmCtx ^. CLT.llvmTypeCtx
+    let dl = CLTC.llvmDataLayout typeCtx
     -- See comment above on heuristics in 'simulateMacawCfg'
     let heuristics =
           if simNoHeuristics simOpts
@@ -1651,14 +1652,14 @@ simulateLlvmCfgs ::
   GreaseLogAction ->
   SimOpts ->
   C.HandleAllocator ->
-  Trans.LLVMContext arch ->
+  CLT.LLVMContext arch ->
   Maybe L.Module ->
   (forall sym bak. CB.IsSymBackend sym bak => bak -> IO (InitialMem sym)) ->
   (forall sym. LLVM.SetupHook sym arch) ->
   Map Entrypoint (EntrypointCfgs (C.AnyCFG CLLVM.LLVM)) ->
   IO Results
 simulateLlvmCfgs la simOpts halloc llvmCtx llvmMod mkMem setupHook cfgs = do
-  let fm = W4.FloatRealRepr
+  let fm = WE.FloatRealRepr
   withSolverOnlineBackend (simSolver simOpts) fm globalNonceGenerator $ \bak -> do
     initMem <- mkMem bak
     results <- do
@@ -1722,15 +1723,15 @@ simulateLlvmSyntax simOpts la = do
   regCfgs <- entrypointCfgMap la halloc prog (simEntryPoints simOpts)
   let cfgs = Map.map (fmap toSsaAnyCfg) regCfgs
   let dl = DataLayout.defaultDataLayout
-  let (_errs, tyCtx) = TCtx.mkTypeContext dl IntMap.empty []
+  let (_errs, tyCtx) = CLTC.mkTypeContext dl IntMap.empty []
   let llvmCtx =
-        Trans.LLVMContext
-          { Trans.llvmArch = CLLVM.X86Repr ?ptrWidth
-          , Trans.llvmPtrWidth = \k -> k ?ptrWidth
-          , Trans.llvmMemVar = mvar
-          , Trans._llvmTypeCtx = tyCtx
-          , Trans.llvmGlobalAliases = Map.empty
-          , Trans.llvmFunctionAliases = Map.empty
+        CLT.LLVMContext
+          { CLT.llvmArch = CLLVM.X86Repr ?ptrWidth
+          , CLT.llvmPtrWidth = \k -> k ?ptrWidth
+          , CLT.llvmMemVar = mvar
+          , CLT._llvmTypeCtx = tyCtx
+          , CLT.llvmGlobalAliases = Map.empty
+          , CLT.llvmFunctionAliases = Map.empty
           }
   sexpOvs <- loadLLVMSExpOvs la (simOverrides simOpts) halloc mvar
   let llvmMod = Nothing
@@ -1756,7 +1757,7 @@ parseBitcode la path =
       pure m
 
 simulateLlvm ::
-  Trans.TranslationOptions ->
+  CLT.TranslationOptions ->
   SimOpts ->
   GreaseLogAction ->
   IO Results
@@ -1766,7 +1767,7 @@ simulateLlvm transOpts simOpts la = do
   mvar <- liftIO $ CLM.mkMemVar "grease:memmodel" halloc
   C.Some @_ @_ @arch trans <- do
     let ?transOpts = transOpts
-    Trans.translateModule halloc mvar llvmMod
+    CLT.translateModule halloc mvar llvmMod
 
   entries <-
     if List.null (simEntryPoints simOpts)
@@ -1777,22 +1778,22 @@ simulateLlvm transOpts simOpts la = do
         pure (List.map (convertSymbol . L.defName) (L.modDefines llvmMod))
       else pure (simEntryPoints simOpts)
 
-  let llvmCtxt = trans ^. Trans.transContext
-  Trans.llvmPtrWidth llvmCtxt $ \ptrW -> CLM.withPtrWidth ptrW $ do
+  let llvmCtxt = trans ^. CLT.transContext
+  CLT.llvmPtrWidth llvmCtxt $ \ptrW -> CLM.withPtrWidth ptrW $ do
     let mkMem :: forall sym bak. CB.IsSymBackend sym bak => bak -> IO (InitialMem sym)
         mkMem bak =
-          let ?lc = llvmCtxt ^. Trans.llvmTypeCtx
+          let ?lc = llvmCtxt ^. CLT.llvmTypeCtx
               ?recordLLVMAnnotation = \_ _ _ -> pure ()
            in withMemOptions simOpts $ do
                 unpopulated <- CLLVM.initializeAllMemory bak llvmCtxt llvmMod
                 initMem <-
                   case simMutGlobs simOpts of
                     Initialized ->
-                      CLLVM.populateAllGlobals bak (trans ^. Trans.globalInitMap) unpopulated
+                      CLLVM.populateAllGlobals bak (trans ^. CLT.globalInitMap) unpopulated
                     Symbolic ->
                       unsupported la "GREASE does not yet support symbolic globals for LLVM"
                     Uninitialized ->
-                      CLLVM.populateConstGlobals bak (trans ^. Trans.globalInitMap) unpopulated
+                      CLLVM.populateConstGlobals bak (trans ^. CLT.globalInitMap) unpopulated
                 pure (InitialMem initMem)
 
     let ?parserHooks = llvmParserHooks emptyParserHooks mvar
@@ -1803,7 +1804,7 @@ simulateLlvm transOpts simOpts la = do
             EntrypointAddress{} -> nonSymbolEntrypoint la
             EntrypointCoreDump{} -> nonSymbolEntrypoint la
             EntrypointSymbolName nm ->
-              Trans.getTranslatedCFG trans (L.Symbol (Text.unpack nm)) >>= \case
+              CLT.getTranslatedCFG trans (L.Symbol (Text.unpack nm)) >>= \case
                 Just (_decl, cfg, warns) -> do
                   forM_ warns $ \warn ->
                     LJ.writeLog la (LLVMSetupHookDiagnostic (LDiag.LLVMTranslationWarning warn))
@@ -2172,7 +2173,7 @@ simulateFile opts la =
         | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32 opts la
         | ".ppc64.elf" `List.isSuffixOf` path -> simulatePPC64 opts la
         | ".x64.elf" `List.isSuffixOf` path -> simulateX86 opts la
-        | ".bc" `List.isSuffixOf` path -> simulateLlvm Trans.defaultTranslationOptions opts la
+        | ".bc" `List.isSuffixOf` path -> simulateLlvm CLT.defaultTranslationOptions opts la
         | ".armv7l.cbl" `List.isSuffixOf` path -> simulateARMSyntax opts la
         | ".ppc32.cbl" `List.isSuffixOf` path -> simulatePPC32Syntax opts la
         | ".ppc64.cbl" `List.isSuffixOf` path -> simulatePPC64Syntax opts la

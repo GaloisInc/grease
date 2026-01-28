@@ -50,7 +50,7 @@ import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.Pointer (BlockId (BlockId), PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
-import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Numeric (showHex)
 import Prettyprinter qualified as PP
 import Prelude hiding (print)
@@ -263,7 +263,7 @@ printOff (PtrShape.Offset off) = do
         case aw of
           DMM.Addr32 -> 8
           DMM.Addr64 -> 16
-  let off' = integerToInt (Bytes.bytesToInteger off)
+  let off' = integerToInt (CLB.bytesToInteger off)
   pure (PP.pretty (padHex padding off'))
 
 -- | Helper, not exported
@@ -298,8 +298,8 @@ integerToInt :: Integer -> Int
 integerToInt = fromIntegral
 
 -- | Helper, not exported
-bytesToInt :: Bytes.Bytes -> Int
-bytesToInt = integerToInt . Bytes.bytesToInteger
+bytesToInt :: CLB.Bytes -> Int
+bytesToInt = integerToInt . CLB.bytesToInteger
 
 -- | Ignores @tag@s.
 printMemShape :: PtrShape.MemShape w tag -> Printer w (PP.Doc Void)

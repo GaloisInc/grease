@@ -21,10 +21,10 @@ import Lang.Crucible.Backend.Simple (Flags)
 import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.Errors.MemoryError qualified as Mem
 import Lang.Crucible.Simulator.SimError qualified as C
-import What4.Expr.Builder qualified as W4
+import What4.Expr.Builder qualified as WEB
 import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4
-import What4.Protocol.Online qualified as W4
+import What4.Protocol.Online qualified as WPO
 import What4.SatResult qualified as W4
 
 -- | Should this proof obligation be excluded from consideration by the must-
@@ -80,9 +80,9 @@ mustFailPred bak obligation = do
 -- | Check if at least one of the given 'C.ProofObligation's is guaranteed to
 -- fail, i.e., if the conjunction of their 'mustFailPred's is unsatisfiable.
 oneMustFail ::
-  ( W4.OnlineSolver solver
+  ( WPO.OnlineSolver solver
   , CB.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder t st (Flags fm)
+  , sym ~ WEB.ExprBuilder t st (Flags fm)
   , bak ~ OnlineBackend solver t st (Flags fm)
   ) =>
   bak ->
@@ -95,7 +95,7 @@ oneMustFail bak obligations = do
       Monad.=<< Traversable.traverse (mustFailPred bak) obligations
   let onlineDisabled = Monad.fail "`must-fail` requires online solving to be enabled"
   withSolverProcess bak onlineDisabled Function.$ \solverProc ->
-    W4.checkSatisfiable solverProc "must-fail heuristic" mustFail
+    WPO.checkSatisfiable solverProc "must-fail heuristic" mustFail
       Monad.>>= \case
         W4.Unknown -> pure False
         W4.Sat () -> pure False
@@ -105,9 +105,9 @@ oneMustFail bak obligations = do
 -- apply the \"one must fail\" heuristic: Was at least one of the predicates
 -- guaranteed to fail?
 checkOneMustFail ::
-  ( W4.OnlineSolver solver
+  ( WPO.OnlineSolver solver
   , CB.IsSymBackend sym bak
-  , sym ~ W4.ExprBuilder t st (Flags fm)
+  , sym ~ WEB.ExprBuilder t st (Flags fm)
   , bak ~ OnlineBackend solver t st (Flags fm)
   ) =>
   bak ->

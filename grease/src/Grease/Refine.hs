@@ -144,7 +144,7 @@ import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
 import System.Exit qualified as Exit
-import What4.Expr qualified as W4
+import What4.Expr qualified as WE
 import What4.Expr.App qualified as W4
 import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as WI
@@ -161,7 +161,7 @@ doLog la diag = LJ.writeLog la (RefineDiagnostic diag)
 findPredAnnotations ::
   forall sym brand st fs t.
   ( CB.IsSymInterface sym
-  , sym ~ W4.ExprBuilder brand st fs
+  , sym ~ WE.ExprBuilder brand st fs
   ) =>
   sym ->
   WI.SymExpr sym t ->
@@ -254,7 +254,7 @@ data ErrorCallbacks sym t
 -- In this configuration, Macaw and Crucible-LLVM will record errors
 -- to the 'errorMap' as an 'ErrorDescription'
 buildErrMaps ::
-  sym ~ W4.ExprBuilder t st fs =>
+  sym ~ WE.ExprBuilder t st fs =>
   Maybe
     ( IORef
         ( Map.Map
@@ -481,7 +481,7 @@ execAndRefine ::
   forall ext solver sym bak t st argTys ret w m fm p.
   ( MonadIO m
   , C.IsSyntaxExtension ext
-  , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
+  , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
   , 16 C.<= w
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
@@ -570,7 +570,7 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
 refineOnce ::
   ( CLM.HasPtrWidth wptr
   , C.IsSyntaxExtension ext
-  , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
+  , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
   , ToConc.HasToConcretize p
   , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext wptr
@@ -580,7 +580,7 @@ refineOnce ::
   Opts.SimOpts ->
   C.HandleAllocator ->
   bak ->
-  W4.FloatModeRepr fm ->
+  W4FM.FloatModeRepr fm ->
   DataLayout ->
   Ctx.Assignment Setup.ValueName argTys ->
   Ctx.Assignment (Const String) argTys ->
