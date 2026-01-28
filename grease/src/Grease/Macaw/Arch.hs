@@ -1,7 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -44,7 +42,7 @@ import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as Symbolic
 import Data.Macaw.Symbolic qualified as Symbolic
-import Data.Macaw.Symbolic.Memory as SymbolicMemory
+import Data.Macaw.Symbolic.Memory qualified as SymbolicMemory
 import Data.Macaw.Types (BVType)
 import Data.Map (Map)
 import Data.Parameterized.Context qualified as Ctx

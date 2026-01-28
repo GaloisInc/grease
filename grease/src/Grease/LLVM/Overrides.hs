@@ -3,8 +3,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -32,16 +30,16 @@ import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (Diagnostic (LLVMOverridesDiagnostic), GreaseLogAction)
 import Grease.LLVM.Overrides.Builtin (basicLLVMOverrides)
 import Grease.LLVM.Overrides.Declare (mkDeclare)
-import Grease.LLVM.Overrides.Diagnostic as Diag
-import Grease.LLVM.Overrides.SExp (LLVMSExpOverride (..), acfgToAnyLLVMOverride)
+import Grease.LLVM.Overrides.Diagnostic qualified as Diag
+import Grease.LLVM.Overrides.SExp (LLVMSExpOverride (lsoAuxiliaryOverrides, lsoForwardDeclarations, lsoPublicOverride), acfgToAnyLLVMOverride)
 import Grease.LLVM.Overrides.SExp qualified as GLOS
-import Grease.Overrides (CantResolveOverrideCallback (..))
+import Grease.Overrides (CantResolveOverrideCallback (CantResolveOverrideCallback))
 import Grease.Skip (declSkipOverride, registerSkipOverride)
 import Grease.Syntax.Overrides (concBvOverride, freshBytesOverride, tryBindTypedOverride)
 import Grease.Utility (OnlineSolverAndBackend, llvmOverrideName)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.LLVM.DataLayout as CLLVM
+import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
 import Lang.Crucible.LLVM.Functions qualified as CLLVM
 import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.MemModel qualified as CLM
@@ -49,7 +47,7 @@ import Lang.Crucible.LLVM.SymIO qualified as CLSIO
 import Lang.Crucible.LLVM.Syntax.Overrides.String qualified as StrOv
 import Lang.Crucible.LLVM.Translation (LLVMContext)
 import Lang.Crucible.LLVM.Translation qualified as CLT
-import Lang.Crucible.LLVM.TypeContext (TypeContext (..))
+import Lang.Crucible.LLVM.TypeContext (TypeContext)
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lumberjack qualified as LJ

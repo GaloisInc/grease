@@ -1,8 +1,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- | Dwarf shape parsing and initialization. Currently due to downstream parsing support
 -- this module only supports parsing DWARFv4. 'loadDwarfPreconditions' will attempt to find a
@@ -17,11 +15,11 @@ module Grease.Macaw.Dwarf (loadDwarfPreconditions, UseConservativeDebugShapes (.
 import Control.Lens qualified as Lens
 import Control.Monad (foldM, join)
 import Control.Monad.Except (runExceptT, withExceptT)
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.RWS (MonadIO (..), MonadTrans (lift))
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.RWS (MonadTrans (lift))
 import Control.Monad.Trans.Except (ExceptT, except)
-import Control.Monad.Trans.Maybe (MaybeT (..), hoistMaybe)
-import Data.Coerce
+import Control.Monad.Trans.Maybe (MaybeT (MaybeT), hoistMaybe, runMaybeT)
+import Data.Coerce (coerce)
 import Data.ElfEdit qualified as Elf
 import Data.Foldable (find, for_)
 import Data.Foldable qualified as Foldable
@@ -40,19 +38,19 @@ import Data.Maybe (fromMaybe)
 import Data.Maybe qualified as Maybe
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
-import Data.Proxy (Proxy (..))
+import Data.Proxy (Proxy (Proxy))
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Data.Word (Word64)
 import Grease.Diagnostic (Diagnostic (DwarfShapesDiagnostic), GreaseLogAction)
 import Grease.Macaw.Arch (ArchContext, archABIParams)
 import Grease.Macaw.Dwarf.Diagnostic qualified as DwarfDiagnostic
-import Grease.Macaw.RegName (RegName (..), mkRegName)
-import Grease.Options (TypeUnrollingBound (..))
+import Grease.Macaw.RegName (RegName (RegName), mkRegName)
+import Grease.Options (TypeUnrollingBound (TypeUnrollingBound))
 import Grease.Shape (ExtShape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (MemShape (Exactly, Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget, TaggedByte (..), memShapeSize, ptrTarget)
+import Grease.Shape.Pointer (MemShape (Exactly, Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget, TaggedByte (TaggedByte), memShapeSize, ptrTarget, taggedByteTag, taggedByteValue)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (toBytes)
 import Lang.Crucible.LLVM.MemModel qualified as CLM

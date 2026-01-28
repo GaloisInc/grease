@@ -2,8 +2,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2025
@@ -15,10 +13,10 @@ module Grease.LLVM.SimulatorHooks (
 import Control.Lens (set, (^.))
 import Control.Monad.IO.Class (MonadIO)
 import Data.Parameterized.NatRepr qualified as NatRepr
-import Data.Type.Equality (TestEquality (..), (:~:) (..))
-import Grease.Diagnostic (Diagnostic (..), GreaseLogAction)
+import Data.Type.Equality (testEquality, (:~:) (Refl))
+import Grease.Diagnostic (Diagnostic (LLVMSimulatorHooksDiagnostic), GreaseLogAction)
 import Grease.LLVM.SimulatorHooks.Diagnostic qualified as Diag
-import Grease.Options (ErrorSymbolicFunCalls (..))
+import Grease.Options (ErrorSymbolicFunCalls, getErrorSymbolicFunCalls)
 import Grease.Panic (panic)
 import Grease.Skip (createSkipOverride)
 import Lang.Crucible.Backend qualified as CB

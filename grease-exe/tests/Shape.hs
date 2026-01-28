@@ -2,8 +2,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- `error` is fine in tests
 {- HLINT ignore "Use panic" -}
@@ -33,7 +31,8 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (testEquality)
 import Data.Type.Equality qualified as Equality
-import Grease.Shape as Shape
+import Grease.Shape (ExtShape, Shape)
+import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
@@ -59,10 +58,10 @@ eqShape ::
   Bool
 eqShape eqExt s1 s2 =
   case (s1, s2) of
-    (ShapeBool NoTag, ShapeBool NoTag) -> True
-    (ShapeUnit NoTag, ShapeUnit NoTag) -> True
-    (ShapeStruct NoTag s1', ShapeStruct NoTag s2') -> eqShapes eqExt s1' s2'
-    (ShapeExt s1', ShapeExt s2') -> eqExt s1' s2'
+    (Shape.ShapeBool NoTag, Shape.ShapeBool NoTag) -> True
+    (Shape.ShapeUnit NoTag, Shape.ShapeUnit NoTag) -> True
+    (Shape.ShapeStruct NoTag s1', Shape.ShapeStruct NoTag s2') -> eqShapes eqExt s1' s2'
+    (Shape.ShapeExt s1', Shape.ShapeExt s2') -> eqExt s1' s2'
     (_, _) -> False
 
 eqShapes ::
@@ -137,7 +136,7 @@ genShape genExt =
     [ genStruct (genShape genExt)
     , do
         Some ext <- genExt
-        pure (Some (ShapeExt ext))
+        pure (Some (Shape.ShapeExt ext))
     ]
 
 maxBytes :: Integral a => a
@@ -212,7 +211,7 @@ doPrintNamed nm s =
 
 doPrint :: Shape LLVM NoTag ty -> Text
 doPrint s =
-  let doc = Print.evalPrinter printCfg (Print.print s)
+  let doc = Print.evalPrinter printCfg (Print.printShape s)
    in PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions doc)
 
 testPrint :: String -> Text -> Shape LLVM NoTag ty -> TT.TestTree
@@ -301,11 +300,11 @@ shapeTests =
     , testPrint
         "Print ShapeBool"
         "bool"
-        (ShapeBool NoTag)
+        (Shape.ShapeBool NoTag)
     , testPrint
         "Print ShapeUnit"
         "unit"
-        (ShapeUnit NoTag)
+        (Shape.ShapeUnit NoTag)
     , testPrint
         "Print ShapeStruct"
         "{bool, unit}"

@@ -3,8 +3,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -58,7 +56,7 @@ import Data.Void (Void)
 import Data.Word (Word8)
 import GHC.TypeLits (Nat)
 import Grease.Panic (panic)
-import Grease.Shape (ExtShape, ParsedShapes (..), Shape)
+import Grease.Shape (ExtShape, ParsedShapes (ParsedShapes), Shape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (BlockId (BlockId, getBlockId), Offset, PtrShape)
@@ -69,7 +67,7 @@ import Lang.Crucible.LLVM.MemModel.Pointer (HasPtrWidth)
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Types qualified as C
 import Lang.Crucible.Types qualified as CT
-import Numeric
+import Numeric qualified as Numeric
 import Prettyprinter qualified as PP
 import Text.Megaparsec (Parsec)
 import Text.Megaparsec qualified as MP
@@ -199,7 +197,7 @@ instance PP.Pretty ParseError where
     \case
       ParseError err -> PP.pretty (MP.errorBundlePretty err)
       MissingBlock (BlockId blk) ->
-        PP.pretty ("Missing definition for allocation " List.++ showHex blk "")
+        PP.pretty ("Missing definition for allocation " List.++ Numeric.showHex blk "")
 
 parseShapes ::
   forall ext w.

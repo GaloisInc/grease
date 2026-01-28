@@ -1,6 +1,4 @@
 {-# LANGUAGE ImplicitParams #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2025
@@ -12,7 +10,7 @@ module Grease.Macaw.Overrides.SExp (
 
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
-import Data.Proxy (Proxy (..))
+import Data.Proxy (Proxy (Proxy))
 import Data.Sequence qualified as Seq
 import Grease.Macaw.SimulatorState (MacawFnHandle, MacawOverride)
 import Grease.Syntax (ParseProgramError, parseProgram)

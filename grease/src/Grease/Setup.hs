@@ -5,8 +5,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -29,8 +27,8 @@ import Control.Lens (use, (%~), (.=), (^.))
 import Control.Lens.TH (makeLenses)
 import Control.Lens.Zoom (zoom)
 import Control.Monad (foldM)
-import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Trans.State (StateT (..), evalStateT)
+import Control.Monad.IO.Class (MonadIO (liftIO))
+import Control.Monad.Trans.State (StateT, evalStateT, runStateT)
 import Data.BitVector.Sized qualified as BV
 import Data.Function ((&))
 import Data.List qualified as List
@@ -49,9 +47,32 @@ import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic (Diagnostic (SetupDiagnostic), GreaseLogAction)
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Setup.Diagnostic qualified as Diag
-import Grease.Shape
-import Grease.Shape.Pointer
-import Grease.Shape.Selector
+import Grease.Shape (
+  ArgShapes (ArgShapes),
+  ExtShape,
+  Shape (ShapeBool, ShapeExt, ShapeFloat, ShapeStruct, ShapeUnit),
+  getTag,
+  shapeType,
+ )
+import Grease.Shape.Pointer (
+  BlockId,
+  MemShape (Exactly, Initialized, Pointer, Uninitialized),
+  PtrShape (ShapePtr, ShapePtrBV, ShapePtrBVLit),
+  PtrTarget (PtrTarget),
+  TaggedByte (TaggedByte),
+  getOffset,
+  getPtrTag,
+  memShapeSize,
+  ptrShapeType,
+  ptrTargetSize,
+  taggedByteValue,
+ )
+import Grease.Shape.Selector (
+  ArgSelector (ArgSelector),
+  Selector (SelectArg),
+  ppSelector,
+  selectorPath,
+ )
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.LLVM.Bytes (Bytes)

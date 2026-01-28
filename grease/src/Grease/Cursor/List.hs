@@ -1,8 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -15,7 +13,7 @@ module Grease.Cursor.List (
 ) where
 
 import Data.Parameterized.Axiom (unsafeAxiom)
-import Data.Parameterized.List (List (..))
+import Data.Parameterized.List (List (Nil, (:<)))
 import Data.Type.Equality ((:~:) (Refl))
 import Grease.Panic (panic)
 

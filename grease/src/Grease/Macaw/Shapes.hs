@@ -1,6 +1,4 @@
 {-# LANGUAGE ImplicitParams #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 module Grease.Macaw.Shapes (
   macawInitArgShapes,
@@ -8,7 +6,7 @@ module Grease.Macaw.Shapes (
 
 import Control.Monad.Trans.Maybe qualified as MaybeT
 import Data.ElfEdit qualified as Elf
-import Data.Functor.Const (Const (..))
+import Data.Functor.Const (Const)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic

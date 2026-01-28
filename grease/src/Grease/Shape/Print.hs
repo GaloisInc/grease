@@ -4,8 +4,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -17,7 +15,7 @@ module Grease.Shape.Print (
   printNamedShapesFiltered,
   printNamedShapes,
   printNamed,
-  print,
+  printShape,
 ) where
 
 import Control.Monad qualified as Monad
@@ -53,7 +51,6 @@ import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Numeric (showHex)
 import Prettyprinter qualified as PP
-import Prelude hiding (print)
 
 data Allocs
   = Allocs
@@ -190,16 +187,16 @@ printNamed ::
   Shape ext tag ty ->
   Printer w (PP.Doc ann)
 printNamed name s =
-  ((PP.pretty name PP.<> ": ") PP.<>) Functor.<$> print s
+  ((PP.pretty name PP.<> ": ") PP.<>) Functor.<$> printShape s
 
 -- | Print a single 'Shape'
 --
 -- Ignores @tag@s.
-print ::
+printShape ::
   ExtShape ext ~ PtrShape ext w =>
   Shape ext tag ty ->
   Printer w (PP.Doc ann)
-print =
+printShape =
   \case
     Shape.ShapeBool _tag -> pure "bool"
     Shape.ShapeUnit _tag -> pure "unit"
@@ -213,7 +210,7 @@ printStruct ::
   Ctx.Assignment (Shape ext tag) ctx ->
   Printer w (PP.Doc ann)
 printStruct fields = do
-  docs <- Monad.sequence (TFC.toListFC print fields)
+  docs <- Monad.sequence (TFC.toListFC printShape fields)
   pure (PP.braces (PP.hcat (List.intersperse ", " docs)))
 
 -- | Ignores @tag@s.

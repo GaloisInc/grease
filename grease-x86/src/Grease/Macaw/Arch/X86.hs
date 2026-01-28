@@ -2,8 +2,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 -- Due to the orphan ArchReloc instance below
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -13,7 +11,7 @@
 module Grease.Macaw.Arch.X86 (x86Ctx) where
 
 import Control.Lens ((.~), (^.))
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (liftIO)
 import Data.BitVector.Sized qualified as BV
 import Data.ElfEdit qualified as EE
 import Data.Function ((&))
@@ -24,10 +22,11 @@ import Data.Map qualified as Map
 import Data.Parameterized.Classes (ixF')
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Some qualified as Some
-import Data.Proxy (Proxy (..))
+import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word64)
-import Grease.Macaw.Arch (ArchContext (..), ArchRegs, ArchReloc, defaultPCFixup)
-import Grease.Macaw.Load.Relocation (RelocType (..))
+import Grease.Macaw.Arch (ArchRegs, ArchReloc, defaultPCFixup)
+import Grease.Macaw.Arch qualified as Arch
+import Grease.Macaw.Load.Relocation (RelocType (RelativeReloc, SymbolReloc))
 import Grease.Options (ExtraStackSlots)
 import Grease.Panic (panic)
 import Grease.Shape.Pointer (x64StackPtrShape)
@@ -56,7 +55,7 @@ x86Ctx ::
   -- Otherwise, initialize the end of the stack to 8 fresh, symbolic bytes.
   Maybe Word64 ->
   ExtraStackSlots ->
-  IO (ArchContext X86.X86_64)
+  IO (Arch.ArchContext X86.X86_64)
 x86Ctx halloc mbReturnAddr stackArgSlots = do
   -- We want to initialize the %fs and %gs segment registers with symbolic
   -- arrays so that they do not crash when they are accessed (e.g., as part of
@@ -73,30 +72,30 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
       panic "armCtx" ["Failed to generate architecture-specific values"]
     Just avals -> pure avals
   return
-    ArchContext
-      { _archInfo = X86.x86_64_linux_info
-      , _archVals = avals
-      , _archRelocSupported = x64RelocSupported
-      , _archGetIP = \regs -> do
+    Arch.ArchContext
+      { Arch._archInfo = X86.x86_64_linux_info
+      , Arch._archVals = avals
+      , Arch._archRelocSupported = x64RelocSupported
+      , Arch._archGetIP = \regs -> do
           let CS.RV (CLM.LLVMPointer _base off) = regs ^. ixF' X86SymRegs.rip
           pure off
-      , _archPcReg = X86.X86_IP
-      , _archIntegerArguments = \bak ->
+      , Arch._archPcReg = X86.X86_IP
+      , Arch._archIntegerArguments = \bak ->
           Stubs.x86_64LinuxIntegerArguments bak avals
-      , _archIntegerReturnRegisters = Stubs.x86_64LinuxIntegerReturnRegisters
-      , _archFunctionReturnAddr = Stubs.x86_64LinuxReturnAddr
-      , _archSyscallArgumentRegisters = Stubs.x86_64LinuxSyscallArgumentRegisters
-      , _archSyscallNumberRegister = Stubs.x86_64LinuxSyscallNumberRegister
-      , _archSyscallReturnRegisters = Stubs.x86_64LinuxSyscallReturnRegisters
-      , _archSyscallCodeMapping = Stubs.syscallMap
-      , _archStackPtrShape = x64StackPtrShape (bytes64LE <$> mbReturnAddr) stackArgSlots
-      , _archInitGlobals = Stubs.x86_64LinuxInitGlobals fsbaseGlob gsbaseGlob
+      , Arch._archIntegerReturnRegisters = Stubs.x86_64LinuxIntegerReturnRegisters
+      , Arch._archFunctionReturnAddr = Stubs.x86_64LinuxReturnAddr
+      , Arch._archSyscallArgumentRegisters = Stubs.x86_64LinuxSyscallArgumentRegisters
+      , Arch._archSyscallNumberRegister = Stubs.x86_64LinuxSyscallNumberRegister
+      , Arch._archSyscallReturnRegisters = Stubs.x86_64LinuxSyscallReturnRegisters
+      , Arch._archSyscallCodeMapping = Stubs.syscallMap
+      , Arch._archStackPtrShape = x64StackPtrShape (bytes64LE <$> mbReturnAddr) stackArgSlots
+      , Arch._archInitGlobals = Stubs.x86_64LinuxInitGlobals fsbaseGlob gsbaseGlob
       , -- NB: x86-64 does not have a link register, so we don't need to
         -- override it.
-        _archRegOverrides = Map.empty
-      , _archOffsetStackPointerPostCall = x64FixupStackPointer
-      , _archABIParams = regList
-      , _archPCFixup = defaultPCFixup @X86.X86_64 Proxy
+        Arch._archRegOverrides = Map.empty
+      , Arch._archOffsetStackPointerPostCall = x64FixupStackPointer
+      , Arch._archABIParams = regList
+      , Arch._archPCFixup = defaultPCFixup @X86.X86_64 Proxy
       }
 
 x64RelocSupported :: EE.X86_64_RelocationType -> Maybe RelocType

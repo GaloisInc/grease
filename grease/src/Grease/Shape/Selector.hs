@@ -2,8 +2,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -29,7 +27,7 @@ import Control.Lens.TH (makeLenses)
 import Data.Function ((&))
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
-import Grease.Cursor (Cursor (..), CursorExt, ppCursor)
+import Grease.Cursor (Cursor, CursorExt, ppCursor)
 import Grease.Cursor.Pointer (ppDereference)
 import Prettyprinter qualified as PP
 import What4.FunctionName qualified as WFN

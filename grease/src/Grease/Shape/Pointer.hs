@@ -8,8 +8,6 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE UndecidableInstances #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -58,7 +56,7 @@ import Data.Foldable qualified as Foldable
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
-import Data.Parameterized.Classes (ShowF (..))
+import Data.Parameterized.Classes (ShowF)
 import Data.Parameterized.NatRepr (NatRepr, natValue)
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Some (Some (Some))
@@ -72,11 +70,11 @@ import Data.Text qualified as Text
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import Data.Word (Word8)
 import GHC.TypeLits (type Natural, type (<=))
-import Grease.Cursor
-import Grease.Cursor.Pointer (Dereference (..))
+import Grease.Cursor (Cursor (CursorExt, Here), CursorExt, Last, lastCons)
+import Grease.Cursor.Pointer (Dereference (DereferenceByte, DereferencePtr))
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.LLVM.Bytes (Bytes (..))
+import Lang.Crucible.LLVM.Bytes (Bytes (Bytes))
 import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Prettyprinter qualified as PP

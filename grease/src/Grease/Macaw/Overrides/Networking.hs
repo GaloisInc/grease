@@ -4,8 +4,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- TODO(#438): Remove calls to `error`
 {- HLINT ignore "Use panic" -}
@@ -16,16 +14,16 @@ module Grease.Macaw.Overrides.Networking (
 ) where
 
 import Control.Lens (use, (%=))
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State qualified as State
-import Data.BitVector.Sized as BV
+import Data.BitVector.Sized qualified as BV
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as MS
 import Data.Map.Strict qualified as Map
-import Data.Parameterized.Context as Ctx
-import Data.Parameterized.Some (Some (..))
+import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.Some (Some (Some))
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Data.Word (Word16)
@@ -479,7 +477,7 @@ callRecv ::
 callRecv bak fs memVar sockfd buf len _flags = do
   let sym = CB.backendGetSym bak
   -- Drop upper 32 bits from `sockfd` to create a 32 bit file descriptor
-  let w32 = knownNat @32
+  let w32 = WI.knownNat @32
   sockfd32 <- liftIO $ StubsO.adjustPointerSize sym (CS.regValue sockfd) w32
   let sockfdPtrErr =
         CS.AssertFailureSimError
@@ -543,7 +541,7 @@ callSend ::
 callSend bak fs memVar sockfd buf len _flags = do
   let sym = CB.backendGetSym bak
   -- Drop upper 32 bits from `sockfd` to create a 32 bit file descriptor
-  let w32 = knownNat @32
+  let w32 = WI.knownNat @32
   sockfd32 <- liftIO $ StubsO.adjustPointerSize sym (CS.regValue sockfd) w32
   let sockfdPtrErr =
         CS.AssertFailureSimError
