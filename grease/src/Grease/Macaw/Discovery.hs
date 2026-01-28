@@ -1,6 +1,3 @@
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
-
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
@@ -9,7 +6,7 @@ module Grease.Macaw.Discovery (
 ) where
 
 import Control.Lens (to, (.~), (^.))
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Function ((&))
 import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.CFG qualified as MC
@@ -18,11 +15,11 @@ import Data.Macaw.Memory.ElfLoader qualified as EL
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Utils.IncComp qualified as IncComp
 import Data.Map.Strict qualified as Map
-import Data.Parameterized.Some
-import Grease.Diagnostic
-import Grease.Macaw.Arch
+import Data.Parameterized.Some (Some (Some))
+import Grease.Diagnostic (Diagnostic (LoadDiagnostic))
+import Grease.Macaw.Arch (ArchContext, ArchRegCFG, archInfo, archVals)
 import Grease.Macaw.Load.Diagnostic qualified as Diag
-import Grease.Utility
+import Grease.Utility (functionNameFromByteString, tshow)
 import Lang.Crucible.FunctionHandle qualified as C
 import Lumberjack qualified as LJ
 import What4.FunctionName qualified as WFN

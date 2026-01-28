@@ -1,8 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ViewPatterns #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -16,7 +14,10 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
 import Grease.Panic (panic)
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.Pretty as P
+import Lang.Crucible.Pretty as P (
+  IntrinsicPrettyFn (IntrinsicPrettyFn),
+  IntrinsicPrinters (IntrinsicPrinters),
+ )
 import Lang.Crucible.Types qualified as C
 import What4.Interface qualified as WI
 

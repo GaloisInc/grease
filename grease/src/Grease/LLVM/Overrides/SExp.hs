@@ -2,8 +2,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2025
@@ -21,7 +19,7 @@ import Data.Map qualified as Map
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Grease.LLVM.Overrides.Declare (mkDeclare)
-import Grease.Overrides (OverrideNameError (..), partitionCfgs)
+import Grease.Overrides (OverrideNameError, partitionCfgs)
 import Grease.Syntax (ParseProgramError, parseProgram)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg

@@ -1,8 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2025
@@ -14,7 +12,7 @@ module Grease.Macaw.Overrides.Defs (
 ) where
 
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.State (MonadState (..), StateT (..), evalStateT)
+import Control.Monad.State (StateT (StateT), evalStateT, get, put, runStateT)
 import Data.BitVector.Sized qualified as BV
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC

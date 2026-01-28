@@ -1,8 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -12,15 +10,14 @@ module Grease.Refine.Diagnostic (
   severity,
 ) where
 
-import Control.Lens ((^.))
-import Data.Functor.Const (Const (..))
+import Control.Lens (Const, (^.))
 import Data.Macaw.Memory qualified as MM
 import Data.Parameterized.Context qualified as Ctx
 import Data.Text (Text)
 import Grease.Diagnostic.Severity (Severity (Debug, Info, Warn))
 import Grease.ErrorDescription (ErrorDescription)
 import Grease.Heuristic.Result qualified as Heuristic
-import Grease.Shape (ArgShapes (..), ExtShape, PrettyExt)
+import Grease.Shape (ArgShapes (ArgShapes), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Print qualified as ShapePP
 import Lang.Crucible.LLVM.MemModel qualified as CLM

@@ -1,7 +1,5 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -24,7 +22,7 @@ module Grease.Concretize (
   printConcData,
 ) where
 
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (liftIO)
 import Data.BitVector.Sized qualified as BV
 import Data.Foldable (toList)
 import Data.Functor.Const (Const)
@@ -39,9 +37,9 @@ import Data.Text (Text)
 import Data.Type.Equality (testEquality)
 import Data.Word (Word8)
 import Grease.Concretize.ToConcretize (ToConcretizeType)
-import Grease.ErrorDescription (ErrorDescription (..))
+import Grease.ErrorDescription (ErrorDescription)
 import Grease.ErrorDescription qualified as Err
-import Grease.Setup (Args (Args), InitialMem (..))
+import Grease.Setup (Args (Args), InitialMem (InitialMem))
 import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.Concretize (concShape)

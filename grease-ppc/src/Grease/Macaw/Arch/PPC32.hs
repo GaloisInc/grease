@@ -2,8 +2,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 -- Due to the orphan ArchReloc instance below
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -22,12 +20,13 @@ import Data.Map qualified as Map
 import Data.Parameterized.Classes (ixF')
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some qualified as Some
-import Data.Proxy (Proxy (..))
+import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word32)
 import Dismantle.PPC qualified as D
-import Grease.Macaw.Arch (ArchContext (..), ArchReloc, defaultPCFixup)
-import Grease.Macaw.Load.Relocation (RelocType (..))
-import Grease.Macaw.RegName (RegName (..))
+import Grease.Macaw.Arch (ArchReloc, defaultPCFixup)
+import Grease.Macaw.Arch qualified as Arch
+import Grease.Macaw.Load.Relocation (RelocType (RelativeReloc, SymbolReloc))
+import Grease.Macaw.RegName (RegName (RegName))
 import Grease.Options (ExtraStackSlots)
 import Grease.Panic (panic)
 import Grease.Shape.Pointer (ppcStackPtrShape)
@@ -53,7 +52,7 @@ ppc32Ctx ::
   -- of the link register just before starting simulation.
   Maybe Word32 ->
   ExtraStackSlots ->
-  IO (ArchContext PPC.PPC32)
+  IO (Arch.ArchContext PPC.PPC32)
 ppc32Ctx mbReturnAddr stackArgSlots = do
   let extOverride = Stubs.ppcLinuxStmtExtensionOverride
   avals <- case Symbolic.genArchVals Proxy Proxy (Just extOverride) of
@@ -69,32 +68,32 @@ ppc32Ctx mbReturnAddr stackArgSlots = do
           Nothing ->
             Map.empty
   return
-    ArchContext
-      { _archInfo = PPC.ppc32_linux_info
-      , _archGetIP = \regs -> do
+    Arch.ArchContext
+      { Arch._archInfo = PPC.ppc32_linux_info
+      , Arch._archGetIP = \regs -> do
           let C.RV (CLM.LLVMPointer _base off) = regs ^. ixF' PPC.Symbolic.Regs.ip
           pure off
-      , _archPcReg = PPC.PPC_IP
-      , _archVals = avals
-      , _archRelocSupported = ppc32RelocSupported
-      , _archIntegerArguments = \bak ->
+      , Arch._archPcReg = PPC.PPC_IP
+      , Arch._archVals = avals
+      , Arch._archRelocSupported = ppc32RelocSupported
+      , Arch._archIntegerArguments = \bak ->
           Stubs.ppcLinuxIntegerArguments bak avals
-      , _archIntegerReturnRegisters = Stubs.ppcLinuxIntegerReturnRegisters
-      , _archFunctionReturnAddr = Stubs.ppcLinuxReturnAddr
-      , _archSyscallArgumentRegisters = Stubs.ppcLinuxSyscallArgumentRegisters PPC.V32Repr
-      , _archSyscallNumberRegister = Stubs.ppcLinuxSyscallNumberRegister
-      , _archSyscallReturnRegisters = Stubs.ppcLinuxSyscallReturnRegisters PPC.V32Repr
-      , _archSyscallCodeMapping = Stubs.syscallMap
-      , _archStackPtrShape = ppcStackPtrShape (bytes32LE <$> mbReturnAddr) stackArgSlots
-      , _archInitGlobals = \_ mem globals -> pure (mem, globals)
-      , _archRegOverrides = regOverrides
-      , _archOffsetStackPointerPostCall = pure
-      , _archABIParams =
+      , Arch._archIntegerReturnRegisters = Stubs.ppcLinuxIntegerReturnRegisters
+      , Arch._archFunctionReturnAddr = Stubs.ppcLinuxReturnAddr
+      , Arch._archSyscallArgumentRegisters = Stubs.ppcLinuxSyscallArgumentRegisters PPC.V32Repr
+      , Arch._archSyscallNumberRegister = Stubs.ppcLinuxSyscallNumberRegister
+      , Arch._archSyscallReturnRegisters = Stubs.ppcLinuxSyscallReturnRegisters PPC.V32Repr
+      , Arch._archSyscallCodeMapping = Stubs.syscallMap
+      , Arch._archStackPtrShape = ppcStackPtrShape (bytes32LE <$> mbReturnAddr) stackArgSlots
+      , Arch._archInitGlobals = \_ mem globals -> pure (mem, globals)
+      , Arch._archRegOverrides = regOverrides
+      , Arch._archOffsetStackPointerPostCall = pure
+      , Arch._archABIParams =
           -- IBM Docs https://www.ibm.com/docs/en/aix/7.1.0?topic=overview-register-usage-conventions
           [ Some.Some (PPC.PPC_GP (D.GPR rnum))
           | rnum <- [3 .. 10]
           ]
-      , _archPCFixup = defaultPCFixup @PPC.PPC32 Proxy
+      , Arch._archPCFixup = defaultPCFixup @PPC.PPC32 Proxy
       }
 
 ppc32RelocSupported :: EE.PPC32_RelocationType -> Maybe RelocType

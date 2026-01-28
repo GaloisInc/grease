@@ -1,8 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -13,7 +11,7 @@ module Grease.LLVM (
 
 import Control.Exception.Safe (MonadThrow)
 import Control.Lens ((^.))
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
 import Grease.Concretize.ToConcretize (HasToConcretize)

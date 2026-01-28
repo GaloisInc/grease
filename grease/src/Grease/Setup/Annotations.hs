@@ -2,8 +2,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -25,19 +23,19 @@ module Grease.Setup.Annotations (
 import Control.Applicative ((<|>))
 import Control.Lens ((%=), (^.))
 import Control.Lens.TH (makeLenses)
-import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.State.Class (MonadState (..))
+import Control.Monad.IO.Class (MonadIO (liftIO))
+import Control.Monad.State.Class (MonadState)
 import Data.Macaw.CFG qualified as MC
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe qualified as Maybe
 import Data.Parameterized.Map qualified as MapF
-import Data.Parameterized.Some (Some (..))
+import Data.Parameterized.Some (Some (Some))
 import Data.Proxy (Proxy (Proxy))
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
-import Grease.Shape.Selector
+import Grease.Shape.Selector (Selector, selectorPath)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Types qualified as C

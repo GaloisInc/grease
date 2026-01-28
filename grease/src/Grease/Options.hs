@@ -1,6 +1,4 @@
 {-# LANGUAGE DerivingStrategies #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -33,12 +31,12 @@ import Data.Set (Set)
 import Data.Text (Text)
 import Data.Word (Word64)
 import Grease.Diagnostic.Severity (Severity)
-import Grease.Entrypoint
-import Grease.Macaw.PLT
+import Grease.Entrypoint (Entrypoint)
+import Grease.Macaw.PLT (PltStub)
 import Grease.Requirement (Requirement)
-import Grease.Shape.Pointer (ExtraStackSlots (..))
+import Grease.Shape.Pointer (ExtraStackSlots (ExtraStackSlots))
 import Grease.Shape.Simple (SimpleShape)
-import Grease.Solver (Solver (..))
+import Grease.Solver (Solver)
 import Lang.Crucible.Utils.Seconds (Seconds)
 import Lang.Crucible.Utils.Timeout (Timeout)
 import What4.FunctionName (FunctionName)
