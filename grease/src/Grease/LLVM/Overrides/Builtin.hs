@@ -16,8 +16,8 @@ import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.Intrinsics.LLVM qualified as LLVM
 import Lang.Crucible.LLVM.Intrinsics.Libc qualified as Libc
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.LLVM.SymIO qualified as SymIO
-import Lang.Crucible.LLVM.TypeContext qualified as TCtx
+import Lang.Crucible.LLVM.SymIO qualified as CLSIO
+import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 
 -- | LLVM overrides that are unconditionally made available to all LLVM programs
 -- (S-expression or bitcode module), including overrides.
@@ -27,12 +27,12 @@ import Lang.Crucible.LLVM.TypeContext qualified as TCtx
 basicLLVMOverrides ::
   forall p sym ext w.
   ( CB.IsSymInterface sym
-  , ?lc :: TCtx.TypeContext
+  , ?lc :: CLTC.TypeContext
   , ?memOpts :: CLM.MemOptions
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth w
   ) =>
-  SymIO.LLVMFileSystem w ->
+  CLSIO.LLVMFileSystem w ->
   Seq.Seq (CLI.SomeLLVMOverride p sym ext)
 basicLLVMOverrides fs =
   -- We never need to make use of any non-standard IntrinsicsOptions.
@@ -49,13 +49,13 @@ basicLLVMOverrides fs =
 libcOverrides ::
   forall p sym ext w.
   ( CB.IsSymInterface sym
-  , ?lc :: TCtx.TypeContext
+  , ?lc :: CLTC.TypeContext
   , ?memOpts :: CLM.MemOptions
   , ?intrinsicsOpts :: CLI.IntrinsicsOptions
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth w
   ) =>
-  SymIO.LLVMFileSystem w ->
+  CLSIO.LLVMFileSystem w ->
   [CLI.SomeLLVMOverride p sym ext]
 libcOverrides fs =
   List.concat @[]
@@ -65,10 +65,10 @@ libcOverrides fs =
  where
   symioLlvmOverrides :: [CLI.SomeLLVMOverride p sym ext]
   symioLlvmOverrides =
-    [ CLI.SomeLLVMOverride $ SymIO.openFile fs
-    , CLI.SomeLLVMOverride $ SymIO.closeFile fs
-    , CLI.SomeLLVMOverride $ SymIO.readFileHandle fs
-    , CLI.SomeLLVMOverride $ SymIO.writeFileHandle fs
+    [ CLI.SomeLLVMOverride $ CLSIO.openFile fs
+    , CLI.SomeLLVMOverride $ CLSIO.closeFile fs
+    , CLI.SomeLLVMOverride $ CLSIO.readFileHandle fs
+    , CLI.SomeLLVMOverride $ CLSIO.writeFileHandle fs
     ]
 
 -- | All of the @crucible-llvm@ overrides that work across all supported
@@ -78,12 +78,12 @@ libcOverrides fs =
 -- (i.e., the ones from libc, but not the LLVM intrinsics).
 builtinLLVMOverrides ::
   ( CB.IsSymInterface sym
-  , ?lc :: TCtx.TypeContext
+  , ?lc :: CLTC.TypeContext
   , ?memOpts :: CLM.MemOptions
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth w
   ) =>
-  SymIO.LLVMFileSystem w ->
+  CLSIO.LLVMFileSystem w ->
   Seq.Seq (CLI.OverrideTemplate p sym ext arch)
 builtinLLVMOverrides fs =
   -- We never need to make use of any non-standard IntrinsicsOptions.

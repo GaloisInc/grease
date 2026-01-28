@@ -2,8 +2,6 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2025
@@ -48,14 +46,14 @@ import Data.Void (Void)
 import Data.Word (Word64)
 import Grease.Cli.Enum qualified as GCE
 import Grease.Diagnostic.Severity qualified as Sev
-import Grease.Entrypoint
+import Grease.Entrypoint (Entrypoint, EntrypointLocation (EntrypointAddress, EntrypointCoreDump, EntrypointSymbolName), entrypointAddressStartupOvParser, entrypointNoStartupOv, entrypointSymbolStartupOvParser)
 import Grease.Macaw.Overrides.Address (addressOverrideParser)
-import Grease.Macaw.PLT
+import Grease.Macaw.PLT (pltStubParser)
 import Grease.Options (SimOpts (simDumpCoverage))
 import Grease.Options qualified as GO
 import Grease.Shape.Simple (SimpleShape)
 import Grease.Shape.Simple qualified as Simple
-import Grease.Solver (Solver (..))
+import Grease.Solver (Solver (Yices))
 import Grease.Version (verStr)
 import Lang.Crucible.Utils.Seconds (secondsFromInt)
 import Lang.Crucible.Utils.Timeout (Timeout (Timeout))

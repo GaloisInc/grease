@@ -4,8 +4,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- TODO(#438): Remove calls to `error`
 {- HLINT ignore "Use panic" -}
@@ -16,16 +14,16 @@ module Grease.Macaw.Overrides.Networking (
 ) where
 
 import Control.Lens (use, (%=))
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State qualified as State
-import Data.BitVector.Sized as BV
+import Data.BitVector.Sized qualified as BV
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as MS
 import Data.Map.Strict qualified as Map
-import Data.Parameterized.Context as Ctx
-import Data.Parameterized.Some (Some (..))
+import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.Some (Some (Some))
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Data.Word (Word16)
@@ -39,7 +37,7 @@ import Lang.Crucible.Backend.Online qualified as CBO
 import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.DataLayout qualified as CLD
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.LLVM.SymIO qualified as CLSymIo
+import Lang.Crucible.LLVM.SymIO qualified as CLSIO
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.SymIO qualified as CSymIo
 import Lang.Crucible.Types qualified as CT
@@ -48,7 +46,7 @@ import Stubs.FunctionOverride qualified as StubsF
 import Stubs.Override qualified as StubsO
 import What4.Expr qualified as WE
 import What4.Interface qualified as WI
-import What4.ProgramLoc qualified as WP
+import What4.ProgramLoc qualified as WPL
 import What4.Protocol.Online qualified as WPO
 import What4.Utils.ResolveBounds.BV qualified as WURB
 
@@ -173,7 +171,7 @@ networkOverrides ::
   , w ~ MC.ArchAddrWidth arch
   , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
-  CLSymIo.LLVMFileSystem w ->
+  CLSIO.LLVMFileSystem w ->
   CS.GlobalVar CLM.Mem ->
   MS.MemModelConfig p sym arch CLM.Mem ->
   Seq.Seq (StubsF.SomeFunctionOverride p sym arch)
@@ -193,7 +191,7 @@ buildAcceptOverride ::
   , w ~ MC.ArchAddrWidth arch
   , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
-  CLSymIo.LLVMFileSystem w ->
+  CLSIO.LLVMFileSystem w ->
   StubsF.FunctionOverride
     p
     sym
@@ -224,7 +222,7 @@ callAccept ::
   , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
-  CLSymIo.LLVMFileSystem w ->
+  CLSIO.LLVMFileSystem w ->
   CS.RegEntry sym (CLM.LLVMPointerType w) ->
   CS.RegEntry sym (CLM.LLVMPointerType w) ->
   CS.RegEntry sym (CLM.LLVMPointerType w) ->
@@ -245,14 +243,14 @@ callAccept bak fs sockfd _addr _addrlen = do
                 GMSSN.AfInetRepr -> GMSSN.acceptAfInetFilePath sockAddr ssi
                 GMSSN.AfInet6Repr -> GMSSN.acceptAfInetFilePath sockAddr ssi
         connectionFileLit <- liftIO $ WI.stringLit sym $ WI.Char8Literal $ BSC.pack connectionFilePath
-        CSymIo.openFile (CLSymIo.llvmFileSystem fs) connectionFileLit $ \res -> do
+        CSymIo.openFile (CLSIO.llvmFileSystem fs) connectionFileLit $ \res -> do
           case res of
             Left CSymIo.FileNotFound -> returnIOError
             Right fileHandle -> do
               let sockNextConn = GMSSN.serverSocketNextConnection ssi
               CS.stateContext . CS.cruciblePersonality . GMSS.greaseSimulatorState . GMSS.serverSocketFds
                 %= Map.insert sockfdInt (Some (ssi{GMSSN.serverSocketNextConnection = sockNextConn + 1}))
-              CLSymIo.allocateFileDescriptor fs fileHandle
+              CLSIO.allocateFileDescriptor fs fileHandle
       _ -> returnIOError
   fdPtr <- liftIO $ CLM.llvmPointer_bv sym fd
   liftIO $ StubsO.adjustPointerSize sym fdPtr ?ptrWidth
@@ -443,7 +441,7 @@ buildRecvOverride ::
   ( CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth w
   ) =>
-  CLSymIo.LLVMFileSystem w ->
+  CLSIO.LLVMFileSystem w ->
   CS.GlobalVar CLM.Mem ->
   StubsF.FunctionOverride
     p
@@ -469,7 +467,7 @@ callRecv ::
   , CLM.HasPtrWidth w
   ) =>
   bak ->
-  CLSymIo.LLVMFileSystem w ->
+  CLSIO.LLVMFileSystem w ->
   CS.GlobalVar CLM.Mem ->
   CS.RegEntry sym (CLM.LLVMPointerType w) ->
   CS.RegEntry sym (CLM.LLVMPointerType w) ->
@@ -479,7 +477,7 @@ callRecv ::
 callRecv bak fs memVar sockfd buf len _flags = do
   let sym = CB.backendGetSym bak
   -- Drop upper 32 bits from `sockfd` to create a 32 bit file descriptor
-  let w32 = knownNat @32
+  let w32 = WI.knownNat @32
   sockfd32 <- liftIO $ StubsO.adjustPointerSize sym (CS.regValue sockfd) w32
   let sockfdPtrErr =
         CS.AssertFailureSimError
@@ -497,7 +495,7 @@ callRecv bak fs memVar sockfd buf len _flags = do
   let lenReg = CS.RegEntry (CT.BVRepr ?ptrWidth) lenBv
 
   -- Use crucible-llvm override for `read`
-  resBv <- CLSymIo.callReadFileHandle memVar fs sockfd32Reg buf lenReg
+  resBv <- CLSIO.callReadFileHandle memVar fs sockfd32Reg buf lenReg
 
   liftIO $ CLM.llvmPointer_bv sym resBv
 
@@ -506,7 +504,7 @@ buildSendOverride ::
   , CLM.HasPtrWidth w
   , ?memOpts :: CLM.MemOptions
   ) =>
-  CLSymIo.LLVMFileSystem w ->
+  CLSIO.LLVMFileSystem w ->
   CS.GlobalVar CLM.Mem ->
   StubsF.FunctionOverride
     p
@@ -533,7 +531,7 @@ callSend ::
   , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
-  CLSymIo.LLVMFileSystem w ->
+  CLSIO.LLVMFileSystem w ->
   CS.GlobalVar CLM.Mem ->
   CS.RegEntry sym (CLM.LLVMPointerType w) ->
   CS.RegEntry sym (CLM.LLVMPointerType w) ->
@@ -543,7 +541,7 @@ callSend ::
 callSend bak fs memVar sockfd buf len _flags = do
   let sym = CB.backendGetSym bak
   -- Drop upper 32 bits from `sockfd` to create a 32 bit file descriptor
-  let w32 = knownNat @32
+  let w32 = WI.knownNat @32
   sockfd32 <- liftIO $ StubsO.adjustPointerSize sym (CS.regValue sockfd) w32
   let sockfdPtrErr =
         CS.AssertFailureSimError
@@ -561,7 +559,7 @@ callSend bak fs memVar sockfd buf len _flags = do
   let lenReg = CS.RegEntry (CT.BVRepr ?ptrWidth) lenBv
 
   -- Use the crucible-llvm override for `write`
-  resBv <- CLSymIo.callWriteFileHandle memVar fs sockfd32Reg buf lenReg
+  resBv <- CLSIO.callWriteFileHandle memVar fs sockfd32Reg buf lenReg
 
   liftIO $ CLM.llvmPointer_bv sym resBv
 
@@ -570,7 +568,7 @@ buildSocketOverride ::
   , w ~ MC.ArchAddrWidth arch
   , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
-  CLSymIo.LLVMFileSystem w ->
+  CLSIO.LLVMFileSystem w ->
   StubsF.FunctionOverride
     p
     sym
@@ -600,7 +598,7 @@ callSocket ::
   , GMSS.HasGreaseSimulatorState p cExt sym arch
   ) =>
   bak ->
-  CLSymIo.LLVMFileSystem w ->
+  CLSIO.LLVMFileSystem w ->
   CS.RegEntry sym (CLM.LLVMPointerType w) ->
   CS.RegEntry sym (CLM.LLVMPointerType w) ->
   CS.RegEntry sym (CLM.LLVMPointerType w) ->
@@ -641,11 +639,11 @@ callSocket bak fs domainReg typeReg _protocol = do
         WI.Char8Literal $
           BSC.pack $
             GMSSN.socketFilePath ssi
-  fd <- CSymIo.openFile (CLSymIo.llvmFileSystem fs) socketFileLit $ \res -> do
+  fd <- CSymIo.openFile (CLSIO.llvmFileSystem fs) socketFileLit $ \res -> do
     case res of
       Left CSymIo.FileNotFound -> returnIOError
       Right fileHandle -> do
-        fd <- CLSymIo.allocateFileDescriptor fs fileHandle
+        fd <- CLSIO.allocateFileDescriptor fs fileHandle
         fdBV <- case WI.asBV fd of
           Just fdBV -> pure fdBV
           Nothing ->
@@ -664,7 +662,7 @@ callSocket bak fs domainReg typeReg _protocol = do
 
 networkConcretizationFailedSymbolic ::
   HasCallStack =>
-  WP.ProgramLoc ->
+  WPL.ProgramLoc ->
   -- | The function being invoked.
   Text.Text ->
   -- | The argument to the function for which concretization was attempted.
@@ -682,7 +680,7 @@ networkConcretizationFailedSymbolic loc nm arg = do
 
 unsupportedSocketArgument ::
   HasCallStack =>
-  WP.ProgramLoc ->
+  WPL.ProgramLoc ->
   -- | The type of argument to the @socket@ function.
   NetworkFunctionArgument ->
   -- | The unsupported argument value.

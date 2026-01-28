@@ -4,8 +4,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright   : (c) Galois, Inc. 2024
@@ -89,7 +87,7 @@ import Control.Exception.Safe qualified as X
 import Control.Lens ((^.))
 import Control.Monad qualified as Monad
 import Control.Monad.Except (ExceptT, runExceptT)
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Functor.Const (Const)
 import Data.IORef (IORef, modifyIORef, readIORef)
 import Data.IORef qualified as IORef
@@ -102,7 +100,7 @@ import Data.Maybe (maybeToList)
 import Data.Maybe qualified as Maybe
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Nonce (Nonce)
-import Data.Proxy (Proxy (..))
+import Data.Proxy (Proxy (Proxy))
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
@@ -113,13 +111,16 @@ import Grease.Concretize qualified as Conc
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
-import Grease.Diagnostic
+import Grease.Diagnostic (Diagnostic (RefineDiagnostic), GreaseLogAction)
+import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
 import Grease.ExecutionFeatures (boundedExecFeats)
-import Grease.Heuristic
+import Grease.Heuristic (HeuristicResult (CantRefine, PossibleBug, RefinedPrecondition, Unknown), OnlineSolverAndBackend, RefineHeuristic)
+import Grease.Heuristic.Result (CantRefine (Exhausted, Exit, MissingFunc, MissingSemantics, MutableGlobal, SolverTimeout, SolverUnknown, Timeout, Unsupported))
 import Grease.Options (BoundsOpts)
 import Grease.Options qualified as Opts
 import Grease.Panic (panic)
 import Grease.Refine.Diagnostic qualified as Diag
+import Grease.Setup (InitialMem)
 import Grease.Setup qualified as Setup
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
@@ -127,7 +128,7 @@ import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Solver (Solver, solverAdapter)
 import Grease.SymIO qualified as GSIO
-import Grease.Utility
+import Grease.Utility (tshow)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Prove qualified as C
 import Lang.Crucible.CFG.Core qualified as C
@@ -144,7 +145,7 @@ import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
 import System.Exit qualified as Exit
-import What4.Expr qualified as W4
+import What4.Expr qualified as WE
 import What4.Expr.App qualified as W4
 import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as WI
@@ -161,7 +162,7 @@ doLog la diag = LJ.writeLog la (RefineDiagnostic diag)
 findPredAnnotations ::
   forall sym brand st fs t.
   ( CB.IsSymInterface sym
-  , sym ~ W4.ExprBuilder brand st fs
+  , sym ~ WE.ExprBuilder brand st fs
   ) =>
   sym ->
   WI.SymExpr sym t ->
@@ -254,7 +255,7 @@ data ErrorCallbacks sym t
 -- In this configuration, Macaw and Crucible-LLVM will record errors
 -- to the 'errorMap' as an 'ErrorDescription'
 buildErrMaps ::
-  sym ~ W4.ExprBuilder t st fs =>
+  sym ~ WE.ExprBuilder t st fs =>
   Maybe
     ( IORef
         ( Map.Map
@@ -481,7 +482,7 @@ execAndRefine ::
   forall ext solver sym bak t st argTys ret w m fm p.
   ( MonadIO m
   , C.IsSyntaxExtension ext
-  , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
+  , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
   , 16 C.<= w
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
@@ -570,7 +571,7 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
 refineOnce ::
   ( CLM.HasPtrWidth wptr
   , C.IsSyntaxExtension ext
-  , OnlineSolverAndBackend solver sym bak t st (W4.Flags fm)
+  , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
   , ToConc.HasToConcretize p
   , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext wptr
@@ -580,7 +581,7 @@ refineOnce ::
   Opts.SimOpts ->
   C.HandleAllocator ->
   bak ->
-  W4.FloatModeRepr fm ->
+  W4FM.FloatModeRepr fm ->
   DataLayout ->
   Ctx.Assignment Setup.ValueName argTys ->
   Ctx.Assignment (Const String) argTys ->

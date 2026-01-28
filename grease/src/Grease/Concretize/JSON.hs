@@ -3,8 +3,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -27,19 +25,19 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map (MapF)
 import Data.Parameterized.Map qualified as MapF
 import Data.Parameterized.SymbolRepr (SymbolRepr)
-import Data.Parameterized.TraversableFC as TFC
+import Data.Parameterized.TraversableFC qualified as TFC (toListFC)
 import Data.Text.Encoding qualified as Text
-import Grease.Concretize (ConcArgs (..))
+import Grease.Concretize (ConcArgs (ConcArgs))
 import Grease.Panic (panic)
 import Grease.Shape (ExtShape, getTag)
 import Grease.Shape.Pointer (PtrShape, getPtrTag)
 import Lang.Crucible.Concretize (ConcRV')
 import Lang.Crucible.Concretize qualified as Conc
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Types (TypeRepr)
 import Lang.Crucible.Types qualified as C
 import LibBF qualified as LibBF
-import What4.Expr.Builder qualified as W4
+import What4.Expr.Builder qualified as WEB
 import What4.FloatMode (FloatModeRepr)
 import What4.FloatMode qualified as W4FM
 import What4.Utils.Complex qualified as W4
@@ -75,7 +73,7 @@ jsonPtrFn = IntrinsicJsonFn $ \tyCtx ptr ->
   case Ctx.viewAssign tyCtx of
     Ctx.AssignExtend (Ctx.viewAssign -> Ctx.AssignEmpty) (C.BVRepr _) -> do
       case ptr of
-        Mem.ConcLLVMPtr blk off _w ->
+        CLMP.ConcLLVMPtr blk off _w ->
           Aeson.object ["block" Aeson..= blk, "offset" Aeson..= BV.asUnsigned off]
     -- These are impossible by the definition of LLVMPointerImpl
     Ctx.AssignEmpty ->
@@ -113,7 +111,7 @@ bigFloatToJson bf =
 
 -- | Helper, not exported
 anyToJson ::
-  (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
+  (sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)) =>
   MapF SymbolRepr (IntrinsicJsonFn t) ->
   FloatModeRepr fm ->
   Conc.ConcAnyValue sym ->
@@ -124,7 +122,7 @@ anyToJson iFns fm (Conc.ConcAnyValue tp v) =
 -- | Helper, not exported
 maybeToJson ::
   forall sym scope st fm t tp.
-  (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
+  (sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)) =>
   MapF SymbolRepr (IntrinsicJsonFn t) ->
   FloatModeRepr fm ->
   C.TypeRepr tp ->
@@ -136,7 +134,7 @@ maybeToJson iFns fm tp (Conc.ConcRV' v) = do
 
 -- | Helper, not exported
 structToJson ::
-  (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
+  (sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)) =>
   MapF SymbolRepr (IntrinsicJsonFn t) ->
   FloatModeRepr fm ->
   C.CtxRepr tps ->
@@ -145,10 +143,10 @@ structToJson ::
 structToJson iFns fm tps (Conc.ConcRV' val) =
   let pairs = Ctx.zipWith Pair tps val
    in Aeson.toJSON
-        <$> sequence (toListFC (\(Pair t v) -> concRegValueToJson iFns fm t v) pairs)
+        <$> sequence (TFC.toListFC (\(Pair t v) -> concRegValueToJson iFns fm t v) pairs)
 
 concRegValueToJson ::
-  (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
+  (sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)) =>
   MapF SymbolRepr (IntrinsicJsonFn t) ->
   FloatModeRepr fm ->
   TypeRepr tp ->
@@ -197,7 +195,7 @@ concRegValueToJson iFns fm tp val'@(Conc.ConcRV' val) =
     C.WordMapRepr{} -> Nothing
 
 concArgsToJson ::
-  (sym ~ W4.ExprBuilder scope st (W4.Flags fm)) =>
+  (sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)) =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   FloatModeRepr fm ->
   Ctx.Assignment (Const String) args ->

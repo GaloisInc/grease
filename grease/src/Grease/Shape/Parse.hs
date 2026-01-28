@@ -3,8 +3,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -58,18 +56,18 @@ import Data.Void (Void)
 import Data.Word (Word8)
 import GHC.TypeLits (Nat)
 import Grease.Panic (panic)
-import Grease.Shape (ExtShape, ParsedShapes (..), Shape)
+import Grease.Shape (ExtShape, ParsedShapes (ParsedShapes), Shape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (BlockId (BlockId, getBlockId), Offset, PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes (Bytes)
-import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel.Pointer (HasPtrWidth)
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Types qualified as C
 import Lang.Crucible.Types qualified as CT
-import Numeric
+import Numeric qualified as Numeric
 import Prettyprinter qualified as PP
 import Text.Megaparsec (Parsec)
 import Text.Megaparsec qualified as MP
@@ -138,16 +136,16 @@ data ParsePtrShape w tag t where
   ParseShapePtrBV ::
     1 C.<= w' =>
     NatRepr w' ->
-    ParsePtrShape w tag (Mem.LLVMPointerType w')
+    ParsePtrShape w tag (CLMP.LLVMPointerType w')
   ParseShapePtrBVLit ::
     1 C.<= w' =>
     NatRepr w' ->
     BV w' ->
-    ParsePtrShape w tag (Mem.LLVMPointerType w')
+    ParsePtrShape w tag (CLMP.LLVMPointerType w')
   ParseShapePtr ::
     PtrShape.Offset ->
     BlockId ->
-    ParsePtrShape w tag (Mem.LLVMPointerType w)
+    ParsePtrShape w tag (CLMP.LLVMPointerType w)
 
 astToMap ::
   ExtShape ext ~ PtrShape ext w =>
@@ -199,7 +197,7 @@ instance PP.Pretty ParseError where
     \case
       ParseError err -> PP.pretty (MP.errorBundlePretty err)
       MissingBlock (BlockId blk) ->
-        PP.pretty ("Missing definition for allocation " List.++ showHex blk "")
+        PP.pretty ("Missing definition for allocation " List.++ Numeric.showHex blk "")
 
 parseShapes ::
   forall ext w.
@@ -275,12 +273,12 @@ parseMemShape =
 trySepBy1 :: Parser a -> Parser sep -> Parser [a]
 trySepBy1 p sep = (:) Functor.<$> p Applicative.<*> MP.many (MP.try (sep Applicative.*> p))
 
-parseUninit :: Parser Bytes.Bytes
+parseUninit :: Parser CLB.Bytes
 parseUninit = parseUninitRle MP.<|> parseUninitExplicit
 
-parseUninitExplicit :: Parser Bytes.Bytes
+parseUninitExplicit :: Parser CLB.Bytes
 parseUninitExplicit =
-  Bytes.toBytes . List.length Functor.<$> trySepBy1 (MP.chunk "##") memShapeSep
+  CLB.toBytes . List.length Functor.<$> trySepBy1 (MP.chunk "##") memShapeSep
 
 parseRle :: Parser Char -> Parser Bytes
 parseRle parseChar = do
@@ -291,19 +289,19 @@ parseRle parseChar = do
     _ <- MP.single '*'
     pure ()
   rl <- MPCL.hexadecimal
-  pure (Bytes.toBytes @Int rl)
+  pure (CLB.toBytes @Int rl)
 
-parseUninitRle :: Parser Bytes.Bytes
+parseUninitRle :: Parser CLB.Bytes
 parseUninitRle = parseRle (MP.single '#')
 
-parseInit :: Parser Bytes.Bytes
+parseInit :: Parser CLB.Bytes
 parseInit = parseInitRle MP.<|> parseInitExplicit
 
-parseInitExplicit :: Parser Bytes.Bytes
+parseInitExplicit :: Parser CLB.Bytes
 parseInitExplicit =
-  Bytes.toBytes . List.length Functor.<$> trySepBy1 (MP.chunk "XX") memShapeSep
+  CLB.toBytes . List.length Functor.<$> trySepBy1 (MP.chunk "XX") memShapeSep
 
-parseInitRle :: Parser Bytes.Bytes
+parseInitRle :: Parser CLB.Bytes
 parseInitRle = parseRle (MP.single 'X')
 
 -- | Helper, not exported. Requires actual hex 'Char's.
@@ -393,7 +391,7 @@ parsePtrBvLit = do
       bv <- BV.mkBV bits Functor.<$> MPCL.hexadecimal
       Applicative.pure (Some (Shape.ShapeExt (ParseShapePtrBVLit bits bv)))
 
-parsePtr :: HasPtrWidth w => Parser (ParsePtrShape w NoTag (Mem.LLVMPointerType w))
+parsePtr :: HasPtrWidth w => Parser (ParsePtrShape w NoTag (CLMP.LLVMPointerType w))
 parsePtr = do
   -- The `try` is needed to disambiguate the block number from the bytes of
   -- `ShapePtrBVLit`
@@ -408,7 +406,7 @@ parsePtr = do
   Applicative.pure (ParseShapePtr off blk)
 
 parseOffset :: Parser PtrShape.Offset
-parseOffset = PtrShape.Offset . (Bytes.toBytes @Int) Functor.<$> MPCL.hexadecimal
+parseOffset = PtrShape.Offset . (CLB.toBytes @Int) Functor.<$> MPCL.hexadecimal
 
 -----------------------------------------------------------
 
@@ -417,7 +415,7 @@ parseOffset = PtrShape.Offset . (Bytes.toBytes @Int) Functor.<$> MPCL.hexadecima
 -- | Parse shapes from JSON or shapes DSL content, depending on the extension.
 fromPathAndContent ::
   ExtShape ext ~ PtrShape ext w =>
-  Mem.HasPtrWidth w =>
+  CLMP.HasPtrWidth w =>
   -- | Path to file
   FilePath ->
   -- | Content of file
@@ -435,7 +433,7 @@ fromPathAndContent path txt =
 -- | Read shapes from a JSON or shapes DSL file, depending on the extension.
 fromFile ::
   ExtShape ext ~ PtrShape ext w =>
-  Mem.HasPtrWidth w =>
+  CLMP.HasPtrWidth w =>
   FilePath ->
   IO (Either (PP.Doc ann) (ParsedShapes ext))
 fromFile path = fromPathAndContent path <$> Text.IO.readFile path

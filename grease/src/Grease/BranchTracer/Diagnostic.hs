@@ -12,12 +12,12 @@ module Grease.BranchTracer.Diagnostic (
 import Grease.Diagnostic.Severity (Severity (Debug))
 import Grease.Utility (ppProgramLoc)
 import Prettyprinter qualified as PP
-import What4.ProgramLoc qualified as W4
+import What4.ProgramLoc qualified as WPL
 
 data Diagnostic where
   ReachedBranch ::
     -- | The function name
-    Maybe W4.ProgramLoc ->
+    Maybe WPL.ProgramLoc ->
     Diagnostic
 
 instance PP.Pretty Diagnostic where

@@ -1,6 +1,4 @@
 {-# LANGUAGE ImplicitParams #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -24,18 +22,18 @@ import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
-import Grease.Shape.Selector
+import Grease.Shape.Selector qualified as Selector
 import Grease.Skip.Diagnostic qualified as Diag
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.LLVM.DataLayout as Mem
-import Lang.Crucible.LLVM.Functions as CLLVM
-import Lang.Crucible.LLVM.Intrinsics as CLLVM
+import Lang.Crucible.LLVM.DataLayout qualified as Mem
+import Lang.Crucible.LLVM.Functions qualified as CLLVM
+import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.Translation (LLVMContext)
-import Lang.Crucible.LLVM.Translation qualified as CLLVM
-import Lang.Crucible.LLVM.TypeContext qualified as CLLVM
+import Lang.Crucible.LLVM.Translation qualified as CLT
+import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
@@ -68,7 +66,7 @@ skipOverride la dl memVar funcName valTy shape = do
     liftIO $ Setup.runSetup (Setup.InitialMem mem) $ do
       let funcNameStr = Text.unpack (WFN.functionName funcName)
       let valName = Setup.ValueName (funcNameStr ++ "Return")
-      let sel = SelectRet (RetSelector funcName (Cursor.Here valTy))
+      let sel = Selector.SelectRet (Selector.RetSelector funcName (Cursor.Here valTy))
       shape' <- Setup.setupShape la bak dl valName valTy sel shape
       pure (CS.unRV (Shape.getTag PtrShape.getPtrTag shape'))
 
@@ -120,24 +118,24 @@ declSkipOverride ::
   GreaseLogAction ->
   LLVMContext arch ->
   L.Declare ->
-  Maybe (CLLVM.SomeLLVMOverride p sym ext)
+  Maybe (CLI.SomeLLVMOverride p sym ext)
 declSkipOverride la llvmCtx decl =
-  let ?lc = llvmCtx ^. CLLVM.llvmTypeCtx
-   in CLLVM.llvmDeclToFunHandleRepr' decl $ \argTys retTy -> do
+  let ?lc = llvmCtx ^. CLT.llvmTypeCtx
+   in CLT.llvmDeclToFunHandleRepr' decl $ \argTys retTy -> do
         shape <-
           case minimalShapeWithPtrs (const NoTag) retTy of
             Left _err -> Nothing
             Right shape -> Just shape
-        let dl = llvmCtx ^. CLLVM.llvmTypeCtx . to CLLVM.llvmDataLayout
+        let dl = llvmCtx ^. CLT.llvmTypeCtx . to CLTC.llvmDataLayout
         let L.Symbol name = L.decName decl
         let fnName = WFN.functionNameFromText (Text.pack name)
         Just $
-          CLLVM.SomeLLVMOverride $
-            CLLVM.LLVMOverride
-              { llvmOverride_declare = decl
-              , llvmOverride_args = argTys
-              , llvmOverride_ret = retTy
-              , llvmOverride_def = \mvar _args ->
+          CLI.SomeLLVMOverride $
+            CLI.LLVMOverride
+              { CLI.llvmOverride_declare = decl
+              , CLI.llvmOverride_args = argTys
+              , CLI.llvmOverride_ret = retTy
+              , CLI.llvmOverride_def = \mvar _args ->
                   skipOverride la dl mvar fnName retTy shape
               }
 

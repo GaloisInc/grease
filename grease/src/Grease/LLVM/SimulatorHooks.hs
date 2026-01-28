@@ -2,8 +2,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2025
@@ -15,10 +13,10 @@ module Grease.LLVM.SimulatorHooks (
 import Control.Lens (set, (^.))
 import Control.Monad.IO.Class (MonadIO)
 import Data.Parameterized.NatRepr qualified as NatRepr
-import Data.Type.Equality (TestEquality (..), (:~:) (..))
-import Grease.Diagnostic (Diagnostic (..), GreaseLogAction)
+import Data.Type.Equality (testEquality, (:~:) (Refl))
+import Grease.Diagnostic (Diagnostic (LLVMSimulatorHooksDiagnostic), GreaseLogAction)
 import Grease.LLVM.SimulatorHooks.Diagnostic qualified as Diag
-import Grease.Options (ErrorSymbolicFunCalls (..))
+import Grease.Options (ErrorSymbolicFunCalls, getErrorSymbolicFunCalls)
 import Grease.Panic (panic)
 import Grease.Skip (createSkipOverride)
 import Lang.Crucible.Backend qualified as CB
@@ -27,7 +25,7 @@ import Lang.Crucible.LLVM.DataLayout qualified as CLLVM
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.Extension qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
 import Lumberjack qualified as LJ
 import What4.FunctionName qualified as WFN
@@ -81,8 +79,8 @@ extensionExec la halloc dl errorSymbolicFunCalls baseExt stmt st =
     CLLVM.LLVM_LoadHandle mvar _ltp ptrReg args ret
       | let ptr = CS.regValue ptrReg
       , not (getErrorSymbolicFunCalls errorSymbolicFunCalls)
-      , Nothing <- WI.asNat (Mem.llvmPointerBlock ptr) -> do
-          let ptrWidth = Mem.ptrWidth ptr
+      , Nothing <- WI.asNat (CLMP.llvmPointerBlock ptr) -> do
+          let ptrWidth = CLMP.ptrWidth ptr
           Refl <-
             -- LLVM_LoadHandle binds an existentially quantified type variable
             -- representing the pointer width, but grease's `ExtShape LLVM`

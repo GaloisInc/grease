@@ -1,14 +1,20 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE Trustworthy #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Panic (Grease, panic) where
 
-import Panic hiding (panic)
+import GHC.Stack (HasCallStack)
+import Panic (
+  PanicComponent (
+    panicComponentIssues,
+    panicComponentName,
+    panicComponentRevision
+  ),
+  useGitRevision,
+ )
 import Panic qualified
 
 data Grease = Grease

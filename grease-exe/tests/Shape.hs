@@ -2,8 +2,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- `error` is fine in tests
 {- HLINT ignore "Use panic" -}
@@ -33,7 +31,8 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Type.Equality (testEquality)
 import Data.Type.Equality qualified as Equality
-import Grease.Shape as Shape
+import Grease.Shape (ExtShape, Shape)
+import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
@@ -42,10 +41,10 @@ import Grease.Shape.Print qualified as Print
 import Hedgehog qualified as H
 import Hedgehog.Gen qualified as HG
 import Hedgehog.Range qualified as HR
-import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel.Pointer (LLVMPointerType)
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as Mem
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import Test.Tasty qualified as TT
@@ -59,10 +58,10 @@ eqShape ::
   Bool
 eqShape eqExt s1 s2 =
   case (s1, s2) of
-    (ShapeBool NoTag, ShapeBool NoTag) -> True
-    (ShapeUnit NoTag, ShapeUnit NoTag) -> True
-    (ShapeStruct NoTag s1', ShapeStruct NoTag s2') -> eqShapes eqExt s1' s2'
-    (ShapeExt s1', ShapeExt s2') -> eqExt s1' s2'
+    (Shape.ShapeBool NoTag, Shape.ShapeBool NoTag) -> True
+    (Shape.ShapeUnit NoTag, Shape.ShapeUnit NoTag) -> True
+    (Shape.ShapeStruct NoTag s1', Shape.ShapeStruct NoTag s2') -> eqShapes eqExt s1' s2'
+    (Shape.ShapeExt s1', Shape.ShapeExt s2') -> eqExt s1' s2'
     (_, _) -> False
 
 eqShapes ::
@@ -137,13 +136,13 @@ genShape genExt =
     [ genStruct (genShape genExt)
     , do
         Some ext <- genExt
-        pure (Some (ShapeExt ext))
+        pure (Some (Shape.ShapeExt ext))
     ]
 
 maxBytes :: Integral a => a
 maxBytes = 32
 
-genPtrShape :: Mem.HasPtrWidth w => H.Gen (Some (PtrShape ext w NoTag))
+genPtrShape :: CLMP.HasPtrWidth w => H.Gen (Some (PtrShape ext w NoTag))
 genPtrShape =
   HG.choice
     [ do
@@ -166,24 +165,24 @@ genPtrShape =
     ]
 
 genPtrTarget ::
-  Mem.HasPtrWidth wptr =>
+  CLMP.HasPtrWidth wptr =>
   H.Gen (PtrShape.PtrTarget wptr NoTag, PtrShape.Offset)
 genPtrTarget = do
   memShapes <- HG.list (HR.linear 0 16) genMemShape
   -- Use smart constructor to avoid "non-canonical" instances
   let tgt = PtrShape.ptrTarget Maybe.Nothing (Seq.fromList memShapes)
   let sz = PtrShape.ptrTargetSize ?ptrWidth tgt
-  offsetInt <- HG.integral (HR.linear 0 (Bytes.bytesToInteger sz))
-  let offset = PtrShape.Offset (Bytes.toBytes offsetInt)
+  offsetInt <- HG.integral (HR.linear 0 (CLB.bytesToInteger sz))
+  let offset = PtrShape.Offset (CLB.toBytes offsetInt)
   pure (tgt, offset)
 
-genMemShape :: Mem.HasPtrWidth wptr => H.Gen (PtrShape.MemShape wptr NoTag)
+genMemShape :: CLMP.HasPtrWidth wptr => H.Gen (PtrShape.MemShape wptr NoTag)
 genMemShape = do
   -- Don't generate zero bytes, because then printing then parsing doesn't
   -- roundtrip
   let minBytes :: Int
       minBytes = 1
-  let bytes = Bytes.toBytes Functor.<$> HG.integral (HR.linear minBytes maxBytes)
+  let bytes = CLB.toBytes Functor.<$> HG.integral (HR.linear minBytes maxBytes)
   HG.recursive
     HG.choice
     [ PtrShape.Uninitialized Functor.<$> bytes
@@ -212,7 +211,7 @@ doPrintNamed nm s =
 
 doPrint :: Shape LLVM NoTag ty -> Text
 doPrint s =
-  let doc = Print.evalPrinter printCfg (Print.print s)
+  let doc = Print.evalPrinter printCfg (Print.printShape s)
    in PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions doc)
 
 testPrint :: String -> Text -> Shape LLVM NoTag ty -> TT.TestTree
@@ -301,11 +300,11 @@ shapeTests =
     , testPrint
         "Print ShapeBool"
         "bool"
-        (ShapeBool NoTag)
+        (Shape.ShapeBool NoTag)
     , testPrint
         "Print ShapeUnit"
         "unit"
-        (ShapeUnit NoTag)
+        (Shape.ShapeUnit NoTag)
     , testPrint
         "Print ShapeStruct"
         "{bool, unit}"

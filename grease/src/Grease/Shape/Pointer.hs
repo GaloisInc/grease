@@ -8,8 +8,6 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE UndecidableInstances #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -58,7 +56,7 @@ import Data.Foldable qualified as Foldable
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
-import Data.Parameterized.Classes (ShowF (..))
+import Data.Parameterized.Classes (ShowF)
 import Data.Parameterized.NatRepr (NatRepr, natValue)
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Some (Some (Some))
@@ -72,12 +70,12 @@ import Data.Text qualified as Text
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import Data.Word (Word8)
 import GHC.TypeLits (type Natural, type (<=))
-import Grease.Cursor
-import Grease.Cursor.Pointer (Dereference (..))
+import Grease.Cursor (Cursor (CursorExt, Here), CursorExt, Last, lastCons)
+import Grease.Cursor.Pointer (Dereference (DereferenceByte, DereferencePtr))
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Lang.Crucible.CFG.Core qualified as C
-import Lang.Crucible.LLVM.Bytes (Bytes (..))
-import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.Bytes (Bytes (Bytes))
+import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Prettyprinter qualified as PP
 
@@ -151,13 +149,13 @@ deriving instance
 instance MC.PrettyF tag => PP.Pretty (MemShape wptr tag) where
   pretty =
     \case
-      Uninitialized bs -> "uninitialized x" PP.<+> PP.viaShow (Bytes.bytesToInteger bs)
+      Uninitialized bs -> "uninitialized x" PP.<+> PP.viaShow (CLB.bytesToInteger bs)
       Initialized tag bs ->
         PP.hcat
           [ "initialized"
           , ppTag tag
           , "x "
-          , PP.viaShow (Bytes.bytesToInteger bs)
+          , PP.viaShow (CLB.bytesToInteger bs)
           ]
       Pointer tag (Offset off) tgt ->
         PP.hcat
@@ -229,8 +227,8 @@ memShapeSize _proxy =
   \case
     Uninitialized bs -> bs
     Initialized _tag bs -> bs
-    Pointer _ _ _ -> Bytes.bitsToBytes (C.widthVal ?ptrWidth)
-    Exactly bs -> Bytes.Bytes (fromIntegral (List.length bs))
+    Pointer _ _ _ -> CLB.bitsToBytes (C.widthVal ?ptrWidth)
+    Exactly bs -> CLB.Bytes (fromIntegral (List.length bs))
 
 initializeMemShape ::
   tag (C.VectorType (CLM.LLVMPointerType 8)) ->
@@ -366,7 +364,7 @@ growPtrTarget ::
   Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8))) =>
   PtrTarget wptr tag ->
   PtrTarget wptr tag
-growPtrTarget = growPtrTargetBy (Bytes.toBytes (1 :: Integer))
+growPtrTarget = growPtrTargetBy (CLB.toBytes (1 :: Integer))
 
 -- | Initialize all uninitialized parts of an allocation
 initializePtrTarget ::
@@ -408,9 +406,9 @@ ptrTargetToPtrs ::
   PtrTarget wptr tag
 ptrTargetToPtrs proxy tag tgt =
   let sz = ptrTargetSize proxy tgt
-      ptrBytes = Bytes.bitsToBytes (C.widthVal ?ptrWidth)
+      ptrBytes = CLB.bitsToBytes (C.widthVal ?ptrWidth)
       (nPtrs, remBytes) = sz `divMod` ptrBytes
-      nPtrs' = Bytes.bytesToInteger $ if remBytes == 0 then nPtrs else nPtrs + 1
+      nPtrs' = CLB.bytesToInteger $ if remBytes == 0 then nPtrs else nPtrs + 1
       genSeq n x = Seq.iterateN n id x
    in ( PtrTarget Nothing $
           genSeq (fromIntegral nPtrs') $
@@ -620,7 +618,7 @@ parseJsonPtrShape parseTag =
       Nothing -> fail "Cannot have zero-width bitvector"
       Just NatRepr.LeqProof -> k w
 
-  parseOffset v = Offset . Bytes.toBytes @Int <$> v .: "offset"
+  parseOffset v = Offset . CLB.toBytes @Int <$> v .: "offset"
 
   parseJsonPtrTarget ::
     Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8))) =>
@@ -646,13 +644,13 @@ parseJsonPtrShape parseTag =
           pure (Exactly bytes)
         "init" -> do
           tag <- parseTag v
-          Initialized tag . Bytes.toBytes @Int <$> v .: "init"
+          Initialized tag . CLB.toBytes @Int <$> v .: "init"
         "ptr" -> do
           tag <- parseTag v
           offset <- parseOffset v
           tgt <- parseJsonPtrTarget =<< v .: "target"
           pure (Pointer tag offset tgt)
-        "uninit" -> Uninitialized . Bytes.toBytes @Int <$> v .: "uninit"
+        "uninit" -> Uninitialized . CLB.toBytes @Int <$> v .: "uninit"
         t -> fail ("Unknown memory shape type: " ++ Text.unpack t)
 
 -- | The x86_64 stack pointer points to the end of a large, fresh, mostly-
@@ -701,7 +699,7 @@ ppcStackPtrShape ::
   ExtraStackSlots ->
   PtrShape ext wptr NoTag (CLM.LLVMPointerType wptr)
 ppcStackPtrShape returnAddrBytes stackArgSlots =
-  let ptrWidth = Bytes.bitsToBytes (natValue ?ptrWidth)
+  let ptrWidth = CLB.bitsToBytes (natValue ?ptrWidth)
       (returnAddr, returnAddrSize) = returnAddrMemShape returnAddrBytes ptrWidth
       byte = TaggedByte NoTag 0
       backChain = Exactly (List.replicate (fromIntegral ptrWidth) byte)

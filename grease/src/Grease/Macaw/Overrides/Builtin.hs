@@ -34,8 +34,8 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.Intrinsics.Cast qualified as Cast
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.LLVM.SymIO qualified as SymIO
-import Lang.Crucible.LLVM.TypeContext qualified as TCtx
+import Lang.Crucible.LLVM.SymIO qualified as CLSIO
+import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Stubs.FunctionOverride qualified as Stubs
 import Text.LLVM.AST qualified as L
 
@@ -47,7 +47,7 @@ builtinStubsOverrides ::
   forall sym bak p arch cExt.
   ( CB.IsSymBackend sym bak
   , ?memOpts :: CLM.MemOptions
-  , ?lc :: TCtx.TypeContext
+  , ?lc :: CLTC.TypeContext
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
@@ -56,7 +56,7 @@ builtinStubsOverrides ::
   bak ->
   C.GlobalVar CLM.Mem ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
-  SymIO.LLVMFileSystem (MC.ArchAddrWidth arch) ->
+  CLSIO.LLVMFileSystem (MC.ArchAddrWidth arch) ->
   Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
 builtinStubsOverrides bak mvar mmConf fs =
   customOvs <> fromLlvmOvs <> networkingOvs

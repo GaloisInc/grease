@@ -4,8 +4,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -17,7 +15,7 @@ module Grease.Shape.Print (
   printNamedShapesFiltered,
   printNamedShapes,
   printNamed,
-  print,
+  printShape,
 ) where
 
 import Control.Monad qualified as Monad
@@ -50,10 +48,9 @@ import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.Pointer (BlockId (BlockId), PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
-import Lang.Crucible.LLVM.Bytes qualified as Bytes
+import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Numeric (showHex)
 import Prettyprinter qualified as PP
-import Prelude hiding (print)
 
 data Allocs
   = Allocs
@@ -190,16 +187,16 @@ printNamed ::
   Shape ext tag ty ->
   Printer w (PP.Doc ann)
 printNamed name s =
-  ((PP.pretty name PP.<> ": ") PP.<>) Functor.<$> print s
+  ((PP.pretty name PP.<> ": ") PP.<>) Functor.<$> printShape s
 
 -- | Print a single 'Shape'
 --
 -- Ignores @tag@s.
-print ::
+printShape ::
   ExtShape ext ~ PtrShape ext w =>
   Shape ext tag ty ->
   Printer w (PP.Doc ann)
-print =
+printShape =
   \case
     Shape.ShapeBool _tag -> pure "bool"
     Shape.ShapeUnit _tag -> pure "unit"
@@ -213,7 +210,7 @@ printStruct ::
   Ctx.Assignment (Shape ext tag) ctx ->
   Printer w (PP.Doc ann)
 printStruct fields = do
-  docs <- Monad.sequence (TFC.toListFC print fields)
+  docs <- Monad.sequence (TFC.toListFC printShape fields)
   pure (PP.braces (PP.hcat (List.intersperse ", " docs)))
 
 -- | Ignores @tag@s.
@@ -263,7 +260,7 @@ printOff (PtrShape.Offset off) = do
         case aw of
           DMM.Addr32 -> 8
           DMM.Addr64 -> 16
-  let off' = integerToInt (Bytes.bytesToInteger off)
+  let off' = integerToInt (CLB.bytesToInteger off)
   pure (PP.pretty (padHex padding off'))
 
 -- | Helper, not exported
@@ -298,8 +295,8 @@ integerToInt :: Integer -> Int
 integerToInt = fromIntegral
 
 -- | Helper, not exported
-bytesToInt :: Bytes.Bytes -> Int
-bytesToInt = integerToInt . Bytes.bytesToInteger
+bytesToInt :: CLB.Bytes -> Int
+bytesToInt = integerToInt . CLB.bytesToInteger
 
 -- | Ignores @tag@s.
 printMemShape :: PtrShape.MemShape w tag -> Printer w (PP.Doc Void)

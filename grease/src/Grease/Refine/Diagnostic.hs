@@ -1,8 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -12,15 +10,14 @@ module Grease.Refine.Diagnostic (
   severity,
 ) where
 
-import Control.Lens ((^.))
-import Data.Functor.Const (Const (..))
+import Control.Lens (Const, (^.))
 import Data.Macaw.Memory qualified as MM
 import Data.Parameterized.Context qualified as Ctx
 import Data.Text (Text)
 import Grease.Diagnostic.Severity (Severity (Debug, Info, Warn))
 import Grease.ErrorDescription (ErrorDescription)
 import Grease.Heuristic.Result qualified as Heuristic
-import Grease.Shape (ArgShapes (..), ExtShape, PrettyExt)
+import Grease.Shape (ArgShapes (ArgShapes), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Print qualified as ShapePP
 import Lang.Crucible.LLVM.MemModel qualified as CLM
@@ -30,7 +27,7 @@ import Lang.Crucible.Simulator.GlobalState qualified as GS
 import Prettyprinter qualified as PP
 import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4
-import What4.ProgramLoc qualified as W4
+import What4.ProgramLoc qualified as WPL
 
 data Diagnostic where
   CantRefine ::
@@ -49,7 +46,7 @@ data Diagnostic where
   PredNotFound ::
     Diagnostic
   RefinementFinishedPath ::
-    W4.ProgramLoc ->
+    WPL.ProgramLoc ->
     Text ->
     Diagnostic
   RefinementFinalPrecondition ::
@@ -81,9 +78,9 @@ data Diagnostic where
     ArgShapes ext tag tys ->
     Diagnostic
   ResumingFromBranch ::
-    W4.ProgramLoc -> Diagnostic
+    WPL.ProgramLoc -> Diagnostic
   SolverGoalPassed ::
-    W4.ProgramLoc -> Diagnostic
+    WPL.ProgramLoc -> Diagnostic
   SolverGoalFailed ::
     WI.IsExpr (WI.SymExpr sym) =>
     -- | Symbolic backend
@@ -131,9 +128,9 @@ instance PP.Pretty Diagnostic where
       RefinementFinishedPath loc result ->
         PP.hsep
           [ "Path ended in"
-          , PP.pretty (W4.plFunction loc)
+          , PP.pretty (WPL.plFunction loc)
           , "at"
-          , PP.pretty (W4.plSourceLoc loc)
+          , PP.pretty (WPL.plSourceLoc loc)
           , "with result"
           , PP.pretty result
           ]
@@ -151,9 +148,9 @@ instance PP.Pretty Diagnostic where
           , ShapePP.evalPrinter (printCfg w) (ShapePP.printNamedShapes argNames argShapes)
           ]
       ResumingFromBranch loc ->
-        PP.hsep ["Resuming execution from branch at", PP.pretty (W4.plSourceLoc loc)]
+        PP.hsep ["Resuming execution from branch at", PP.pretty (WPL.plSourceLoc loc)]
       SolverGoalPassed loc ->
-        PP.hsep ["Goal from", PP.pretty (W4.plSourceLoc loc), "passed"]
+        PP.hsep ["Goal from", PP.pretty (WPL.plSourceLoc loc), "passed"]
       SolverGoalFailed _sym lp minfo ->
         PP.vcat $
           [ "Goal failed:"

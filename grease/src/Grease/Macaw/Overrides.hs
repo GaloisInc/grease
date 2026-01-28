@@ -3,8 +3,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -25,7 +23,7 @@ module Grease.Macaw.Overrides (
 ) where
 
 import Control.Lens ((^.))
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Foldable qualified as Foldable
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.CFG qualified as MC
@@ -36,14 +34,14 @@ import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Sequence qualified as Seq
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.Macaw.Arch
+import Grease.Macaw.Arch (ArchContext, archIntegerArguments, archIntegerReturnRegisters, archVals)
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
-import Grease.Macaw.Overrides.SExp (MacawSExpOverride (..), loadOverrides)
+import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride, msoPublicFnHandle, msoPublicOverride, msoSomeFunctionOverride), loadOverrides)
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, MacawOverride)
-import Grease.Overrides (CantResolveOverrideCallback (..))
+import Grease.Overrides (CantResolveOverrideCallback (CantResolveOverrideCallback))
 import Grease.Skip (registerSkipOverride)
 import Grease.Syntax (ParseProgramError)
-import Grease.Syntax.Overrides as SExp
+import Grease.Syntax.Overrides qualified as SExp (checkTypedOverrideHandleCompat, freshBytesOverride, tryConcBvOverride)
 import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
@@ -56,9 +54,9 @@ import Lang.Crucible.LLVM.TypeContext (TypeContext)
 import Lang.Crucible.Simulator qualified as CS
 import Stubs.FunctionOverride qualified as Stubs
 import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
-import What4.Expr qualified as W4
+import What4.Expr.Builder qualified as WEB
 import What4.FunctionName qualified as WFN
-import What4.Protocol.Online qualified as W4
+import What4.Protocol.Online qualified as WPO
 
 -- | Convert a 'Stubs.FunctionOverride' to a 'MacawOverride'. Really, this
 -- functionality ought to be exposed from @stubs-common@. See
@@ -70,8 +68,8 @@ macawOverride ::
   , -- For silly reasons, `stubs` requires the use of an online SMT solver
     -- connection in order to call `functionOverride`. See
     -- https://github.com/GaloisInc/stubs/issues/28.
-    W4.OnlineSolver solver
-  , sym ~ W4.ExprBuilder scope st fs
+    WPO.OnlineSolver solver
+  , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   ) =>
   bak ->
@@ -149,13 +147,13 @@ massageRegAssignment = CS.unRV . Ctx.last . fmapFC (CS.RV . CS.regValue)
 mkMacawOverrideMap ::
   forall sym bak arch solver scope st fs p.
   ( CB.IsSymInterface sym
-  , W4.OnlineSolver solver
+  , WPO.OnlineSolver solver
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
-  , sym ~ W4.ExprBuilder scope st fs
+  , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
   ) =>
   bak ->
@@ -348,10 +346,10 @@ lookupMacawForwardDeclarationOverride bak funOvs decName hdl =
           let ov = SExp.freshBytesOverride @_ @p @sym @(Symbolic.MacawExt arch) ?ptrWidth
           (C.Refl, C.Refl) <- SExp.checkTypedOverrideHandleCompat hdl ov
           Just (CS.runTypedOverride (C.handleName hdl) ov)
-        "conc-bv-8" -> tryConcBvOverride bak (C.knownNat @8) hdl
-        "conc-bv-16" -> tryConcBvOverride bak (C.knownNat @16) hdl
-        "conc-bv-32" -> tryConcBvOverride bak (C.knownNat @32) hdl
-        "conc-bv-64" -> tryConcBvOverride bak (C.knownNat @64) hdl
+        "conc-bv-8" -> SExp.tryConcBvOverride bak (C.knownNat @8) hdl
+        "conc-bv-16" -> SExp.tryConcBvOverride bak (C.knownNat @16) hdl
+        "conc-bv-32" -> SExp.tryConcBvOverride bak (C.knownNat @32) hdl
+        "conc-bv-64" -> SExp.tryConcBvOverride bak (C.knownNat @64) hdl
         _ -> Nothing
     Just mso -> do
       let someForwardedOv = msoSomeFunctionOverride mso
