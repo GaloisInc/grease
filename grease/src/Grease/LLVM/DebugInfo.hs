@@ -2,8 +2,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -21,11 +19,13 @@ import Data.Foldable qualified as Foldable
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Parameterized.Context qualified as Ctx
+import Data.Parameterized.NatRepr (knownNat, natValue)
 import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Semigroup (Min (Min), Semigroup (sconcat))
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
+import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import Grease.Panic (panic)
 import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
@@ -35,8 +35,8 @@ import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes (Bytes)
 import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.Types as C
-import Text.LLVM.AST as L
+import Lang.Crucible.Types qualified as C
+import Text.LLVM.AST qualified as L
 import Text.LLVM.DebugUtils qualified as LDU
 import What4.FunctionName qualified as WFN
 

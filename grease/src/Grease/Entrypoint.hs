@@ -1,8 +1,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -30,7 +28,7 @@ module Grease.Entrypoint (
   parseEntrypointStartupOv,
 ) where
 
-import Control.Applicative (Alternative (..))
+import Control.Applicative (Alternative (empty))
 import Data.ByteString qualified as BS
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic

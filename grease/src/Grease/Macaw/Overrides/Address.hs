@@ -3,8 +3,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2025
@@ -38,7 +36,7 @@ import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Macaw.Arch (ArchContext, archVals)
 import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
-import Grease.Overrides (CantResolveOverrideCallback (..), OverrideNameError (..), partitionCfgs)
+import Grease.Overrides (CantResolveOverrideCallback, OverrideNameError, partitionCfgs)
 import Grease.Syntax (ParseProgramError, parseProgram)
 import Grease.Utility (tshow)
 import Lang.Crucible.Backend qualified as CB

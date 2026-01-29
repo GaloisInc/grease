@@ -2,8 +2,6 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -12,7 +10,7 @@ module Grease.Shape.Concretize (
   concShape,
 ) where
 
-import Data.BitVector.Sized as BV
+import Data.BitVector.Sized qualified as BV
 import Data.List qualified as List
 import Data.Vector qualified as Vec
 import Data.Word (Word8)

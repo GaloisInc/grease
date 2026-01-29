@@ -1,8 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -21,7 +19,7 @@ import Data.Map.Strict qualified as Map
 import Data.Parameterized.Map qualified as MapF
 import Data.Text (Text)
 import Data.Traversable (for)
-import Grease.Macaw.Arch
+import Grease.Macaw.Arch (ArchRegCFG)
 import Grease.Utility (segoffToAbsoluteAddr)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Expr qualified as C

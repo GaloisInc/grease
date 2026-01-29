@@ -1,6 +1,4 @@
 {-# LANGUAGE ImplicitParams #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- | c.f. "Grease.LLVM.SetupHook"
 module Grease.Macaw.SetupHook (
@@ -26,10 +24,10 @@ import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (Diagnostic (MacawSetupHookDiagnostic), GreaseLogAction)
 import Grease.Entrypoint qualified as GE
 import Grease.Macaw.Overrides qualified as GMO
-import Grease.Macaw.Overrides.Address as GMOA
+import Grease.Macaw.Overrides.Address qualified as GMOA
 import Grease.Macaw.SetupHook.Diagnostic qualified as Diag
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
-import Grease.Overrides (CantResolveOverrideCallback (..))
+import Grease.Overrides (CantResolveOverrideCallback)
 import Grease.Skip (createSkipOverride)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as LCB

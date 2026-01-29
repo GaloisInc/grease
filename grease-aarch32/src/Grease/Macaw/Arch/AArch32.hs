@@ -2,8 +2,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 -- Due to the orphan ArchReloc instance below
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -28,11 +26,12 @@ import Data.Parameterized.Classes (ixF')
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some qualified as Some
-import Data.Proxy (Proxy (..))
+import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word32)
-import Grease.Macaw.Arch (ArchContext (..), ArchReloc)
-import Grease.Macaw.Load.Relocation (RelocType (..))
-import Grease.Macaw.RegName (RegName (..))
+import Grease.Macaw.Arch (ArchReloc)
+import Grease.Macaw.Arch qualified as Arch
+import Grease.Macaw.Load.Relocation (RelocType (RelativeReloc, SymbolReloc))
+import Grease.Macaw.RegName (RegName (RegName))
 import Grease.Options (ExtraStackSlots)
 import Grease.Panic (panic)
 import Grease.Shape.Pointer (armStackPtrShape)
@@ -60,7 +59,7 @@ armCtx ::
   -- value of the link register just before starting simulation.
   Maybe Word32 ->
   ExtraStackSlots ->
-  IO (ArchContext ARM.ARM)
+  IO (Arch.ArchContext ARM.ARM)
 armCtx halloc mbReturnAddr stackArgSlots = do
   tlsGlob <- Stubs.freshTLSGlobalVar halloc
   let extOverride = Stubs.aarch32LinuxStmtExtensionOverride
@@ -77,29 +76,29 @@ armCtx halloc mbReturnAddr stackArgSlots = do
           Nothing ->
             Map.empty
   return
-    ArchContext
-      { _archInfo = ARM.arm_linux_info
-      , _archGetIP = \regs -> do
+    Arch.ArchContext
+      { Arch._archInfo = ARM.arm_linux_info
+      , Arch._archGetIP = \regs -> do
           let C.RV (CLM.LLVMPointer _base off) = regs ^. ixF' ARM.Symbolic.Regs.pc
           pure off
-      , _archPcReg = ARM.pc
-      , _archVals = avals
-      , _archRelocSupported = armRelocSupported
-      , _archIntegerArguments = \bak ->
+      , Arch._archPcReg = ARM.pc
+      , Arch._archVals = avals
+      , Arch._archRelocSupported = armRelocSupported
+      , Arch._archIntegerArguments = \bak ->
           Stubs.aarch32LinuxIntegerArguments bak avals
-      , _archIntegerReturnRegisters = Stubs.aarch32LinuxIntegerReturnRegisters
-      , _archFunctionReturnAddr = Stubs.aarch32LinuxReturnAddr
-      , _archSyscallArgumentRegisters = Stubs.aarch32LinuxSyscallArgumentRegisters
-      , _archSyscallNumberRegister = Stubs.aarch32LinuxSyscallNumberRegister
-      , _archSyscallReturnRegisters = Stubs.aarch32LinuxSyscallReturnRegisters
-      , _archSyscallCodeMapping = Stubs.syscallMap
-      , _archStackPtrShape = armStackPtrShape stackArgSlots
-      , _archInitGlobals = Stubs.aarch32LinuxInitGlobals tlsGlob
-      , _archRegOverrides = regOverrides
-      , _archOffsetStackPointerPostCall = pure
+      , Arch._archIntegerReturnRegisters = Stubs.aarch32LinuxIntegerReturnRegisters
+      , Arch._archFunctionReturnAddr = Stubs.aarch32LinuxReturnAddr
+      , Arch._archSyscallArgumentRegisters = Stubs.aarch32LinuxSyscallArgumentRegisters
+      , Arch._archSyscallNumberRegister = Stubs.aarch32LinuxSyscallNumberRegister
+      , Arch._archSyscallReturnRegisters = Stubs.aarch32LinuxSyscallReturnRegisters
+      , Arch._archSyscallCodeMapping = Stubs.syscallMap
+      , Arch._archStackPtrShape = armStackPtrShape stackArgSlots
+      , Arch._archInitGlobals = Stubs.aarch32LinuxInitGlobals tlsGlob
+      , Arch._archRegOverrides = regOverrides
+      , Arch._archOffsetStackPointerPostCall = pure
       , -- assumes AAPCS32 https://github.com/ARM-software/abi-aa/blob/main/aapcs32/aapcs32.rst#parameter-passing
-        _archABIParams = Some.Some <$> [ARM.r0, ARM.r1, ARM.r2, ARM.r3]
-      , _archPCFixup = armArchPCFixup
+        Arch._archABIParams = Some.Some <$> [ARM.r0, ARM.r1, ARM.r2, ARM.r3]
+      , Arch._archPCFixup = armArchPCFixup
       }
 
 -- | This PC fixup fixes call addresses to set the low bit of the address

@@ -1,6 +1,3 @@
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
-
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
@@ -15,7 +12,7 @@ module Grease.Macaw.RegName (
 ) where
 
 import Control.Lens (to, (^.))
-import Data.Functor.Const (Const (..))
+import Data.Functor.Const (Const (Const), getConst)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic

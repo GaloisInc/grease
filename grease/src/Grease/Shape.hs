@@ -8,8 +8,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
--- TODO(#162)
-{-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -58,7 +56,7 @@ import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map qualified as Map
-import Data.Parameterized.Classes (ShowF (..))
+import Data.Parameterized.Classes (ShowF, showF, showsPrecF)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Ctx (Ctx)
 import Data.Parameterized.Some (Some (Some))
