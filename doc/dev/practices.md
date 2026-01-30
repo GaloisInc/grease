@@ -109,6 +109,9 @@ of them have individual descriptions.
 
 [the GitHub label UI]: https://github.com/GaloisInc/grease/labels
 
+`type/` and `size/` labels are mutually exclusive. `topic/` labels are usually
+mutually exclusive.
+
 ## `status/`
 
 The `status/` labels describe where an issue is in its lifecycle. They mostly
