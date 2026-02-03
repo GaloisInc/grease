@@ -138,11 +138,8 @@ import Grease.Output qualified as GOut
 import Grease.Panic (Grease, panic)
 import Grease.Pretty (prettyPtrFnMap)
 import Grease.Profiler.Feature (greaseProfilerFeature)
-import Grease.Refine
 import Grease.Refine qualified as GRef
-import Grease.Requirement
 import Grease.Requirement qualified as GReq
-import Grease.Setup
 import Grease.Setup qualified as GSetup
 import Grease.Setup qualified as Setup
 import Grease.Shape (ArgShapes (..), ExtShape)
