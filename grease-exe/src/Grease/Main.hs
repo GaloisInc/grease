@@ -916,7 +916,7 @@ data PreconditionEnvironment sym bak ext argTys precond fmted tag = forall pty. 
   }
 
 data SomePrecondEnviron sym bak ext argTys where
-  SomePrecondEnviron :: PreconditionEnvironment sym bak ext argTys precond fmted tag -> SomePrecondEnviron sym bak ext argTys
+  SomePrecondEnviron :: (PP.Pretty fmted) => PreconditionEnvironment sym bak ext argTys precond fmted tag -> SomePrecondEnviron sym bak ext argTys
 
 macawInitPreconditionEnv ::
   forall sym bak arch scope st fm solver.
@@ -1659,89 +1659,79 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
   dbgCtx <- initDebugger la dbgOpts dbgCmdExt (C.cfgReturnType cfg)
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
-
-  initArgShapes <-
-    let opts = GO.simInitPrecondOpts simOpts
-     in getLlvmInitArgShapes la opts llvmMod argNames cfg
-
   let bounds = GO.simBoundsOpts simOpts
-  let addrWidth = MC.addrWidthRepr (Proxy @(CLLVM.ArchWidth arch))
+  withMemOptions
+    simOpts
+    $ do
+      SomePrecondEnviron (PreconditionEnvironment initArgShapes fmt heuristics setupBldr) <- llvmInitPreconds la (Proxy @arch) simOpts bak llvmMod argNames cfg
+      result <- do
+        let valueNames = Ctx.generate (Ctx.size argTys) (\i -> GSetup.ValueName ("arg" <> show i))
+        let typeCtx = llvmCtx ^. CLT.llvmTypeCtx
+        let dl = CLTC.llvmDataLayout typeCtx
+        GRef.refinementLoop la bounds initArgShapes fmt $ \argShapes ->
+          GRef.refineOnce
+            la
+            simOpts
+            halloc
+            bak
+            fm
+            dl
+            valueNames
+            argNames
+            argTys
+            setupBldr
+            argShapes
+            initMem
+            memVar
+            heuristics
+            execFeats
+            $ \toConc setupMem initFs args -> do
+              let p =
+                    GLP.GreaseLLVMPersonality
+                      { GLP._dbgContext = dbgCtx
+                      , GLP._toConcretize = toConc
+                      }
+              LLVM.initState
+                bak
+                la
+                (CLLVM.llvmExtensionImpl ?memOpts)
+                p
+                halloc
+                (GO.simErrorSymbolicFunCalls simOpts)
+                setupMem
+                -- TODO: just take the whole initFs
+                (GSIO.initFs initFs)
+                (GSIO.initFsGlobals initFs)
+                (GSIO.initFsOverride initFs)
+                llvmCtx
+                setupHook
+                (GSetup.argVals args)
+                mbStartupOvCfg
+                scfg
 
-  result <-
-    withMemOptions simOpts $ do
-      let valueNames = Ctx.generate (Ctx.size argTys) (\i -> GSetup.ValueName ("arg" <> show i))
-      let typeCtx = llvmCtx ^. CLT.llvmTypeCtx
-      let dl = CLTC.llvmDataLayout typeCtx
-      -- See comment above on heuristics in 'simulateMacawCfg'
-      let heuristics =
-            if GO.simNoHeuristics simOpts
-              then [H.mustFailHeuristic]
-              else H.llvmHeuristics la List.++ [H.mustFailHeuristic]
-
-      GRef.refinementLoop la bounds initArgShapes (ShapePrint.PrintableShapes addrWidth argNames) $ \argShapes ->
-        GRef.refineOnce
-          la
-          simOpts
-          halloc
-          bak
-          fm
-          dl
-          valueNames
-          argNames
-          argTys
-          GSetup.setup
-          argShapes
-          initMem
-          memVar
-          heuristics
-          execFeats
-          $ \toConc setupMem initFs args -> do
-            let p =
-                  GLP.GreaseLLVMPersonality
-                    { GLP._dbgContext = dbgCtx
-                    , GLP._toConcretize = toConc
-                    }
-            LLVM.initState
-              bak
-              la
-              (CLLVM.llvmExtensionImpl ?memOpts)
-              p
-              halloc
-              (GO.simErrorSymbolicFunCalls simOpts)
-              setupMem
-              -- TODO: just take the whole initFs
-              (GSIO.initFs initFs)
-              (GSIO.initFsGlobals initFs)
-              (GSIO.initFsOverride initFs)
-              llvmCtx
-              setupHook
-              (GSetup.argVals args)
-              mbStartupOvCfg
-              scfg
-
-  res <-
-    case result of
-      GRef.RefinementBug b cData ->
-        pure (GOut.BatchBug (toBatchBug fm MM.Addr64 argNames argTys initArgShapes b cData))
-      GRef.RefinementCantRefine b ->
-        pure (GOut.BatchCantRefine b)
-      GRef.RefinementItersExceeded ->
-        pure GOut.BatchItersExceeded
-      GRef.RefinementNoHeuristic errs -> do
-        maybeBug <- checkMustFail bak errs
-        case maybeBug of
-          Just bug -> pure (GOut.BatchBug bug)
-          Nothing ->
-            pure $
-              GOut.BatchCouldNotInfer $
-                errs <&> \noHeuristic ->
-                  toFailedPredicate fm MM.Addr64 argNames argTys initArgShapes noHeuristic
-      GRef.RefinementSuccess _argShapes -> pure (GOut.BatchChecks Map.empty)
-  traverse_
-    cancel
-    profLogTask
-  pure
-    res
+      res <-
+        case result of
+          GRef.RefinementBug b cData ->
+            pure (GOut.BatchBug (toBatchBug fm MM.Addr64 argNames argTys undefined b cData))
+          GRef.RefinementCantRefine b ->
+            pure (GOut.BatchCantRefine b)
+          GRef.RefinementItersExceeded ->
+            pure GOut.BatchItersExceeded
+          GRef.RefinementNoHeuristic errs -> do
+            maybeBug <- checkMustFail bak errs
+            case maybeBug of
+              Just bug -> pure (GOut.BatchBug bug)
+              Nothing ->
+                pure $
+                  GOut.BatchCouldNotInfer $
+                    errs <&> \noHeuristic ->
+                      toFailedPredicate fm MM.Addr64 argNames argTys undefined noHeuristic
+          GRef.RefinementSuccess _argShapes -> pure (GOut.BatchChecks Map.empty)
+      traverse_
+        cancel
+        profLogTask
+      pure
+        res
 
 simulateLlvmCfgs ::
   CLM.HasPtrWidth (CLLVM.ArchWidth arch) =>
