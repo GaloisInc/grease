@@ -908,14 +908,15 @@ withMaybeFile :: Maybe FilePath -> IOMode -> (Maybe Handle -> IO a) -> IO a
 withMaybeFile Nothing _ f = f Nothing
 withMaybeFile (Just pth) imd f = withFile pth imd (f . Just)
 
-data PreconditionEnvironment sym bak ext argTys where
-  PreconditionEnvironment ::
-    (PP.Pretty fmted, pty ~ precond ext tag argTys) =>
-    pty ->
-    (pty -> fmted) ->
-    [H.RefineHeuristic sym bak ext argTys pty] ->
-    GRef.SetupFn precond ext tag argTys ->
-    PreconditionEnvironment sym bak ext argTys
+data PreconditionEnvironment sym bak ext argTys precond fmted tag = forall pty. (pty ~ precond ext tag argTys) => PreconditionEnvironment
+  { precondInitArgs :: pty
+  , precondFormatter :: pty -> fmted
+  , precondHeuristics :: [H.RefineHeuristic sym bak ext argTys pty]
+  , precondSetupFn :: GRef.SetupFn precond ext tag argTys
+  }
+
+data SomePrecondEnviron sym bak ext argTys where
+  SomePrecondEnviron :: PreconditionEnvironment sym bak ext argTys precond fmted tag -> SomePrecondEnviron sym bak ext argTys
 
 macawInitPreconditionEnv ::
   forall sym bak arch scope st fm solver.
@@ -944,7 +945,7 @@ macawInitPreconditionEnv ::
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
-  IO (PreconditionEnvironment sym bak (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)))
+  IO (SomePrecondEnviron sym bak (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)))
 macawInitPreconditionEnv la _ bak archCtx simOpts macawCfgConfig argNames mbCfgAddr =
   do
     let rNames = regNames (archCtx ^. GMA.archVals)
@@ -956,7 +957,7 @@ macawInitPreconditionEnv la _ bak archCtx simOpts macawCfgConfig argNames mbCfgA
     let opts = GO.simInitPrecondOpts simOpts
     initArgShapes <- getMacawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr
     let fmt = ShapePrint.PrintableShapes addrWidth argNames
-    pure $ PreconditionEnvironment initArgShapes fmt heuristics Setup.setup
+    pure $ SomePrecondEnviron $ PreconditionEnvironment initArgShapes fmt heuristics Setup.setup
 
 simulateMacawCfg ::
   forall sym bak arch solver scope st fm.
@@ -1593,7 +1594,7 @@ llvmInitPreconds ::
   Maybe L.Module ->
   Ctx.Assignment (Const String) argTys ->
   C.CFG CLLVM.LLVM blocks argTys ret ->
-  IO (PreconditionEnvironment sym bak CLLVM.LLVM argTys)
+  IO (SomePrecondEnviron sym bak CLLVM.LLVM argTys)
 llvmInitPreconds la _ simOpts _bak llvmMod argNames cfg =
   do
     C.Refl <-
@@ -1610,7 +1611,7 @@ llvmInitPreconds la _ simOpts _bak llvmMod argNames cfg =
             else H.llvmHeuristics la List.++ [H.mustFailHeuristic]
     let addrWidth = MC.addrWidthRepr (Proxy @(CLLVM.ArchWidth arch))
     let fmt = ShapePrint.PrintableShapes addrWidth argNames
-    pure $ PreconditionEnvironment initArgShapes fmt heuristics Setup.setup
+    pure $ SomePrecondEnviron $ PreconditionEnvironment initArgShapes fmt heuristics Setup.setup
 
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.
