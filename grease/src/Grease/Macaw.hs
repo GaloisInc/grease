@@ -285,10 +285,9 @@ globalMemoryHooks arch relocs =
       traverse (WI.bvLit sym WI.knownRepr . BV.word8) relocAbsBaseAddrWord8s
 
 minimalArgShapes ::
-  forall arch sym bak m wptr.
+  forall arch bak m wptr.
   ( MonadIO m
   , MonadThrow m
-  , CB.IsSymBackend sym bak
   , C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , CLM.HasPtrWidth wptr
   , Symbolic.SymArchConstraints arch

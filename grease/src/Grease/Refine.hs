@@ -80,6 +80,7 @@ module Grease.Refine (
 
   -- * Implementation details
   findPredAnnotations,
+  SetupFn,
 ) where
 
 import Control.Applicative ((<|>))
@@ -120,7 +121,7 @@ import Grease.Options (BoundsOpts)
 import Grease.Options qualified as Opts
 import Grease.Panic (panic)
 import Grease.Refine.Diagnostic qualified as Diag
-import Grease.Setup (InitialMem)
+import Grease.Setup
 import Grease.Setup qualified as Setup
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
@@ -135,6 +136,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout (DataLayout)
+import Lang.Crucible.LLVM.DataLayout qualified as Mem
 import Lang.Crucible.LLVM.Errors qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
@@ -144,6 +146,7 @@ import Lang.Crucible.Simulator.PathSplitting qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
+import Prettyprinter qualified as PP
 import System.Exit qualified as Exit
 import What4.Expr qualified as WE
 import What4.Expr.App qualified as W4
@@ -193,7 +196,7 @@ data NoHeuristic sym ext tys
   , noHeuristicError :: Maybe (ErrorDescription sym)
   }
 
-data ProveRefineResult sym ext tys
+data ProveRefineResult sym ext tys precond
   = -- | All goals succeeded
     ProveSuccess
   | -- | Heuristic reports a possible bug
@@ -203,10 +206,10 @@ data ProveRefineResult sym ext tys
   | -- | Can\'t continue refining for some explicit reason
     ProveCantRefine CantRefine
   | -- | Goals failed and a refined configuration was built
-    ProveRefine (ArgShapes ext NoTag tys)
+    ProveRefine precond
 
 -- | How to combine intermediate results. Not exported.
-combiner :: C.Combiner (ExceptT C.TimedOut IO) (ProveRefineResult sym ext argTys)
+combiner :: C.Combiner (ExceptT C.TimedOut IO) (ProveRefineResult sym ext argTys precond)
 combiner = C.Combiner $ \mr1 mr2 -> do
   r1 <- mr1
   case C.subgoalResult r1 of
@@ -282,7 +285,7 @@ buildErrMaps mbBBMap = do
 
 -- | How to consume the results of trying to prove a goal. Not exported.
 consumer ::
-  forall p ext r solver sym bak t st argTys w fm.
+  forall p ext r solver sym bak t st argTys w fm precond.
   ( C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st fm
   , 16 C.<= w
@@ -295,8 +298,8 @@ consumer ::
   CS.ExecResult p sym ext r ->
   GreaseLogAction ->
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
-  RefinementData sym bak ext argTys ->
-  C.ProofConsumer sym t (ProveRefineResult sym ext argTys)
+  RefinementData sym bak ext argTys precond ->
+  C.ProofConsumer sym t (ProveRefineResult sym ext argTys precond)
 consumer bak execResult la bbMap refineData = do
   let RefinementData
         { refineAnns = anns
@@ -338,9 +341,9 @@ consumer bak execResult la bbMap refineData = do
         doLog la $ Diag.SolverGoalFailed sym lp minfo
         let
           runHeuristics ::
-            [RefineHeuristic sym bak ext argTys] ->
-            ArgShapes ext NoTag argTys ->
-            IO (ProveRefineResult sym ext argTys)
+            [RefineHeuristic sym bak ext argTys precond] ->
+            precond ->
+            IO (ProveRefineResult sym ext argTys precond)
           runHeuristics (h : hs) fc = do
             let initMem = Conc.initStateMem initState
             res <- liftIO (h bak anns initMem goal minfo argNames fc)
@@ -411,12 +414,12 @@ execCfg bak execData = do
         pure (r, o, Seq.empty)
 
 -- | Data needed for refinement
-data RefinementData sym bak ext argTys
+data RefinementData sym bak ext argTys precondInfo
   = RefinementData
   { refineAnns :: Anns.Annotations sym ext argTys
   , refineArgNames :: Ctx.Assignment (Const String) argTys
-  , refineArgShapes :: ArgShapes ext NoTag argTys
-  , refineHeuristics :: [RefineHeuristic sym bak ext argTys]
+  , refineArgShapes :: precondInfo
+  , refineHeuristics :: [RefineHeuristic sym bak ext argTys precondInfo]
   , refineInitState :: Conc.InitialState sym ext argTys
   , refineSolver :: Solver
   , refineSolverTimeout :: C.Timeout
@@ -424,7 +427,7 @@ data RefinementData sym bak ext argTys
 
 -- | Helper, not exported
 proveAndRefine ::
-  forall p ext r solver sym bak t st argTys w fm.
+  forall p ext r solver sym bak t st argTys w fm precond.
   ( C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st fm
   , 16 C.<= w
@@ -437,9 +440,9 @@ proveAndRefine ::
   CS.ExecResult p sym ext r ->
   GreaseLogAction ->
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
-  RefinementData sym bak ext argTys ->
+  RefinementData sym bak ext argTys precond ->
   CB.ProofObligations sym ->
-  IO (ProveRefineResult sym ext argTys)
+  IO (ProveRefineResult sym ext argTys precond)
 proveAndRefine bak execResult la bbMap refineData goals = do
   let sym = CB.backendGetSym bak
   let solver = refineSolver refineData
@@ -479,7 +482,7 @@ processExecResult =
     _ -> Nothing
 
 execAndRefine ::
-  forall ext solver sym bak t st argTys ret w m fm p.
+  forall ext solver sym bak t st argTys ret w m fm p precond.
   ( MonadIO m
   , C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
@@ -493,10 +496,10 @@ execAndRefine ::
   W4FM.FloatModeRepr fm ->
   GreaseLogAction ->
   C.GlobalVar CLM.Mem ->
-  RefinementData sym bak ext argTys ->
+  RefinementData sym bak ext argTys precond ->
   IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
   ExecData p sym ext ret ->
-  m (ProveRefineResult sym ext argTys)
+  m (ProveRefineResult sym ext argTys precond)
 execAndRefine bak _fm la memVar refineData bbMapRef execData = do
   let refineOne initSt = do
         let execData' = execData{execInitState = initSt}
@@ -523,8 +526,8 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
   -- Process new states that may have been generated during execution. Defer to
   -- `combiner` on how to combine the results from multiple states.
   let go ::
-        ProveRefineResult sym ext argTys ->
-        IO (ProveRefineResult sym ext argTys)
+        ProveRefineResult sym ext argTys precond ->
+        IO (ProveRefineResult sym ext argTys precond)
       go r = do
         remaining <- IORef.readIORef remainingRef
         case remaining of
@@ -567,6 +570,31 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
       ProveCantRefine (Timeout{}) -> "symex timeout"
       ProveCantRefine (Unsupported{}) -> "unsupported feature"
 
+type SetupFn precond ext tag argTys =
+  forall bak sym m w.
+  ( MonadIO m
+  , X.MonadCatch m
+  , CB.IsSymBackend sym bak
+  , C.IsSyntaxExtension ext
+  , CLM.HasPtrWidth w
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
+  , ExtShape ext ~ PtrShape ext w
+  , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
+  ) =>
+  GreaseLogAction ->
+  bak ->
+  Mem.DataLayout ->
+  Ctx.Assignment ValueName argTys ->
+  Ctx.Assignment C.TypeRepr argTys ->
+  precond ext tag argTys ->
+  InitialMem sym ->
+  m
+    ( Args sym ext argTys
+    , SetupMem sym
+    , Anns.Annotations sym ext argTys
+    )
+
 -- | Run 'Setup.setup' then 'execAndRefine'. Usually passed to 'refinementLoop'.
 refineOnce ::
   ( CLM.HasPtrWidth wptr
@@ -586,10 +614,11 @@ refineOnce ::
   Ctx.Assignment Setup.ValueName argTys ->
   Ctx.Assignment (Const String) argTys ->
   Ctx.Assignment C.TypeRepr argTys ->
-  ArgShapes ext NoTag argTys ->
+  SetupFn precond ext tag argTys ->
+  precond ext tag argTys ->
   InitialMem sym ->
   C.GlobalVar CLM.Mem ->
-  [RefineHeuristic sym bak ext argTys] ->
+  [RefineHeuristic sym bak ext argTys (precond ext tag argTys)] ->
   [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
   ( ( MSM.MacawProcessAssertion sym
     , Mem.HasLLVMAnn sym
@@ -600,8 +629,8 @@ refineOnce ::
     Setup.Args sym ext argTys ->
     IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
   ) ->
-  IO (ProveRefineResult sym ext argTys)
-refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem memVar heuristics execFeats mkInitState = do
+  IO (ProveRefineResult sym ext argTys (precond ext tag argTys))
+refineOnce la simOpts halloc bak fm dl valueNames argNames argTys setupFn argShapes initMem memVar heuristics execFeats mkInitState = do
   let sym = CB.backendGetSym bak
   ErrorCallbacks
     { errorMap = bbMapRef
@@ -612,7 +641,7 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
   let ?recordLLVMAnnotation = recordLLVMAnnotation
   let ?processMacawAssert = processMacawAssert
   (args, setupMem, setupAnns) <-
-    Setup.setup la bak dl valueNames argTys argShapes initMem
+    setupFn la bak dl valueNames argTys argShapes initMem
   initFs_ <- GSIO.initialLlvmFileSystem halloc sym (Opts.simFsOpts simOpts)
   (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
   let initFs = initFs_{GSIO.initFsGlobals = globals1}
@@ -644,43 +673,43 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
           }
   execAndRefine bak fm la memVar refineData bbMapRef execData
 
-data RefinementSummary sym ext tys
-  = RefinementSuccess (ArgShapes ext NoTag tys)
+data RefinementSummary sym ext tys precond
+  = RefinementSuccess precond
   | RefinementNoHeuristic (NE.NonEmpty (NoHeuristic sym ext tys))
   | RefinementItersExceeded
   | RefinementCantRefine CantRefine
   | RefinementBug Bug.BugInstance (ConcretizedData sym ext tys)
 
 refinementLoop ::
-  forall sym ext argTys w.
+  forall sym ext argTys w precond fmted.
   ( C.IsSyntaxExtension ext
   , 16 C.<= w
   , CLM.HasPtrWidth w
   , MC.MemWidth w
   , ExtShape ext ~ PtrShape ext w
   , PrettyExt ext NoTag
+  , PP.Pretty fmted
   ) =>
   GreaseLogAction ->
   BoundsOpts ->
-  Ctx.Assignment (Const String) argTys ->
-  ArgShapes ext NoTag argTys ->
-  -- | This callback is usually 'refineOnce'
-  (ArgShapes ext NoTag argTys -> IO (ProveRefineResult sym ext argTys)) ->
-  IO (RefinementSummary sym ext argTys)
-refinementLoop la boundsOpts argNames initArgShapes go = do
+  precond ->
+  (precond -> fmted) ->
+  -- \| This callback is usually 'refineOnce'
+  (precond -> IO (ProveRefineResult sym ext argTys precond)) ->
+  IO (RefinementSummary sym ext argTys precond)
+refinementLoop la boundsOpts initArgShapes formatter go = do
   let
     loop ::
       Int ->
-      ArgShapes ext NoTag argTys ->
-      IO (RefinementSummary sym ext argTys)
+      precond ->
+      IO (RefinementSummary sym ext argTys precond)
     loop iters argShapes = do
       if Maybe.maybe False (iters >=) (Opts.simMaxIters boundsOpts)
         then do
           doLog la Diag.RefinementLoopMaximumIterationsExceeded
           pure RefinementItersExceeded
         else do
-          let addrWidth = MC.addrWidthRepr (Proxy @w)
-          doLog la (Diag.RefinementUsingPrecondition addrWidth argNames argShapes)
+          doLog la (Diag.RefinementUsingPrecondition (formatter argShapes))
           new <- go argShapes
           case new of
             ProveBug b cData -> pure (RefinementBug b cData)
@@ -690,7 +719,7 @@ refinementLoop la boundsOpts argNames initArgShapes go = do
               loop (iters + 1) argShapes'
             ProveSuccess -> do
               doLog la Diag.RefinementLoopAllGoalsPassed
-              doLog la (Diag.RefinementFinalPrecondition addrWidth argNames argShapes)
+              doLog la (Diag.RefinementFinalPrecondition (formatter argShapes))
               pure $ RefinementSuccess argShapes
             ProveNoHeuristic errs -> do
               doLog la Diag.RefinementLoopNoHeuristic
