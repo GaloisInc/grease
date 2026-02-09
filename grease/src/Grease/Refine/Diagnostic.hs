@@ -50,14 +50,8 @@ data Diagnostic where
     Text ->
     Diagnostic
   RefinementFinalPrecondition ::
-    forall w ext tag tys.
-    ( ExtShape ext ~ PtrShape ext w
-    , PrettyExt ext tag
-    ) =>
-    MM.AddrWidthRepr w ->
-    -- | Argument names
-    Ctx.Assignment (Const String) tys ->
-    ArgShapes ext tag tys ->
+    PP.Pretty precond =>
+    precond ->
     Diagnostic
   RefinementLoopMaximumIterationsExceeded ::
     Diagnostic
@@ -68,14 +62,8 @@ data Diagnostic where
   RefinementLoopNoHeuristic ::
     Diagnostic
   RefinementUsingPrecondition ::
-    forall w ext tag tys.
-    ( ExtShape ext ~ PtrShape ext w
-    , PrettyExt ext tag
-    ) =>
-    MM.AddrWidthRepr w ->
-    -- | Argument names
-    Ctx.Assignment (Const String) tys ->
-    ArgShapes ext tag tys ->
+    PP.Pretty precond =>
+    precond ->
     Diagnostic
   ResumingFromBranch ::
     WPL.ProgramLoc -> Diagnostic
@@ -120,10 +108,10 @@ instance PP.Pretty Diagnostic where
         "No annotation on predicate!"
       PredNotFound ->
         "Predicate annotation was not found in bad behavior map"
-      RefinementFinalPrecondition w argNames (ArgShapes argShapes) ->
+      RefinementFinalPrecondition prec ->
         PP.vcat
           [ "Final refined precondition:"
-          , ShapePP.evalPrinter (printCfg w) (ShapePP.printNamedShapes argNames argShapes)
+          , PP.pretty prec
           ]
       RefinementFinishedPath loc result ->
         PP.hsep
@@ -142,10 +130,10 @@ instance PP.Pretty Diagnostic where
         "All goals passed!"
       RefinementLoopNoHeuristic ->
         "Unable to find a heuristic for any goal"
-      RefinementUsingPrecondition w argNames (ArgShapes argShapes) ->
+      RefinementUsingPrecondition prec ->
         PP.vcat
           [ "Using precondition:"
-          , ShapePP.evalPrinter (printCfg w) (ShapePP.printNamedShapes argNames argShapes)
+          , PP.pretty prec
           ]
       ResumingFromBranch loc ->
         PP.hsep ["Resuming execution from branch at", PP.pretty (WPL.plSourceLoc loc)]
