@@ -101,8 +101,8 @@ type RefineHeuristic sym bak ext tys precond =
   Maybe (ErrorDescription sym) ->
   -- Argument names
   Ctx.Assignment (Const String) tys ->
-  precond ->
-  IO (HeuristicResult ext tys precond)
+  precond ext NoTag tys ->
+  IO (HeuristicResult ext NoTag tys precond)
 
 selectArg :: ArgSelector ext argTys ts t -> Lens' (ArgShapes ext NoTag argTys) (Shape ext NoTag t)
 selectArg sel = argShapes . ixF' (sel ^. argSelectorIndex)
@@ -120,7 +120,7 @@ newtype MemoryErrorHeuristic sym ext w argTys precond
         ArgShapes ext NoTag argTys ->
         AnyMemError sym ->
         ArgSelector ext argTys ts t ->
-        IO (HeuristicResult ext argTys precond)
+        IO (HeuristicResult ext NoTag argTys precond)
       )
 
 refinePtrArg ::
@@ -128,13 +128,13 @@ refinePtrArg ::
   , Cursor.CursorExt ext ~ Dereference ext w
   , CLMP.HasPtrWidth w
   , Cursor.Last ts ~ CLMP.LLVMPointerType w'
-  , precond ~ ArgShapes ext NoTag argTys
+  , precond ~ ArgShapes
   ) =>
   GreaseLogAction ->
   ArgShapes ext NoTag argTys ->
   ((regTy ~ CLMP.LLVMPointerType w) => PtrTarget w NoTag -> Either ModifyPtrError (PtrTarget w NoTag)) ->
   ArgSelector ext argTys ts regTy ->
-  IO (HeuristicResult ext argTys precond)
+  IO (HeuristicResult ext NoTag argTys precond)
 refinePtrArg la args modify sel =
   case args ^. selectArg sel of
     ShapeExt (ShapePtrBV _tag w) | Just Refl <- testEquality w ?ptrWidth -> do
@@ -164,14 +164,14 @@ newPointer ::
   , Cursor.CursorExt ext ~ Dereference ext w
   , CLMP.HasPtrWidth w
   , Cursor.Last ts ~ CLMP.LLVMPointerType 8
-  , precond ~ ArgShapes ext NoTag argTys
+  , precond ~ ArgShapes
   ) =>
   GreaseLogAction ->
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
   ArgSelector ext argTys ts regTy ->
-  IO (HeuristicResult ext argTys precond)
+  IO (HeuristicResult ext NoTag argTys precond)
 newPointer la argNames args sel = do
   let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
   doLog la $ Diag.DefaultHeuristicsBytesToPtr argName sel
@@ -184,7 +184,7 @@ handleMemErr ::
   , Cursor.CursorExt ext ~ Dereference ext w
   , CLMP.HasPtrWidth w
   , Cursor.Last ts ~ CLMP.LLVMPointerType w
-  , precond ~ ArgShapes ext NoTag argTys
+  , precond ~ ArgShapes
   ) =>
   GreaseLogAction ->
   -- | Argument names
@@ -192,7 +192,7 @@ handleMemErr ::
   ArgShapes ext NoTag argTys ->
   AnyMemError sym ->
   ArgSelector ext argTys ts regTy ->
-  IO (HeuristicResult ext argTys precond)
+  IO (HeuristicResult ext NoTag argTys precond)
 handleMemErr la argNames args err sel =
   case err of
     -- Most of the time, expanding an allocation backing a function won't help
@@ -257,7 +257,7 @@ modPtr ::
   , sym ~ WE.ExprBuilder t st fs
   , Cursor.CursorExt ext ~ Dereference ext w
   , CLMP.HasPtrWidth w
-  , precond ~ ArgShapes ext NoTag argTys
+  , precond ~ ArgShapes
   ) =>
   GreaseLogAction ->
   Anns.Annotations sym ext argTys ->
@@ -265,7 +265,7 @@ modPtr ::
   ArgShapes ext NoTag argTys ->
   (PtrTarget w NoTag -> PtrTarget w NoTag) ->
   CLMP.LLVMPtr sym w0 ->
-  IO (HeuristicResult ext argTys precond)
+  IO (HeuristicResult ext NoTag argTys precond)
 modPtr la anns sym args modify ptr = do
   Refl <- assertPtrWidth ptr
   case Anns.lookupPtrAnnotation anns sym ?ptrWidth ptr of
@@ -307,7 +307,7 @@ handleUB ::
   , sym ~ WE.ExprBuilder t st fs
   , Cursor.CursorExt ext ~ Dereference ext w
   , CLMP.HasPtrWidth w
-  , precond ~ ArgShapes ext NoTag argTys
+  , precond ~ ArgShapes
   ) =>
   GreaseLogAction ->
   Anns.Annotations sym ext argTys ->
@@ -315,7 +315,7 @@ handleUB ::
   WPL.ProgramLoc ->
   ArgShapes ext NoTag argTys ->
   Mem.UndefinedBehavior (CS.RegValue' sym) ->
-  IO (HeuristicResult ext argTys precond)
+  IO (HeuristicResult ext NoTag argTys precond)
 handleUB la anns sym _loc args =
   \case
     Mem.FreeBadOffset (CS.RV ptr) ->
@@ -332,7 +332,7 @@ handleUB la anns sym _loc args =
   makeIntoPointer ::
     forall w'.
     CLMP.LLVMPtr sym w' ->
-    IO (HeuristicResult ext argTys precond)
+    IO (HeuristicResult ext NoTag argTys precond)
   makeIntoPointer ptr = do
     Refl <- assertPtrWidth ptr
     case Anns.lookupPtrAnnotation anns sym ?ptrWidth ptr of
@@ -368,7 +368,7 @@ applyMemoryHeuristics ::
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
   CLMP.LLVMPtr sym w ->
-  IO (HeuristicResult ext argTys precond)
+  IO (HeuristicResult ext NoTag argTys precond)
 applyMemoryHeuristics _la anns sym ptrHeuristic byteHeuristic loc (InitialMem memImpl) memErr argNames args ptr = do
   Refl <- assertPtrWidth ptr
   let msel = Anns.lookupPtrAnnotation anns sym ?ptrWidth ptr
@@ -465,7 +465,7 @@ mustFailHeuristic bak _anns _initMem obligation minfo _argNames _args =
 pointerHeuristic ::
   forall wptr solver sym bak t st fs ext argTys precond.
   ( C.IsSyntaxExtension ext
-  , precond ~ ArgShapes ext NoTag argTys
+  , precond ~ ArgShapes
   , ExtShape ext ~ PtrShape ext wptr
   , Cursor.CursorExt ext ~ Dereference ext wptr
   , OnlineSolverAndBackend solver sym bak t st fs
@@ -506,7 +506,7 @@ pointerHeuristic la ptrHeuristic byteHeuristic bak anns initMem obligation minfo
   sym = CB.backendGetSym bak
   labeledPred = CB.proofGoal obligation
   loc = CS.simErrorLoc (labeledPred ^. W4.labeledPredMsg)
-  applyToErr :: AnyMemError sym -> CLMP.LLVMPtr sym w -> IO (HeuristicResult ext argTys precond)
+  applyToErr :: AnyMemError sym -> CLMP.LLVMPtr sym w -> IO (HeuristicResult ext NoTag argTys precond)
   applyToErr e ptr = applyMemoryHeuristics la anns sym ptrHeuristic byteHeuristic loc initMem e argNames args ptr
 
 pointerHeuristics ::
@@ -519,7 +519,7 @@ pointerHeuristics ::
   , CLMP.HasPtrWidth wptr
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
-  , precond ~ ArgShapes ext NoTag argTys
+  , precond ~ ArgShapes
   ) =>
   GreaseLogAction ->
   MemoryErrorHeuristic sym ext wptr argTys precond ->
@@ -573,7 +573,7 @@ llvmHeuristics ::
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   , wptr ~ 64 -- TODO(lb): Why is this necessary?
-  , precond ~ ArgShapes LLVM NoTag argTys
+  , precond ~ ArgShapes
   ) =>
   GreaseLogAction ->
   [RefineHeuristic sym bak LLVM argTys precond]
@@ -595,7 +595,7 @@ macawHeuristics ::
   , CLMP.HasPtrWidth (MC.ArchAddrWidth arch)
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
-  , precond ~ ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.MacawCrucibleRegTypes arch)
+  , precond ~ ArgShapes
   ) =>
   GreaseLogAction ->
   RegNames arch ->
@@ -616,7 +616,7 @@ macawHeuristics la rNames =
     ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.MacawCrucibleRegTypes arch) ->
     AnyMemError sym ->
     ArgSelector (Symbolic.MacawExt arch) (Symbolic.MacawCrucibleRegTypes arch) ts regTy ->
-    IO (HeuristicResult (Symbolic.MacawExt arch) (Symbolic.MacawCrucibleRegTypes arch) precond)
+    IO (HeuristicResult (Symbolic.MacawExt arch) NoTag (Symbolic.MacawCrucibleRegTypes arch) precond)
   handleMemErr' sym loc argNames args e@(AnyMemErrorLLVM (Mem.MemoryError op reason)) sel =
     if getRegName rNames (sel ^. argSelectorIndex) == mkRegName @arch MC.sp_reg
       then case reason of

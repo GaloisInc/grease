@@ -27,7 +27,7 @@ import Data.Parameterized.Map qualified as MapF
 import Data.Parameterized.SymbolRepr (SymbolRepr)
 import Data.Parameterized.TraversableFC qualified as TFC (toListFC)
 import Data.Text.Encoding qualified as Text
-import Grease.Concretize (ConcArgs (ConcArgs))
+import Grease.Concretize (ConcArgs (ConcArgs), NormalConcArgs (NormalConcArgs))
 import Grease.Panic (panic)
 import Grease.Shape (ExtShape, getTag)
 import Grease.Shape.Pointer (PtrShape, getPtrTag)
@@ -199,10 +199,10 @@ concArgsToJson ::
   (ExtShape ext ~ PtrShape ext wptr) =>
   FloatModeRepr fm ->
   Ctx.Assignment (Const String) args ->
-  ConcArgs sym ext args ->
+  ConcArgs sym ext args NormalConcArgs ->
   Ctx.Assignment C.TypeRepr args ->
   [Aeson.Value]
-concArgsToJson fm argNames (ConcArgs cArgs) argTys =
+concArgsToJson fm argNames (ConcArgs (NormalConcArgs cArgs)) argTys =
   let argsWithTypes = Ctx.zipWith (\argTy cArg -> Pair argTy (getTag getPtrTag cArg)) argTys cArgs
    in let argBlobs = TFC.toListFC (\(Pair ty cVal) -> concRegValueToJson jsonPtrFnMap fm ty cVal) argsWithTypes
        in let argNames' = TFC.toListFC getConst argNames

@@ -13,8 +13,10 @@ module Grease.Concretize (
   ConcArgs (..),
   ConcretizedData (..),
   SomeConcretizedValue (..),
+  NormalConcArgs (..),
   concArgsToSym,
   makeConcretizedData,
+  normalConcretizationFn,
 
   -- * Pretty-printing
   printConcArgs,
@@ -41,6 +43,7 @@ import Grease.ErrorDescription (ErrorDescription)
 import Grease.ErrorDescription qualified as Err
 import Grease.Setup (Args (Args), InitialMem (InitialMem))
 import Grease.Shape (ExtShape, Shape)
+import Grease.Shape qualified as ArgShapes
 import Grease.Shape qualified as Shape
 import Grease.Shape.Concretize (concShape)
 import Grease.Shape.Pointer (PtrShape)
@@ -66,9 +69,9 @@ import What4.Interface qualified as WI
 -- * Data to be concretized
 
 -- | Initial state, to be concretized into 'ConcretizedData'
-data InitialState sym ext argTys
+data InitialState sym ext tag argTys precond
   = InitialState
-  { initStateArgs :: Args sym ext argTys
+  { initStateArgs :: precond ext tag argTys
   , initStateFs :: SymIO.InitialFileSystemContents sym
   , initStateMem :: InitialMem sym
   }
@@ -78,20 +81,20 @@ data InitialState sym ext argTys
 -- * Concretization
 
 -- | Arguments ('Args') that have been concretized
-newtype ConcArgs sym ext argTys
-  = ConcArgs {getConcArgs :: Ctx.Assignment (Shape ext (Conc.ConcRV' sym)) argTys}
+newtype ConcArgs ext tag argTys precond
+  = ConcArgs {getConcArgs :: precond ext tag argTys}
 
 -- | Turn 'ConcArgs' back into a 'C.RegMap' that can be used to re-execute
 -- a CFG.
 concArgsToSym ::
-  forall sym ext brand st fm wptr argTys.
+  forall sym ext brand st fm wptr argTys precond.
   CB.IsSymInterface sym =>
   (sym ~ WE.ExprBuilder brand st (WE.Flags fm)) =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   sym ->
   W4FM.FloatModeRepr fm ->
   Ctx.Assignment C.TypeRepr argTys ->
-  ConcArgs sym ext argTys ->
+  ConcArgs sym ext argTys precond ->
   IO (CS.RegMap sym argTys)
 concArgsToSym sym fm argTys (ConcArgs cArgs) =
   CS.RegMap
@@ -126,9 +129,9 @@ data SomeConcretizedValue sym
 -- | Concretized version of 'InitialState' plus @GlobalVar 'ToConcretizeType'@
 --
 -- Produced by 'makeConcretizedData'
-data ConcretizedData sym ext argTys
+data ConcretizedData sym ext argTys precond
   = ConcretizedData
-  { concArgs :: ConcArgs sym ext argTys
+  { concArgs :: ConcArgs sym ext argTys precond
   , concExtra :: [SomeConcretizedValue sym]
   -- ^ Concretized values from the @GlobalVar 'ToConcretizeType'@
   , concFs :: ConcFs
@@ -136,20 +139,35 @@ data ConcretizedData sym ext argTys
   , concErr :: Maybe (ErrorDescription sym)
   }
 
+newtype ConcretizationFn precond ext tag argTys sym t
+  = ConcretizationFn (Conc.ConcCtx sym t -> precond ext tag argTys -> IO (precond ext (Conc.ConcRV' sym) argTys))
+
+normalConcretizationFn ::
+  forall sym ext tag argTys t wptr.
+  CLMP.HasPtrWidth wptr =>
+  (ExtShape ext ~ PtrShape ext wptr) =>
+  ConcretizationFn NormalConcArgs ext tag argTys sym t
+normalConcretizationFn = ConcretizationFn $ \ctx (NormalConcArgs initArgs) -> do
+  let concRV :: forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)
+      concRV tRepr = fmap (Conc.ConcRV' @sym) . Conc.groundRegValue @sym @t ctx tRepr . CS.unRV
+  cArgs <- traverseFC (Shape.traverseShapeWithType concRV) initArgs
+  pure (NormalConcArgs cArgs)
+
 makeConcretizedData ::
-  forall solver sym ext wptr bak t st argTys fm.
+  forall solver sym ext wptr bak t st argTys fm tag precond.
   OnlineSolverAndBackend solver sym bak t st fm =>
   CLMP.HasPtrWidth wptr =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   bak ->
   WE.GroundEvalFn t ->
   Maybe (ErrorDescription sym) ->
-  InitialState sym ext argTys ->
+  InitialState sym ext argTys tag precond ->
   CS.RegValue sym ToConcretizeType ->
-  IO (ConcretizedData sym ext argTys)
-makeConcretizedData bak groundEvalFn minfo initState extra = do
+  ConcretizationFn precond ext tag argTys sym t ->
+  IO (ConcretizedData sym ext argTys precond)
+makeConcretizedData bak groundEvalFn minfo initState extra (ConcretizationFn concFn) = do
   let InitialState
-        { initStateArgs = Args initArgs
+        { initStateArgs = initArgs
         , initStateFs = initFs
         , initStateMem = InitialMem initMem
         } = initState
@@ -157,7 +175,7 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   let ctx = Conc.ConcCtx @sym @t groundEvalFn CLMP.concPtrFnMap
   let concRV :: forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)
       concRV t = fmap (Conc.ConcRV' @sym) . Conc.groundRegValue @sym @t ctx t . CS.unRV
-  cArgs <- liftIO (traverseFC (Shape.traverseShapeWithType concRV) initArgs)
+  cArgs <- liftIO $ concFn ctx initArgs
   let WE.GroundEvalFn gFn = groundEvalFn
   let toWord8 :: BV.BV 8 -> Word8
       toWord8 = fromIntegral . BV.asUnsigned
@@ -198,9 +216,9 @@ printConcArgs ::
   Ctx.Assignment (Const String) argTys ->
   -- | Which shapes to print
   Ctx.Assignment (Const Bool) argTys ->
-  ConcArgs sym ext argTys ->
+  ConcArgs sym ext argTys NormalConcArgs ->
   PP.Doc ann
-printConcArgs addrWidth argNames filt (ConcArgs cArgs) =
+printConcArgs addrWidth argNames filt (ConcArgs (NormalConcArgs cArgs)) =
   let cShapes = fmapFC concShape cArgs
    in let rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
        in ShapePP.evalPrinter
@@ -268,7 +286,7 @@ printConcData ::
   Ctx.Assignment (Const String) argTys ->
   -- | Which shapes to print
   Ctx.Assignment (Const Bool) argTys ->
-  ConcretizedData sym ext argTys ->
+  ConcretizedData sym ext argTys NormalConcArgs ->
   PP.Doc ann
 printConcData addrWidth argNames filt cData =
   let args = printConcArgs addrWidth argNames filt (concArgs cData)

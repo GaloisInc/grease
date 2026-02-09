@@ -50,10 +50,10 @@ instance PP.Pretty CantRefine where
       Timeout -> "Symbolic execution timed out"
       Unsupported msg -> "Unsupported:" PP.<+> PP.pretty msg
 
-data HeuristicResult ext tys precond
+data HeuristicResult ext tag tys precond
   = CantRefine CantRefine
   | PossibleBug Bug.BugInstance
-  | RefinedPrecondition precond
+  | RefinedPrecondition (precond ext tag tys)
   | Unknown
 
 -- | Merge two 'HeuristicResult's, preferring the first except if it is
@@ -62,9 +62,9 @@ data HeuristicResult ext tys precond
 -- This is useful for heuristics for @memcpy@, which applies heuristics to its
 -- source and destination pointers separately, then merges them.
 mergeResultsOptimistic ::
-  HeuristicResult ext tys precond ->
-  HeuristicResult ext tys precond ->
-  HeuristicResult ext tys precond
+  HeuristicResult ext NoTag tys precond ->
+  HeuristicResult ext NoTag tys precond ->
+  HeuristicResult ext NoTag tys precond
 mergeResultsOptimistic r1 r2 =
   case (r1, r2) of
     (CantRefine{}, _) -> r2
