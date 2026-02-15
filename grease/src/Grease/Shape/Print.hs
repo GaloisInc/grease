@@ -199,7 +199,7 @@ printNamed name s =
 printShapeWithOffset ::
   ExtShape ext ~ PtrShape ext w =>
   -- | Function to extract offset for ShapePtr
-  (forall ty. tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
+  (tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
   Shape ext tag ty ->
   Printer w (PP.Doc ann)
 printShapeWithOffset getOffset =
@@ -223,24 +223,17 @@ printShape = printShapeWithOffset (\_ mOffset -> fromMaybe (PtrShape.Offset 0) m
 printStructWithOffset ::
   ExtShape ext ~ PtrShape ext w =>
   -- | Function to extract offset for ShapePtr
-  (forall ty. tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
+  (tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
   Ctx.Assignment (Shape ext tag) ctx ->
   Printer w (PP.Doc ann)
 printStructWithOffset getOffset fields = do
   docs <- Monad.sequence (TFC.toListFC (printShapeWithOffset getOffset) fields)
   pure (PP.braces (PP.hcat (List.intersperse ", " docs)))
 
--- | Ignores @tag@s.
-printStruct ::
-  ExtShape ext ~ PtrShape ext w =>
-  Ctx.Assignment (Shape ext tag) ctx ->
-  Printer w (PP.Doc ann)
-printStruct = printStructWithOffset (\_ mOffset -> fromMaybe (PtrShape.Offset 0) mOffset)
-
 -- | Print a PtrShape with a custom offset extraction function
 printPtrWithOffset ::
   -- | Function to extract offset for ShapePtr
-  (forall ty. tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
+  (tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
   PtrShape ext w tag ty ->
   Printer w (PP.Doc ann)
 printPtrWithOffset getOffset =
