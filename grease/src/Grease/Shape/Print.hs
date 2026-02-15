@@ -245,10 +245,6 @@ printPtrWithOffset getOffset =
       let offset = getOffset tag mOffset
       printBlockOffset blk offset
 
--- | Ignores @tag@s.
-printPtr :: PtrShape ext w tag ty -> Printer w (PP.Doc ann)
-printPtr = printPtrWithOffset (\_ mOffset -> fromMaybe (PtrShape.Offset 0) mOffset)
-
 printBv :: NatRepr w' -> Printer w (PP.Doc ann)
 printBv w' = do
   -- TODO: assert that width % 8 == 0?
