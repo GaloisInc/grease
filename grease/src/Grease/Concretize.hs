@@ -204,7 +204,7 @@ printConcNamedShapesFiltered ::
   CLMP.HasPtrWidth w =>
   ExtShape ext ~ PtrShape ext w =>
   -- | Offset extractor for concretized pointers
-  (forall ty. tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
+  (tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
   -- | Names
   Ctx.Assignment (Const.Const nm) tys ->
   -- | Only print those 'Shape's with 'True' in the corresponding entry
@@ -230,7 +230,7 @@ printConcNamed ::
   CLMP.HasPtrWidth w =>
   ExtShape ext ~ PtrShape ext w =>
   -- | Offset extractor
-  (forall ty. tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
+  (tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
   nm ->
   Shape ext tag ty ->
   ShapePP.Printer w (PP.Doc ann)
