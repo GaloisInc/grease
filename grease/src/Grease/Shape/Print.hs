@@ -16,6 +16,7 @@ module Grease.Shape.Print (
   printNamedShapes,
   printNamed,
   printShape,
+  printShapeWithOffset,
 ) where
 
 import Control.Monad qualified as Monad
@@ -35,6 +36,7 @@ import Data.IntMap qualified as IntMap
 import Data.List qualified as List
 import Data.Macaw.Memory (AddrWidthRepr)
 import Data.Macaw.Memory qualified as DMM
+import Data.Maybe (fromMaybe)
 import Data.Monoid qualified as Monoid
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (NatRepr)
@@ -49,6 +51,7 @@ import Grease.Shape qualified as Shape
 import Grease.Shape.Pointer (BlockId (BlockId), PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes qualified as CLB
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Numeric (showHex)
 import Prettyprinter qualified as PP
 
@@ -189,6 +192,24 @@ printNamed ::
 printNamed name s =
   ((PP.pretty name PP.<> ": ") PP.<>) Functor.<$> printShape s
 
+-- | Print a single 'Shape' with a custom offset extraction function
+--
+-- The offset extraction function is used for 'ShapePtr' to determine what offset
+-- to print. It receives the tag and the Maybe Offset field.
+printShapeWithOffset ::
+  ExtShape ext ~ PtrShape ext w =>
+  -- | Function to extract offset for ShapePtr
+  (tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
+  Shape ext tag ty ->
+  Printer w (PP.Doc ann)
+printShapeWithOffset getOffset =
+  \case
+    Shape.ShapeBool _tag -> pure "bool"
+    Shape.ShapeUnit _tag -> pure "unit"
+    Shape.ShapeFloat _tag fi -> pure (PP.pretty fi)
+    Shape.ShapeStruct _tag fields -> printStructWithOffset getOffset fields
+    Shape.ShapeExt ext -> printPtrWithOffset getOffset ext
+
 -- | Print a single 'Shape'
 --
 -- Ignores @tag@s.
@@ -196,31 +217,32 @@ printShape ::
   ExtShape ext ~ PtrShape ext w =>
   Shape ext tag ty ->
   Printer w (PP.Doc ann)
-printShape =
-  \case
-    Shape.ShapeBool _tag -> pure "bool"
-    Shape.ShapeUnit _tag -> pure "unit"
-    Shape.ShapeFloat _tag fi -> pure (PP.pretty fi)
-    Shape.ShapeStruct _tag fields -> printStruct fields
-    Shape.ShapeExt ext -> printPtr ext
+printShape = printShapeWithOffset (\_ mOffset -> fromMaybe (PtrShape.Offset 0) mOffset)
 
--- | Ignores @tag@s.
-printStruct ::
+-- | Print a struct with a custom offset extraction function
+printStructWithOffset ::
   ExtShape ext ~ PtrShape ext w =>
+  -- | Function to extract offset for ShapePtr
+  (tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
   Ctx.Assignment (Shape ext tag) ctx ->
   Printer w (PP.Doc ann)
-printStruct fields = do
-  docs <- Monad.sequence (TFC.toListFC printShape fields)
+printStructWithOffset getOffset fields = do
+  docs <- Monad.sequence (TFC.toListFC (printShapeWithOffset getOffset) fields)
   pure (PP.braces (PP.hcat (List.intersperse ", " docs)))
 
--- | Ignores @tag@s.
-printPtr :: PtrShape ext w tag ty -> Printer w (PP.Doc ann)
-printPtr =
+-- | Print a PtrShape with a custom offset extraction function
+printPtrWithOffset ::
+  -- | Function to extract offset for ShapePtr
+  (tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
+  PtrShape ext w tag ty ->
+  Printer w (PP.Doc ann)
+printPtrWithOffset getOffset =
   \case
     PtrShape.ShapePtrBV _tag w -> printBv w
     PtrShape.ShapePtrBVLit _tag w bv -> printBvLit w bv
-    PtrShape.ShapePtr _tag offset tgt@(PtrShape.PtrTarget bid _) -> do
+    PtrShape.ShapePtr tag mOffset tgt@(PtrShape.PtrTarget bid _) -> do
       blk <- printerAlloc (printTgt tgt) bid
+      let offset = getOffset tag mOffset
       printBlockOffset blk offset
 
 printBv :: NatRepr w' -> Printer w (PP.Doc ann)
