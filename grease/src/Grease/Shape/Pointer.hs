@@ -454,7 +454,7 @@ data PtrShape (ext :: Type) w tag (t :: C.CrucibleType) where
     PtrShape ext w tag (CLM.LLVMPointerType w')
   ShapePtr ::
     tag (CLM.LLVMPointerType w) ->
-    Offset ->
+    Maybe Offset ->
     PtrTarget w tag ->
     PtrShape ext w tag (CLM.LLVMPointerType w)
 
@@ -483,8 +483,8 @@ instance
         case (testEquality tag tag', testEquality w w') of
           (Just Refl, Just Refl) | bv == bv' -> Just Refl
           _ -> Nothing
-      (ShapePtr tag offset target, ShapePtr tag' offset' target') ->
-        case (testEquality tag tag', offset == offset', target == target') of
+      (ShapePtr tag mOffset target, ShapePtr tag' mOffset' target') ->
+        case (testEquality tag tag', mOffset == mOffset', target == target') of
           (Just Refl, True, True) -> Just Refl
           _ -> Nothing
       _ -> Nothing
@@ -504,8 +504,10 @@ instance MC.PrettyF tag => MC.PrettyF (PtrShape ext w tag) where
           , "]"
           , ppTag tag
           ]
-      ShapePtr tag (Offset off) tgt ->
-        PP.pretty tgt PP.<> "+" PP.<> PP.viaShow off PP.<> ppTag tag
+      ShapePtr tag mOffset tgt ->
+        case mOffset of
+          Just (Offset off) -> PP.pretty tgt PP.<> "+" PP.<> PP.viaShow off PP.<> ppTag tag
+          Nothing -> PP.pretty tgt PP.<> ppTag tag
 
 instance TFC.FunctorFC (PtrShape ext w) where
   fmapFC = TFC.fmapFCDefault
@@ -518,15 +520,15 @@ instance TFC.TraversableFC (PtrShape ext w) where
     \case
       ShapePtrBV tag w -> ShapePtrBV <$> f tag <*> pure w
       ShapePtrBVLit tag w bv -> ShapePtrBVLit <$> f tag <*> pure w <*> pure bv
-      ShapePtr tag off tgt ->
-        ShapePtr <$> f tag <*> pure off <*> TF.traverseF f tgt
+      ShapePtr tag mOffset tgt ->
+        ShapePtr <$> f tag <*> pure mOffset <*> TF.traverseF f tgt
 
 ptrShapeType :: CLM.HasPtrWidth w => PtrShape ext w tag t -> C.TypeRepr t
 ptrShapeType =
   \case
     ShapePtrBV _tag w -> CLM.LLVMPointerRepr w
     ShapePtrBVLit _tag w _ -> CLM.LLVMPointerRepr w
-    ShapePtr _tag _ _ -> CLM.LLVMPointerRepr ?ptrWidth
+    ShapePtr _ _ _ -> CLM.LLVMPointerRepr ?ptrWidth
 
 -- | Like 'TF.traverseFC', but with access to the appropriate 'C.TypeRepr'.
 traversePtrShapeWithType ::
@@ -541,10 +543,10 @@ traversePtrShapeWithType f =
       ShapePtrBV <$> f (CLM.LLVMPointerRepr w) tag <*> pure w
     ShapePtrBVLit tag w bv ->
       ShapePtrBVLit <$> f (CLM.LLVMPointerRepr w) tag <*> pure w <*> pure bv
-    ShapePtr tag off tgt ->
+    ShapePtr tag mOffset tgt ->
       ShapePtr
         <$> f (CLM.LLVMPointerRepr ?ptrWidth) tag
-        <*> pure off
+        <*> pure mOffset
         <*> traversePtrTargetWithType f tgt
 
 -- | Get the @tag@ on this 'PtrShape'. (See 'Grease.Shape.Shape'.)
@@ -561,7 +563,7 @@ setPtrTag shape tag =
   case shape of
     ShapePtrBV _tag w -> ShapePtrBV tag w
     ShapePtrBVLit _tag w bv -> ShapePtrBVLit tag w bv
-    ShapePtr _tag off tgt -> ShapePtr tag off tgt
+    ShapePtr _tag mOffset tgt -> ShapePtr tag mOffset tgt
 
 -- | A 'Lens.Lens' for the @tag@ on this 'PtrShape'. (See 'Grease.Shape.Shape'.)
 ptrShapeTag :: Lens.Lens' (PtrShape ext w tag t) (tag t)
@@ -604,7 +606,7 @@ parseJsonPtrShape parseTag =
         tag <- parseTag v
         offset <- parseOffset v
         tgt <- parseJsonPtrTarget =<< v .: "target"
-        pure (Some (ShapePtr tag offset tgt))
+        pure (Some (ShapePtr tag (Just offset) tgt))
       t -> fail ("Unknown pointer type: " ++ Text.unpack t)
  where
   withWidth ::
@@ -677,7 +679,7 @@ x64StackPtrShape returnAddrBytes stackArgSlots =
         ptrTarget Nothing $
           Seq.fromList $
             [Uninitialized uninit, returnAddr] List.++ stackArgs
-   in ShapePtr NoTag (Offset uninit) tgt
+   in ShapePtr NoTag (Just (Offset uninit)) tgt
 
 -- | The PowerPC stack pointer points to the end of a large, fresh, mostly-
 -- uninitialized allocation, which is typical for a stack pointer. The very end
@@ -710,7 +712,7 @@ ppcStackPtrShape returnAddrBytes stackArgSlots =
         ptrTarget Nothing $
           Seq.fromList $
             [Uninitialized uninit, returnAddr, backChain] List.++ stackArgs
-   in ShapePtr NoTag (Offset uninit) tgt
+   in ShapePtr NoTag (Just (Offset uninit)) tgt
 
 -- | The AArch32 stack pointer points to the end of a large, fresh, mostly-
 -- uninitialized allocation, which is typical for a stack pointer. The very end
@@ -730,7 +732,7 @@ armStackPtrShape stackArgSlots =
         ptrTarget Nothing $
           Seq.fromList $
             Uninitialized uninit : stackArgs
-   in ShapePtr NoTag (Offset uninit) tgt
+   in ShapePtr NoTag (Just (Offset uninit)) tgt
 
 -- Helper, not exported
 stackSizeInMiB :: Bytes

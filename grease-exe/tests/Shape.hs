@@ -106,8 +106,8 @@ eqPtrShape s1 s2 =
       case testEquality w w' of
         Maybe.Nothing -> False
         Maybe.Just Equality.Refl -> bv == bv'
-    (PtrShape.ShapePtr NoTag off1 tgt1, PtrShape.ShapePtr NoTag off2 tgt2) ->
-      off1 == off2 && eqPtrTarget tgt1 tgt2
+    (PtrShape.ShapePtr NoTag mOffset1 tgt1, PtrShape.ShapePtr NoTag mOffset2 tgt2) ->
+      mOffset1 == mOffset2 && eqPtrTarget tgt1 tgt2
     (_, _) -> False
 
 genShapes ::
@@ -161,7 +161,7 @@ genPtrShape =
             pure (Some (PtrShape.ShapePtrBVLit NoTag w' bv))
     , do
         (tgt, offset) <- genPtrTarget
-        pure (Some (PtrShape.ShapePtr NoTag offset tgt))
+        pure (Some (PtrShape.ShapePtr NoTag (Just offset) tgt))
     ]
 
 genPtrTarget ::
@@ -244,7 +244,7 @@ ptrShape ::
   [PtrShape.MemShape 64 NoTag] ->
   Shape LLVM NoTag (LLVMPointerType 64)
 ptrShape offset =
-  Shape.ShapeExt . PtrShape.ShapePtr NoTag offset . PtrShape.PtrTarget Maybe.Nothing . Seq.fromList
+  Shape.ShapeExt . PtrShape.ShapePtr NoTag (Just offset) . PtrShape.PtrTarget Maybe.Nothing . Seq.fromList
 
 printThenParse :: Shape LLVM NoTag t -> IO (Some (Shape LLVM NoTag))
 printThenParse s = do

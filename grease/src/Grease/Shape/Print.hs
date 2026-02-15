@@ -35,6 +35,7 @@ import Data.IntMap qualified as IntMap
 import Data.List qualified as List
 import Data.Macaw.Memory (AddrWidthRepr)
 import Data.Macaw.Memory qualified as DMM
+import Data.Maybe (fromMaybe)
 import Data.Monoid qualified as Monoid
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (NatRepr)
@@ -219,8 +220,9 @@ printPtr =
   \case
     PtrShape.ShapePtrBV _tag w -> printBv w
     PtrShape.ShapePtrBVLit _tag w bv -> printBvLit w bv
-    PtrShape.ShapePtr _tag offset tgt@(PtrShape.PtrTarget bid _) -> do
+    PtrShape.ShapePtr _tag mOffset tgt@(PtrShape.PtrTarget bid _) -> do
       blk <- printerAlloc (printTgt tgt) bid
+      let offset = fromMaybe (PtrShape.Offset 0) mOffset
       printBlockOffset blk offset
 
 printBv :: NatRepr w' -> Printer w (PP.Doc ann)

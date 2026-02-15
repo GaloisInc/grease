@@ -52,11 +52,11 @@ concPtrShape =
     PtrShape.ShapePtrBV tag w ->
       PtrShape.ShapePtrBVLit tag w (CLMP.concOffset (Conc.unConcRV' tag))
     s@PtrShape.ShapePtrBVLit{} -> s
-    PtrShape.ShapePtr tag off tgt ->
+    PtrShape.ShapePtr tag _ tgt ->
       let ptr = Conc.unConcRV' tag
        in if CLMP.concBlock ptr == 0
             then PtrShape.ShapePtrBVLit tag (CLMP.concWidth ptr) (CLMP.concOffset ptr)
-            else PtrShape.ShapePtr tag off (concPtrTarget tgt)
+            else PtrShape.ShapePtr tag Nothing (concPtrTarget tgt)
 
 concShape ::
   CLMP.HasPtrWidth wptr =>

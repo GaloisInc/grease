@@ -145,15 +145,15 @@ refinePtrArg la args modify sel =
       case result of
         Left err -> panic "refinePtrArg" [show (PP.pretty err)]
         Right pt' -> do
-          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (Offset 0) pt')
+          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (Just (Offset 0)) pt')
           pure $ RefinedPrecondition args'
-    ShapeExt (ShapePtr _tag offset pt) -> do
+    ShapeExt (ShapePtr _tag mOffset pt) -> do
       doLog la $ Diag.HeuristicPtrTarget pt
       let result = modify pt
       case result of
         Left err -> panic "refinePtrArg" [show (PP.pretty err)]
         Right pt' -> do
-          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag offset pt')
+          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag mOffset pt')
           pure $ RefinedPrecondition args'
     _ -> pure Unknown
 
@@ -336,7 +336,7 @@ handleUB la anns sym _loc args =
           ShapeExt (ShapePtrBV _tag w) | Just Refl <- testEquality w ?ptrWidth -> do
             let pt = ptrTarget Nothing (Seq.singleton (Uninitialized 1))
             doLog la $ Diag.HeuristicPtrTarget pt
-            let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (Offset 0) pt)
+            let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (Just (Offset 0)) pt)
             pure $ RefinedPrecondition args'
           _ -> pure Unknown
       Just (Anns.SomePtrSelector (SelectRet{})) -> pure Unknown

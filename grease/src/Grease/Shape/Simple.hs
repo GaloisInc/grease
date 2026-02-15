@@ -113,10 +113,10 @@ toShape =
   \case
     BufUninit n ->
       let tgt = PtrShape.ptrTarget Nothing (Seq.singleton (PtrShape.Uninitialized n))
-       in Some (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.Offset 0) tgt))
+       in Some (Shape.ShapeExt (PtrShape.ShapePtr NoTag (Just (PtrShape.Offset 0)) tgt))
     BufInit n ->
       let tgt = PtrShape.ptrTarget Nothing (Seq.singleton (PtrShape.Initialized NoTag n))
-       in Some (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.Offset 0) tgt))
+       in Some (Shape.ShapeExt (PtrShape.ShapePtr NoTag (Just (PtrShape.Offset 0)) tgt))
     ArgU32 bv ->
       Some (Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag (knownNat @32) bv))
     ArgU64 bv ->
