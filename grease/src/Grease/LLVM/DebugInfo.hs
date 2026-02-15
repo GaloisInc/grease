@@ -193,7 +193,7 @@ diArgShape tyViews i t = do
         (Bv, CLM.LLVMPointerRepr w) -> Right (Shape.ShapeExt (ShapePtrBV NoTag w))
         (Ptr tgt, CLM.LLVMPointerRepr w)
           | Just Refl <- testEquality w ?ptrWidth ->
-              Right (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.Offset 0) tgt))
+              Right (Shape.ShapeExt (PtrShape.ShapePtr NoTag (Just (PtrShape.Offset 0)) tgt))
         _ -> fallback
     _ -> fallback
 

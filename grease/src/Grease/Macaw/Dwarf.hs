@@ -315,7 +315,7 @@ pointerShapeOfDwarf _ gla tyUnrollBound _ sprog shouldBeConservative (MDwarf.Poi
         tyRef <- except $ Maybe.maybe (Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Pointer missing pointee") Right mbTyRef
         typeApp <- extractType sprog tyRef
         liftIO $ constructPtrTarget gla tyUnrollBound sprog Map.empty typeApp shouldBeConservative
-      pointerShape = ShapePtr NoTag (Offset 0) <$> memShape
+      pointerShape = ShapePtr NoTag (Just (Offset 0)) <$> memShape
    in (C.Some <$> pointerShape)
 pointerShapeOfDwarf _ _ _ _ _ _ ty = except $ Left $ DwarfDiagnostic.UnsupportedType ty
 
