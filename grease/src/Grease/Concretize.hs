@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -25,14 +26,19 @@ module Grease.Concretize (
 import Control.Monad.IO.Class (liftIO)
 import Data.BitVector.Sized qualified as BV
 import Data.Foldable (toList)
+import Data.Functor qualified as Functor
 import Data.Functor.Const (Const)
+import Data.Functor.Const qualified as Const
+import Data.Functor.Product qualified as Product
 import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Monoid qualified as Monoid
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
+import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Text (Text)
 import Data.Type.Equality (testEquality)
 import Data.Word (Word8)
@@ -50,6 +56,7 @@ import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Concretize qualified as Conc
+import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
@@ -190,6 +197,46 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
 
 -- * Pretty-printing
 
+-- | Helper function to print concretized shapes with custom offset extractor
+printConcNamedShapesFiltered ::
+  forall ext w tag nm tys ann.
+  PP.Pretty nm =>
+  CLMP.HasPtrWidth w =>
+  ExtShape ext ~ PtrShape ext w =>
+  -- | Offset extractor for concretized pointers
+  (forall ty. tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
+  -- | Names
+  Ctx.Assignment (Const.Const nm) tys ->
+  -- | Only print those 'Shape's with 'True' in the corresponding entry
+  Ctx.Assignment (Const.Const Bool) tys ->
+  -- | Shapes to print
+  Ctx.Assignment (Shape ext tag) tys ->
+  ShapePP.Printer w (PP.Doc ann)
+printConcNamedShapesFiltered getOffset names filt shapes =
+  TFC.foldlMFC'
+    ( \doc (Product.Pair (Product.Pair (Const.Const nm) s) (Const.Const b)) ->
+        if b
+          then
+            ((doc PP.<> PP.line) PP.<>)
+              Functor.<$> printConcNamed getOffset nm s
+          else pure doc
+    )
+    Monoid.mempty
+    (Ctx.zipWith Product.Pair (Ctx.zipWith Product.Pair names shapes) filt)
+
+-- | Helper to print a single named concretized shape
+printConcNamed ::
+  PP.Pretty nm =>
+  CLMP.HasPtrWidth w =>
+  ExtShape ext ~ PtrShape ext w =>
+  -- | Offset extractor
+  (forall ty. tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
+  nm ->
+  Shape ext tag ty ->
+  ShapePP.Printer w (PP.Doc ann)
+printConcNamed getOffset name s =
+  ((PP.pretty name PP.<> ": ") PP.<>) Functor.<$> ShapePP.printShapeWithOffset getOffset s
+
 printConcArgs ::
   CLMP.HasPtrWidth wptr =>
   (ExtShape ext ~ PtrShape ext wptr) =>
@@ -202,10 +249,16 @@ printConcArgs ::
   PP.Doc ann
 printConcArgs addrWidth argNames filt (ConcArgs cArgs) =
   let cShapes = fmapFC concShape cArgs
-   in let rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
-       in ShapePP.evalPrinter
-            (ShapePP.PrinterConfig addrWidth rleThreshold)
-            (ShapePP.printNamedShapesFiltered argNames filt cShapes)
+      -- Custom offset extractor for concretized pointers
+      getConcOffset tag _ =
+        let ptr = Conc.unConcRV' tag
+            offsetBV = CLMP.concOffset ptr
+            offsetBytes = BV.asUnsigned offsetBV
+         in PtrShape.Offset (CLB.toBytes offsetBytes)
+      rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
+   in ShapePP.evalPrinter
+        (ShapePP.PrinterConfig addrWidth rleThreshold)
+        (printConcNamedShapesFiltered getConcOffset argNames filt cShapes)
 
 -- | Helper, not exported
 showHex' :: Integral a => a -> String
@@ -224,7 +277,7 @@ printConcExtra ::
   PP.Doc ann
 printConcExtra vals =
   PP.vsep $
-    PP.pretty "Concretized values:"
+    PP.pretty ("Concretized values:" :: Text)
       : map (PP.indent 2 . ppValue) vals
  where
   ppBv8 = PP.pretty . padHex 2 . BV.asUnsigned
@@ -238,7 +291,7 @@ printConcExtra vals =
             C.VectorRepr (C.BVRepr w)
               | Just C.Refl <- testEquality w (knownNat @8) ->
                   PP.fillSep (List.map (\(Conc.ConcRV' b) -> ppBv8 b) (toList val))
-            _ -> PP.pretty "<can't print this value>"
+            _ -> PP.pretty ("<can't print this value>" :: Text)
       ]
 
 -- | Pretty-print the concretized filesystem
@@ -247,7 +300,7 @@ printConcFs ::
   PP.Doc ann
 printConcFs cFs =
   PP.vsep $
-    PP.pretty "Concretized filesystem:"
+    PP.pretty ("Concretized filesystem:" :: Text)
       : map (PP.indent 2 . uncurry ppFile) (Map.toList (getConcFs cFs))
  where
   ppWord8 = PP.pretty . padHex 2
