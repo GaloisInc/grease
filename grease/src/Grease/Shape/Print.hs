@@ -4,6 +4,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -42,6 +43,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (NatRepr)
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.TraversableFC qualified as TFC
+import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Tuple qualified as Tuple
 import Data.Void (Void)
@@ -149,12 +151,12 @@ printAllocs aw as =
 -- | Print 'Shape's associated with given names (e.g., register names)
 printNamedShapesFiltered ::
   PP.Pretty nm =>
-  ExtShape ext ~ PtrShape ext w =>
+  ExtShape ext tag ptrData ~ PtrShape ext w tag ptrData =>
   -- | Names
   Ctx.Assignment (Const.Const nm) tys ->
   -- | Only print those 'Shape's with 'True' in the corresponding entry here
   Ctx.Assignment (Const.Const Bool) tys ->
-  Ctx.Assignment (Shape ext tag) tys ->
+  Ctx.Assignment (Shape ext tag ptrData) tys ->
   Printer w (PP.Doc ann)
 printNamedShapesFiltered names filt shapes =
   TFC.foldlMFC'
@@ -169,10 +171,10 @@ printNamedShapesFiltered names filt shapes =
 -- | Print 'Shape's associated with given names (e.g., register names)
 printNamedShapes ::
   PP.Pretty nm =>
-  ExtShape ext ~ PtrShape ext w =>
+  ExtShape ext tag ptrData ~ PtrShape ext w tag ptrData =>
   -- | Names
   Ctx.Assignment (Const.Const nm) tys ->
-  Ctx.Assignment (Shape ext tag) tys ->
+  Ctx.Assignment (Shape ext tag ptrData) tys ->
   Printer w (PP.Doc ann)
 printNamedShapes names =
   printNamedShapesFiltered
@@ -184,10 +186,10 @@ printNamedShapes names =
 -- Ignores @tag@s.
 printNamed ::
   PP.Pretty nm =>
-  ExtShape ext ~ PtrShape ext w =>
+  ExtShape ext tag ptrData ~ PtrShape ext w tag ptrData =>
   -- | Name
   nm ->
-  Shape ext tag ty ->
+  Shape ext tag ptrData ty ->
   Printer w (PP.Doc ann)
 printNamed name s =
   ((PP.pretty name PP.<> ": ") PP.<>) Functor.<$> printShape s
@@ -195,12 +197,12 @@ printNamed name s =
 -- | Print a single 'Shape' with a custom offset extraction function
 --
 -- The offset extraction function is used for 'ShapePtr' to determine what offset
--- to print. It receives the tag and the Maybe Offset field.
+-- to print. It receives the tag and the PtrData.
 printShapeWithOffset ::
-  ExtShape ext ~ PtrShape ext w =>
+  ExtShape ext tag ptrData ~ PtrShape ext w tag ptrData =>
   -- | Function to extract offset for ShapePtr
-  (tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
-  Shape ext tag ty ->
+  (forall ty. tag (CLM.LLVMPointerType w) -> PtrShape.PtrData ptrData w tag -> PtrShape.Offset) ->
+  Shape ext tag ptrData ty ->
   Printer w (PP.Doc ann)
 printShapeWithOffset getOffset =
   \case
@@ -214,17 +216,27 @@ printShapeWithOffset getOffset =
 --
 -- Ignores @tag@s.
 printShape ::
-  ExtShape ext ~ PtrShape ext w =>
-  Shape ext tag ty ->
+  forall ptrData ext tag w ty ann.
+  PtrShape.KnownPtrMode ptrData =>
+  ExtShape ext tag ptrData ~ PtrShape ext w tag ptrData =>
+  Shape ext tag ptrData ty ->
   Printer w (PP.Doc ann)
-printShape = printShapeWithOffset (\_ mOffset -> fromMaybe (PtrShape.Offset 0) mOffset)
+printShape = printShapeWithOffset extractOffset
+ where
+  extractOffset :: tag (CLM.LLVMPointerType w) -> PtrShape.PtrData ptrData w tag -> PtrShape.Offset
+  extractOffset _ dat =
+    case PtrShape.knownPtrMode @ptrData of
+      PtrShape.PrecondRepr ->
+        case dat of
+          PtrShape.PrecondPtrData mOffset _ -> fromMaybe (PtrShape.Offset 0) mOffset
+      PtrShape.NoDataRepr -> PtrShape.Offset 0
 
 -- | Print a struct with a custom offset extraction function
 printStructWithOffset ::
-  ExtShape ext ~ PtrShape ext w =>
+  ExtShape ext tag ptrData ~ PtrShape ext w tag ptrData =>
   -- | Function to extract offset for ShapePtr
-  (tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
-  Ctx.Assignment (Shape ext tag) ctx ->
+  (forall ty. tag (CLM.LLVMPointerType w) -> PtrShape.PtrData ptrData w tag -> PtrShape.Offset) ->
+  Ctx.Assignment (Shape ext tag ptrData) ctx ->
   Printer w (PP.Doc ann)
 printStructWithOffset getOffset fields = do
   docs <- Monad.sequence (TFC.toListFC (printShapeWithOffset getOffset) fields)
@@ -232,18 +244,31 @@ printStructWithOffset getOffset fields = do
 
 -- | Print a PtrShape with a custom offset extraction function
 printPtrWithOffset ::
+  forall ptrData ext w tag ty ann.
+  PtrShape.KnownPtrMode ptrData =>
   -- | Function to extract offset for ShapePtr
-  (tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
-  PtrShape ext w tag ty ->
+  (forall ty'. tag (CLM.LLVMPointerType w) -> PtrShape.PtrData ptrData w tag -> PtrShape.Offset) ->
+  PtrShape ext w tag ptrData ty ->
   Printer w (PP.Doc ann)
 printPtrWithOffset getOffset =
   \case
     PtrShape.ShapePtrBV _tag w -> printBv w
     PtrShape.ShapePtrBVLit _tag w bv -> printBvLit w bv
-    PtrShape.ShapePtr tag mOffset tgt@(PtrShape.PtrTarget bid _) -> do
-      blk <- printerAlloc (printTgt tgt) bid
-      let offset = getOffset tag mOffset
-      printBlockOffset blk offset
+    PtrShape.ShapePtr tag dat ->
+      case PtrShape.knownPtrMode @ptrData of
+        PtrShape.PrecondRepr ->
+          case dat of
+            PtrShape.PrecondPtrData _ tgt -> do
+              let bid = PtrShape.ptrTargetBlock tgt
+              blk <- printerAlloc (printTgt tgt) bid
+              let offset = getOffset tag dat
+              printBlockOffset blk offset
+        PtrShape.NoDataRepr ->
+          case dat of
+            PtrShape.NoPtrData -> do
+              let offset = getOffset tag dat
+              -- After Setup, pointer data has been removed, print placeholder
+              pure ("<?+" PP.<> PP.pretty (show offset) PP.<> ">")
 
 printBv :: NatRepr w' -> Printer w (PP.Doc ann)
 printBv w' = do
@@ -307,7 +332,7 @@ printRle c n = do
   s = PP.pretty @[Char] [c, c]
 
 -- | Ignores @tag@s.
-printTgt :: PtrShape.PtrTarget w tag -> Printer w (PP.Doc Void)
+printTgt :: PtrShape.KnownPtrMode ptrData => PtrShape.PtrTarget w tag ptrData -> Printer w (PP.Doc Void)
 printTgt (PtrShape.PtrTarget _ memShapes) = do
   docs <- traverse printMemShape memShapes
   pure (PP.align (PP.fillSep (Foldable.toList docs)))
@@ -321,13 +346,23 @@ bytesToInt :: CLB.Bytes -> Int
 bytesToInt = integerToInt . CLB.bytesToInteger
 
 -- | Ignores @tag@s.
-printMemShape :: PtrShape.MemShape w tag -> Printer w (PP.Doc Void)
+printMemShape :: forall ptrData w tag. PtrShape.KnownPtrMode ptrData => PtrShape.MemShape w tag ptrData -> Printer w (PP.Doc Void)
 printMemShape = \case
   PtrShape.Uninitialized bytes -> printRle '#' (bytesToInt bytes)
   PtrShape.Initialized _tag bytes -> printRle 'X' (bytesToInt bytes)
-  PtrShape.Pointer _tag off target@(PtrShape.PtrTarget bid _) -> do
-    blk <- printerAlloc (printTgt target) bid
-    printBlockOffset blk off
+  PtrShape.Pointer _tag dat ->
+    case PtrShape.knownPtrMode @ptrData of
+      PtrShape.PrecondRepr ->
+        case dat of
+          PtrShape.PrecondPtrData mOff tgt -> do
+            let offset = fromMaybe (PtrShape.Offset 0) mOff
+            let bid = PtrShape.ptrTargetBlock tgt
+            blk <- printerAlloc (printTgt tgt) bid
+            printBlockOffset blk offset
+      PtrShape.NoDataRepr ->
+        -- After Setup, pointer data has been removed
+        case dat of
+          PtrShape.NoPtrData -> pure "<?+?>"
   PtrShape.Exactly bytes ->
     let ppWord8 = PP.pretty . padHex 2
      in pure (PP.fillSep (List.map (ppWord8 . PtrShape.taggedByteValue) bytes))

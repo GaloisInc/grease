@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -50,7 +51,7 @@ import Data.Text (Text)
 import Grease.Macaw.Load.Relocation (RelocType)
 import Grease.Macaw.RegName (RegName)
 import Grease.Shape.NoTag (NoTag)
-import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
@@ -200,7 +201,7 @@ data ArchContext arch = ArchContext
        type -}
     -- A mapping from syscall numbers to names.
     _archSyscallCodeMapping :: IntMap Text
-  , _archStackPtrShape :: PtrShape (Symbolic.MacawExt arch) (MC.ArchAddrWidth arch) NoTag (CLM.LLVMPointerType (MC.ArchAddrWidth arch))
+  , _archStackPtrShape :: PtrShape (Symbolic.MacawExt arch) (MC.ArchAddrWidth arch) NoTag 'Precond (CLM.LLVMPointerType (MC.ArchAddrWidth arch))
   -- ^ Shape of the stack pointer
   --
   -- A function that writes to the stack on architectures where it grows down

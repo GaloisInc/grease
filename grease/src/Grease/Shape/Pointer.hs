@@ -15,6 +15,10 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Shape.Pointer (
   ExtraStackSlots (..),
+  PtrDataMode (..),
+  PtrData (..),
+  PtrModeRepr (..),
+  KnownPtrMode (..),
   TaggedByte (..),
   traverseTaggedByte,
   MemShape (..),
@@ -100,8 +104,18 @@ data instance PtrData 'Precond w tag
   }
 
 data PtrModeRepr (tp :: PtrDataMode) where
-  PrecondRepr :: PtrModeRepr Precond
-  NoDataRepr :: PtrModeRepr NoData
+  PrecondRepr :: PtrModeRepr 'Precond
+  NoDataRepr :: PtrModeRepr 'NoData
+
+-- | Typeclass for types with a known PtrDataMode at compile time
+class KnownPtrMode (mode :: PtrDataMode) where
+  knownPtrMode :: PtrModeRepr mode
+
+instance KnownPtrMode 'Precond where
+  knownPtrMode = PrecondRepr
+
+instance KnownPtrMode 'NoData where
+  knownPtrMode = NoDataRepr
 
 -- | No data mode: empty, pointer data has been removed
 data instance PtrData 'NoData w tag = NoPtrData
@@ -179,7 +193,7 @@ deriving instance
   ) =>
   Eq (MemShape wptr tag ptrData)
 
-instance MC.PrettyF tag => PP.Pretty (MemShape wptr tag ptrData) where
+instance (KnownPtrMode ptrData, MC.PrettyF tag) => PP.Pretty (MemShape wptr tag ptrData) where
   pretty =
     \case
       Uninitialized bs -> "uninitialized x" PP.<+> PP.viaShow (CLB.bytesToInteger bs)
@@ -191,23 +205,27 @@ instance MC.PrettyF tag => PP.Pretty (MemShape wptr tag ptrData) where
           , PP.viaShow (CLB.bytesToInteger bs)
           ]
       Pointer tag ptrData ->
-        case ptrData of
-          PrecondPtrData mOffset tgt ->
-            PP.hcat
-              [ "ptr"
-              , ppTag tag
-              , ":"
-              , PP.pretty tgt
-              , case mOffset of
-                  Just (Offset off) -> "+" PP.<> PP.viaShow off
-                  Nothing -> ""
-              ]
-          NoPtrData ->
-            PP.hcat
-              [ "ptr"
-              , ppTag tag
-              , ":removed"
-              ]
+        case knownPtrMode @ptrData of
+          PrecondRepr ->
+            case ptrData of
+              PrecondPtrData mOffset tgt ->
+                PP.hcat
+                  [ "ptr"
+                  , ppTag tag
+                  , ":"
+                  , PP.pretty tgt
+                  , case mOffset of
+                      Just (Offset off) -> "+" PP.<> PP.viaShow off
+                      Nothing -> ""
+                  ]
+          NoDataRepr ->
+            case ptrData of
+              NoPtrData ->
+                PP.hcat
+                  [ "ptr"
+                  , ppTag tag
+                  , ":removed"
+                  ]
       Exactly bs -> "exactly:" PP.<+> PP.pretty bs
 
 -- Note: FunctorF/FoldableF/TraversableF instances cannot be provided for MemShape
@@ -219,10 +237,11 @@ instance MC.PrettyF tag => PP.Pretty (MemShape wptr tag ptrData) where
 traverseMemShapeWithType ::
   CLM.HasPtrWidth wptr =>
   Applicative m =>
+  PtrModeRepr ptrData ->
   (forall x. C.TypeRepr x -> tag x -> m (tag' x)) ->
   MemShape wptr tag ptrData ->
   m (MemShape wptr tag' ptrData)
-traverseMemShapeWithType f =
+traverseMemShapeWithType mode f =
   \case
     Uninitialized bs -> pure (Uninitialized bs)
     Initialized tag bs ->
@@ -232,9 +251,13 @@ traverseMemShapeWithType f =
     Pointer tag ptrData ->
       Pointer
         <$> f (CLM.LLVMPointerRepr ?ptrWidth) tag
-        <*> case ptrData of
-          PrecondPtrData mOffset tgt -> PrecondPtrData mOffset <$> traversePtrTargetWithType f tgt
-          NoPtrData -> pure NoPtrData
+        <*> case mode of
+          PrecondRepr ->
+            case ptrData of
+              PrecondPtrData mOffset tgt -> PrecondPtrData mOffset <$> traversePtrTargetWithType mode f tgt
+          NoDataRepr ->
+            case ptrData of
+              NoPtrData -> pure NoPtrData
     Exactly bs ->
       Exactly
         <$> traverse (traverseTaggedByte (f (CLM.LLVMPointerRepr (C.knownNat @8)))) bs
@@ -340,11 +363,12 @@ deriving instance
 traversePtrTargetWithType ::
   CLM.HasPtrWidth wptr =>
   Applicative m =>
+  PtrModeRepr ptrData ->
   (forall x. C.TypeRepr x -> tag x -> m (tag' x)) ->
   PtrTarget wptr tag ptrData ->
   m (PtrTarget wptr tag' ptrData)
-traversePtrTargetWithType f (PtrTarget bid tgt) =
-  PtrTarget bid <$> traverse (traverseMemShapeWithType f) tgt
+traversePtrTargetWithType mode f (PtrTarget bid tgt) =
+  PtrTarget bid <$> traverse (traverseMemShapeWithType mode f) tgt
 
 -- | Smart constructor that merges compatible adjacent shapes.
 ptrTarget ::
@@ -450,8 +474,8 @@ ptrTargetToPtrs proxy tag tgt =
 instance PP.Pretty BlockId where
   pretty bid = "blockid:" PP.<+> (PP.pretty $ getBlockId bid)
 
-instance MC.PrettyF tag => PP.Pretty (PtrTarget wptr tag ptrData) where
-  pretty :: MC.PrettyF tag => PtrTarget wptr tag ptrData -> PP.Doc ann
+instance (KnownPtrMode ptrData, MC.PrettyF tag) => PP.Pretty (PtrTarget wptr tag ptrData) where
+  pretty :: (KnownPtrMode ptrData, MC.PrettyF tag) => PtrTarget wptr tag ptrData -> PP.Doc ann
   pretty =
     \case
       PtrTarget bid Seq.Empty -> PP.pretty bid PP.<+> "<unallocated>"
@@ -522,10 +546,10 @@ instance
           _ -> Nothing
       _ -> Nothing
 
-instance MC.PrettyF tag => Show (PtrShape ext w tag ptrData t) where
+instance (KnownPtrMode ptrData, MC.PrettyF tag) => Show (PtrShape ext w tag ptrData t) where
   show = show . MC.prettyF
-instance MC.PrettyF tag => ShowF (PtrShape ext w tag ptrData)
-instance MC.PrettyF tag => MC.PrettyF (PtrShape ext w tag ptrData) where
+instance (KnownPtrMode ptrData, MC.PrettyF tag) => ShowF (PtrShape ext w tag ptrData)
+instance (KnownPtrMode ptrData, MC.PrettyF tag) => MC.PrettyF (PtrShape ext w tag ptrData) where
   prettyF =
     \case
       ShapePtrBV tag _w -> "bv" PP.<> ppTag tag
@@ -540,13 +564,18 @@ instance MC.PrettyF tag => MC.PrettyF (PtrShape ext w tag ptrData) where
       ShapePtr tag ptrData ->
         prettyPtrData tag ptrData
    where
-    prettyPtrData :: tag (CLM.LLVMPointerType w) -> PtrData mode w tag -> PP.Doc ann
-    prettyPtrData tag (PrecondPtrData mOffset tgt) =
-      case mOffset of
-        Just (Offset off) -> PP.pretty tgt PP.<> "+" PP.<> PP.viaShow off PP.<> ppTag tag
-        Nothing -> PP.pretty tgt PP.<> ppTag tag
-    prettyPtrData tag NoPtrData =
-      "ptr" PP.<> ppTag tag PP.<> ":removed"
+    prettyPtrData :: tag (CLM.LLVMPointerType w) -> PtrData ptrData w tag -> PP.Doc ann
+    prettyPtrData tag dat =
+      case knownPtrMode @ptrData of
+        PrecondRepr ->
+          case dat of
+            PrecondPtrData mOffset tgt ->
+              case mOffset of
+                Just (Offset off) -> PP.pretty tgt PP.<> "+" PP.<> PP.viaShow off PP.<> ppTag tag
+                Nothing -> PP.pretty tgt PP.<> ppTag tag
+        NoDataRepr ->
+          case dat of
+            NoPtrData -> "ptr" PP.<> ppTag tag PP.<> ":removed"
 
 -- Note: FunctorFC/FoldableFC/TraversableFC instances cannot be provided for PtrShape
 -- because after adding the ptrData parameter, PtrShape ext w has kind
@@ -586,7 +615,7 @@ traversePtrShapeWithType md f =
       NoDataRepr -> pure NoPtrData
       PrecondRepr ->
         let PrecondPtrData{precondOffset, precondTarget} = dat
-         in PrecondPtrData precondOffset <$> traversePtrTargetWithType g precondTarget
+         in PrecondPtrData precondOffset <$> traversePtrTargetWithType md g precondTarget
 
 -- | Get the @tag@ on this 'PtrShape'. (See 'Grease.Shape.Shape'.)
 getPtrTag :: PtrShape ext w tag ptrData t -> tag t

@@ -13,6 +13,7 @@ import Grease.LLVM.DebugInfo qualified as GLD
 import Grease.Options qualified as GO
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
+import Grease.Shape.Pointer qualified as PtrShape
 import Grease.Shape.Simple qualified as Simple
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as CFH
@@ -45,7 +46,7 @@ llvmInitArgShapes ::
   Maybe (Shape.ParsedShapes CLLVM.LLVM) ->
   -- | The CFG of the user-requested entrypoint function.
   C.CFG CLLVM.LLVM blocks argTys ret ->
-  Either InitArgShapesError (Shape.ArgShapes CLLVM.LLVM NoTag argTys)
+  Either InitArgShapesError (Shape.ArgShapes CLLVM.LLVM NoTag 'PtrShape.Precond argTys)
 llvmInitArgShapes opts llvmMod argNames parsedShapes cfg = do
   let argTys = C.cfgArgTypes cfg
   let initArgs0 =

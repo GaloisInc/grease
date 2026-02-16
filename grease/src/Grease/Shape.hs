@@ -69,7 +69,7 @@ import Data.Traversable qualified as Traversable
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import GHC.Show qualified as GShow
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (PtrDataMode (NoData, Precond), PtrShape, minimalPtrShape, parseJsonPtrShape, ptrShapeType, traversePtrShapeWithType)
+import Grease.Shape.Pointer (KnownPtrMode (knownPtrMode), PtrDataMode (NoData, Precond), PtrModeRepr (NoDataRepr, PrecondRepr), PtrShape, minimalPtrShape, parseJsonPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel (HasPtrWidth)
@@ -122,7 +122,7 @@ data Shape ext tag ptrData t where
 --
 -- For documentation on these type parameters, see 'Shape'.
 type ExtShape :: Type -> (C.CrucibleType -> Type) -> PtrDataMode -> C.CrucibleType -> Type
-type family ExtShape ext
+type family ExtShape ext tag ptrData
 
 class ShowF (ExtShape ext tag ptrData) => ShowExt ext tag ptrData
 instance ShowF (ExtShape ext tag ptrData) => ShowExt ext tag ptrData
@@ -203,10 +203,12 @@ traverseShapeWithType ::
   CLM.HasPtrWidth wptr =>
   Applicative m =>
   (ExtShape ext tag ptrData ~ PtrShape ext wptr tag ptrData) =>
+  (ExtShape ext tag' ptrData ~ PtrShape ext wptr tag' ptrData) =>
+  PtrModeRepr ptrData ->
   (forall x. C.TypeRepr x -> tag x -> m (tag' x)) ->
   Shape ext tag ptrData t ->
   m (Shape ext tag' ptrData t)
-traverseShapeWithType f =
+traverseShapeWithType mode f =
   \case
     ShapeBool tag -> ShapeBool <$> f C.BoolRepr tag
     ShapeFloat tag fi -> ShapeFloat <$> f (C.FloatRepr fi) tag <*> pure fi
@@ -214,16 +216,18 @@ traverseShapeWithType f =
       let fieldTypes = fmapFC (shapeType ptrShapeType) fields
        in ShapeStruct
             <$> f (C.StructRepr fieldTypes) tag
-            <*> traverseFC (traverseShapeWithType f) fields
+            <*> traverseFC (traverseShapeWithType mode f) fields
     ShapeUnit tag -> ShapeUnit <$> f C.UnitRepr tag
-    ShapeExt ext -> ShapeExt <$> traversePtrShapeWithType f ext
+    ShapeExt ext -> ShapeExt <$> traversePtrShapeWithType mode f ext
 
 tagWithType ::
   CLM.HasPtrWidth wptr =>
+  KnownPtrMode ptrData =>
   (ExtShape ext tag ptrData ~ PtrShape ext wptr tag ptrData) =>
+  (ExtShape ext C.TypeRepr ptrData ~ PtrShape ext wptr C.TypeRepr ptrData) =>
   Shape ext tag ptrData t ->
   Shape ext C.TypeRepr ptrData t
-tagWithType = runIdentity . traverseShapeWithType (\typeRepr _tag -> Identity typeRepr)
+tagWithType = runIdentity . traverseShapeWithType knownPtrMode (\typeRepr _tag -> Identity typeRepr)
 
 type instance ExtShape (Symbolic.MacawExt arch) tag ptrData = PtrShape (Symbolic.MacawExt arch) (MC.ArchAddrWidth arch) tag ptrData
 type instance ExtShape LLVM tag ptrData = PtrShape LLVM 64 tag ptrData

@@ -21,10 +21,11 @@ import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.Concretize qualified as Conc
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 
--- | Turns 'PtrShape.Initialized' into 'PtrShape.Exactly', calls 'concPtrTarget'.
+-- | Turns 'PtrShape.Initialized' into 'PtrShape.Exactly'.
+-- Note: Operates on 'NoData mode since this is used for allocation maps after Setup.
 concMemShape ::
-  PtrShape.MemShape wptr (Conc.ConcRV' sym) ->
-  PtrShape.MemShape wptr (Conc.ConcRV' sym)
+  PtrShape.MemShape wptr (Conc.ConcRV' sym) 'PtrShape.NoData ->
+  PtrShape.MemShape wptr (Conc.ConcRV' sym) 'PtrShape.NoData
 concMemShape =
   \case
     s@PtrShape.Uninitialized{} -> s
@@ -33,36 +34,37 @@ concMemShape =
           toWord8 = fromIntegral . BV.asUnsigned
        in let concByte b = PtrShape.TaggedByte b (toWord8 (CLMP.concOffset (Conc.unConcRV' b)))
            in PtrShape.Exactly (List.map concByte (Vec.toList tag))
-    PtrShape.Pointer tag off tgt -> PtrShape.Pointer tag off (concPtrTarget tgt)
+    PtrShape.Pointer tag PtrShape.NoPtrData -> PtrShape.Pointer tag PtrShape.NoPtrData
     PtrShape.Exactly bs -> PtrShape.Exactly bs
 
 concPtrTarget ::
-  PtrShape.PtrTarget wptr (Conc.ConcRV' sym) ->
-  PtrShape.PtrTarget wptr (Conc.ConcRV' sym)
+  PtrShape.PtrTarget wptr (Conc.ConcRV' sym) 'PtrShape.NoData ->
+  PtrShape.PtrTarget wptr (Conc.ConcRV' sym) 'PtrShape.NoData
 concPtrTarget (PtrShape.PtrTarget bid s) = PtrShape.PtrTarget bid (fmap concMemShape s)
 
--- | Turns 'PtrShape.ShapePtrBV' into 'PtrShape.ShapePtrBVLit', calls 'concPtrTarget'.
+-- | Turns 'PtrShape.ShapePtrBV' into 'PtrShape.ShapePtrBVLit'.
+-- Note: Operates on 'NoData mode since this is used after Setup.
 concPtrShape ::
   CLMP.HasPtrWidth wptr =>
-  (ExtShape ext ~ PtrShape ext wptr) =>
-  PtrShape.PtrShape ext wptr (Conc.ConcRV' sym) t ->
-  PtrShape.PtrShape ext wptr (Conc.ConcRV' sym) t
+  (ExtShape ext (Conc.ConcRV' sym) 'PtrShape.NoData ~ PtrShape ext wptr (Conc.ConcRV' sym) 'PtrShape.NoData) =>
+  PtrShape.PtrShape ext wptr (Conc.ConcRV' sym) 'PtrShape.NoData t ->
+  PtrShape.PtrShape ext wptr (Conc.ConcRV' sym) 'PtrShape.NoData t
 concPtrShape =
   \case
     PtrShape.ShapePtrBV tag w ->
       PtrShape.ShapePtrBVLit tag w (CLMP.concOffset (Conc.unConcRV' tag))
     s@PtrShape.ShapePtrBVLit{} -> s
-    PtrShape.ShapePtr tag _ tgt ->
+    PtrShape.ShapePtr tag PtrShape.NoPtrData ->
       let ptr = Conc.unConcRV' tag
        in if CLMP.concBlock ptr == 0
             then PtrShape.ShapePtrBVLit tag (CLMP.concWidth ptr) (CLMP.concOffset ptr)
-            else PtrShape.ShapePtr tag Nothing (concPtrTarget tgt)
+            else PtrShape.ShapePtr tag PtrShape.NoPtrData
 
 concShape ::
   CLMP.HasPtrWidth wptr =>
-  (ExtShape ext ~ PtrShape ext wptr) =>
-  Shape ext (Conc.ConcRV' sym) t ->
-  Shape ext (Conc.ConcRV' sym) t
+  (ExtShape ext (Conc.ConcRV' sym) 'PtrShape.NoData ~ PtrShape ext wptr (Conc.ConcRV' sym) 'PtrShape.NoData) =>
+  Shape ext (Conc.ConcRV' sym) 'PtrShape.NoData t ->
+  Shape ext (Conc.ConcRV' sym) 'PtrShape.NoData t
 concShape =
   \case
     s@Shape.ShapeBool{} -> s
