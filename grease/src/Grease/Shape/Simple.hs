@@ -108,7 +108,8 @@ parseArgU64 = ArgU64 <$> parseBV64
 
 toShape ::
   Shape.ExtShape ext NoTag 'PtrShape.Precond ~ PtrShape ext wptr NoTag 'PtrShape.Precond =>
-  SimpleShape -> Some (Shape ext NoTag 'PtrShape.Precond)
+  SimpleShape ->
+  Some (Shape ext NoTag 'PtrShape.Precond)
 toShape =
   \case
     BufUninit n ->
@@ -129,9 +130,9 @@ useSimpleShapes ::
   -- | Argument names
   Ctx.Assignment (Const.Const String) tys ->
   -- | Initial arguments
-  Shape.ArgShapes ext NoTag 'PtrShape.Precond tys ->
+  Shape.ArgShapes ext NoTag tys ->
   Map Text.Text SimpleShape ->
-  Either Shape.TypeMismatch (Shape.ArgShapes ext NoTag 'PtrShape.Precond tys)
+  Either Shape.TypeMismatch (Shape.ArgShapes ext NoTag tys)
 useSimpleShapes argNames initArgs simpleShapes =
   let parsedShapes = Parse.ParsedShapes (fmap toShape simpleShapes)
    in Shape.replaceShapes argNames initArgs parsedShapes
