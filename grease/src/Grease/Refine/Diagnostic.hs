@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -18,7 +19,7 @@ import Grease.Diagnostic.Severity (Severity (Debug, Info, Warn))
 import Grease.ErrorDescription (ErrorDescription)
 import Grease.Heuristic.Result qualified as Heuristic
 import Grease.Shape (ArgShapes (ArgShapes), ExtShape, PrettyExt)
-import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Grease.Shape.Print qualified as ShapePP
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
@@ -50,9 +51,9 @@ data Diagnostic where
     Text ->
     Diagnostic
   RefinementFinalPrecondition ::
-    forall w ext tag tys ptrData.
-    ( ExtShape ext ~ PtrShape ext w
-    , PrettyExt ext tag ptrData
+    forall w ext tag tys.
+    ( ExtShape ext tag 'Precond ~ PtrShape ext w tag 'Precond
+    , PrettyExt ext tag 'Precond
     ) =>
     MM.AddrWidthRepr w ->
     -- | Argument names
@@ -69,8 +70,8 @@ data Diagnostic where
     Diagnostic
   RefinementUsingPrecondition ::
     forall w ext tag tys.
-    ( ExtShape ext ~ PtrShape ext w
-    , PrettyExt ext tag
+    ( ExtShape ext tag 'Precond ~ PtrShape ext w tag 'Precond
+    , PrettyExt ext tag 'Precond
     ) =>
     MM.AddrWidthRepr w ->
     -- | Argument names

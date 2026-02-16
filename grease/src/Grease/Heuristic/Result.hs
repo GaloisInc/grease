@@ -55,7 +55,7 @@ instance PP.Pretty CantRefine where
 data HeuristicResult ext tys
   = CantRefine CantRefine
   | PossibleBug Bug.BugInstance
-  | RefinedPrecondition (ArgShapes ext NoTag 'Precond tys)
+  | RefinedPrecondition (ArgShapes ext NoTag tys)
   | Unknown
 
 -- | Merge two 'HeuristicResult's, preferring the first except if it is
