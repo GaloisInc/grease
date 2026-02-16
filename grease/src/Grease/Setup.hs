@@ -43,6 +43,7 @@ import Data.Sequence qualified as Seq
 import Data.Type.Equality ((:~:) (Refl))
 import Data.Vector qualified as Vec
 import Data.Word (Word8)
+import GHC.Natural (Natural)
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic (Diagnostic (SetupDiagnostic), GreaseLogAction)
@@ -69,6 +70,7 @@ import Grease.Shape.Pointer (
   ptrTargetSize,
   taggedByteValue,
  )
+import Grease.Shape.Pointer qualified as ShapePtr
 import Grease.Shape.Selector (
   ArgSelector (ArgSelector),
   Selector (SelectArg),
@@ -117,7 +119,6 @@ doLog la diag = LJ.writeLog la (SetupDiagnostic diag)
 data SetupRes sym w
   = SetupRes
   { setupResPtr :: CS.RegValue sym (CLM.LLVMPointerType w)
-  , setupResTgt :: PtrTarget w (CS.RegValue' sym)
   }
 
 data SetupState sym ext argTys w = SetupState
@@ -179,8 +180,8 @@ setupPtrMem ::
   Mem.DataLayout ->
   ValueName (CLM.LLVMPointerType w) ->
   Selector ext argTys ts regTy ->
-  PtrTarget w tag ->
-  Setup sym ext argTys w (CS.RegValue sym (CLM.LLVMPointerType w), PtrTarget w (CS.RegValue' sym))
+  PtrTarget w tag 'ShapePtr.Precond ->
+  Setup sym ext argTys w (CS.RegValue sym (CLM.LLVMPointerType w))
 setupPtrMem la bak dl nm sel tgt@(PtrTarget bid _) =
   let unseenFallback = setupPtr la bak dl nm sel tgt
    in case bid of
@@ -190,7 +191,7 @@ setupPtrMem la bak dl nm sel tgt@(PtrTarget bid _) =
             Just memoizeRes -> pure (setupResPtr memoizeRes, setupResTgt memoizeRes)
             Nothing -> do
               (ptr, rTgt) <- unseenFallback
-              let res = SetupRes{setupResPtr = ptr, setupResTgt = rTgt}
+              let res = SetupRes{setupResPtr = ptr}
               setupRes .= Map.insert bid' res resMap
               pure (ptr, rTgt)
         Nothing -> unseenFallback
@@ -211,8 +212,8 @@ setupPtr ::
   Mem.DataLayout ->
   ValueName (CLM.LLVMPointerType w) ->
   Selector ext argTys ts regTy ->
-  PtrTarget w tag ->
-  Setup sym ext argTys w (CS.RegValue sym (CLM.LLVMPointerType w), PtrTarget w (CS.RegValue' sym))
+  PtrTarget w tag 'ShapePtr.Precond ->
+  Setup sym ext argTys w (CS.RegValue sym (CLM.LLVMPointerType w))
 setupPtr la bak layout nm sel target = do
   let align = Mem.maxAlignment layout
   let sym = CB.backendGetSym bak
@@ -317,10 +318,10 @@ setupPtr la bak layout nm sel target = do
     , -- Base pointer plus current offset
       CS.RegValue sym (CLM.LLVMPointerType w)
     , -- Values written so far
-      Seq.Seq (MemShape w (CS.RegValue' sym))
+      Seq.Seq (MemShape w (CS.RegValue' sym) 'ShapePtr.Precond)
     ) ->
-    MemShape w tag ->
-    Setup sym ext argTys w (Int, CS.RegValue sym (CLM.LLVMPointerType w), Seq.Seq (MemShape w (CS.RegValue' sym)))
+    MemShape w tag 'ShapePtr.Precond ->
+    Setup sym ext argTys w (Int, CS.RegValue sym (CLM.LLVMPointerType w), Seq.Seq (MemShape w (CS.RegValue' sym) 'ShapePtr.Precond))
   go (idx, ptr, written) memShape = do
     let sym = CB.backendGetSym bak
     let sel' = sel & selectorPath %~ PtrCursor.addIndex idx
@@ -342,7 +343,7 @@ setupPtr la bak layout nm sel target = do
               (m', byteVals) <- writeFreshBytes sym m sel' ptr bytes
               setupMem .= m'
               pure (Initialized (CS.RV byteVals) bytes)
-        Pointer _tag off tgt -> do
+        Pointer _tag (ShapePtr.PrecondPtrData{ShapePtr.precondOffset = off, ShapePtr.precondTarget = tgt}) -> do
           -- recursive case
           let nm' = addIndex nm idx
           (val, tgt') <- setupPtrMem la bak layout nm' sel' tgt
@@ -417,8 +418,8 @@ setupShape ::
   ValueName t ->
   C.TypeRepr t ->
   Selector ext argTys ts regTy ->
-  Shape ext tag t ->
-  Setup sym ext argTys w (Shape ext (CS.RegValue' sym) t)
+  Shape ext tag 'ShapePtr.Precond t ->
+  Setup sym ext argTys w (Shape ext (CS.RegValue' sym) 'ShapePtr.NoData t)
 setupShape la bak layout nm tRepr sel s = do
   let sym = CB.backendGetSym bak
   Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @ts)
@@ -436,7 +437,7 @@ setupShape la bak layout nm tRepr sel s = do
     ShapeExt (ShapePtrBVLit _tag w bv) -> do
       bv' <- liftIO (CLMP.llvmPointer_bv sym =<< WI.bvLit sym w bv)
       pure (ShapeExt (ShapePtrBV (CS.RV bv') w))
-    ShapeExt (ShapePtr _tag mOffset target) -> do
+    ShapeExt (ShapePtr _tag (ShapePtr.PrecondPtrData{ShapePtr.precondOffset = off, ShapePtr.precondTarget = tgt})) -> do
       (basePtr, target') <- setupPtrMem la bak layout nm sel target
       -- Before Setup: mOffset is Just offset with user-specified concrete offset
       -- We integrate it into the pointer and return Nothing
@@ -469,7 +470,7 @@ setupArgs ::
   , CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
-  , ExtShape ext ~ PtrShape ext w
+  , ExtShape ext tag 'ShapePtr.Precond ~ PtrShape ext w tag 'ShapePtr.Precond
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
   ) =>
   GreaseLogAction ->
@@ -477,7 +478,7 @@ setupArgs ::
   Mem.DataLayout ->
   Ctx.Assignment ValueName argTys ->
   Ctx.Assignment C.TypeRepr argTys ->
-  Ctx.Assignment (Shape ext tag) argTys ->
+  Ctx.Assignment (Shape ext tag 'ShapePtr.Precond) argTys ->
   Setup sym ext argTys w (Args sym ext argTys)
 setupArgs la bak layout argNames argTys =
   fmap Args
@@ -501,11 +502,11 @@ newtype SetupMem sym = SetupMem {getSetupMem :: CLM.MemImpl sym}
 --
 -- Used by refinement loop to print concrete examples.
 newtype Args sym ext argTys
-  = Args {getArgs :: Ctx.Assignment (Shape ext (CS.RegValue' sym)) argTys}
+  = Args {getArgs :: Ctx.Assignment (Shape ext (CS.RegValue' sym) 'ShapePtr.NoData) argTys}
 
 argTypes ::
   ( CLM.HasPtrWidth w
-  , ExtShape ext ~ PtrShape ext w
+  , ExtShape ext tag 'ShapePtr.NoData ~ PtrShape ext w tag 'ShapePtr.NoData
   ) =>
   Args sym ext argTys ->
   Ctx.Assignment C.TypeRepr argTys
@@ -513,16 +514,16 @@ argTypes (Args args) = fmapFC (shapeType ptrShapeType) args
 
 argVals ::
   ( CLM.HasPtrWidth w
-  , ExtShape ext ~ PtrShape ext w
+  , ExtShape ext tag 'ShapePtr.NoData ~ PtrShape ext w tag 'ShapePtr.NoData
   ) =>
   Args sym ext argTys ->
   Ctx.Assignment (CS.RegValue' sym) argTys
 argVals (Args args) = fmapFC (getTag getPtrTag) args
 
 argRegMap ::
-  forall sym ext w argTys.
+  forall sym ext w argTys tag.
   ( CLM.HasPtrWidth w
-  , ExtShape ext ~ PtrShape ext w
+  , ExtShape ext tag 'ShapePtr.NoData ~ PtrShape ext w tag 'ShapePtr.NoData
   ) =>
   Args sym ext argTys ->
   CS.RegMap sym argTys
@@ -557,7 +558,7 @@ setup ::
   , CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
-  , ExtShape ext ~ PtrShape ext w
+  , ExtShape ext tag 'ShapePtr.NoData ~ PtrShape ext w tag 'ShapePtr.NoData
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
   ) =>
   GreaseLogAction ->

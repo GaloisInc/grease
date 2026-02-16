@@ -128,7 +128,7 @@ data ShapesAst ext w
   , astShapes :: Map Text (Some (Shape (Parse ext w) NoTag 'PtrShape.Precond))
   }
 
-type instance Shape.ExtShape (Parse ext w) tag ptrData = ParsePtrShape w tag ptrData
+type instance Shape.ExtShape (Parse ext w) = ParsePtrShape w
 
 -- | Like 'PtrShape.PtrShape', except that 'PtrShape.PtrTarget' is replaced
 -- by 'BlockId'. Always uses 'Precond mode during parsing.

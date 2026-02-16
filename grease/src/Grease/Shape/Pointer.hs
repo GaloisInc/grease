@@ -97,7 +97,7 @@ data family PtrData (mode :: PtrDataMode) (w :: Natural) (tag :: C.CrucibleType 
 -- | Precondition mode: contains offset and target
 data instance PtrData 'Precond w tag
   = PrecondPtrData
-  { precondOffset :: Maybe Offset
+  { precondOffset :: Offset
   , precondTarget :: PtrTarget w tag 'Precond
   }
 
@@ -212,9 +212,7 @@ instance (KnownPtrMode ptrData, MC.PrettyF tag) => PP.Pretty (MemShape wptr tag 
                   , ppTag tag
                   , ":"
                   , PP.pretty tgt
-                  , case mOffset of
-                      Just (Offset off) -> "+" PP.<> PP.viaShow off
-                      Nothing -> ""
+                  , "+" PP.<> PP.viaShow mOffset
                   ]
           NoDataRepr ->
             case ptrData of
