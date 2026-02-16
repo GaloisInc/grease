@@ -318,15 +318,15 @@ minimalShapeWithPtrs mkTag =
     )
     (pure . mkTag)
 
-type ArgShapes :: Type -> (C.CrucibleType -> Type) -> PtrDataMode -> Ctx C.CrucibleType -> Type
-newtype ArgShapes ext tag ptrData tys = ArgShapes
-  { _argShapes :: Ctx.Assignment (Shape ext tag ptrData) tys
+type ArgShapes :: Type -> (C.CrucibleType -> Type) -> Ctx C.CrucibleType -> Type
+newtype ArgShapes ext tag tys = ArgShapes
+  { _argShapes :: Ctx.Assignment (Shape ext tag 'Precond) tys
   }
 makeLenses ''ArgShapes
 
-deriving instance (ShowExt ext tag ptrData, ShowF tag) => Show (ArgShapes ext tag ptrData tys)
+deriving instance (ShowExt ext tag 'Precond, ShowF tag) => Show (ArgShapes ext tag tys)
 
-instance (MC.PrettyF tag, PrettyExt ext tag ptrData) => PP.Pretty (ArgShapes ext tag ptrData tys) where
+instance (MC.PrettyF tag, PrettyExt ext tag 'Precond) => PP.Pretty (ArgShapes ext tag tys) where
   pretty (ArgShapes regs) =
     MC.foldlFC (\doc rShape -> PP.vcat [doc, PP.pretty rShape]) "" regs
 
@@ -363,10 +363,10 @@ replaceShapes ::
   -- | Argument names
   Ctx.Assignment (Const.Const String) tys ->
   -- | Initial arguments
-  ArgShapes ext NoTag 'Precond tys ->
+  ArgShapes ext NoTag tys ->
   -- | Replacement arguments
   ParsedShapes ext ->
-  Either TypeMismatch (ArgShapes ext NoTag 'Precond tys)
+  Either TypeMismatch (ArgShapes ext NoTag tys)
 replaceShapes names (ArgShapes args) (ParsedShapes replacements) =
   -- TODO: Check that all the map keys are expected
   ArgShapes

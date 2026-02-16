@@ -50,9 +50,9 @@ data Diagnostic where
     Text ->
     Diagnostic
   RefinementFinalPrecondition ::
-    forall w ext tag tys.
+    forall w ext tag tys ptrData.
     ( ExtShape ext ~ PtrShape ext w
-    , PrettyExt ext tag
+    , PrettyExt ext tag ptrData
     ) =>
     MM.AddrWidthRepr w ->
     -- | Argument names
