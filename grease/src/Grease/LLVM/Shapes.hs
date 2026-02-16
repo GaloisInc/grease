@@ -46,7 +46,7 @@ llvmInitArgShapes ::
   Maybe (Shape.ParsedShapes CLLVM.LLVM) ->
   -- | The CFG of the user-requested entrypoint function.
   C.CFG CLLVM.LLVM blocks argTys ret ->
-  Either InitArgShapesError (Shape.ArgShapes CLLVM.LLVM NoTag 'PtrShape.Precond argTys)
+  Either InitArgShapesError (Shape.ArgShapes CLLVM.LLVM NoTag argTys)
 llvmInitArgShapes opts llvmMod argNames parsedShapes cfg = do
   let argTys = C.cfgArgTypes cfg
   let initArgs0 =
