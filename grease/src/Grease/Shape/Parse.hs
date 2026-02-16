@@ -179,7 +179,7 @@ convertShape as =
       case IntMap.lookup blk (getAllocs as) of
         Maybe.Nothing -> Either.Left (BlockId blk)
         Maybe.Just tgt ->
-          (Shape.ShapeExt . PtrShape.ShapePtr NoTag . PtrShape.PrecondPtrData (Just off))
+          Shape.ShapeExt . PtrShape.ShapePtr NoTag . PtrShape.PrecondPtrData (Just off)
             Functor.<$> ptrTarget as tgt (Just $ BlockId blk)
 
 -----------------------------------------------------------
