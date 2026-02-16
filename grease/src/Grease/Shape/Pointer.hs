@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
@@ -66,7 +65,6 @@ import Data.Parameterized.NatRepr (NatRepr, natValue)
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Some (Some (Some))
 import Data.Parameterized.TraversableF qualified as TF
-import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Proxy (Proxy (Proxy))
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
