@@ -437,11 +437,10 @@ setupShape la bak layout nm tRepr sel s = do
     ShapeExt (ShapePtrBVLit _tag w bv) -> do
       bv' <- liftIO (CLMP.llvmPointer_bv sym =<< WI.bvLit sym w bv)
       pure (ShapeExt (ShapePtrBV (CS.RV bv') w))
-    ShapeExt (ShapePtr _tag (ShapePtr.PrecondPtrData{ShapePtr.precondOffset = off, ShapePtr.precondTarget = tgt})) -> do
-      (basePtr, target') <- setupPtrMem la bak layout nm sel target
-      -- Before Setup: mOffset is Just offset with user-specified concrete offset
-      -- We integrate it into the pointer and return Nothing
-      let offset = fromMaybe (Offset 0) mOffset
+    ShapeExt (ShapePtr _tag (ShapePtr.PrecondPtrData{ShapePtr.precondOffset = offset, ShapePtr.precondTarget = tgt})) -> do
+      (basePtr, target') <- setupPtrMem la bak layout nm sel tgt
+      -- Before Setup: offset contains the user-specified concrete offset
+      -- We integrate it into the pointer
       offsetBv <- liftIO (WI.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral (getOffset offset))))
       p <- liftIO (CLMP.ptrAdd sym ?ptrWidth basePtr offsetBv)
       pure (ShapeExt (ShapePtr (CS.RV p) Nothing target'))

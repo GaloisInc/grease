@@ -145,15 +145,15 @@ refinePtrArg la args modify sel =
       case result of
         Left err -> panic "refinePtrArg" [show (PP.pretty err)]
         Right pt' -> do
-          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (Just (Offset 0)) pt')
+          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (ShapePtr.PrecondPtrData (Offset 0) pt'))
           pure $ RefinedPrecondition args'
-    ShapeExt (ShapePtr _tag mOffset pt) -> do
+    ShapeExt (ShapePtr _tag (ShapePtr.PrecondPtrData offset pt)) -> do
       doLog la $ Diag.HeuristicPtrTarget pt
       let result = modify pt
       case result of
         Left err -> panic "refinePtrArg" [show (PP.pretty err)]
         Right pt' -> do
-          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag mOffset pt')
+          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (ShapePtr.PrecondPtrData offset pt'))
           pure $ RefinedPrecondition args'
     _ -> pure Unknown
 

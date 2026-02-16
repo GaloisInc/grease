@@ -51,6 +51,7 @@ import Grease.Shape qualified as Shape
 import Grease.Shape.Concretize (concShape)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
+import Grease.Shape.Pointer qualified as ShapePtr
 import Grease.Shape.Print qualified as ShapePP
 import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
@@ -86,7 +87,7 @@ data InitialState sym ext argTys
 
 -- | Arguments ('Args') that have been concretized
 newtype ConcArgs sym ext argTys
-  = ConcArgs {getConcArgs :: Ctx.Assignment (Shape ext (Conc.ConcRV' sym)) argTys}
+  = ConcArgs {getConcArgs :: Ctx.Assignment (Shape ext (Conc.ConcRV' sym) 'ShapePtr.NoData) argTys}
 
 -- | Turn 'ConcArgs' back into a 'C.RegMap' that can be used to re-execute
 -- a CFG.

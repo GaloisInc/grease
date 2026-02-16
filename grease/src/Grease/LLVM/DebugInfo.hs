@@ -102,7 +102,7 @@ asPtrTarget =
   \case
     LDU.ArrInfo _elemTy -> PtrShape.PtrTarget Nothing Seq.empty
     t@(LDU.BaseType _nm _dibt) -> uninit (minTypeSize t)
-    LDU.Pointer{} -> PtrShape.PtrTarget Nothing (Seq.singleton (PtrShape.Pointer NoTag (PtrShape.PrecondPtrData (Just (PtrShape.Offset 0)) (PtrShape.PtrTarget Nothing Seq.empty))))
+    LDU.Pointer{} -> PtrShape.PtrTarget Nothing (Seq.singleton (PtrShape.Pointer NoTag (PtrShape.PrecondPtrData (PtrShape.Offset 0) (PtrShape.PtrTarget Nothing Seq.empty))))
     LDU.Structure _nm fields -> structPtrTarget fields
     LDU.Typedef _nm ty -> asPtrTarget ty
     t@(LDU.Union _nm _fields) -> uninit (minTypeSize t)
@@ -193,7 +193,7 @@ diArgShape tyViews i t = do
         (Bv, CLM.LLVMPointerRepr w) -> Right (Shape.ShapeExt (ShapePtrBV NoTag w))
         (Ptr tgt, CLM.LLVMPointerRepr w)
           | Just Refl <- testEquality w ?ptrWidth ->
-              Right (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.PrecondPtrData (Just (PtrShape.Offset 0)) tgt)))
+              Right (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.PrecondPtrData (PtrShape.Offset 0) tgt)))
         _ -> fallback
     _ -> fallback
 

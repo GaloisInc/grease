@@ -228,7 +228,7 @@ printShape = printShapeWithOffset extractOffset
     case PtrShape.knownPtrMode @ptrData of
       PtrShape.PrecondRepr ->
         case dat of
-          PtrShape.PrecondPtrData mOffset _ -> fromMaybe (PtrShape.Offset 0) mOffset
+          PtrShape.PrecondPtrData offset _ -> offset
       PtrShape.NoDataRepr -> PtrShape.Offset 0
 
 -- | Print a struct with a custom offset extraction function
@@ -356,8 +356,7 @@ printMemShape = \case
     case PtrShape.knownPtrMode @ptrData of
       PtrShape.PrecondRepr ->
         case dat of
-          PtrShape.PrecondPtrData mOff tgt -> do
-            let offset = fromMaybe (PtrShape.Offset 0) mOff
+          PtrShape.PrecondPtrData offset tgt -> do
             let bid = PtrShape.ptrTargetBlock tgt
             blk <- printerAlloc (printTgt tgt) bid
             printBlockOffset blk offset

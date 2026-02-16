@@ -111,7 +111,7 @@ memShape allocs =
     Exactly wds ->
       Either.Right (PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) wds))
     Pointer blk off ->
-      Either.Right . PtrShape.Pointer NoTag . PtrShape.PrecondPtrData (Just off)
+      Either.Right . PtrShape.Pointer NoTag . PtrShape.PrecondPtrData off
         =<< case lookupAlloc blk allocs of
           Maybe.Just tgt -> ptrTarget (removeAlloc blk allocs) tgt (Just blk)
           Maybe.Nothing -> Either.Left blk
@@ -179,7 +179,7 @@ convertShape as =
       case IntMap.lookup blk (getAllocs as) of
         Maybe.Nothing -> Either.Left (BlockId blk)
         Maybe.Just tgt ->
-          Shape.ShapeExt . PtrShape.ShapePtr NoTag . PtrShape.PrecondPtrData (Just off)
+          Shape.ShapeExt . PtrShape.ShapePtr NoTag . PtrShape.PrecondPtrData off
             Functor.<$> ptrTarget as tgt (Just $ BlockId blk)
 
 -----------------------------------------------------------

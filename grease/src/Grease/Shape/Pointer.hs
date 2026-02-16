@@ -206,13 +206,13 @@ instance (KnownPtrMode ptrData, MC.PrettyF tag) => PP.Pretty (MemShape wptr tag 
         case knownPtrMode @ptrData of
           PrecondRepr ->
             case ptrData of
-              PrecondPtrData mOffset tgt ->
+              PrecondPtrData offset tgt ->
                 PP.hcat
                   [ "ptr"
                   , ppTag tag
                   , ":"
                   , PP.pretty tgt
-                  , "+" PP.<> PP.viaShow mOffset
+                  , "+" PP.<> PP.viaShow offset
                   ]
           NoDataRepr ->
             case ptrData of
@@ -250,7 +250,7 @@ traverseMemShapeWithType mode f =
         <*> case mode of
           PrecondRepr ->
             case ptrData of
-              PrecondPtrData mOffset tgt -> PrecondPtrData mOffset <$> traversePtrTargetWithType mode f tgt
+              PrecondPtrData offset tgt -> PrecondPtrData offset <$> traversePtrTargetWithType mode f tgt
           NoDataRepr ->
             case ptrData of
               NoPtrData -> pure NoPtrData
@@ -464,7 +464,7 @@ ptrTargetToPtrs proxy tag tgt =
       genSeq n x = Seq.iterateN n id x
    in ( PtrTarget Nothing $
           genSeq (fromIntegral nPtrs') $
-            Pointer tag (PrecondPtrData (Just (Offset 0)) (ptrTarget Nothing Seq.Empty))
+            Pointer tag (PrecondPtrData (Offset 0) (ptrTarget Nothing Seq.Empty))
       )
 
 instance PP.Pretty BlockId where
@@ -565,10 +565,8 @@ instance (KnownPtrMode ptrData, MC.PrettyF tag) => MC.PrettyF (PtrShape ext w ta
       case knownPtrMode @ptrData of
         PrecondRepr ->
           case dat of
-            PrecondPtrData mOffset tgt ->
-              case mOffset of
-                Just (Offset off) -> PP.pretty tgt PP.<> "+" PP.<> PP.viaShow off PP.<> ppTag tag
-                Nothing -> PP.pretty tgt PP.<> ppTag tag
+            PrecondPtrData offset tgt ->
+              PP.pretty tgt PP.<> "+" PP.<> PP.viaShow offset PP.<> ppTag tag
         NoDataRepr ->
           case dat of
             NoPtrData -> "ptr" PP.<> ppTag tag PP.<> ":removed"
@@ -670,7 +668,7 @@ parseJsonPtrShape parseTag =
         tag <- parseTag v
         offset <- parseOffset v
         tgt <- parseJsonPtrTarget =<< v .: "target"
-        pure (Some (ShapePtr tag (PrecondPtrData (Just offset) tgt)))
+        pure (Some (ShapePtr tag (PrecondPtrData offset tgt)))
       t -> fail ("Unknown pointer type: " ++ Text.unpack t)
  where
   withWidth ::
@@ -715,7 +713,7 @@ parseJsonPtrShape parseTag =
           tag <- parseTag v
           offset <- parseOffset v
           tgt <- parseJsonPtrTarget =<< v .: "target"
-          pure (Pointer tag (PrecondPtrData (Just offset) tgt))
+          pure (Pointer tag (PrecondPtrData offset tgt))
         "uninit" -> Uninitialized . CLB.toBytes @Int <$> v .: "uninit"
         t -> fail ("Unknown memory shape type: " ++ Text.unpack t)
 
@@ -743,7 +741,7 @@ x64StackPtrShape returnAddrBytes stackArgSlots =
         ptrTarget Nothing $
           Seq.fromList $
             [Uninitialized uninit, returnAddr] List.++ stackArgs
-   in ShapePtr NoTag (PrecondPtrData (Just (Offset uninit)) tgt)
+   in ShapePtr NoTag (PrecondPtrData (Offset uninit) tgt)
 
 -- | The PowerPC stack pointer points to the end of a large, fresh, mostly-
 -- uninitialized allocation, which is typical for a stack pointer. The very end
@@ -776,7 +774,7 @@ ppcStackPtrShape returnAddrBytes stackArgSlots =
         ptrTarget Nothing $
           Seq.fromList $
             [Uninitialized uninit, returnAddr, backChain] List.++ stackArgs
-   in ShapePtr NoTag (PrecondPtrData (Just (Offset uninit)) tgt)
+   in ShapePtr NoTag (PrecondPtrData (Offset uninit) tgt)
 
 -- | The AArch32 stack pointer points to the end of a large, fresh, mostly-
 -- uninitialized allocation, which is typical for a stack pointer. The very end
@@ -796,7 +794,7 @@ armStackPtrShape stackArgSlots =
         ptrTarget Nothing $
           Seq.fromList $
             Uninitialized uninit : stackArgs
-   in ShapePtr NoTag (PrecondPtrData (Just (Offset uninit)) tgt)
+   in ShapePtr NoTag (PrecondPtrData (Offset uninit) tgt)
 
 -- Helper, not exported
 stackSizeInMiB :: Bytes
@@ -869,9 +867,9 @@ bytesToPointers proxy tag path tgt =
         Just (Pointer tag' ptrData) -> do
           C.Refl <- Right $ lastCons (Proxy @(CLM.LLVMPointerType w)) (Proxy @ts')
           case ptrData of
-            PrecondPtrData mOffset subTgt -> do
+            PrecondPtrData offset subTgt -> do
               subTgt' <- bytesToPointers proxy tag rest subTgt
-              Right (ptrTarget Nothing (Seq.update idx (Pointer tag' (PrecondPtrData mOffset subTgt')) ms))
+              Right (ptrTarget Nothing (Seq.update idx (Pointer tag' (PrecondPtrData offset subTgt')) ms))
         Just Exactly{} -> Right (ptrTargetToPtrs proxy tag tgt)
         Just Initialized{} -> Right (ptrTargetToPtrs proxy tag tgt)
         Just Uninitialized{} -> Right (ptrTargetToPtrs proxy tag tgt)
@@ -903,9 +901,9 @@ modifyPtrTarget proxy modify path tgt =
         Just (Pointer tag ptrData) -> do
           C.Refl <- pure $ lastCons (Proxy @(CLM.LLVMPointerType w)) (Proxy @ts')
           case ptrData of
-            PrecondPtrData mOffset subTgt -> do
+            PrecondPtrData offset subTgt -> do
               subTgt' <- modifyPtrTarget proxy modify rest subTgt
-              Right (ptrTarget Nothing (Seq.update idx (Pointer tag (PrecondPtrData mOffset subTgt')) ms))
+              Right (ptrTarget Nothing (Seq.update idx (Pointer tag (PrecondPtrData offset subTgt')) ms))
         Just _ -> Left ModifyPtrMismatchedSelector
         Nothing -> Left (ModifyPtrPathOutOfBounds idx (Seq.length ms))
     (CursorExt (DereferenceByte _ _), _) ->
