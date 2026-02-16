@@ -64,6 +64,7 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.SymSequence qualified as C
 import Lang.Crucible.SymIO qualified as SymIO
 import Numeric (showHex)
+import Numeric.Natural (Natural)
 import Prettyprinter qualified as PP
 import What4.Expr qualified as WE
 import What4.FloatMode qualified as W4FM
@@ -86,22 +87,26 @@ data InitialState sym ext argTys
 -- * Concretization
 
 -- | Arguments ('Args') that have been concretized
-newtype ConcArgs sym ext argTys
-  = ConcArgs {getConcArgs :: Ctx.Assignment (Shape ext (Conc.ConcRV' sym) 'ShapePtr.NoData) argTys}
+data ConcArgs sym ext argTys w
+  = ConcArgs
+  { concArgsShapes :: Ctx.Assignment (Shape ext (Conc.ConcRV' sym) 'ShapePtr.NoData) argTys
+  , concArgsAllocMap :: Map.Map Natural (ShapePtr.PtrTarget w (Conc.ConcRV' sym) 'ShapePtr.NoData)
+  -- ^ Map from Crucible block number to allocation contents for printing
+  }
 
 -- | Turn 'ConcArgs' back into a 'C.RegMap' that can be used to re-execute
 -- a CFG.
 concArgsToSym ::
-  forall sym ext brand st fm wptr argTys.
+  forall sym ext brand st fm wptr argTys w.
   CB.IsSymInterface sym =>
   (sym ~ WE.ExprBuilder brand st (WE.Flags fm)) =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   sym ->
   W4FM.FloatModeRepr fm ->
   Ctx.Assignment C.TypeRepr argTys ->
-  ConcArgs sym ext argTys ->
+  ConcArgs sym ext argTys w ->
   IO (CS.RegMap sym argTys)
-concArgsToSym sym fm argTys (ConcArgs cArgs) =
+concArgsToSym sym fm argTys (ConcArgs cArgs _allocMap) =
   CS.RegMap
     <$> Ctx.zipWithM
       ( \tp cShape -> do
@@ -134,9 +139,9 @@ data SomeConcretizedValue sym
 -- | Concretized version of 'InitialState' plus @GlobalVar 'ToConcretizeType'@
 --
 -- Produced by 'makeConcretizedData'
-data ConcretizedData sym ext argTys
+data ConcretizedData sym ext argTys w
   = ConcretizedData
-  { concArgs :: ConcArgs sym ext argTys
+  { concArgs :: ConcArgs sym ext argTys w
   , concExtra :: [SomeConcretizedValue sym]
   -- ^ Concretized values from the @GlobalVar 'ToConcretizeType'@
   , concFs :: ConcFs
@@ -154,18 +159,20 @@ makeConcretizedData ::
   Maybe (ErrorDescription sym) ->
   InitialState sym ext argTys ->
   CS.RegValue sym ToConcretizeType ->
-  IO (ConcretizedData sym ext argTys)
+  IO (ConcretizedData sym ext argTys wptr)
 makeConcretizedData bak groundEvalFn minfo initState extra = do
   let InitialState
-        { initStateArgs = Args initArgs
+        { initStateArgs = Args initArgs initAllocMap
         , initStateFs = initFs
         , initStateMem = InitialMem initMem
         } = initState
   let sym = CB.backendGetSym bak
   let ctx = Conc.ConcCtx @sym @t groundEvalFn CLMP.concPtrFnMap
   let concRV :: forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)
-      concRV t = fmap (Conc.ConcRV' @sym) . Conc.groundRegValue @sym @t ctx t . CS.unRV
+      concRV t = fmap (Conc.ConcRV' @sym) . Conc.groundRegValue @sym @t ctx . CS.unRV
   cArgs <- liftIO (traverseFC (Shape.traverseShapeWithType concRV) initArgs)
+  -- Concretize allocation map
+  cAllocMap <- traverse (concretizePtrTarget concRV) initAllocMap
   let WE.GroundEvalFn gFn = groundEvalFn
   let toWord8 :: BV.BV 8 -> Word8
       toWord8 = fromIntegral . BV.asUnsigned
@@ -187,12 +194,48 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   cErr <- traverse (\eds -> Err.concretizeErrorDescription sym groundEvalFn eds) minfo
   pure $
     ConcretizedData
-      { concArgs = ConcArgs cArgs
+      { concArgs = ConcArgs cArgs cAllocMap
       , concExtra = cExtra
       , concFs = ConcFs cFs
       , concMem = ConcMem cMem
       , concErr = cErr
       }
+ where
+  -- Helper to concretize a PtrTarget
+  concretizePtrTarget ::
+    (forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)) ->
+    ShapePtr.PtrTarget wptr (CS.RegValue' sym) 'ShapePtr.NoData ->
+    IO (ShapePtr.PtrTarget wptr (Conc.ConcRV' sym) 'ShapePtr.NoData)
+  concretizePtrTarget concRV (ShapePtr.PtrTarget bid ms) =
+    ShapePtr.PtrTarget bid <$> traverse (concretizeMemShape concRV) ms
+
+  -- Helper to concretize a MemShape
+  concretizeMemShape ::
+    (forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)) ->
+    ShapePtr.MemShape wptr (CS.RegValue' sym) 'ShapePtr.NoData ->
+    IO (ShapePtr.MemShape wptr (Conc.ConcRV' sym) 'ShapePtr.NoData)
+  concretizeMemShape concRV = \case
+    ShapePtr.Uninitialized bytes -> pure (ShapePtr.Uninitialized bytes)
+    ShapePtr.Initialized tag bytes ->
+      ShapePtr.Initialized
+        <$> concRV (C.VectorRepr (CLM.LLVMPointerRepr (knownNat @8))) tag
+        <*> pure bytes
+    ShapePtr.Pointer tag ShapePtr.NoPtrData ->
+      ShapePtr.Pointer
+        <$> concRV (CLM.LLVMPointerRepr (knownNat @wptr)) tag
+        <*> pure ShapePtr.NoPtrData
+    ShapePtr.Exactly bytes ->
+      ShapePtr.Exactly <$> traverse (concretizeTaggedByte concRV) bytes
+
+  -- Helper to concretize a TaggedByte
+  concretizeTaggedByte ::
+    (forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)) ->
+    ShapePtr.TaggedByte (CS.RegValue' sym) ->
+    IO (ShapePtr.TaggedByte (Conc.ConcRV' sym))
+  concretizeTaggedByte concRV (ShapePtr.TaggedByte tag val) =
+    ShapePtr.TaggedByte
+      <$> concRV (CLM.LLVMPointerRepr (knownNat @8)) tag
+      <*> pure val
 
 ---------------------------------------------------------------------
 
@@ -246,9 +289,9 @@ printConcArgs ::
   Ctx.Assignment (Const String) argTys ->
   -- | Which shapes to print
   Ctx.Assignment (Const Bool) argTys ->
-  ConcArgs sym ext argTys ->
+  ConcArgs sym ext argTys wptr ->
   PP.Doc ann
-printConcArgs addrWidth argNames filt (ConcArgs cArgs) =
+printConcArgs addrWidth argNames filt (ConcArgs cArgs _allocMap) =
   let cShapes = fmapFC concShape cArgs
       -- Custom offset extractor for concretized pointers
       getConcOffset tag _ =
