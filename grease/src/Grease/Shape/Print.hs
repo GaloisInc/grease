@@ -150,7 +150,7 @@ printAllocs aw as =
 
 -- | Print 'Shape's associated with given names (e.g., register names)
 printNamedShapesFiltered ::
-  PP.Pretty nm =>
+  (PP.Pretty nm, PtrShape.KnownPtrMode ptrData) =>
   ExtShape ext tag ptrData ~ PtrShape ext w tag ptrData =>
   -- | Names
   Ctx.Assignment (Const.Const nm) tys ->
@@ -170,7 +170,7 @@ printNamedShapesFiltered names filt shapes =
 
 -- | Print 'Shape's associated with given names (e.g., register names)
 printNamedShapes ::
-  PP.Pretty nm =>
+  (PP.Pretty nm, PtrShape.KnownPtrMode ptrData) =>
   ExtShape ext tag ptrData ~ PtrShape ext w tag ptrData =>
   -- | Names
   Ctx.Assignment (Const.Const nm) tys ->
@@ -185,7 +185,7 @@ printNamedShapes names =
 --
 -- Ignores @tag@s.
 printNamed ::
-  PP.Pretty nm =>
+  (PP.Pretty nm, PtrShape.KnownPtrMode ptrData) =>
   ExtShape ext tag ptrData ~ PtrShape ext w tag ptrData =>
   -- | Name
   nm ->
@@ -199,9 +199,9 @@ printNamed name s =
 -- The offset extraction function is used for 'ShapePtr' to determine what offset
 -- to print. It receives the tag and the PtrData.
 printShapeWithOffset ::
-  ExtShape ext tag ptrData ~ PtrShape ext w tag ptrData =>
+  (ExtShape ext tag ptrData ~ PtrShape ext w tag ptrData, PtrShape.KnownPtrMode ptrData) =>
   -- | Function to extract offset for ShapePtr
-  (forall ty. tag (CLM.LLVMPointerType w) -> PtrShape.PtrData ptrData w tag -> PtrShape.Offset) ->
+  (tag (CLM.LLVMPointerType w) -> PtrShape.PtrData ptrData w tag -> PtrShape.Offset) ->
   Shape ext tag ptrData ty ->
   Printer w (PP.Doc ann)
 printShapeWithOffset getOffset =
@@ -233,9 +233,11 @@ printShape = printShapeWithOffset extractOffset
 
 -- | Print a struct with a custom offset extraction function
 printStructWithOffset ::
-  ExtShape ext tag ptrData ~ PtrShape ext w tag ptrData =>
+  ( ExtShape ext tag ptrData ~ PtrShape ext w tag ptrData
+  , PtrShape.KnownPtrMode ptrData
+  ) =>
   -- | Function to extract offset for ShapePtr
-  (forall ty. tag (CLM.LLVMPointerType w) -> PtrShape.PtrData ptrData w tag -> PtrShape.Offset) ->
+  (tag (CLM.LLVMPointerType w) -> PtrShape.PtrData ptrData w tag -> PtrShape.Offset) ->
   Ctx.Assignment (Shape ext tag ptrData) ctx ->
   Printer w (PP.Doc ann)
 printStructWithOffset getOffset fields = do
@@ -247,7 +249,7 @@ printPtrWithOffset ::
   forall ptrData ext w tag ty ann.
   PtrShape.KnownPtrMode ptrData =>
   -- | Function to extract offset for ShapePtr
-  (forall ty'. tag (CLM.LLVMPointerType w) -> PtrShape.PtrData ptrData w tag -> PtrShape.Offset) ->
+  (tag (CLM.LLVMPointerType w) -> PtrShape.PtrData ptrData w tag -> PtrShape.Offset) ->
   PtrShape ext w tag ptrData ty ->
   Printer w (PP.Doc ann)
 printPtrWithOffset getOffset =
@@ -268,7 +270,7 @@ printPtrWithOffset getOffset =
             PtrShape.NoPtrData -> do
               let offset = getOffset tag dat
               -- After Setup, pointer data has been removed, print placeholder
-              pure ("<?+" PP.<> PP.pretty (show offset) PP.<> ">")
+              pure ("<?+" PP.<> PP.viaShow offset PP.<> ">")
 
 printBv :: NatRepr w' -> Printer w (PP.Doc ann)
 printBv w' = do
