@@ -122,7 +122,7 @@ data Shape ext tag ptrData t where
 --
 -- For documentation on these type parameters, see 'Shape'.
 type ExtShape :: Type -> (C.CrucibleType -> Type) -> PtrDataMode -> C.CrucibleType -> Type
-type family ExtShape ext tag ptrData
+type family ExtShape ext
 
 class ShowF (ExtShape ext tag ptrData) => ShowExt ext tag ptrData
 instance ShowF (ExtShape ext tag ptrData) => ShowExt ext tag ptrData
@@ -229,8 +229,8 @@ tagWithType ::
   Shape ext C.TypeRepr ptrData t
 tagWithType = runIdentity . traverseShapeWithType knownPtrMode (\typeRepr _tag -> Identity typeRepr)
 
-type instance ExtShape (Symbolic.MacawExt arch) tag ptrData = PtrShape (Symbolic.MacawExt arch) (MC.ArchAddrWidth arch) tag ptrData
-type instance ExtShape LLVM tag ptrData = PtrShape LLVM 64 tag ptrData
+type instance ExtShape (Symbolic.MacawExt arch) = PtrShape (Symbolic.MacawExt arch) (MC.ArchAddrWidth arch)
+type instance ExtShape LLVM = PtrShape LLVM 64
 
 getTag ::
   (forall t'. ExtShape ext tag ptrData t' -> tag t') ->
