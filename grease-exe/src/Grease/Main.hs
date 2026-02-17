@@ -146,7 +146,7 @@ import Grease.Shape qualified as Shape
 import Grease.Shape.Concretize (concShape)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Parse qualified as Parse
-import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Grease.Solver (withSolverOnlineBackend)
 import Grease.SymIO qualified as GSIO
 import Grease.Syntax (parseOverridesYaml, parsedProgramCfgMap, resolveOverridesYaml)
@@ -347,7 +347,7 @@ toBatchBug ::
   Ctx.Assignment C.TypeRepr args ->
   Shape.ArgShapes ext NoTag args ->
   Bug.BugInstance ->
-  Conc.ConcretizedData sym ext args ->
+  Conc.ConcretizedData sym ext args wptr ->
   GOut.BatchBug
 toBatchBug fm addrWidth argNames argTys initArgs b cData =
   let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
@@ -369,7 +369,7 @@ toFailedPredicate ::
   Ctx.Assignment (Const String) args ->
   Ctx.Assignment C.TypeRepr args ->
   Shape.ArgShapes ext NoTag args ->
-  GRef.NoHeuristic sym ext args ->
+  GRef.NoHeuristic sym ext args wptr ->
   GOut.FailedPredicate
 toFailedPredicate fm addrWidth argNames argTys initArgs (GRef.NoHeuristic goal cData _err) =
   let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
@@ -404,7 +404,7 @@ checkMustFail ::
   , WPO.OnlineSolver solver
   ) =>
   bak ->
-  NE.NonEmpty (GRef.NoHeuristic sym ext tys) ->
+  NE.NonEmpty (GRef.NoHeuristic sym ext tys wptr) ->
   IO (Maybe GOut.BatchBug)
 checkMustFail bak errs = do
   let noHeuristicPreds =
@@ -507,19 +507,20 @@ interestingConcretizedShapes ::
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   -- | Default/initial/minimal shapes
-  Ctx.Assignment (Shape.Shape ext tag) argTys ->
-  Conc.ConcArgs sym ext argTys ->
+  Ctx.Assignment (Shape.Shape ext tag 'Precond) argTys ->
+  Conc.ConcArgs sym ext argTys wptr ->
   Ctx.Assignment (Const Bool) argTys
-interestingConcretizedShapes names initArgs (Conc.ConcArgs cArgs) =
-  let cShapes = fmapFC (Shape.tagWithType . concShape) cArgs
-   in let initArgs' = fmapFC Shape.tagWithType initArgs
-       in let isLlvmArg name = "%" `List.isPrefixOf` name
-           in Ctx.zipWith
-                ( \(Const name) (Const isDefault) ->
-                    Const ((name `List.elem` interestingRegs || isLlvmArg name) && not isDefault)
-                )
-                names
-                (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgs')
+interestingConcretizedShapes names _initArgs (Conc.ConcArgs _cArgs _allocMap) =
+  -- Note: We can't directly compare shapes in 'Precond mode with shapes in 'NoData mode
+  -- using testEquality, as they have different types. For now, we conservatively mark
+  -- all interesting register names and LLVM arguments as interesting.
+  -- TODO: Implement a mode-agnostic shape comparison
+  let isLlvmArg name = "%" `List.isPrefixOf` name
+   in fmapFC
+        ( \(Const name) ->
+            Const (name `List.elem` interestingRegs || isLlvmArg name)
+        )
+        names
 
 -- | Compute the initial 'ArgShapes' for a Macaw CFG.
 --
@@ -782,7 +783,7 @@ macawInitState ::
   C.GlobalVar ToConc.ToConcretizeType ->
   GSetup.SetupMem sym ->
   GSIO.InitializedFs sym wptr ->
-  GSetup.Args sym ext (Symbolic.MacawCrucibleRegTypes arch) ->
+  GSetup.Args sym ext (Symbolic.MacawCrucibleRegTypes arch) wptr ->
   IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
 macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConcVar setupMem initFs args = do
   let sym = CB.backendGetSym bak
@@ -854,7 +855,7 @@ macawRefineOnce ::
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
-  IO (GRef.ProveRefineResult sym ext argTys)
+  IO (GRef.ProveRefineResult sym ext argTys wptr)
 macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
   let regTypes = Symbolic.crucArchRegTypes (archCtx ^. GMA.archVals . to Symbolic.archFunctions)
   let rNames = regNames (archCtx ^. GMA.archVals)
@@ -1055,7 +1056,7 @@ simulateRewrittenCfg ::
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   H.InitialMem sym ->
   ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
-  GRef.RefinementSummary sym (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
+  GRef.RefinementSummary sym (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) (MC.ArchAddrWidth arch) ->
   [CS.ExecutionFeature (GreaseSimulatorState MDebug.MacawCommand sym arch) sym (Symbolic.MacawExt arch) (CS.RegEntry sym (Symbolic.ArchRegStruct arch))] ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
