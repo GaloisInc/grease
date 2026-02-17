@@ -58,6 +58,7 @@ import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, Shape (ShapeExt), argShapes)
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (MemShape (Uninitialized), ModifyPtrError, Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget, bytesToPointers, growPtrTarget, growPtrTargetUpTo, initializeOrGrowPtrTarget, modifyPtrTarget, ptrTarget)
+import Grease.Shape.Pointer qualified as ShapePtr
 import Grease.Shape.Selector (ArgSelector, Selector (SelectArg, SelectRet), argSelectorIndex, argSelectorPath)
 import Grease.Utility (OnlineSolverAndBackend, ppProgramLoc, tshow)
 import Lang.Crucible.Backend qualified as CB
@@ -104,7 +105,7 @@ type RefineHeuristic sym bak ext tys =
   ArgShapes ext NoTag tys ->
   IO (HeuristicResult ext tys)
 
-selectArg :: ArgSelector ext argTys ts t -> Lens' (ArgShapes ext NoTag argTys) (Shape ext NoTag t)
+selectArg :: ArgSelector ext argTys ts t -> Lens' (ArgShapes ext NoTag argTys) (Shape ext NoTag 'ShapePtr.Precond t)
 selectArg sel = argShapes . ixF' (sel ^. argSelectorIndex)
 
 newtype MemoryErrorHeuristic sym ext w argTys
@@ -131,13 +132,15 @@ refinePtrArg ::
   ) =>
   GreaseLogAction ->
   ArgShapes ext NoTag argTys ->
-  ((regTy ~ CLMP.LLVMPointerType w) => PtrTarget w NoTag -> Either ModifyPtrError (PtrTarget w NoTag)) ->
+  ((regTy ~ CLMP.LLVMPointerType w) => PtrTarget w NoTag 'ShapePtr.Precond -> Either ModifyPtrError (PtrTarget w NoTag 'ShapePtr.Precond)) ->
   ArgSelector ext argTys ts regTy ->
   IO (HeuristicResult ext argTys)
 refinePtrArg la args modify sel =
   case args ^. selectArg sel of
     ShapeExt (ShapePtrBV _tag w) | Just Refl <- testEquality w ?ptrWidth -> do
-      let pt = ptrTarget Nothing Seq.empty
+      let
+        pt :: ShapePtr.PtrTarget w NoTag 'ShapePtr.Precond
+        pt = ptrTarget Nothing Seq.empty
       doLog la $ Diag.HeuristicPtrTarget pt
       let result = modify pt
       -- A note on the `panic`s: These errors are impossible, because we always
@@ -259,7 +262,7 @@ modPtr ::
   Anns.Annotations sym ext argTys ->
   sym ->
   ArgShapes ext NoTag argTys ->
-  (PtrTarget w NoTag -> PtrTarget w NoTag) ->
+  (PtrTarget w NoTag 'ShapePtr.Precond -> PtrTarget w NoTag 'ShapePtr.Precond) ->
   CLMP.LLVMPtr sym w0 ->
   IO (HeuristicResult ext argTys)
 modPtr la anns sym args modify ptr = do
@@ -280,8 +283,8 @@ growPtrTargetUpToBv ::
   Semigroup (tag (C.VectorType (CLMP.LLVMPointerType 8))) =>
   sym ->
   WI.SymBV sym w' ->
-  PtrTarget w tag ->
-  PtrTarget w tag
+  PtrTarget w tag 'ShapePtr.Precond ->
+  PtrTarget w tag 'ShapePtr.Precond
 growPtrTargetUpToBv sym symBv =
   case WI.asBV (Maybe.fromMaybe symBv (WI.getUnannotatedTerm sym symBv)) of
     Nothing -> growPtrTarget
@@ -334,9 +337,11 @@ handleUB la anns sym _loc args =
       Just (Anns.SomePtrSelector (SelectArg sel)) -> do
         case args ^. selectArg sel of
           ShapeExt (ShapePtrBV _tag w) | Just Refl <- testEquality w ?ptrWidth -> do
-            let pt = ptrTarget Nothing (Seq.singleton (Uninitialized 1))
+            let
+              pt :: ShapePtr.PtrTarget wptr NoTag 'ShapePtr.Precond
+              pt = ptrTarget Nothing (Seq.singleton (Uninitialized 1))
             doLog la $ Diag.HeuristicPtrTarget pt
-            let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (Just (Offset 0)) pt)
+            let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag $ ShapePtr.PrecondPtrData (Offset 0) pt)
             pure $ RefinedPrecondition args'
           _ -> pure Unknown
       Just (Anns.SomePtrSelector (SelectRet{})) -> pure Unknown
