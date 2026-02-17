@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ImplicitParams #-}
 
 -- |
@@ -22,6 +23,7 @@ import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
+import Grease.Shape.Pointer qualified as ShapePtr
 import Grease.Shape.Selector qualified as Selector
 import Grease.Skip.Diagnostic qualified as Diag
 import Lang.Crucible.Backend qualified as CB
@@ -56,7 +58,7 @@ skipOverride ::
   CS.GlobalVar CLM.Mem ->
   WFN.FunctionName ->
   C.TypeRepr ret ->
-  Shape ext tag ret ->
+  Shape ext tag 'ShapePtr.Precond ret ->
   CS.OverrideSim p sym ext r args' ret' (CS.RegValue sym ret)
 skipOverride la dl memVar funcName valTy shape = do
   doLog la (Diag.FunctionCall funcName)
