@@ -1,5 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |
@@ -75,9 +77,9 @@ import What4.Interface qualified as WI
 -- * Data to be concretized
 
 -- | Initial state, to be concretized into 'ConcretizedData'
-data InitialState sym ext argTys
+data InitialState sym ext argTys wptr
   = InitialState
-  { initStateArgs :: Args sym ext argTys
+  { initStateArgs :: Args sym ext argTys wptr
   , initStateFs :: SymIO.InitialFileSystemContents sym
   , initStateMem :: InitialMem sym
   }
@@ -157,7 +159,7 @@ makeConcretizedData ::
   bak ->
   WE.GroundEvalFn t ->
   Maybe (ErrorDescription sym) ->
-  InitialState sym ext argTys ->
+  InitialState sym ext argTys wptr ->
   CS.RegValue sym ToConcretizeType ->
   IO (ConcretizedData sym ext argTys wptr)
 makeConcretizedData bak groundEvalFn minfo initState extra = do
@@ -169,8 +171,8 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   let sym = CB.backendGetSym bak
   let ctx = Conc.ConcCtx @sym @t groundEvalFn CLMP.concPtrFnMap
   let concRV :: forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)
-      concRV t = fmap (Conc.ConcRV' @sym) . Conc.groundRegValue @sym @t ctx . CS.unRV
-  cArgs <- liftIO (traverseFC (Shape.traverseShapeWithType concRV) initArgs)
+      concRV t v = Conc.ConcRV' @sym <$> Conc.groundRegValue @sym @t ctx t (CS.unRV v)
+  cArgs <- liftIO (traverseFC (Shape.traverseShapeWithType ShapePtr.NoDataRepr concRV) initArgs)
   -- Concretize allocation map
   cAllocMap <- traverse (concretizePtrTarget concRV) initAllocMap
   let WE.GroundEvalFn gFn = groundEvalFn
@@ -222,7 +224,7 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
         <*> pure bytes
     ShapePtr.Pointer tag ShapePtr.NoPtrData ->
       ShapePtr.Pointer
-        <$> concRV (CLM.LLVMPointerRepr (knownNat @wptr)) tag
+        <$> concRV (CLM.LLVMPointerRepr ?ptrWidth) tag
         <*> pure ShapePtr.NoPtrData
     ShapePtr.Exactly bytes ->
       ShapePtr.Exactly <$> traverse (concretizeTaggedByte concRV) bytes
@@ -248,13 +250,13 @@ printConcNamedShapesFiltered ::
   CLMP.HasPtrWidth w =>
   ExtShape ext ~ PtrShape ext w =>
   -- | Offset extractor for concretized pointers
-  (tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
+  (tag (CLM.LLVMPointerType w) -> PtrShape.PtrData 'ShapePtr.NoData w tag -> PtrShape.Offset) ->
   -- | Names
   Ctx.Assignment (Const.Const nm) tys ->
   -- | Only print those 'Shape's with 'True' in the corresponding entry
   Ctx.Assignment (Const.Const Bool) tys ->
   -- | Shapes to print
-  Ctx.Assignment (Shape ext tag) tys ->
+  Ctx.Assignment (Shape ext tag 'ShapePtr.NoData) tys ->
   ShapePP.Printer w (PP.Doc ann)
 printConcNamedShapesFiltered getOffset names filt shapes =
   TFC.foldlMFC'
@@ -274,9 +276,9 @@ printConcNamed ::
   CLMP.HasPtrWidth w =>
   ExtShape ext ~ PtrShape ext w =>
   -- | Offset extractor
-  (tag (CLM.LLVMPointerType w) -> Maybe PtrShape.Offset -> PtrShape.Offset) ->
+  (tag (CLM.LLVMPointerType w) -> PtrShape.PtrData 'ShapePtr.NoData w tag -> PtrShape.Offset) ->
   nm ->
-  Shape ext tag ty ->
+  Shape ext tag 'ShapePtr.NoData ty ->
   ShapePP.Printer w (PP.Doc ann)
 printConcNamed getOffset name s =
   ((PP.pretty name PP.<> ": ") PP.<>) Functor.<$> ShapePP.printShapeWithOffset getOffset s
@@ -365,7 +367,7 @@ printConcData ::
   Ctx.Assignment (Const String) argTys ->
   -- | Which shapes to print
   Ctx.Assignment (Const Bool) argTys ->
-  ConcretizedData sym ext argTys ->
+  ConcretizedData sym ext argTys wptr ->
   PP.Doc ann
 printConcData addrWidth argNames filt cData =
   let args = printConcArgs addrWidth argNames filt (concArgs cData)

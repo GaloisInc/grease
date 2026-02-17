@@ -63,7 +63,7 @@ import Grease.Panic (panic)
 import Grease.Setup (InitialMem (InitialMem), SetupMem, getSetupMem)
 import Grease.Shape (ArgShapes (ArgShapes), Shape (ShapeBool, ShapeExt, ShapeStruct))
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (PtrShape (ShapePtrBV, ShapePtrBVLit))
+import Grease.Shape.Pointer (PtrDataMode (..), PtrShape (ShapePtrBV, ShapePtrBVLit))
 import Grease.Syntax (ResolvedOverridesYaml)
 import Grease.Utility (printHandle)
 import Lang.Crucible.Analysis.Postdom qualified as C
@@ -308,7 +308,7 @@ minimalArgShapes _bak arch mbEntryAddr = do
   mkRegShape ::
     forall tp.
     MC.ArchReg arch tp ->
-    m (Shape (Symbolic.MacawExt arch) NoTag (Symbolic.ToCrucibleType tp))
+    m (Shape (Symbolic.MacawExt arch) NoTag 'Precond (Symbolic.ToCrucibleType tp))
   mkRegShape r =
     if
       | Just Refl <- testEquality r MC.sp_reg ->

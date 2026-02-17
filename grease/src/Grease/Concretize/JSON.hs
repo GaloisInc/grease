@@ -199,10 +199,10 @@ concArgsToJson ::
   (ExtShape ext ~ PtrShape ext wptr) =>
   FloatModeRepr fm ->
   Ctx.Assignment (Const String) args ->
-  ConcArgs sym ext args ->
+  ConcArgs sym ext args wptr ->
   Ctx.Assignment C.TypeRepr args ->
   [Aeson.Value]
-concArgsToJson fm argNames (ConcArgs cArgs) argTys =
+concArgsToJson fm argNames (ConcArgs cArgs _allocMap) argTys =
   let argsWithTypes = Ctx.zipWith (\argTy cArg -> Pair argTy (getTag getPtrTag cArg)) argTys cArgs
    in let argBlobs = TFC.toListFC (\(Pair ty cVal) -> concRegValueToJson jsonPtrFnMap fm ty cVal) argsWithTypes
        in let argNames' = TFC.toListFC getConst argNames
