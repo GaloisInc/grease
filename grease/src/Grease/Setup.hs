@@ -563,11 +563,10 @@ setupArgs la bak layout argNames argTys inputShapes = do
       )
       inputShapes
   -- After setup, remove pointer data (convert from Precond to NoData mode)
-  let shapesNoData = fmapFC removePointerData shapesWithPtrData
   -- Extract the allocation map that was built during setup
   allocMap <- use setupAllocMap
   -- Return Args with both shapes and allocation map
-  pure (Args shapesNoData allocMap)
+  pure (Args shapesWithPtrData allocMap)
 
 -- | Memory before execution
 --
