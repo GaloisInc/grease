@@ -191,6 +191,7 @@ data NoHeuristic sym ext tys wptr
   { noHeuristicGoal :: CB.ProofObligation sym
   , noHeuristicConcretizedData :: ConcretizedData sym ext tys wptr
   , noHeuristicError :: Maybe (ErrorDescription sym)
+  , noHeuristicFinalPrec :: ArgShapes ext NoTag tys
   }
 
 data ProveRefineResult sym ext tys wptr
@@ -352,7 +353,7 @@ consumer bak execResult la bbMap refineData = do
               RefinedPrecondition fc' -> pure $ ProveRefine fc'
               Unknown -> runHeuristics hs fc
           runHeuristics [] _ =
-            pure (ProveNoHeuristic (NE.singleton (NoHeuristic goal cData minfo)))
+            pure (ProveNoHeuristic (NE.singleton (NoHeuristic goal cData minfo argShapes)))
         runHeuristics heuristics argShapes
       C.Unknown{} -> pure (ProveCantRefine SolverUnknown)
 
@@ -649,7 +650,7 @@ data RefinementSummary sym ext tys wptr
   | RefinementNoHeuristic (NE.NonEmpty (NoHeuristic sym ext tys wptr))
   | RefinementItersExceeded
   | RefinementCantRefine CantRefine
-  | RefinementBug Bug.BugInstance (ConcretizedData sym ext tys wptr)
+  | RefinementBug Bug.BugInstance (ConcretizedData sym ext tys wptr) (ArgShapes ext NoTag tys)
 
 refinementLoop ::
   forall sym ext argTys w.
@@ -683,7 +684,7 @@ refinementLoop la boundsOpts argNames initArgShapes go = do
           doLog la (Diag.RefinementUsingPrecondition addrWidth argNames argShapes)
           new <- go argShapes
           case new of
-            ProveBug b cData -> pure (RefinementBug b cData)
+            ProveBug b cData -> pure (RefinementBug b cData argShapes)
             ProveCantRefine b -> pure (RefinementCantRefine b)
             ProveRefine argShapes' -> do
               doLog la Diag.RefinementLoopRetrying
