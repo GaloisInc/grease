@@ -143,7 +143,6 @@ import Grease.Requirement qualified as GReq
 import Grease.Setup qualified as GSetup
 import Grease.Shape (ArgShapes, ExtShape)
 import Grease.Shape qualified as Shape
-import Grease.Shape.Concretize (concShape)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
