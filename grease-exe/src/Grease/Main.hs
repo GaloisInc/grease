@@ -519,8 +519,8 @@ interestingConcretizedShapes names initArgs finalArgs =
       finalArgsWithType = fmapFC Shape.tagWithType finalArgs
       isLlvmArg name = "%" `List.isPrefixOf` name
    in Ctx.zipWith
-        ( \(Const name) (Const isDefault) ->
-            Const ((name `List.elem` interestingRegs || isLlvmArg name) && not isDefault)
+        ( \(Const name) (Const _isDefault) ->
+            Const (name `List.elem` interestingRegs || isLlvmArg name)
         )
         names
         (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) finalArgsWithType initArgsWithType)

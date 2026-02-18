@@ -257,7 +257,7 @@ printConcNamedShapesFiltered ::
   Ctx.Assignment (Const.Const Bool) tys ->
   -- | Shapes to print
   Ctx.Assignment (Shape ext tag 'ShapePtr.NoData) tys ->
-  ShapePP.Printer w (PP.Doc ann)
+  ShapePP.Printer w tag (PP.Doc ann)
 printConcNamedShapesFiltered getOffset names filt shapes =
   TFC.foldlMFC'
     ( \doc (Product.Pair (Product.Pair (Const.Const nm) s) (Const.Const b)) ->
@@ -279,7 +279,7 @@ printConcNamed ::
   (tag (CLM.LLVMPointerType w) -> PtrShape.PtrData 'ShapePtr.NoData w tag -> PtrShape.Offset) ->
   nm ->
   Shape ext tag 'ShapePtr.NoData ty ->
-  ShapePP.Printer w (PP.Doc ann)
+  ShapePP.Printer w tag (PP.Doc ann)
 printConcNamed getOffset name s =
   ((PP.pretty name PP.<> ": ") PP.<>) Functor.<$> ShapePP.printShapeWithOffset getOffset s
 
@@ -293,7 +293,7 @@ printConcArgs ::
   Ctx.Assignment (Const Bool) argTys ->
   ConcArgs sym ext argTys wptr ->
   PP.Doc ann
-printConcArgs addrWidth argNames filt (ConcArgs cArgs _allocMap) =
+printConcArgs addrWidth argNames filt (ConcArgs cArgs allocMap) =
   let cShapes = fmapFC concShape cArgs
       -- Custom offset extractor for concretized pointers
       getConcOffset tag _ =
@@ -301,10 +301,14 @@ printConcArgs addrWidth argNames filt (ConcArgs cArgs _allocMap) =
             offsetBV = CLMP.concOffset ptr
             offsetBytes = BV.asUnsigned offsetBV
          in PtrShape.Offset (CLB.toBytes offsetBytes)
+      -- Extraction function to get concrete pointer from ConcRV'
+      extractConc tag = Just (Conc.unConcRV' tag)
       rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
-   in ShapePP.evalPrinter
-        (ShapePP.PrinterConfig addrWidth rleThreshold)
-        (printConcNamedShapesFiltered getConcOffset argNames filt cShapes)
+      map_doc = PP.viaShow allocMap
+   in map_doc
+        PP.<> ShapePP.evalPrinter
+          (ShapePP.PrinterConfig addrWidth rleThreshold (Just allocMap) (Just extractConc))
+          (printConcNamedShapesFiltered getConcOffset argNames filt cShapes)
 
 -- | Helper, not exported
 showHex' :: Integral a => a -> String

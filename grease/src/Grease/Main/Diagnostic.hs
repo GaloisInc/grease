@@ -141,11 +141,13 @@ instance PP.Pretty Diagnostic where
       Unsupported e -> "Not yet supported:" PP.<+> fmap absurd e
       UserError e -> "User error:" PP.<+> fmap absurd e
    where
-    printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w
+    printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w tag
     printCfg w =
       ShapePP.PrinterConfig
         { ShapePP.cfgAddrWidth = w
         , ShapePP.cfgRleThreshold = 8
+        , ShapePP.cfgAllocMap = Nothing
+        , ShapePP.cfgExtractConc = Nothing
         }
 
 severity :: Diagnostic -> Severity

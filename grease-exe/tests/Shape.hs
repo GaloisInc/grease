@@ -197,11 +197,13 @@ genMemShape = do
         pure $ PtrShape.Pointer NoTag (PtrShape.PrecondPtrData offset tgt)
     ]
 
-printCfg :: Print.PrinterConfig 64
+printCfg :: Print.PrinterConfig 64 tag
 printCfg =
   Print.PrinterConfig
     { Print.cfgAddrWidth = Addr64
     , Print.cfgRleThreshold = 16 -- lower than `maxBytes` to exercise RLE
+    , Print.cfgAllocMap = Nothing
+    , Print.cfgExtractConc = Nothing
     }
 
 doPrintNamed :: Text -> Shape LLVM NoTag 'PtrShape.Precond ty -> Text

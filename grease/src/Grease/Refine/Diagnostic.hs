@@ -162,11 +162,13 @@ instance PP.Pretty Diagnostic where
               Just err -> PP.pretty err
           ]
    where
-    printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w
+    printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w tag
     printCfg w =
       ShapePP.PrinterConfig
         { ShapePP.cfgAddrWidth = w
         , ShapePP.cfgRleThreshold = 8
+        , ShapePP.cfgAllocMap = Nothing
+        , ShapePP.cfgExtractConc = Nothing
         }
 
 severity :: Diagnostic -> Severity
