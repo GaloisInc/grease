@@ -348,9 +348,8 @@ toBatchBug ::
   Shape.ArgShapes ext NoTag args ->
   Bug.BugInstance ->
   Conc.ConcretizedData sym ext args wptr ->
-  Shape.ArgShapes ext NoTag args ->
   GOut.BatchBug
-toBatchBug fm addrWidth argNames argTys initArgs b cData finalArgs =
+toBatchBug fm addrWidth argNames argTys initArgs b cData =
   let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
    in let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (Conc.concArgs cData)
        in let prettyConc = Conc.printConcData addrWidth argNames interestingShapes cData
@@ -372,7 +371,7 @@ toFailedPredicate ::
   Shape.ArgShapes ext NoTag args ->
   GRef.NoHeuristic sym ext args wptr ->
   GOut.FailedPredicate
-toFailedPredicate fm addrWidth argNames argTys initArgs (GRef.NoHeuristic goal cData _err finalShapes) =
+toFailedPredicate fm addrWidth argNames argTys initArgs (GRef.NoHeuristic goal cData _err) =
   let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
       interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (Conc.concArgs cData)
       prettyConc = Conc.printConcData addrWidth argNames interestingShapes cData
@@ -1081,9 +1080,9 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
           (\idx -> Const (regNameToString (getRegName rNames idx)))
 
   res <- case result of
-    GRef.RefinementBug b cData finalShape ->
+    GRef.RefinementBug b cData ->
       let addrWidth = archCtx ^. GMA.archInfo . to MI.archAddrWidth
-       in pure (GOut.BatchBug (toBatchBug fm addrWidth argNames regTypes initArgShapes b cData finalShape))
+       in pure (GOut.BatchBug (toBatchBug fm addrWidth argNames regTypes initArgShapes b cData))
     GRef.RefinementCantRefine b ->
       pure (GOut.BatchCantRefine b)
     GRef.RefinementItersExceeded ->
@@ -1630,8 +1629,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
             scfg
 
   res <- case result of
-    GRef.RefinementBug b cData finalShapes ->
-      pure (GOut.BatchBug (toBatchBug fm MM.Addr64 argNames argTys initArgShapes b cData finalShapes))
+    GRef.RefinementBug b cData ->
+      pure (GOut.BatchBug (toBatchBug fm MM.Addr64 argNames argTys initArgShapes b cData))
     GRef.RefinementCantRefine b ->
       pure (GOut.BatchCantRefine b)
     GRef.RefinementItersExceeded ->
