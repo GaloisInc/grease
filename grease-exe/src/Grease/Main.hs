@@ -143,10 +143,10 @@ import Grease.Requirement qualified as GReq
 import Grease.Setup qualified as GSetup
 import Grease.Shape (ArgShapes, ExtShape)
 import Grease.Shape qualified as Shape
+import Grease.Shape.Concretize qualified as Conc
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
-import Grease.Shape.Pointer qualified as PtrShape
 import Grease.Solver (withSolverOnlineBackend)
 import Grease.SymIO qualified as GSIO
 import Grease.Syntax (parseOverridesYaml, parsedProgramCfgMap, resolveOverridesYaml)
@@ -352,7 +352,7 @@ toBatchBug ::
   GOut.BatchBug
 toBatchBug fm addrWidth argNames argTys initArgs b cData finalArgs =
   let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
-   in let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (finalArgs ^. Shape.argShapes)
+   in let interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (Conc.concArgs cData)
        in let prettyConc = Conc.printConcData addrWidth argNames interestingShapes cData
            in let prettyConc' = PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions prettyConc)
                in GOut.MkBatchBug
@@ -374,7 +374,7 @@ toFailedPredicate ::
   GOut.FailedPredicate
 toFailedPredicate fm addrWidth argNames argTys initArgs (GRef.NoHeuristic goal cData _err finalShapes) =
   let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
-      interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (finalShapes ^. Shape.argShapes)
+      interestingShapes = interestingConcretizedShapes argNames (initArgs ^. Shape.argShapes) (Conc.concArgs cData)
       prettyConc = Conc.printConcData addrWidth argNames interestingShapes cData
       lp = CB.proofGoal goal
       simErr = lp ^. CB.labeledPredMsg
@@ -493,27 +493,6 @@ interestingRegs =
     , "r9"
     ]
 
-hasInitBytesTarget :: PtrShape.PtrTarget w tag 'Precond -> Bool
-hasInitBytesTarget tgt = foldr (\mshp y -> y || memShapeHasInitBytes mshp) False (PtrShape.ptrTargetShapes tgt)
- where
-  memShapeHasInitBytes :: PtrShape.MemShape wptr tag 'Precond -> Bool
-  memShapeHasInitBytes = \case
-    PtrShape.Uninitialized _ -> False
-    PtrShape.Exactly _ -> False
-    PtrShape.Pointer _ pdata -> hasInitBytesTarget (PtrShape.precondTarget pdata)
-    PtrShape.Initialized _ _ -> True
-
-hasInitBytesPtrShape :: PtrShape ext wptr tag 'Precond ty -> Bool
-hasInitBytesPtrShape = \case
-  PtrShape.ShapePtrBV _tag _w -> True
-  PtrShape.ShapePtrBVLit{} -> False
-  PtrShape.ShapePtr _ tgt -> hasInitBytesTarget (PtrShape.precondTarget tgt)
-
--- | Check if a shape has initialized bytes
-hasInitBytesShape :: (ExtShape ext ~ PtrShape ext wptr) => Shape.Shape ext tag 'Precond ty -> Bool
-hasInitBytesShape (Shape.ShapeExt e) = hasInitBytesPtrShape e
-hasInitBytesShape _ = False
-
 -- | Filter out \"uninteresting\" concretized shapes
 --
 -- They are interesting when:
@@ -530,14 +509,14 @@ interestingConcretizedShapes ::
   Ctx.Assignment (Const String) argTys ->
   -- | Default/initial/minimal shapes
   Ctx.Assignment (Shape.Shape ext tag 'Precond) argTys ->
-  Ctx.Assignment (Shape.Shape ext tag 'Precond) argTys ->
+  Conc.ConcArgs sym ext argTys wptr ->
   Ctx.Assignment (Const Bool) argTys
-interestingConcretizedShapes names initArgs finalArgs =
+interestingConcretizedShapes names initArgs cArgs =
   -- Note: We can't directly compare shapes in 'Precond mode with shapes in 'NoData mode
   -- using testEquality, as they have different types. So we compare refined to the new precondition
   -- and also check if there interesting bytes to print.
   let initArgsWithType = fmapFC Shape.tagWithType initArgs
-      finalArgsWithType = fmapFC Shape.tagWithType finalArgs
+      cShapes = fmapFC (Shape.tagWithType . Conc.concShape (Conc.concArgsAllocMap cArgs)) (Conc.concArgsShapes cArgs)
       isLlvmArg name = "%" `List.isPrefixOf` name
    in Ctx.zipWith
         ( \(Const name) (Const _isDefault) ->
@@ -547,7 +526,7 @@ interestingConcretizedShapes names initArgs finalArgs =
         -- Check if the shape has changed, or if there are initialized bytes.
         -- If there are initialized bytes then they will be transformed into Exactly and
         -- will be interesting to prints
-        (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s') || hasInitBytesShape s)) finalArgsWithType initArgsWithType)
+        (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgsWithType)
 
 -- | Compute the initial 'ArgShapes' for a Macaw CFG.
 --
