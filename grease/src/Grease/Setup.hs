@@ -87,6 +87,7 @@ import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
+import Prettyprinter qualified as PP
 import What4.Interface qualified as WI
 
 -- | Name for fresh symbolic values, passed to 'WI.safeSymbol'. The phantom
@@ -241,7 +242,7 @@ setupPtr la bak layout nm sel target = do
       p <- zoom setupAnns (Anns.annotatePtr sym sel ptr)
 
       -- Populate allocation map: extract block number and store PtrTarget
-      let blockNat = CLMP.llvmPointerBlock p
+      let blockNat = CLMP.llvmPointerBlock ptr
       case WI.asNat blockNat of
         Just blockNum -> do
           -- Convert PtrTarget from Precond to NoData mode
@@ -565,6 +566,8 @@ setupArgs la bak layout argNames argTys inputShapes = do
   -- After setup, remove pointer data (convert from Precond to NoData mode)
   -- Extract the allocation map that was built during setup
   allocMap <- use setupAllocMap
+  let map_doc = PP.pretty "allocMap: " PP.<> (PP.hcat $ List.map (\(k, _elem) -> PP.pretty k) $ Map.toList allocMap)
+  liftIO $ putStrLn $ show map_doc
   -- Return Args with both shapes and allocation map
   pure (Args shapesWithPtrData allocMap)
 
