@@ -346,7 +346,7 @@ toBatchBug ::
   Ctx.Assignment C.TypeRepr args ->
   Shape.ArgShapes ext NoTag args ->
   Bug.BugInstance ->
-  Conc.ConcretizedData sym ext args wptr ->
+  Conc.ConcretizedData sym ext args ->
   GOut.BatchBug
 toBatchBug fm addrWidth argNames argTys initArgs b cData =
   let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
@@ -368,7 +368,7 @@ toFailedPredicate ::
   Ctx.Assignment (Const String) args ->
   Ctx.Assignment C.TypeRepr args ->
   Shape.ArgShapes ext NoTag args ->
-  GRef.NoHeuristic sym ext args wptr ->
+  GRef.NoHeuristic sym ext args ->
   GOut.FailedPredicate
 toFailedPredicate fm addrWidth argNames argTys initArgs (GRef.NoHeuristic goal cData _err) =
   let argsJson = concArgsToJson fm argNames (Conc.concArgs cData) argTys
@@ -403,7 +403,7 @@ checkMustFail ::
   , WPO.OnlineSolver solver
   ) =>
   bak ->
-  NE.NonEmpty (GRef.NoHeuristic sym ext tys wptr) ->
+  NE.NonEmpty (GRef.NoHeuristic sym ext tys) ->
   IO (Maybe GOut.BatchBug)
 checkMustFail bak errs = do
   let noHeuristicPreds =
@@ -507,7 +507,7 @@ interestingConcretizedShapes ::
   Ctx.Assignment (Const String) argTys ->
   -- | Default/initial/minimal shapes
   Ctx.Assignment (Shape.Shape ext tag 'Precond) argTys ->
-  Conc.ConcArgs sym ext argTys wptr ->
+  Conc.ConcArgs sym ext argTys ->
   Ctx.Assignment (Const Bool) argTys
 interestingConcretizedShapes names initArgs cArgs =
   -- Note: We can't directly compare shapes in 'Precond mode with shapes in 'NoData mode
@@ -859,7 +859,7 @@ macawRefineOnce ::
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
-  IO (GRef.ProveRefineResult sym ext argTys wptr)
+  IO (GRef.ProveRefineResult sym ext argTys)
 macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
   let regTypes = Symbolic.crucArchRegTypes (archCtx ^. GMA.archVals . to Symbolic.archFunctions)
   let rNames = regNames (archCtx ^. GMA.archVals)
@@ -1060,7 +1060,7 @@ simulateRewrittenCfg ::
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   H.InitialMem sym ->
   ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
-  GRef.RefinementSummary sym (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) (MC.ArchAddrWidth arch) ->
+  GRef.RefinementSummary sym (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
   [CS.ExecutionFeature (GreaseSimulatorState MDebug.MacawCommand sym arch) sym (Symbolic.MacawExt arch) (CS.RegEntry sym (Symbolic.ArchRegStruct arch))] ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.

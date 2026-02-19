@@ -82,7 +82,7 @@ data InitialState sym ext argTys wptr
 -- * Concretization
 
 -- | Arguments ('Args') that have been concretized
-data ConcArgs sym ext argTys w
+data ConcArgs sym ext argTys
   = ConcArgs
   { concArgsShapes :: Ctx.Assignment (Shape ext (Conc.ConcRV' sym) 'ShapePtr.Precond) argTys
   }
@@ -90,14 +90,14 @@ data ConcArgs sym ext argTys w
 -- | Turn 'ConcArgs' back into a 'C.RegMap' that can be used to re-execute
 -- a CFG.
 concArgsToSym ::
-  forall sym ext brand st fm wptr argTys w.
+  forall sym ext brand st fm wptr argTys.
   CB.IsSymInterface sym =>
   (sym ~ WE.ExprBuilder brand st (WE.Flags fm)) =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   sym ->
   W4FM.FloatModeRepr fm ->
   Ctx.Assignment C.TypeRepr argTys ->
-  ConcArgs sym ext argTys w ->
+  ConcArgs sym ext argTys ->
   IO (CS.RegMap sym argTys)
 concArgsToSym sym fm argTys (ConcArgs cArgs) =
   CS.RegMap
@@ -132,9 +132,9 @@ data SomeConcretizedValue sym
 -- | Concretized version of 'InitialState' plus @GlobalVar 'ToConcretizeType'@
 --
 -- Produced by 'makeConcretizedData'
-data ConcretizedData sym ext argTys w
+data ConcretizedData sym ext argTys
   = ConcretizedData
-  { concArgs :: ConcArgs sym ext argTys w
+  { concArgs :: ConcArgs sym ext argTys
   , concExtra :: [SomeConcretizedValue sym]
   -- ^ Concretized values from the @GlobalVar 'ToConcretizeType'@
   , concFs :: ConcFs
@@ -152,7 +152,7 @@ makeConcretizedData ::
   Maybe (ErrorDescription sym) ->
   InitialState sym ext argTys wptr ->
   CS.RegValue sym ToConcretizeType ->
-  IO (ConcretizedData sym ext argTys wptr)
+  IO (ConcretizedData sym ext argTys)
 makeConcretizedData bak groundEvalFn minfo initState extra = do
   let InitialState
         { initStateArgs = Args initArgs initAllocMap
@@ -245,7 +245,7 @@ printConcArgs ::
   Ctx.Assignment (Const String) argTys ->
   -- | Which shapes to print
   Ctx.Assignment (Const Bool) argTys ->
-  ConcArgs sym ext argTys wptr ->
+  ConcArgs sym ext argTys ->
   PP.Doc ann
 printConcArgs addrWidth argNames filt (ConcArgs cArgs) =
   let rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
@@ -314,7 +314,7 @@ printConcData ::
   Ctx.Assignment (Const String) argTys ->
   -- | Which shapes to print
   Ctx.Assignment (Const Bool) argTys ->
-  ConcretizedData sym ext argTys wptr ->
+  ConcretizedData sym ext argTys ->
   PP.Doc ann
 printConcData addrWidth argNames filt cData =
   let args = printConcArgs addrWidth argNames filt (concArgs cData)

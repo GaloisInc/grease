@@ -199,7 +199,7 @@ concArgsToJson ::
   (ExtShape ext ~ PtrShape ext wptr) =>
   FloatModeRepr fm ->
   Ctx.Assignment (Const String) args ->
-  ConcArgs sym ext args wptr ->
+  ConcArgs sym ext args ->
   Ctx.Assignment C.TypeRepr args ->
   [Aeson.Value]
 concArgsToJson fm argNames (ConcArgs cArgs) argTys =
