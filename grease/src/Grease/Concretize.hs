@@ -28,19 +28,14 @@ module Grease.Concretize (
 import Control.Monad.IO.Class (liftIO)
 import Data.BitVector.Sized qualified as BV
 import Data.Foldable (toList)
-import Data.Functor qualified as Functor
 import Data.Functor.Const (Const)
-import Data.Functor.Const qualified as Const
-import Data.Functor.Product qualified as Product
 import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Monoid qualified as Monoid
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.TraversableFC (fmapFC, traverseFC)
-import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Text (Text)
 import Data.Type.Equality (testEquality)
 import Data.Word (Word8)
@@ -50,7 +45,7 @@ import Grease.ErrorDescription qualified as Err
 import Grease.Setup (Args (Args), InitialMem (InitialMem))
 import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
-import Grease.Shape.Concretize (concPtrTarget, concShape)
+import Grease.Shape.Concretize (concShape)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Grease.Shape.Pointer qualified as ShapePtr
@@ -59,7 +54,6 @@ import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Concretize qualified as Conc
-import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
@@ -243,46 +237,6 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
 
 -- * Pretty-printing
 
--- | Helper function to print concretized shapes with custom offset extractor
-printConcNamedShapesFiltered ::
-  forall ext w tag nm tys ann.
-  PP.Pretty nm =>
-  CLMP.HasPtrWidth w =>
-  ExtShape ext ~ PtrShape ext w =>
-  -- | Offset extractor for concretized pointers
-  (tag (CLM.LLVMPointerType w) -> PtrShape.PtrData 'ShapePtr.NoData w tag -> PtrShape.Offset) ->
-  -- | Names
-  Ctx.Assignment (Const.Const nm) tys ->
-  -- | Only print those 'Shape's with 'True' in the corresponding entry
-  Ctx.Assignment (Const.Const Bool) tys ->
-  -- | Shapes to print
-  Ctx.Assignment (Shape ext tag 'ShapePtr.NoData) tys ->
-  ShapePP.Printer w tag (PP.Doc ann)
-printConcNamedShapesFiltered getOffset names filt shapes =
-  TFC.foldlMFC'
-    ( \doc (Product.Pair (Product.Pair (Const.Const nm) s) (Const.Const b)) ->
-        if b
-          then
-            ((doc PP.<> PP.line) PP.<>)
-              Functor.<$> printConcNamed getOffset nm s
-          else pure doc
-    )
-    Monoid.mempty
-    (Ctx.zipWith Product.Pair (Ctx.zipWith Product.Pair names shapes) filt)
-
--- | Helper to print a single named concretized shape
-printConcNamed ::
-  PP.Pretty nm =>
-  CLMP.HasPtrWidth w =>
-  ExtShape ext ~ PtrShape ext w =>
-  -- | Offset extractor
-  (tag (CLM.LLVMPointerType w) -> PtrShape.PtrData 'ShapePtr.NoData w tag -> PtrShape.Offset) ->
-  nm ->
-  Shape ext tag 'ShapePtr.NoData ty ->
-  ShapePP.Printer w tag (PP.Doc ann)
-printConcNamed getOffset name s =
-  ((PP.pretty name PP.<> ": ") PP.<>) Functor.<$> ShapePP.printShapeWithOffset getOffset s
-
 printConcArgs ::
   CLMP.HasPtrWidth wptr =>
   (ExtShape ext ~ PtrShape ext wptr) =>
@@ -294,20 +248,14 @@ printConcArgs ::
   ConcArgs sym ext argTys wptr ->
   PP.Doc ann
 printConcArgs addrWidth argNames filt (ConcArgs cArgs allocMap) =
-  let cShapes = fmapFC concShape cArgs
-      concMap = fmap concPtrTarget allocMap
-      -- Custom offset extractor for concretized pointers
-      getConcOffset tag _ =
-        let ptr = Conc.unConcRV' tag
-            offsetBV = CLMP.concOffset ptr
-            offsetBytes = BV.asUnsigned offsetBV
-         in PtrShape.Offset (CLB.toBytes offsetBytes)
-      -- Extraction function to get concrete pointer from ConcRV'
-      extractConc tag = Just (Conc.unConcRV' tag)
-      rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
-   in ShapePP.evalPrinter
-        (ShapePP.PrinterConfig addrWidth rleThreshold (Just concMap) (Just extractConc))
-        (printConcNamedShapesFiltered getConcOffset argNames filt cShapes)
+  let
+    -- concShape takes allocMap and returns Precond shapes, concretizing targets lazily
+    cShapes = fmapFC (concShape allocMap) cArgs
+    rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
+   in
+    ShapePP.evalPrinter
+      (ShapePP.PrinterConfig addrWidth rleThreshold)
+      (ShapePP.printNamedShapesFiltered argNames filt cShapes)
 
 -- | Helper, not exported
 showHex' :: Integral a => a -> String

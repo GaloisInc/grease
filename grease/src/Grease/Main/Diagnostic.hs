@@ -146,8 +146,6 @@ instance PP.Pretty Diagnostic where
       ShapePP.PrinterConfig
         { ShapePP.cfgAddrWidth = w
         , ShapePP.cfgRleThreshold = 8
-        , ShapePP.cfgAllocMap = Nothing
-        , ShapePP.cfgExtractConc = Nothing
         }
 
 severity :: Diagnostic -> Severity

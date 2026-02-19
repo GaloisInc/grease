@@ -92,9 +92,6 @@ data PrinterConfig w tag = PrinterConfig
   , cfgRleThreshold :: Int
   -- ^ Threshold for applying run-length encoding (RLE) to sequences of
   -- initialized, symbolic bytes or uninitialized bytes.
-  , cfgAllocMap :: Maybe (Map.Map Natural (PtrShape.PtrTarget w tag 'PtrShape.NoData))
-  , cfgExtractConc :: Maybe (tag (CLM.LLVMPointerType w) -> Maybe (CLMP.ConcLLVMPtr w))
-  -- ^ Optional function to extract concrete pointer from tag for NoData printing
   }
 
 -- | 'ReaderT'/'State' monad for pretty-printing
@@ -136,12 +133,6 @@ addrWidth = Printer (ReaderT.asks cfgAddrWidth)
 
 rleThreshold :: Printer w tag Int
 rleThreshold = Printer (ReaderT.asks cfgRleThreshold)
-
-allocMap :: Printer w tag (Maybe (Map.Map Natural (PtrShape.PtrTarget w tag 'PtrShape.NoData)))
-allocMap = Printer (ReaderT.asks cfgAllocMap)
-
-extractConc :: Printer w tag (Maybe (tag (CLM.LLVMPointerType w) -> Maybe (CLMP.ConcLLVMPtr w)))
-extractConc = Printer (ReaderT.asks cfgExtractConc)
 
 printAllocs :: AddrWidthRepr w -> Allocs -> PP.Doc ann
 printAllocs aw as =
@@ -278,30 +269,10 @@ printPtrWithOffset getOffset =
         PtrShape.NoDataRepr ->
           case dat of
             PtrShape.NoPtrData -> do
-              mAllocMap <- allocMap
-              mExtract <- extractConc
+              -- Simplified: this case should not occur after refactoring
+              -- Keep for backward compatibility with any legacy code
               let offset = getOffset tag dat
-
-              case (mAllocMap, mExtract) of
-                (Just aMap, Just extract) ->
-                  case extract tag of
-                    Just ptr -> do
-                      let blockNum = CLMP.concBlock ptr -- Get block number (Integer)
-                      case Map.lookup (fromInteger blockNum) aMap of
-                        Nothing ->
-                          -- Block not found in map - print informative placeholder
-                          pure ("Warning block not found in metadata <?" PP.<> PP.viaShow blockNum PP.<> "+" PP.<> PP.viaShow offset PP.<> ">")
-                        Just tgt -> do
-                          -- Found target - print like PrecondRepr does
-                          let bid = PtrShape.ptrTargetBlock tgt
-                          blk <- printerAlloc (printTgt tgt) bid
-                          printBlockOffset blk offset
-                    Nothing ->
-                      -- Extract function returned Nothing
-                      pure ("<?+" PP.<> PP.viaShow offset PP.<> ">")
-                _ ->
-                  -- No allocMap or extract function available, fall back to placeholder
-                  pure ("<?+" PP.<> PP.viaShow offset PP.<> ">")
+              pure ("<?+" PP.<> PP.viaShow offset PP.<> ">")
 
 printBv :: NatRepr w' -> Printer w tag (PP.Doc ann)
 printBv w' = do
@@ -393,36 +364,9 @@ printMemShape = \case
             printBlockOffset blk offset
       PtrShape.NoDataRepr ->
         case dat of
-          PtrShape.NoPtrData -> do
-            mAllocMap <- allocMap
-            mExtract <- extractConc
-
-            case (mAllocMap, mExtract) of
-              (Just aMap, Just extract) ->
-                case extract _tag of
-                  Just ptr -> do
-                    let blockNum = CLMP.concBlock ptr
-                    case Map.lookup (fromInteger blockNum) aMap of
-                      Nothing ->
-                        -- Block not found - extract offset and show what we can
-                        let offsetBV = CLMP.concOffset ptr
-                            offsetBytes = BV.asUnsigned offsetBV
-                            offset = PtrShape.Offset (CLB.toBytes offsetBytes)
-                         in pure ("<?" PP.<> PP.viaShow blockNum PP.<> "+" PP.<> PP.viaShow offset PP.<> ">")
-                      Just tgt -> do
-                        -- Found target - extract offset from concrete pointer
-                        let offsetBV = CLMP.concOffset ptr
-                            offsetBytes = BV.asUnsigned offsetBV
-                            offset = PtrShape.Offset (CLB.toBytes offsetBytes)
-                            bid = PtrShape.ptrTargetBlock tgt
-                        blk <- printerAlloc (printTgt tgt) bid
-                        printBlockOffset blk offset
-                  Nothing ->
-                    -- Extract function returned Nothing
-                    pure "<?+?>"
-              _ ->
-                -- No allocMap or extract function available
-                pure "<?+?>"
+          PtrShape.NoPtrData ->
+            -- Simplified: should not occur after refactoring
+            pure "<?+?>"
   PtrShape.Exactly bytes ->
     let ppWord8 = PP.pretty . padHex 2
      in pure (PP.fillSep (List.map (ppWord8 . PtrShape.taggedByteValue) bytes))
