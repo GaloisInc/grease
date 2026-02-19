@@ -17,7 +17,6 @@ import GHC.Generics (Generic)
 import Grease.Bug qualified as Bug
 import Grease.Shape (ArgShapes)
 import Grease.Shape.NoTag (NoTag)
-import Grease.Shape.Pointer (PtrDataMode (Precond))
 import Prettyprinter qualified as PP
 
 -- | There is no way to proceed with refinement, for some explicit reason

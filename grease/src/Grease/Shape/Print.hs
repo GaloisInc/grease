@@ -37,7 +37,6 @@ import Data.IntMap qualified as IntMap
 import Data.List qualified as List
 import Data.Macaw.Memory (AddrWidthRepr)
 import Data.Macaw.Memory qualified as DMM
-import Data.Map.Strict qualified as Map
 import Data.Monoid qualified as Monoid
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (NatRepr)
@@ -53,9 +52,7 @@ import Grease.Shape.Pointer (BlockId (BlockId), PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Numeric (showHex)
-import Numeric.Natural (Natural)
 import Prettyprinter qualified as PP
 
 data Allocs

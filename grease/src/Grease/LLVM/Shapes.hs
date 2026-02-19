@@ -13,7 +13,6 @@ import Grease.LLVM.DebugInfo qualified as GLD
 import Grease.Options qualified as GO
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer qualified as PtrShape
 import Grease.Shape.Simple qualified as Simple
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as CFH
