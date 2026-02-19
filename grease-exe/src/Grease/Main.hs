@@ -146,6 +146,7 @@ import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
+import Grease.Shape.Pointer qualified as PtrShape
 import Grease.Solver (withSolverOnlineBackend)
 import Grease.SymIO qualified as GSIO
 import Grease.Syntax (parseOverridesYaml, parsedProgramCfgMap, resolveOverridesYaml)
@@ -492,6 +493,27 @@ interestingRegs =
     , "r9"
     ]
 
+hasInitBytesTarget :: PtrShape.PtrTarget w tag 'Precond -> Bool
+hasInitBytesTarget tgt = foldr (\mshp y -> y || memShapeHasInitBytes mshp) False (PtrShape.ptrTargetShapes tgt)
+ where
+  memShapeHasInitBytes :: PtrShape.MemShape wptr tag 'Precond -> Bool
+  memShapeHasInitBytes = \case
+    PtrShape.Uninitialized _ -> False
+    PtrShape.Exactly _ -> False
+    PtrShape.Pointer _ pdata -> hasInitBytesTarget (PtrShape.precondTarget pdata)
+    PtrShape.Initialized _ _ -> True
+
+hasInitBytesPtrShape :: PtrShape ext wptr tag 'Precond ty -> Bool
+hasInitBytesPtrShape = \case
+  PtrShape.ShapePtrBV _tag _w -> True
+  PtrShape.ShapePtrBVLit{} -> False
+  PtrShape.ShapePtr _ tgt -> hasInitBytesTarget (PtrShape.precondTarget tgt)
+
+-- | Check if a shape has initialized bytes
+hasInitBytesShape :: (ExtShape ext ~ PtrShape ext wptr) => Shape.Shape ext tag 'Precond ty -> Bool
+hasInitBytesShape (Shape.ShapeExt e) = hasInitBytesPtrShape e
+hasInitBytesShape _ = False
+
 -- | Filter out \"uninteresting\" concretized shapes
 --
 -- They are interesting when:
@@ -512,9 +534,8 @@ interestingConcretizedShapes ::
   Ctx.Assignment (Const Bool) argTys
 interestingConcretizedShapes names initArgs finalArgs =
   -- Note: We can't directly compare shapes in 'Precond mode with shapes in 'NoData mode
-  -- using testEquality, as they have different types. For now, we conservatively mark
-  -- all interesting register names and LLVM arguments as interesting.
-  -- TODO: Implement a mode-agnostic shape comparison
+  -- using testEquality, as they have different types. So we compare refined to the new precondition
+  -- and also check if there interesting bytes to print.
   let initArgsWithType = fmapFC Shape.tagWithType initArgs
       finalArgsWithType = fmapFC Shape.tagWithType finalArgs
       isLlvmArg name = "%" `List.isPrefixOf` name
@@ -523,7 +544,10 @@ interestingConcretizedShapes names initArgs finalArgs =
             Const (name `List.elem` interestingRegs || isLlvmArg name)
         )
         names
-        (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) finalArgsWithType initArgsWithType)
+        -- Check if the shape has changed, or if there are initialized bytes.
+        -- If there are initialized bytes then they will be transformed into Exactly and
+        -- will be interesting to prints
+        (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s') || hasInitBytesShape s)) finalArgsWithType initArgsWithType)
 
 -- | Compute the initial 'ArgShapes' for a Macaw CFG.
 --
