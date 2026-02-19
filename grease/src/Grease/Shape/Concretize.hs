@@ -8,6 +8,7 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Shape.Concretize (
   concShape,
+  concPtrTarget,
 ) where
 
 import Data.BitVector.Sized qualified as BV

@@ -50,7 +50,7 @@ import Grease.ErrorDescription qualified as Err
 import Grease.Setup (Args (Args), InitialMem (InitialMem))
 import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
-import Grease.Shape.Concretize (concShape)
+import Grease.Shape.Concretize (concPtrTarget, concShape)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
 import Grease.Shape.Pointer qualified as ShapePtr
@@ -295,6 +295,7 @@ printConcArgs ::
   PP.Doc ann
 printConcArgs addrWidth argNames filt (ConcArgs cArgs allocMap) =
   let cShapes = fmapFC concShape cArgs
+      concMap = fmap concPtrTarget allocMap
       -- Custom offset extractor for concretized pointers
       getConcOffset tag _ =
         let ptr = Conc.unConcRV' tag
@@ -305,7 +306,7 @@ printConcArgs addrWidth argNames filt (ConcArgs cArgs allocMap) =
       extractConc tag = Just (Conc.unConcRV' tag)
       rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
    in ShapePP.evalPrinter
-        (ShapePP.PrinterConfig addrWidth rleThreshold (Just allocMap) (Just extractConc))
+        (ShapePP.PrinterConfig addrWidth rleThreshold (Just concMap) (Just extractConc))
         (printConcNamedShapesFiltered getConcOffset argNames filt cShapes)
 
 -- | Helper, not exported
