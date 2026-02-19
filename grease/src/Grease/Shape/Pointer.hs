@@ -342,9 +342,6 @@ data PtrTarget wptr tag ptrData
   , ptrTargetShapes :: Seq (MemShape wptr tag ptrData)
   }
 
-instance (KnownPtrMode ptrData, MC.PrettyF tag) => Show (PtrTarget wptr tag ptrData) where
-  show = show . PP.pretty
-
 -- Note: FunctorF/FoldableF/TraversableF instances cannot be provided for PtrTarget
 -- because after adding the ptrData parameter, PtrTarget wptr has kind
 -- (C.CrucibleType -> Type) -> PtrDataMode -> Type, but these type classes

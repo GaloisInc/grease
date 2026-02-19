@@ -304,11 +304,9 @@ printConcArgs addrWidth argNames filt (ConcArgs cArgs allocMap) =
       -- Extraction function to get concrete pointer from ConcRV'
       extractConc tag = Just (Conc.unConcRV' tag)
       rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
-      map_doc = PP.viaShow allocMap
-   in map_doc
-        PP.<> ShapePP.evalPrinter
-          (ShapePP.PrinterConfig addrWidth rleThreshold (Just allocMap) (Just extractConc))
-          (printConcNamedShapesFiltered getConcOffset argNames filt cShapes)
+   in ShapePP.evalPrinter
+        (ShapePP.PrinterConfig addrWidth rleThreshold (Just allocMap) (Just extractConc))
+        (printConcNamedShapesFiltered getConcOffset argNames filt cShapes)
 
 -- | Helper, not exported
 showHex' :: Integral a => a -> String
