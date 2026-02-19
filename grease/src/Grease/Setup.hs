@@ -566,8 +566,6 @@ setupArgs la bak layout argNames argTys inputShapes = do
   -- After setup, remove pointer data (convert from Precond to NoData mode)
   -- Extract the allocation map that was built during setup
   allocMap <- use setupAllocMap
-  let map_doc = PP.pretty "allocMap: " PP.<> (PP.hcat $ List.map (\(k, _elem) -> PP.pretty k) $ Map.toList allocMap)
-  liftIO $ putStrLn $ show map_doc
   -- Return Args with both shapes and allocation map
   pure (Args shapesWithPtrData allocMap)
 
