@@ -510,9 +510,6 @@ interestingConcretizedShapes ::
   Conc.ConcArgs sym ext argTys ->
   Ctx.Assignment (Const Bool) argTys
 interestingConcretizedShapes names initArgs cArgs =
-  -- Note: We can't directly compare shapes in 'Precond mode with shapes in 'NoData mode
-  -- using testEquality, as they have different types. So we compare refined to the new precondition
-  -- and also check if there interesting bytes to print.
   let initArgsWithType = fmapFC Shape.tagWithType initArgs
       cShapes = fmapFC Shape.tagWithType (Conc.concArgsShapes cArgs)
       isLlvmArg name = "%" `List.isPrefixOf` name
@@ -521,9 +518,8 @@ interestingConcretizedShapes names initArgs cArgs =
             Const (name `List.elem` interestingRegs || isLlvmArg name)
         )
         names
-        -- Check if the shape has changed, or if there are initialized bytes.
-        -- If there are initialized bytes then they will be transformed into Exactly and
-        -- will be interesting to prints
+        -- Check if the shape has changed during concretization. When we concretize, we transform the shape
+        -- for initialized bytes and Ptr's to bvlits so this captures when there is interesting data to print.
         (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgsWithType)
 
 -- | Compute the initial 'ArgShapes' for a Macaw CFG.
