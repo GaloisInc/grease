@@ -143,7 +143,6 @@ import Grease.Requirement qualified as GReq
 import Grease.Setup qualified as GSetup
 import Grease.Shape (ArgShapes, ExtShape)
 import Grease.Shape qualified as Shape
-import Grease.Shape.Concretize qualified as Conc
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
@@ -515,7 +514,7 @@ interestingConcretizedShapes names initArgs cArgs =
   -- using testEquality, as they have different types. So we compare refined to the new precondition
   -- and also check if there interesting bytes to print.
   let initArgsWithType = fmapFC Shape.tagWithType initArgs
-      cShapes = fmapFC (Shape.tagWithType . Conc.concShape (Conc.concArgsAllocMap cArgs)) (Conc.concArgsShapes cArgs)
+      cShapes = fmapFC Shape.tagWithType (Conc.concArgsShapes cArgs)
       isLlvmArg name = "%" `List.isPrefixOf` name
    in Ctx.zipWith
         ( \(Const name) (Const _isDefault) ->

@@ -60,7 +60,6 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.SymSequence qualified as C
 import Lang.Crucible.SymIO qualified as SymIO
 import Numeric (showHex)
-import Numeric.Natural (Natural)
 import Prettyprinter qualified as PP
 import What4.Expr qualified as WE
 import What4.FloatMode qualified as W4FM
@@ -85,9 +84,7 @@ data InitialState sym ext argTys wptr
 -- | Arguments ('Args') that have been concretized
 data ConcArgs sym ext argTys w
   = ConcArgs
-  { concArgsShapes :: Ctx.Assignment (Shape ext (Conc.ConcRV' sym) 'ShapePtr.NoData) argTys
-  , concArgsAllocMap :: Map.Map Natural (ShapePtr.PtrTarget w (Conc.ConcRV' sym) 'ShapePtr.NoData)
-  -- ^ Map from Crucible block number to allocation contents for printing
+  { concArgsShapes :: Ctx.Assignment (Shape ext (Conc.ConcRV' sym) 'ShapePtr.Precond) argTys
   }
 
 -- | Turn 'ConcArgs' back into a 'C.RegMap' that can be used to re-execute
@@ -102,7 +99,7 @@ concArgsToSym ::
   Ctx.Assignment C.TypeRepr argTys ->
   ConcArgs sym ext argTys w ->
   IO (CS.RegMap sym argTys)
-concArgsToSym sym fm argTys (ConcArgs cArgs _allocMap) =
+concArgsToSym sym fm argTys (ConcArgs cArgs) =
   CS.RegMap
     <$> Ctx.zipWithM
       ( \tp cShape -> do
@@ -166,9 +163,12 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   let ctx = Conc.ConcCtx @sym @t groundEvalFn CLMP.concPtrFnMap
   let concRV :: forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)
       concRV t v = Conc.ConcRV' @sym <$> Conc.groundRegValue @sym @t ctx t (CS.unRV v)
-  cArgs <- liftIO (traverseFC (Shape.traverseShapeWithType ShapePtr.NoDataRepr concRV) initArgs)
-  -- Concretize allocation map
+  -- First concretize shapes to NoData mode
+  cArgsNoData <- liftIO (traverseFC (Shape.traverseShapeWithType ShapePtr.NoDataRepr concRV) initArgs)
+  -- Concretize allocation map (needed temporarily for transformation)
   cAllocMap <- traverse (concretizePtrTarget concRV) initAllocMap
+  -- Transform NoData shapes to Precond using allocMap
+  let cArgs = fmapFC (concShape cAllocMap) cArgsNoData
   let WE.GroundEvalFn gFn = groundEvalFn
   let toWord8 :: BV.BV 8 -> Word8
       toWord8 = fromIntegral . BV.asUnsigned
@@ -190,7 +190,7 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   cErr <- traverse (\eds -> Err.concretizeErrorDescription sym groundEvalFn eds) minfo
   pure $
     ConcretizedData
-      { concArgs = ConcArgs cArgs cAllocMap
+      { concArgs = ConcArgs cArgs
       , concExtra = cExtra
       , concFs = ConcFs cFs
       , concMem = ConcMem cMem
@@ -247,15 +247,11 @@ printConcArgs ::
   Ctx.Assignment (Const Bool) argTys ->
   ConcArgs sym ext argTys wptr ->
   PP.Doc ann
-printConcArgs addrWidth argNames filt (ConcArgs cArgs allocMap) =
-  let
-    -- concShape takes allocMap and returns Precond shapes, concretizing targets lazily
-    cShapes = fmapFC (concShape allocMap) cArgs
-    rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
-   in
-    ShapePP.evalPrinter
-      (ShapePP.PrinterConfig addrWidth rleThreshold)
-      (ShapePP.printNamedShapesFiltered argNames filt cShapes)
+printConcArgs addrWidth argNames filt (ConcArgs cArgs) =
+  let rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
+   in ShapePP.evalPrinter
+        (ShapePP.PrinterConfig addrWidth rleThreshold)
+        (ShapePP.printNamedShapesFiltered argNames filt cArgs)
 
 -- | Helper, not exported
 showHex' :: Integral a => a -> String
