@@ -33,7 +33,6 @@ import Data.BitVector.Sized qualified as BV
 import Data.Function ((&))
 import Data.List qualified as List
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe)
 import Data.Parameterized.Classes (ixF')
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (NatRepr, natValue)
@@ -59,7 +58,6 @@ import Grease.Shape (
 import Grease.Shape.Pointer (
   BlockId,
   MemShape (Exactly, Initialized, Pointer, Uninitialized),
-  Offset (Offset),
   PtrShape (ShapePtr, ShapePtrBV, ShapePtrBVLit),
   PtrTarget (PtrTarget),
   TaggedByte (TaggedByte),
@@ -87,7 +85,6 @@ import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
-import Prettyprinter qualified as PP
 import What4.Interface qualified as WI
 
 -- | Name for fresh symbolic values, passed to 'WI.safeSymbol'. The phantom
@@ -478,33 +475,6 @@ setupShape la bak layout nm tRepr sel s = do
       let vals = fmapFC (getTag getPtrTag) fieldShapes
       pure (ShapeStruct (CS.RV vals) fieldShapes)
     ShapeUnit _tag -> pure (ShapeUnit (CS.RV ()))
-
--- | Remove pointer data from a shape after Setup
---
--- Converts from 'Precond mode (which has offset and target) to 'NoData mode
--- (which has neither). This is called after setupShape integrates the offset
--- into the pointer value.
-removePointerData ::
-  forall ext tag w ty.
-  ( CLM.HasPtrWidth w
-  , ExtShape ext tag 'ShapePtr.Precond ~ PtrShape ext w tag 'ShapePtr.Precond
-  , ExtShape ext tag 'ShapePtr.NoData ~ PtrShape ext w tag 'ShapePtr.NoData
-  ) =>
-  Shape ext tag 'ShapePtr.Precond ty ->
-  Shape ext tag 'ShapePtr.NoData ty
-removePointerData shape =
-  case shape of
-    ShapeBool tag -> ShapeBool tag
-    ShapeUnit tag -> ShapeUnit tag
-    ShapeFloat tag fi -> ShapeFloat tag fi
-    ShapeStruct tag fields -> ShapeStruct tag (fmapFC removePointerData fields)
-    ShapeExt ptrShape -> ShapeExt (removePtrData ptrShape)
- where
-  removePtrData :: PtrShape ext w tag 'ShapePtr.Precond t -> PtrShape ext w tag 'ShapePtr.NoData t
-  removePtrData = \case
-    ShapePtrBV tag w' -> ShapePtrBV tag w'
-    ShapePtrBVLit tag w' bv -> ShapePtrBVLit tag w' bv
-    ShapePtr tag (ShapePtr.PrecondPtrData _ _) -> ShapePtr tag ShapePtr.NoPtrData
 
 -- | Remove pointer data from a MemShape after Setup
 --
