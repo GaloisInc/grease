@@ -69,7 +69,7 @@ import Data.Traversable qualified as Traversable
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import GHC.Show qualified as GShow
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (KnownPtrMode (knownPtrMode), PtrDataMode (Precond), PtrModeRepr, PtrShape, minimalPtrShape, parseJsonPtrShape, ptrShapeType, traversePtrShapeWithType)
+import Grease.Shape.Pointer (KnownPtrMode (knownPtrMode), PtrDataMode (NoData, Precond), PtrModeRepr, PtrShape, minimalPtrShape, parseJsonPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel (HasPtrWidth)
@@ -194,10 +194,55 @@ instance (MC.PrettyF tag, PrettyExt ext ptrData tag) => MC.PrettyF (Shape ext pt
       ShapeUnit tag -> "unit" PP.<> ppTag tag
       ShapeExt ext -> MC.prettyF ext
 
--- Note: FunctorFC/FoldableFC/TraversableFC instances cannot be provided for Shape
--- because after adding the ptrData parameter, Shape ext has kind
--- (C.CrucibleType -> Type) -> PtrDataMode -> C.CrucibleType -> Type, but these type
--- classes expect (k -> *) -> k' -> *. Use traverseShapeWithType instead.
+-- | Instances for Shape ext 'Precond
+instance
+  (TFC.TraversableFC (ExtShape ext 'Precond)) =>
+  TFC.FunctorFC (Shape ext 'Precond)
+  where
+  fmapFC = TFC.fmapFCDefault
+
+instance
+  (TFC.TraversableFC (ExtShape ext 'Precond)) =>
+  TFC.FoldableFC (Shape ext 'Precond)
+  where
+  foldMapFC = TFC.foldMapFCDefault
+
+instance
+  (TFC.TraversableFC (ExtShape ext 'Precond)) =>
+  TFC.TraversableFC (Shape ext 'Precond)
+  where
+  traverseFC f = \case
+    ShapeBool tag -> ShapeBool <$> f tag
+    ShapeFloat tag fi -> ShapeFloat <$> f tag <*> pure fi
+    ShapeStruct tag fields ->
+      ShapeStruct <$> f tag <*> TFC.traverseFC (TFC.traverseFC f) fields
+    ShapeUnit tag -> ShapeUnit <$> f tag
+    ShapeExt ext -> ShapeExt <$> TFC.traverseFC f ext
+
+-- | Instances for Shape ext 'NoData
+instance
+  (TFC.TraversableFC (ExtShape ext 'NoData)) =>
+  TFC.FunctorFC (Shape ext 'NoData)
+  where
+  fmapFC = TFC.fmapFCDefault
+
+instance
+  (TFC.TraversableFC (ExtShape ext 'NoData)) =>
+  TFC.FoldableFC (Shape ext 'NoData)
+  where
+  foldMapFC = TFC.foldMapFCDefault
+
+instance
+  (TFC.TraversableFC (ExtShape ext 'NoData)) =>
+  TFC.TraversableFC (Shape ext 'NoData)
+  where
+  traverseFC f = \case
+    ShapeBool tag -> ShapeBool <$> f tag
+    ShapeFloat tag fi -> ShapeFloat <$> f tag <*> pure fi
+    ShapeStruct tag fields ->
+      ShapeStruct <$> f tag <*> TFC.traverseFC (TFC.traverseFC f) fields
+    ShapeUnit tag -> ShapeUnit <$> f tag
+    ShapeExt ext -> ShapeExt <$> TFC.traverseFC f ext
 
 traverseShapeWithType ::
   CLM.HasPtrWidth wptr =>

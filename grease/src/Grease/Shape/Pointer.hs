@@ -26,7 +26,6 @@ module Grease.Shape.Pointer (
   memShapeSize,
   PtrTarget (..),
   ptrTarget,
-  traversePtrTargetWithType,
   ptrTargetSize,
   Offset (..),
   PtrShape (..),
@@ -65,6 +64,7 @@ import Data.Parameterized.NatRepr (NatRepr, natValue)
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Parameterized.Some (Some (Some))
 import Data.Parameterized.TraversableF qualified as TF
+import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Proxy (Proxy (Proxy))
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
@@ -224,10 +224,34 @@ instance (KnownPtrMode ptrData, MC.PrettyF tag) => PP.Pretty (MemShape wptr ptrD
                   ]
       Exactly bs -> "exactly:" PP.<+> PP.pretty bs
 
--- Note: FunctorF/FoldableF/TraversableF instances cannot be provided for MemShape
--- because after adding the ptrData parameter, MemShape wptr has kind
--- (C.CrucibleType -> Type) -> PtrDataMode -> Type, but these type classes
--- expect (k -> *) -> *. Use traverseMemShapeWithType instead.
+-- | Instances for MemShape wptr 'Precond
+instance TF.FunctorF (MemShape wptr 'Precond) where
+  fmapF = TF.fmapFDefault
+
+instance TF.FoldableF (MemShape wptr 'Precond) where
+  foldMapF = TF.foldMapFDefault
+
+instance TF.TraversableF (MemShape wptr 'Precond) where
+  traverseF f = \case
+    Uninitialized bs -> pure (Uninitialized bs)
+    Initialized tag bs -> Initialized <$> f tag <*> pure bs
+    Pointer tag (PrecondPtrData offset tgt) ->
+      Pointer <$> f tag <*> (PrecondPtrData offset <$> TF.traverseF f tgt)
+    Exactly bs -> Exactly <$> traverse (TF.traverseF f) bs
+
+-- | Instances for MemShape wptr 'NoData
+instance TF.FunctorF (MemShape wptr 'NoData) where
+  fmapF = TF.fmapFDefault
+
+instance TF.FoldableF (MemShape wptr 'NoData) where
+  foldMapF = TF.foldMapFDefault
+
+instance TF.TraversableF (MemShape wptr 'NoData) where
+  traverseF f = \case
+    Uninitialized bs -> pure (Uninitialized bs)
+    Initialized tag bs -> Initialized <$> f tag <*> pure bs
+    Pointer tag NoPtrData -> Pointer <$> f tag <*> pure NoPtrData
+    Exactly bs -> Exactly <$> traverse (TF.traverseF f) bs
 
 -- | Like 'TF.traverseF', but with access to the appropriate 'C.TypeRepr'.
 traverseMemShapeWithType ::
@@ -250,7 +274,8 @@ traverseMemShapeWithType mode f =
         <*> case mode of
           PrecondRepr ->
             case ptrData of
-              PrecondPtrData offset tgt -> PrecondPtrData offset <$> traversePtrTargetWithType mode f tgt
+              PrecondPtrData offset (PtrTarget bid shapes) ->
+                PrecondPtrData offset <$> (PtrTarget bid <$> traverse (traverseMemShapeWithType mode f) shapes)
           NoDataRepr ->
             case ptrData of
               NoPtrData -> pure NoPtrData
@@ -342,10 +367,27 @@ data PtrTarget wptr ptrData tag
   , ptrTargetShapes :: Seq (MemShape wptr ptrData tag)
   }
 
--- Note: FunctorF/FoldableF/TraversableF instances cannot be provided for PtrTarget
--- because after adding the ptrData parameter, PtrTarget wptr has kind
--- (C.CrucibleType -> Type) -> PtrDataMode -> Type, but these type classes
--- expect (k -> *) -> *. Use traversePtrTargetWithType instead.
+-- | Instances for PtrTarget wptr 'Precond
+instance TF.FunctorF (PtrTarget wptr 'Precond) where
+  fmapF = TF.fmapFDefault
+
+instance TF.FoldableF (PtrTarget wptr 'Precond) where
+  foldMapF = TF.foldMapFDefault
+
+instance TF.TraversableF (PtrTarget wptr 'Precond) where
+  traverseF f (PtrTarget bid shapes) =
+    PtrTarget bid <$> traverse (TF.traverseF f) shapes
+
+-- | Instances for PtrTarget wptr 'NoData
+instance TF.FunctorF (PtrTarget wptr 'NoData) where
+  fmapF = TF.fmapFDefault
+
+instance TF.FoldableF (PtrTarget wptr 'NoData) where
+  foldMapF = TF.foldMapFDefault
+
+instance TF.TraversableF (PtrTarget wptr 'NoData) where
+  traverseF f (PtrTarget bid shapes) =
+    PtrTarget bid <$> traverse (TF.traverseF f) shapes
 
 deriving instance
   ( Eq (tag (CLM.LLVMPointerType 8))
@@ -354,17 +396,6 @@ deriving instance
   , Eq (PtrData ptrData wptr tag)
   ) =>
   Eq (PtrTarget wptr ptrData tag)
-
--- | Like 'TF.traverseF', but with access to the appropriate 'C.TypeRepr'.
-traversePtrTargetWithType ::
-  CLM.HasPtrWidth wptr =>
-  Applicative m =>
-  PtrModeRepr ptrData ->
-  (forall x. C.TypeRepr x -> tag x -> m (tag' x)) ->
-  PtrTarget wptr ptrData tag ->
-  m (PtrTarget wptr ptrData tag')
-traversePtrTargetWithType mode f (PtrTarget bid tgt) =
-  PtrTarget bid <$> traverse (traverseMemShapeWithType mode f) tgt
 
 -- | Smart constructor that merges compatible adjacent shapes.
 ptrTarget ::
@@ -571,10 +602,32 @@ instance (KnownPtrMode ptrData, MC.PrettyF tag) => MC.PrettyF (PtrShape ext w pt
           case dat of
             NoPtrData -> "ptr" PP.<> ppTag tag PP.<> ":removed"
 
--- Note: FunctorFC/FoldableFC/TraversableFC instances cannot be provided for PtrShape
--- because after adding the ptrData parameter, PtrShape ext w has kind
--- (C.CrucibleType -> Type) -> PtrDataMode -> C.CrucibleType -> Type, but these type
--- classes expect (k -> *) -> k' -> *. Use traversePtrShapeWithType instead.
+-- | Instances for PtrShape ext w 'Precond
+instance TFC.FunctorFC (PtrShape ext w 'Precond) where
+  fmapFC = TFC.fmapFCDefault
+
+instance TFC.FoldableFC (PtrShape ext w 'Precond) where
+  foldMapFC = TFC.foldMapFCDefault
+
+instance TFC.TraversableFC (PtrShape ext w 'Precond) where
+  traverseFC f = \case
+    ShapePtrBV tag w -> ShapePtrBV <$> f tag <*> pure w
+    ShapePtrBVLit tag w bv -> ShapePtrBVLit <$> f tag <*> pure w <*> pure bv
+    ShapePtr tag (PrecondPtrData offset tgt) ->
+      ShapePtr <$> f tag <*> (PrecondPtrData offset <$> TF.traverseF f tgt)
+
+-- | Instances for PtrShape ext w 'NoData
+instance TFC.FunctorFC (PtrShape ext w 'NoData) where
+  fmapFC = TFC.fmapFCDefault
+
+instance TFC.FoldableFC (PtrShape ext w 'NoData) where
+  foldMapFC = TFC.foldMapFCDefault
+
+instance TFC.TraversableFC (PtrShape ext w 'NoData) where
+  traverseFC f = \case
+    ShapePtrBV tag w -> ShapePtrBV <$> f tag <*> pure w
+    ShapePtrBVLit tag w bv -> ShapePtrBVLit <$> f tag <*> pure w <*> pure bv
+    ShapePtr tag NoPtrData -> ShapePtr <$> f tag <*> pure NoPtrData
 
 ptrShapeType :: CLM.HasPtrWidth w => PtrShape ext w ptrData tag t -> C.TypeRepr t
 ptrShapeType =
@@ -608,8 +661,8 @@ traversePtrShapeWithType md f =
     case md of
       NoDataRepr -> pure NoPtrData
       PrecondRepr ->
-        let PrecondPtrData{precondOffset, precondTarget} = dat
-         in PrecondPtrData precondOffset <$> traversePtrTargetWithType md g precondTarget
+        let PrecondPtrData{precondOffset, precondTarget = PtrTarget bid shapes} = dat
+         in PrecondPtrData precondOffset <$> (PtrTarget bid <$> traverse (traverseMemShapeWithType md g) shapes)
 
 -- | Get the @tag@ on this 'PtrShape'. (See 'Grease.Shape.Shape'.)
 getPtrTag :: PtrShape ext w ptrData tag t -> tag t
