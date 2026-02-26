@@ -32,9 +32,9 @@ import Numeric.Natural (Natural)
 -- Transforms 'NoData pointers into 'Precond pointers using allocMap.
 concMemShape ::
   CLMP.HasPtrWidth wptr =>
-  Map Natural (PtrShape.PtrTarget wptr (Conc.ConcRV' sym) 'PtrShape.NoData) ->
-  PtrShape.MemShape wptr (Conc.ConcRV' sym) 'PtrShape.NoData ->
-  PtrShape.MemShape wptr (Conc.ConcRV' sym) 'PtrShape.Precond
+  Map Natural (PtrShape.PtrTarget wptr 'PtrShape.NoData (Conc.ConcRV' sym)) ->
+  PtrShape.MemShape wptr 'PtrShape.NoData (Conc.ConcRV' sym) ->
+  PtrShape.MemShape wptr 'PtrShape.Precond (Conc.ConcRV' sym)
 concMemShape allocMap =
   \case
     PtrShape.Uninitialized bytes -> PtrShape.Uninitialized bytes
@@ -58,9 +58,9 @@ concMemShape allocMap =
 
 concPtrTarget ::
   CLMP.HasPtrWidth wptr =>
-  Map Natural (PtrShape.PtrTarget wptr (Conc.ConcRV' sym) 'PtrShape.NoData) ->
-  PtrShape.PtrTarget wptr (Conc.ConcRV' sym) 'PtrShape.NoData ->
-  PtrShape.PtrTarget wptr (Conc.ConcRV' sym) 'PtrShape.Precond
+  Map Natural (PtrShape.PtrTarget wptr 'PtrShape.NoData (Conc.ConcRV' sym)) ->
+  PtrShape.PtrTarget wptr 'PtrShape.NoData (Conc.ConcRV' sym) ->
+  PtrShape.PtrTarget wptr 'PtrShape.Precond (Conc.ConcRV' sym)
 concPtrTarget allocMap (PtrShape.PtrTarget bid s) =
   PtrShape.PtrTarget bid (fmap (concMemShape allocMap) s)
 
@@ -68,10 +68,10 @@ concPtrTarget allocMap (PtrShape.PtrTarget bid s) =
 -- Transforms 'NoData pointers into 'Precond pointers using allocMap.
 concPtrShape ::
   CLMP.HasPtrWidth wptr =>
-  (ExtShape ext (Conc.ConcRV' sym) 'PtrShape.NoData ~ PtrShape ext wptr (Conc.ConcRV' sym) 'PtrShape.NoData) =>
-  Map Natural (PtrShape.PtrTarget wptr (Conc.ConcRV' sym) 'PtrShape.NoData) ->
-  PtrShape.PtrShape ext wptr (Conc.ConcRV' sym) 'PtrShape.NoData t ->
-  PtrShape.PtrShape ext wptr (Conc.ConcRV' sym) 'PtrShape.Precond t
+  (ExtShape ext 'PtrShape.NoData (Conc.ConcRV' sym) ~ PtrShape ext wptr 'PtrShape.NoData (Conc.ConcRV' sym)) =>
+  Map Natural (PtrShape.PtrTarget wptr 'PtrShape.NoData (Conc.ConcRV' sym)) ->
+  PtrShape.PtrShape ext wptr 'PtrShape.NoData (Conc.ConcRV' sym) t ->
+  PtrShape.PtrShape ext wptr 'PtrShape.Precond (Conc.ConcRV' sym) t
 concPtrShape allocMap =
   \case
     PtrShape.ShapePtrBV tag w ->
@@ -93,11 +93,11 @@ concPtrShape allocMap =
 
 concShape ::
   CLMP.HasPtrWidth wptr =>
-  (ExtShape ext (Conc.ConcRV' sym) 'PtrShape.NoData ~ PtrShape ext wptr (Conc.ConcRV' sym) 'PtrShape.NoData) =>
-  (ExtShape ext (Conc.ConcRV' sym) 'PtrShape.Precond ~ PtrShape ext wptr (Conc.ConcRV' sym) 'PtrShape.Precond) =>
-  Map Natural (PtrShape.PtrTarget wptr (Conc.ConcRV' sym) 'PtrShape.NoData) ->
-  Shape ext (Conc.ConcRV' sym) 'PtrShape.NoData t ->
-  Shape ext (Conc.ConcRV' sym) 'PtrShape.Precond t
+  (ExtShape ext 'PtrShape.NoData (Conc.ConcRV' sym) ~ PtrShape ext wptr 'PtrShape.NoData (Conc.ConcRV' sym)) =>
+  (ExtShape ext 'PtrShape.Precond (Conc.ConcRV' sym) ~ PtrShape ext wptr 'PtrShape.Precond (Conc.ConcRV' sym)) =>
+  Map Natural (PtrShape.PtrTarget wptr 'PtrShape.NoData (Conc.ConcRV' sym)) ->
+  Shape ext 'PtrShape.NoData (Conc.ConcRV' sym) t ->
+  Shape ext 'PtrShape.Precond (Conc.ConcRV' sym) t
 concShape allocMap =
   \case
     Shape.ShapeBool tag -> Shape.ShapeBool tag

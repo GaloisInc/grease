@@ -37,7 +37,7 @@ data Diagnostic where
   HeuristicPtrTarget ::
     forall w tag ptrData.
     (KnownPtrMode ptrData, MC.PrettyF tag) =>
-    PtrTarget w tag ptrData ->
+    PtrTarget w ptrData tag ->
     Diagnostic
 
 instance PP.Pretty Diagnostic where

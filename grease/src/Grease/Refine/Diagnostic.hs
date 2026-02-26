@@ -52,8 +52,8 @@ data Diagnostic where
     Diagnostic
   RefinementFinalPrecondition ::
     forall w ext tag tys.
-    ( ExtShape ext tag 'Precond ~ PtrShape ext w tag 'Precond
-    , PrettyExt ext tag 'Precond
+    ( ExtShape ext 'Precond tag ~ PtrShape ext w 'Precond tag
+    , PrettyExt ext 'Precond tag
     ) =>
     MM.AddrWidthRepr w ->
     -- | Argument names
@@ -70,8 +70,8 @@ data Diagnostic where
     Diagnostic
   RefinementUsingPrecondition ::
     forall w ext tag tys.
-    ( ExtShape ext tag 'Precond ~ PtrShape ext w tag 'Precond
-    , PrettyExt ext tag 'Precond
+    ( ExtShape ext 'Precond tag ~ PtrShape ext w 'Precond tag
+    , PrettyExt ext 'Precond tag
     ) =>
     MM.AddrWidthRepr w ->
     -- | Argument names

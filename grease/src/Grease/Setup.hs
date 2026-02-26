@@ -117,7 +117,7 @@ doLog la diag = LJ.writeLog la (SetupDiagnostic diag)
 data SetupRes sym w
   = SetupRes
   { setupResPtr :: CS.RegValue sym (CLM.LLVMPointerType w)
-  , setupResTgt :: ShapePtr.PtrTarget w (CS.RegValue' sym) 'ShapePtr.Precond
+  , setupResTgt :: ShapePtr.PtrTarget w 'ShapePtr.Precond (CS.RegValue' sym)
   }
 
 data SetupState sym ext argTys w = SetupState
@@ -126,7 +126,7 @@ data SetupState sym ext argTys w = SetupState
   , _setupRes :: Map.Map BlockId (SetupRes sym w)
   -- ^ Memoization table that maps observed 'BlockId's from 'setupPtrMem' to
   -- observed 'SetupRes' results.
-  , _setupAllocMap :: Map.Map Natural (ShapePtr.PtrTarget w (CS.RegValue' sym) 'ShapePtr.NoData)
+  , _setupAllocMap :: Map.Map Natural (ShapePtr.PtrTarget w 'ShapePtr.NoData (CS.RegValue' sym))
   -- ^ Allocation map being built during setup. Maps Crucible block numbers to
   -- pointer targets (containing the allocation's memory shapes).
   }
@@ -182,8 +182,8 @@ setupPtrMem ::
   Mem.DataLayout ->
   ValueName (CLM.LLVMPointerType w) ->
   Selector ext argTys ts regTy ->
-  PtrTarget w tag 'ShapePtr.Precond ->
-  Setup sym ext argTys w (CS.RegValue sym (CLM.LLVMPointerType w), ShapePtr.PtrTarget w (CS.RegValue' sym) 'ShapePtr.Precond)
+  PtrTarget w 'ShapePtr.Precond tag ->
+  Setup sym ext argTys w (CS.RegValue sym (CLM.LLVMPointerType w), ShapePtr.PtrTarget w 'ShapePtr.Precond (CS.RegValue' sym))
 setupPtrMem la bak dl nm sel tgt@(PtrTarget bid _) =
   let unseenFallback = setupPtr la bak dl nm sel tgt
    in case bid of
@@ -214,8 +214,8 @@ setupPtr ::
   Mem.DataLayout ->
   ValueName (CLM.LLVMPointerType w) ->
   Selector ext argTys ts regTy ->
-  PtrTarget w tag 'ShapePtr.Precond ->
-  Setup sym ext argTys w (CS.RegValue sym (CLM.LLVMPointerType w), ShapePtr.PtrTarget w (CS.RegValue' sym) 'ShapePtr.Precond)
+  PtrTarget w 'ShapePtr.Precond tag ->
+  Setup sym ext argTys w (CS.RegValue sym (CLM.LLVMPointerType w), ShapePtr.PtrTarget w 'ShapePtr.Precond (CS.RegValue' sym))
 setupPtr la bak layout nm sel target = do
   let align = Mem.maxAlignment layout
   let sym = CB.backendGetSym bak
@@ -334,10 +334,10 @@ setupPtr la bak layout nm sel target = do
     , -- Base pointer plus current offset
       CS.RegValue sym (CLM.LLVMPointerType w)
     , -- Values written so far
-      Seq.Seq (MemShape w (CS.RegValue' sym) 'ShapePtr.Precond)
+      Seq.Seq (MemShape w 'ShapePtr.Precond (CS.RegValue' sym))
     ) ->
-    MemShape w tag 'ShapePtr.Precond ->
-    Setup sym ext argTys w (Int, CS.RegValue sym (CLM.LLVMPointerType w), Seq.Seq (MemShape w (CS.RegValue' sym) 'ShapePtr.Precond))
+    MemShape w 'ShapePtr.Precond tag ->
+    Setup sym ext argTys w (Int, CS.RegValue sym (CLM.LLVMPointerType w), Seq.Seq (MemShape w 'ShapePtr.Precond (CS.RegValue' sym)))
   go (idx, ptr, written) memShape = do
     let sym = CB.backendGetSym bak
     let sel' = sel & selectorPath %~ PtrCursor.addIndex idx
@@ -434,8 +434,8 @@ setupShape ::
   ValueName t ->
   C.TypeRepr t ->
   Selector ext argTys ts regTy ->
-  Shape ext tag 'ShapePtr.Precond t ->
-  Setup sym ext argTys w (Shape ext (CS.RegValue' sym) 'ShapePtr.NoData t)
+  Shape ext 'ShapePtr.Precond tag t ->
+  Setup sym ext argTys w (Shape ext 'ShapePtr.NoData (CS.RegValue' sym) t)
 setupShape la bak layout nm tRepr sel s = do
   let sym = CB.backendGetSym bak
   Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @ts)
@@ -482,8 +482,8 @@ setupShape la bak layout nm tRepr sel s = do
 removeMemShapePtrData ::
   forall w tag.
   CLM.HasPtrWidth w =>
-  ShapePtr.MemShape w tag 'ShapePtr.Precond ->
-  ShapePtr.MemShape w tag 'ShapePtr.NoData
+  ShapePtr.MemShape w 'ShapePtr.Precond tag ->
+  ShapePtr.MemShape w 'ShapePtr.NoData tag
 removeMemShapePtrData = \case
   ShapePtr.Uninitialized bytes -> ShapePtr.Uninitialized bytes
   ShapePtr.Initialized tag bytes -> ShapePtr.Initialized tag bytes
@@ -496,8 +496,8 @@ removeMemShapePtrData = \case
 removePtrTargetData ::
   forall w tag.
   CLM.HasPtrWidth w =>
-  ShapePtr.PtrTarget w tag 'ShapePtr.Precond ->
-  ShapePtr.PtrTarget w tag 'ShapePtr.NoData
+  ShapePtr.PtrTarget w 'ShapePtr.Precond tag ->
+  ShapePtr.PtrTarget w 'ShapePtr.NoData tag
 removePtrTargetData (ShapePtr.PtrTarget bid ms) =
   ShapePtr.PtrTarget bid (fmap removeMemShapePtrData ms)
 
@@ -511,8 +511,8 @@ setupArgs ::
   , CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
-  , ExtShape ext tag 'ShapePtr.Precond ~ PtrShape ext w tag 'ShapePtr.Precond
-  , ExtShape ext tag 'ShapePtr.NoData ~ PtrShape ext w tag 'ShapePtr.NoData
+  , ExtShape ext 'ShapePtr.Precond tag ~ PtrShape ext w 'ShapePtr.Precond tag
+  , ExtShape ext 'ShapePtr.NoData tag ~ PtrShape ext w 'ShapePtr.NoData tag
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
   ) =>
   GreaseLogAction ->
@@ -520,7 +520,7 @@ setupArgs ::
   Mem.DataLayout ->
   Ctx.Assignment ValueName argTys ->
   Ctx.Assignment C.TypeRepr argTys ->
-  Ctx.Assignment (Shape ext tag 'ShapePtr.Precond) argTys ->
+  Ctx.Assignment (Shape ext 'ShapePtr.Precond tag) argTys ->
   Setup sym ext argTys w (Args sym ext argTys w)
 setupArgs la bak layout argNames argTys inputShapes = do
   -- First, run setup on all shapes (they remain in Precond mode during setup)
@@ -553,8 +553,8 @@ newtype SetupMem sym = SetupMem {getSetupMem :: CLM.MemImpl sym}
 -- is stored separately in the map.
 data Args sym ext argTys w
   = Args
-  { argsShapes :: Ctx.Assignment (Shape ext (CS.RegValue' sym) 'ShapePtr.NoData) argTys
-  , argsAllocMap :: Map.Map Natural (ShapePtr.PtrTarget w (CS.RegValue' sym) 'ShapePtr.NoData)
+  { argsShapes :: Ctx.Assignment (Shape ext 'ShapePtr.NoData (CS.RegValue' sym)) argTys
+  , argsAllocMap :: Map.Map Natural (ShapePtr.PtrTarget w 'ShapePtr.NoData (CS.RegValue' sym))
   -- ^ Map from Crucible block number to allocation contents
   --
   -- During setup, when we allocate memory for a PtrTarget, we record
@@ -565,7 +565,7 @@ data Args sym ext argTys w
 
 argTypes ::
   ( CLM.HasPtrWidth w
-  , ExtShape ext tag 'ShapePtr.NoData ~ PtrShape ext w tag 'ShapePtr.NoData
+  , ExtShape ext 'ShapePtr.NoData tag ~ PtrShape ext w 'ShapePtr.NoData tag
   ) =>
   Args sym ext argTys w ->
   Ctx.Assignment C.TypeRepr argTys
@@ -573,7 +573,7 @@ argTypes (Args args _) = fmapFC (shapeType ptrShapeType) args
 
 argVals ::
   ( CLM.HasPtrWidth w
-  , ExtShape ext tag 'ShapePtr.NoData ~ PtrShape ext w tag 'ShapePtr.NoData
+  , ExtShape ext 'ShapePtr.NoData tag ~ PtrShape ext w 'ShapePtr.NoData tag
   ) =>
   Args sym ext argTys w ->
   Ctx.Assignment (CS.RegValue' sym) argTys
@@ -582,7 +582,7 @@ argVals (Args args _) = fmapFC (getTag getPtrTag) args
 argRegMap ::
   forall sym ext w argTys tag.
   ( CLM.HasPtrWidth w
-  , ExtShape ext tag 'ShapePtr.NoData ~ PtrShape ext w tag 'ShapePtr.NoData
+  , ExtShape ext 'ShapePtr.NoData tag ~ PtrShape ext w 'ShapePtr.NoData tag
   ) =>
   Args sym ext argTys w ->
   CS.RegMap sym argTys
@@ -618,7 +618,7 @@ setup ::
   , CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
-  , ExtShape ext tag 'ShapePtr.NoData ~ PtrShape ext w tag 'ShapePtr.NoData
+  , ExtShape ext 'ShapePtr.NoData tag ~ PtrShape ext w 'ShapePtr.NoData tag
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext w
   ) =>
   GreaseLogAction ->

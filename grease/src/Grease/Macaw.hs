@@ -308,7 +308,7 @@ minimalArgShapes _bak arch mbEntryAddr = do
   mkRegShape ::
     forall tp.
     MC.ArchReg arch tp ->
-    m (Shape (Symbolic.MacawExt arch) NoTag 'Grease.Shape.Pointer.Precond (Symbolic.ToCrucibleType tp))
+    m (Shape (Symbolic.MacawExt arch) 'Grease.Shape.Pointer.Precond NoTag (Symbolic.ToCrucibleType tp))
   mkRegShape r =
     if
       | Just Refl <- testEquality r MC.sp_reg ->

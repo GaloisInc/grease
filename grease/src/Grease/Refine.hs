@@ -658,7 +658,7 @@ refinementLoop ::
   , CLM.HasPtrWidth w
   , MC.MemWidth w
   , ExtShape ext ~ PtrShape ext w
-  , PrettyExt ext NoTag 'Precond
+  , PrettyExt ext 'Precond NoTag
   ) =>
   GreaseLogAction ->
   BoundsOpts ->

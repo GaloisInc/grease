@@ -159,7 +159,7 @@ constructPtrTarget ::
   VisitCount ->
   MDwarf.TypeApp ->
   UseConservativeDebugShapes ->
-  IO (PtrTarget w NoTag 'ShapePtr.Precond)
+  IO (PtrTarget w 'ShapePtr.Precond NoTag)
 constructPtrTarget gla tyUnrollBound sprog visitCount tyApp isConservative =
   ptrTarget Nothing
     <$> liftIO
@@ -174,10 +174,10 @@ constructPtrTarget gla tyUnrollBound sprog visitCount tyApp isConservative =
  where
   UseConservativeDebugShapes shouldBeConservative = isConservative
   ishape w = except $ Right $ Seq.singleton $ Initialized NoTag (toBytes w)
-  padding :: Integral a => a -> MemShape w NoTag 'ShapePtr.Precond
+  padding :: Integral a => a -> MemShape w 'ShapePtr.Precond NoTag
   padding w = Uninitialized (toBytes w)
   -- if we dont know where to place members we have to fail/just place some bytes
-  buildMember :: CLM.HasPtrWidth w => Word64 -> MDwarf.Member -> ShapeParsingM (Word64, Seq.Seq (MemShape w NoTag 'ShapePtr.Precond))
+  buildMember :: CLM.HasPtrWidth w => Word64 -> MDwarf.Member -> ShapeParsingM (Word64, Seq.Seq (MemShape w 'ShapePtr.Precond NoTag))
   buildMember loc member =
     do
       memLoc <- case MDwarf.memberLoc member of
@@ -189,7 +189,7 @@ constructPtrTarget gla tyUnrollBound sprog visitCount tyApp isConservative =
       let nextLoc = memLoc + fromIntegral memByteSize
       except $ Right (nextLoc, padd Seq.>< memberShapes)
 
-  shapeOfTyApp :: CLM.HasPtrWidth w => MDwarf.TypeRef -> ShapeParsingM (Seq.Seq (MemShape w NoTag 'ShapePtr.Precond))
+  shapeOfTyApp :: CLM.HasPtrWidth w => MDwarf.TypeRef -> ShapeParsingM (Seq.Seq (MemShape w 'ShapePtr.Precond NoTag))
   shapeOfTyApp x = shapeSeq =<< extractType sprog =<< pure x
 
   numOfRange :: MDwarf.SubrangeBounds -> ShapeParsingM Int
@@ -200,7 +200,7 @@ constructPtrTarget gla tyUnrollBound sprog visitCount tyApp isConservative =
         [MDwarf.DW_OP_const8u w] -> except $ Right $ fromIntegral w
         _ -> except $ Left $ DwarfDiagnostic.UnexpectedDWARFForm $ "Array types represented with DW_AT_upper_bound that do not have a value of DW_ATVAL_UINT are not supported"
 
-  shapeSeq :: CLM.HasPtrWidth w => MDwarf.TypeApp -> ShapeParsingM (Seq.Seq (MemShape w NoTag 'ShapePtr.Precond))
+  shapeSeq :: CLM.HasPtrWidth w => MDwarf.TypeApp -> ShapeParsingM (Seq.Seq (MemShape w 'ShapePtr.Precond NoTag))
   shapeSeq (MDwarf.UnsignedIntType w) = ishape w
   shapeSeq (MDwarf.SignedIntType w) = ishape w
   shapeSeq MDwarf.SignedCharType = ishape (1 :: Int)
@@ -260,7 +260,7 @@ constructPtrTarget gla tyUnrollBound sprog visitCount tyApp isConservative =
 
 type VisitCount = Map.Map MDwarf.TypeRef Int
 
-nullPtr :: CLM.HasPtrWidth w => MemShape w NoTag mode
+nullPtr :: CLM.HasPtrWidth w => MemShape w mode NoTag
 nullPtr =
   let zbyt = TaggedByte{taggedByteTag = NoTag, taggedByteValue = 0}
    in Exactly (take (fromInteger $ CT.intValue ?ptrWidth `div` 8) $ repeat $ zbyt)
@@ -273,7 +273,7 @@ constructPtrMemShapeFromRef ::
   VisitCount ->
   UseConservativeDebugShapes ->
   MDwarf.TypeRef ->
-  ShapeParsingM (MemShape w NoTag 'ShapePtr.Precond)
+  ShapeParsingM (MemShape w 'ShapePtr.Precond NoTag)
 constructPtrMemShapeFromRef gla bound sprog vcount shouldBeConservative ref =
   let TypeUnrollingBound tyUnrollBound = bound
       ct = fromMaybe 0 (Map.lookup ref vcount)
@@ -289,7 +289,7 @@ constructPtrMemShapeFromRef gla bound sprog vcount shouldBeConservative ref =
 intPtrShape ::
   Symbolic.SymArchConstraints arch =>
   MC.ArchReg arch tp ->
-  Either DwarfDiagnostic.DwarfShapeParsingError (C.Some (PtrShape ext w NoTag 'ShapePtr.Precond))
+  Either DwarfDiagnostic.DwarfShapeParsingError (C.Some (PtrShape ext w 'ShapePtr.Precond NoTag))
 intPtrShape reg =
   case MT.typeRepr reg of
     MT.BVTypeRepr w -> Right $ C.Some $ ShapePtrBV NoTag w
@@ -309,7 +309,7 @@ pointerShapeOfDwarf ::
   Subprogram ->
   UseConservativeDebugShapes ->
   MDwarf.TypeApp ->
-  ShapeParsingM (C.Some (PtrShape ext w NoTag 'ShapePtr.Precond))
+  ShapeParsingM (C.Some (PtrShape ext w 'ShapePtr.Precond NoTag))
 pointerShapeOfDwarf _ _ _ r _ _ (MDwarf.SignedIntType _) = except $ intPtrShape r
 pointerShapeOfDwarf _ _ _ r _ _ (MDwarf.UnsignedIntType _) = except $ intPtrShape r
 pointerShapeOfDwarf _ gla tyUnrollBound _ sprog shouldBeConservative (MDwarf.PointerType _ mbTyRef) =
@@ -345,7 +345,7 @@ shapeFromVar ::
   Subprogram ->
   MDwarf.Variable ->
   UseConservativeDebugShapes ->
-  ShapeParsingM (C.Some (Shape.Shape ext NoTag 'ShapePtr.Precond))
+  ShapeParsingM (C.Some (Shape.Shape ext 'ShapePtr.Precond NoTag))
 shapeFromVar arch gla tyUnrollBound buildingForReg sprog vr shouldBeConservative =
   C.mapSome Shape.ShapeExt
     <$> ( pointerShapeOfDwarf arch gla tyUnrollBound buildingForReg sprog shouldBeConservative
@@ -366,7 +366,7 @@ shapeFromDwarf gla aContext tyUnrollBound sub shouldBeConservative =
   let
     abiRegs = aContext Lens.^. archABIParams
     args = (zip abiRegs $ snd <$> (toAscList $ subParamMap sub))
-    regAssignmentFromDwarfVar :: C.Some (MC.ArchReg arch) -> MDwarf.Variable -> ShapeParsingM (Text.Text, C.Some (Shape.Shape ext NoTag 'ShapePtr.Precond))
+    regAssignmentFromDwarfVar :: C.Some (MC.ArchReg arch) -> MDwarf.Variable -> ShapeParsingM (Text.Text, C.Some (Shape.Shape ext 'ShapePtr.Precond NoTag))
     regAssignmentFromDwarfVar reg var =
       do
         C.Some r <- pure reg

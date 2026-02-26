@@ -506,7 +506,7 @@ interestingConcretizedShapes ::
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   -- | Default/initial/minimal shapes
-  Ctx.Assignment (Shape.Shape ext tag 'Precond) argTys ->
+  Ctx.Assignment (Shape.Shape ext 'Precond tag) argTys ->
   Conc.ConcArgs sym ext argTys ->
   Ctx.Assignment (Const Bool) argTys
 interestingConcretizedShapes names initArgs cArgs =

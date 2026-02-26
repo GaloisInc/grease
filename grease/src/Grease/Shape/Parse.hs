@@ -98,12 +98,12 @@ lookupAlloc blk as = IntMap.lookup (getBlockId blk) (getAllocs as)
 removeAlloc :: BlockId -> Allocs -> Allocs
 removeAlloc blk as = Allocs (IntMap.delete (getBlockId blk) (getAllocs as))
 
-ptrTarget :: Allocs -> ParsePtrTarget -> Maybe BlockId -> Either BlockId (PtrShape.PtrTarget wptr NoTag 'PtrShape.Precond)
+ptrTarget :: Allocs -> ParsePtrTarget -> Maybe BlockId -> Either BlockId (PtrShape.PtrTarget wptr 'PtrShape.Precond NoTag)
 ptrTarget as tgt bid =
   PtrShape.PtrTarget bid
     Functor.<$> Traversable.traverse (memShape as) (getParsePtrTarget tgt)
 
-memShape :: Allocs -> ParseMemShape -> Either BlockId (PtrShape.MemShape wptr NoTag 'PtrShape.Precond)
+memShape :: Allocs -> ParseMemShape -> Either BlockId (PtrShape.MemShape wptr 'PtrShape.Precond NoTag)
 memShape allocs =
   \case
     Uninitialized bs -> Either.Right (PtrShape.Uninitialized bs)
@@ -125,31 +125,31 @@ data Parse ext w
 data ShapesAst ext w
   = ShapesAst
   { astAllocs :: Allocs
-  , astShapes :: Map Text (Some (Shape (Parse ext w) NoTag 'PtrShape.Precond))
+  , astShapes :: Map Text (Some (Shape (Parse ext w) 'PtrShape.Precond NoTag))
   }
 
 type instance Shape.ExtShape (Parse ext w) = ParsePtrShape w
 
 -- | Like 'PtrShape.PtrShape', except that 'PtrShape.PtrTarget' is replaced
 -- by 'BlockId'. Always uses 'Precond mode during parsing.
-type ParsePtrShape :: Nat -> (C.CrucibleType -> Type) -> PtrShape.PtrDataMode -> C.CrucibleType -> Type
-data ParsePtrShape w tag ptrData t where
+type ParsePtrShape :: Nat -> PtrShape.PtrDataMode -> (C.CrucibleType -> Type) -> C.CrucibleType -> Type
+data ParsePtrShape w ptrData tag t where
   ParseShapePtrBV ::
     1 C.<= w' =>
     NatRepr w' ->
-    ParsePtrShape w tag ptrData (CLMP.LLVMPointerType w')
+    ParsePtrShape w ptrData tag (CLMP.LLVMPointerType w')
   ParseShapePtrBVLit ::
     1 C.<= w' =>
     NatRepr w' ->
     BV w' ->
-    ParsePtrShape w tag ptrData (CLMP.LLVMPointerType w')
+    ParsePtrShape w ptrData tag (CLMP.LLVMPointerType w')
   ParseShapePtr ::
     PtrShape.Offset ->
     BlockId ->
-    ParsePtrShape w tag ptrData (CLMP.LLVMPointerType w)
+    ParsePtrShape w ptrData tag (CLMP.LLVMPointerType w)
 
 astToMap ::
-  ExtShape ext NoTag 'PtrShape.Precond ~ PtrShape ext w NoTag 'PtrShape.Precond =>
+  ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext w 'PtrShape.Precond NoTag =>
   ShapesAst ext w ->
   Either BlockId (ParsedShapes ext)
 astToMap ast =
@@ -159,10 +159,10 @@ astToMap ast =
       (astShapes ast)
 
 convertShape ::
-  ExtShape ext NoTag 'PtrShape.Precond ~ PtrShape ext w NoTag 'PtrShape.Precond =>
+  ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext w 'PtrShape.Precond NoTag =>
   Allocs ->
-  Shape (Parse ext w) NoTag 'PtrShape.Precond t ->
-  Either BlockId (Shape ext NoTag 'PtrShape.Precond t)
+  Shape (Parse ext w) 'PtrShape.Precond NoTag t ->
+  Either BlockId (Shape ext 'PtrShape.Precond NoTag t)
 convertShape as =
   \case
     Shape.ShapeUnit NoTag -> Either.Right (Shape.ShapeUnit NoTag)
@@ -202,7 +202,7 @@ instance PP.Pretty ParseError where
 
 parseShapes ::
   forall ext w.
-  ExtShape ext NoTag 'PtrShape.Precond ~ PtrShape ext w NoTag 'PtrShape.Precond =>
+  ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext w 'PtrShape.Precond NoTag =>
   HasPtrWidth w =>
   FilePath ->
   Text ->
@@ -214,7 +214,7 @@ parseShapes path txt =
 
 parser ::
   forall ext w proxy.
-  ExtShape ext NoTag 'PtrShape.Precond ~ PtrShape ext w NoTag 'PtrShape.Precond =>
+  ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext w 'PtrShape.Precond NoTag =>
   HasPtrWidth w =>
   proxy ext ->
   Parser (ShapesAst ext w)
@@ -334,9 +334,9 @@ parseExactlyByte = do
   pure (Seq.replicate num (hexCharsToWord8 c0 c1))
 
 parseShape ::
-  ExtShape ext NoTag 'PtrShape.Precond ~ PtrShape ext w NoTag 'PtrShape.Precond =>
+  ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext w 'PtrShape.Precond NoTag =>
   HasPtrWidth w =>
-  Parser (Some (Shape (Parse ext w) NoTag 'PtrShape.Precond))
+  Parser (Some (Shape (Parse ext w) 'PtrShape.Precond NoTag))
 parseShape =
   Applicative.asum @[]
     [ Some Functor.<$> parseBool
@@ -347,16 +347,16 @@ parseShape =
     , parsePtrBvLit
     ]
 
-parseBool :: Parser (Shape ext NoTag 'PtrShape.Precond CT.BoolType)
+parseBool :: Parser (Shape ext 'PtrShape.Precond NoTag CT.BoolType)
 parseBool = MP.chunk "bool" Functor.$> Shape.ShapeBool NoTag
 
-parseUnit :: Parser (Shape ext NoTag 'PtrShape.Precond CT.UnitType)
+parseUnit :: Parser (Shape ext 'PtrShape.Precond NoTag CT.UnitType)
 parseUnit = MP.chunk "unit" Functor.$> Shape.ShapeUnit NoTag
 
 parseStruct ::
-  ExtShape ext NoTag 'PtrShape.Precond ~ PtrShape ext w NoTag 'PtrShape.Precond =>
+  ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext w 'PtrShape.Precond NoTag =>
   HasPtrWidth w =>
-  Parser (Some (Shape (Parse ext w) NoTag 'PtrShape.Precond))
+  Parser (Some (Shape (Parse ext w) 'PtrShape.Precond NoTag))
 parseStruct = do
   _ <- MP.chunk "{"
   _ <- MP.optional MPC.space
@@ -367,8 +367,8 @@ parseStruct = do
   Applicative.pure (Some (Shape.ShapeStruct NoTag assign))
 
 parsePtrBv ::
-  ExtShape ext NoTag 'PtrShape.Precond ~ PtrShape ext w NoTag 'PtrShape.Precond =>
-  Parser (Some (Shape (Parse ext w) NoTag 'PtrShape.Precond))
+  ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext w 'PtrShape.Precond NoTag =>
+  Parser (Some (Shape (Parse ext w) 'PtrShape.Precond NoTag))
 parsePtrBv = do
   n <- List.length Functor.<$> MP.sepBy1 (MP.chunk "XX") (MP.chunk " ")
   Some bits <- Applicative.pure (NatRepr.mkNatRepr (fromIntegral n * 8))
@@ -378,8 +378,8 @@ parsePtrBv = do
       Applicative.pure (Some (Shape.ShapeExt (ParseShapePtrBV bits)))
 
 parsePtrBvLit ::
-  ExtShape ext NoTag 'PtrShape.Precond ~ PtrShape ext w NoTag 'PtrShape.Precond =>
-  Parser (Some (Shape (Parse ext w) NoTag 'PtrShape.Precond))
+  ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext w 'PtrShape.Precond NoTag =>
+  Parser (Some (Shape (Parse ext w) 'PtrShape.Precond NoTag))
 parsePtrBvLit = do
   _ <- MP.optional (MP.chunk "0x")
   -- Use `lookAhead` to ensure the hex number has an even number of digits, so
@@ -392,7 +392,7 @@ parsePtrBvLit = do
       bv <- BV.mkBV bits Functor.<$> MPCL.hexadecimal
       Applicative.pure (Some (Shape.ShapeExt (ParseShapePtrBVLit bits bv)))
 
-parsePtr :: HasPtrWidth w => Parser (ParsePtrShape w NoTag 'PtrShape.Precond (CLMP.LLVMPointerType w))
+parsePtr :: HasPtrWidth w => Parser (ParsePtrShape w 'PtrShape.Precond NoTag (CLMP.LLVMPointerType w))
 parsePtr = do
   -- The `try` is needed to disambiguate the block number from the bytes of
   -- `ShapePtrBVLit`
@@ -415,7 +415,7 @@ parseOffset = PtrShape.Offset . (CLB.toBytes @Int) Functor.<$> MPCL.hexadecimal
 
 -- | Parse shapes from JSON or shapes DSL content, depending on the extension.
 fromPathAndContent ::
-  ExtShape ext NoTag 'PtrShape.Precond ~ PtrShape ext w NoTag 'PtrShape.Precond =>
+  ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext w 'PtrShape.Precond NoTag =>
   CLMP.HasPtrWidth w =>
   -- | Path to file
   FilePath ->
@@ -433,7 +433,7 @@ fromPathAndContent path txt =
 
 -- | Read shapes from a JSON or shapes DSL file, depending on the extension.
 fromFile ::
-  ExtShape ext NoTag 'PtrShape.Precond ~ PtrShape ext w NoTag 'PtrShape.Precond =>
+  ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext w 'PtrShape.Precond NoTag =>
   CLMP.HasPtrWidth w =>
   FilePath ->
   IO (Either (PP.Doc ann) (ParsedShapes ext))

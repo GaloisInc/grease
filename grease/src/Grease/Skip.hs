@@ -58,7 +58,7 @@ skipOverride ::
   CS.GlobalVar CLM.Mem ->
   WFN.FunctionName ->
   C.TypeRepr ret ->
-  Shape ext tag 'ShapePtr.Precond ret ->
+  Shape ext 'ShapePtr.Precond tag ret ->
   CS.OverrideSim p sym ext r args' ret' (CS.RegValue sym ret)
 skipOverride la dl memVar funcName valTy shape = do
   doLog la (Diag.FunctionCall funcName)

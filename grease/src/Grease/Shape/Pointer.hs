@@ -98,7 +98,7 @@ data family PtrData (mode :: PtrDataMode) (w :: Natural) (tag :: C.CrucibleType 
 data instance PtrData 'Precond w tag
   = PrecondPtrData
   { precondOffset :: Offset
-  , precondTarget :: PtrTarget w tag 'Precond
+  , precondTarget :: PtrTarget w 'Precond tag
   }
 
 data PtrModeRepr (tp :: PtrDataMode) where
@@ -171,8 +171,8 @@ traverseTaggedByte f (TaggedByte tag val) = TaggedByte <$> f tag <*> pure val
 -- * @wptr@: Width of a pointer, in bits
 -- * @tag@: See 'Grease.Shape.Shape'
 -- * @ptrData@: Mode indicating whether pointer metadata is present
-type MemShape :: Natural -> (C.CrucibleType -> Type) -> PtrDataMode -> Type
-data MemShape wptr tag ptrData
+type MemShape :: Natural -> PtrDataMode -> (C.CrucibleType -> Type) -> Type
+data MemShape wptr ptrData tag
   = -- | Some number of uninitialized bytes
     Uninitialized !Bytes
   | -- | Some number of symbolically-initialized bytes
@@ -189,9 +189,9 @@ deriving instance
   , Eq (tag (CLM.LLVMPointerType wptr))
   , Eq (PtrData ptrData wptr tag)
   ) =>
-  Eq (MemShape wptr tag ptrData)
+  Eq (MemShape wptr ptrData tag)
 
-instance (KnownPtrMode ptrData, MC.PrettyF tag) => PP.Pretty (MemShape wptr tag ptrData) where
+instance (KnownPtrMode ptrData, MC.PrettyF tag) => PP.Pretty (MemShape wptr ptrData tag) where
   pretty =
     \case
       Uninitialized bs -> "uninitialized x" PP.<+> PP.viaShow (CLB.bytesToInteger bs)
@@ -235,8 +235,8 @@ traverseMemShapeWithType ::
   Applicative m =>
   PtrModeRepr ptrData ->
   (forall x. C.TypeRepr x -> tag x -> m (tag' x)) ->
-  MemShape wptr tag ptrData ->
-  m (MemShape wptr tag' ptrData)
+  MemShape wptr ptrData tag ->
+  m (MemShape wptr ptrData tag')
 traverseMemShapeWithType mode f =
   \case
     Uninitialized bs -> pure (Uninitialized bs)
@@ -260,9 +260,9 @@ traverseMemShapeWithType mode f =
 
 merge ::
   Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8))) =>
-  MemShape wptr tag ptrData ->
-  MemShape wptr tag ptrData ->
-  Maybe (MemShape wptr tag ptrData)
+  MemShape wptr ptrData tag ->
+  MemShape wptr ptrData tag ->
+  Maybe (MemShape wptr ptrData tag)
 merge =
   \cases
     (Uninitialized i) (Uninitialized j) -> Just (Uninitialized (i + j))
@@ -274,7 +274,7 @@ merge =
 memShapeSize ::
   CLM.HasPtrWidth w =>
   proxy w ->
-  MemShape wptr tag ptrData ->
+  MemShape wptr ptrData tag ->
   Bytes
 memShapeSize _proxy =
   \case
@@ -285,8 +285,8 @@ memShapeSize _proxy =
 
 initializeMemShape ::
   tag (C.VectorType (CLM.LLVMPointerType 8)) ->
-  MemShape wptr tag ptrData ->
-  MemShape wptr tag ptrData
+  MemShape wptr ptrData tag ->
+  MemShape wptr ptrData tag
 initializeMemShape tag =
   \case
     Uninitialized bs -> Initialized tag bs
@@ -336,10 +336,10 @@ shape, otherwise the first observed 'PtrTarget's shape will win.
 -- * @wptr@: Width of a pointer, in bits
 -- * @tag@: See 'Grease.Shape.Shape'
 -- * @ptrData@: Mode indicating whether pointer metadata is present
-data PtrTarget wptr tag ptrData
+data PtrTarget wptr ptrData tag
   = PtrTarget
   { ptrTargetBlock :: Maybe BlockId
-  , ptrTargetShapes :: Seq (MemShape wptr tag ptrData)
+  , ptrTargetShapes :: Seq (MemShape wptr ptrData tag)
   }
 
 -- Note: FunctorF/FoldableF/TraversableF instances cannot be provided for PtrTarget
@@ -353,7 +353,7 @@ deriving instance
   , Eq (tag (CLM.LLVMPointerType wptr))
   , Eq (PtrData ptrData wptr tag)
   ) =>
-  Eq (PtrTarget wptr tag ptrData)
+  Eq (PtrTarget wptr ptrData tag)
 
 -- | Like 'TF.traverseF', but with access to the appropriate 'C.TypeRepr'.
 traversePtrTargetWithType ::
@@ -361,8 +361,8 @@ traversePtrTargetWithType ::
   Applicative m =>
   PtrModeRepr ptrData ->
   (forall x. C.TypeRepr x -> tag x -> m (tag' x)) ->
-  PtrTarget wptr tag ptrData ->
-  m (PtrTarget wptr tag' ptrData)
+  PtrTarget wptr ptrData tag ->
+  m (PtrTarget wptr ptrData tag')
 traversePtrTargetWithType mode f (PtrTarget bid tgt) =
   PtrTarget bid <$> traverse (traverseMemShapeWithType mode f) tgt
 
@@ -370,8 +370,8 @@ traversePtrTargetWithType mode f (PtrTarget bid tgt) =
 ptrTarget ::
   Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8))) =>
   Maybe BlockId ->
-  Seq (MemShape wptr tag ptrData) ->
-  PtrTarget wptr tag ptrData
+  Seq (MemShape wptr ptrData tag) ->
+  PtrTarget wptr ptrData tag
 ptrTarget bid = PtrTarget bid . Foldable.foldl' go Seq.empty
  where
   go s (Uninitialized 0) = s
@@ -387,7 +387,7 @@ ptrTarget bid = PtrTarget bid . Foldable.foldl' go Seq.empty
 ptrTargetSize ::
   CLM.HasPtrWidth w =>
   proxy w ->
-  PtrTarget wptr tag ptrData ->
+  PtrTarget wptr ptrData tag ->
   Bytes
 ptrTargetSize proxy (PtrTarget _ s) = Foldable.sum (fmap (memShapeSize proxy) s)
 
@@ -395,8 +395,8 @@ ptrTargetSize proxy (PtrTarget _ s) = Foldable.sum (fmap (memShapeSize proxy) s)
 growPtrTargetBy ::
   Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8))) =>
   Bytes ->
-  PtrTarget wptr tag ptrData ->
-  PtrTarget wptr tag ptrData
+  PtrTarget wptr ptrData tag ->
+  PtrTarget wptr ptrData tag
 growPtrTargetBy amount (PtrTarget bid s) = ptrTarget bid (s Seq.|> Uninitialized amount)
 
 -- | Grow an allocation by adding uninitialized bytes to the end, up to the
@@ -406,16 +406,16 @@ growPtrTargetUpTo ::
   Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8))) =>
   -- | Add uninitialized bytes to the allocation until it becomes this size
   Bytes ->
-  PtrTarget wptr tag ptrData ->
-  PtrTarget wptr tag ptrData
+  PtrTarget wptr ptrData tag ->
+  PtrTarget wptr ptrData tag
 growPtrTargetUpTo amount t =
   growPtrTargetBy (max 1 (amount - ptrTargetSize ?ptrWidth t)) t
 
 -- | Grow an allocation by adding an uninitialized byte to the end
 growPtrTarget ::
   Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8))) =>
-  PtrTarget wptr tag ptrData ->
-  PtrTarget wptr tag ptrData
+  PtrTarget wptr ptrData tag ->
+  PtrTarget wptr ptrData tag
 growPtrTarget = growPtrTargetBy (CLB.toBytes (1 :: Integer))
 
 -- | Initialize all uninitialized parts of an allocation
@@ -423,8 +423,8 @@ initializePtrTarget ::
   Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8))) =>
   -- | Tag for newly-initialized bytes
   tag (C.VectorType (CLM.LLVMPointerType 8)) ->
-  PtrTarget wptr tag ptrData ->
-  PtrTarget wptr tag ptrData
+  PtrTarget wptr ptrData tag ->
+  PtrTarget wptr ptrData tag
 initializePtrTarget tag (PtrTarget bid ms) =
   ptrTarget bid (fmap (initializeMemShape tag) ms)
 
@@ -434,8 +434,8 @@ initializeOrGrowPtrTarget ::
   Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8))) =>
   -- | Tag for newly-initialized bytes
   tag (C.VectorType (CLM.LLVMPointerType 8)) ->
-  PtrTarget wptr tag ptrData ->
-  PtrTarget wptr tag ptrData
+  PtrTarget wptr ptrData tag ->
+  PtrTarget wptr ptrData tag
 initializeOrGrowPtrTarget tag t@(PtrTarget _ ms) =
   if Foldable.all isInit ms
     then growPtrTarget t
@@ -454,8 +454,8 @@ ptrTargetToPtrs ::
   Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8))) =>
   proxy wptr ->
   tag (CLM.LLVMPointerType wptr) ->
-  PtrTarget wptr tag 'Precond ->
-  PtrTarget wptr tag 'Precond
+  PtrTarget wptr 'Precond tag ->
+  PtrTarget wptr 'Precond tag
 ptrTargetToPtrs proxy tag tgt =
   let sz = ptrTargetSize proxy tgt
       ptrBytes = CLB.bitsToBytes (C.widthVal ?ptrWidth)
@@ -470,8 +470,8 @@ ptrTargetToPtrs proxy tag tgt =
 instance PP.Pretty BlockId where
   pretty bid = "blockid:" PP.<+> (PP.pretty $ getBlockId bid)
 
-instance (KnownPtrMode ptrData, MC.PrettyF tag) => PP.Pretty (PtrTarget wptr tag ptrData) where
-  pretty :: (KnownPtrMode ptrData, MC.PrettyF tag) => PtrTarget wptr tag ptrData -> PP.Doc ann
+instance (KnownPtrMode ptrData, MC.PrettyF tag) => PP.Pretty (PtrTarget wptr ptrData tag) where
+  pretty :: (KnownPtrMode ptrData, MC.PrettyF tag) => PtrTarget wptr ptrData tag -> PP.Doc ann
   pretty =
     \case
       PtrTarget bid Seq.Empty -> PP.pretty bid PP.<+> "<unallocated>"
@@ -492,23 +492,23 @@ newtype Offset = Offset {getOffset :: Bytes}
 -- * @ptrData@: Mode indicating whether pointer metadata is present
 
 -- * @t@: Crucible type corresponding to this shape
-type PtrShape :: Type -> Natural -> (C.CrucibleType -> Type) -> PtrDataMode -> C.CrucibleType -> Type
-data PtrShape (ext :: Type) w tag ptrData (t :: C.CrucibleType) where
+type PtrShape :: Type -> Natural -> PtrDataMode -> (C.CrucibleType -> Type) -> C.CrucibleType -> Type
+data PtrShape (ext :: Type) w ptrData tag (t :: C.CrucibleType) where
   ShapePtrBV ::
     1 C.<= w' =>
     tag (CLM.LLVMPointerType w') ->
     NatRepr w' ->
-    PtrShape ext w tag ptrData (CLM.LLVMPointerType w')
+    PtrShape ext w ptrData tag (CLM.LLVMPointerType w')
   ShapePtrBVLit ::
     1 C.<= w' =>
     tag (CLM.LLVMPointerType w') ->
     NatRepr w' ->
     BV w' ->
-    PtrShape ext w tag ptrData (CLM.LLVMPointerType w')
+    PtrShape ext w ptrData tag (CLM.LLVMPointerType w')
   ShapePtr ::
     tag (CLM.LLVMPointerType w) ->
     PtrData ptrData w tag ->
-    PtrShape ext w tag ptrData (CLM.LLVMPointerType w)
+    PtrShape ext w ptrData tag (CLM.LLVMPointerType w)
 
 -- | Returns @'Just' 'Refl'@ iff the shapes are identical.
 --
@@ -524,7 +524,7 @@ instance
   , Eq (PtrData ptrData w tag)
   , TestEquality tag
   ) =>
-  TestEquality (PtrShape ext w tag ptrData)
+  TestEquality (PtrShape ext w ptrData tag)
   where
   testEquality s s' =
     case (s, s') of
@@ -542,10 +542,10 @@ instance
           _ -> Nothing
       _ -> Nothing
 
-instance (KnownPtrMode ptrData, MC.PrettyF tag) => Show (PtrShape ext w tag ptrData t) where
+instance (KnownPtrMode ptrData, MC.PrettyF tag) => Show (PtrShape ext w ptrData tag t) where
   show = show . MC.prettyF
-instance (KnownPtrMode ptrData, MC.PrettyF tag) => ShowF (PtrShape ext w tag ptrData)
-instance (KnownPtrMode ptrData, MC.PrettyF tag) => MC.PrettyF (PtrShape ext w tag ptrData) where
+instance (KnownPtrMode ptrData, MC.PrettyF tag) => ShowF (PtrShape ext w ptrData tag)
+instance (KnownPtrMode ptrData, MC.PrettyF tag) => MC.PrettyF (PtrShape ext w ptrData tag) where
   prettyF =
     \case
       ShapePtrBV tag _w -> "bv" PP.<> ppTag tag
@@ -576,7 +576,7 @@ instance (KnownPtrMode ptrData, MC.PrettyF tag) => MC.PrettyF (PtrShape ext w ta
 -- (C.CrucibleType -> Type) -> PtrDataMode -> C.CrucibleType -> Type, but these type
 -- classes expect (k -> *) -> k' -> *. Use traversePtrShapeWithType instead.
 
-ptrShapeType :: CLM.HasPtrWidth w => PtrShape ext w tag ptrData t -> C.TypeRepr t
+ptrShapeType :: CLM.HasPtrWidth w => PtrShape ext w ptrData tag t -> C.TypeRepr t
 ptrShapeType =
   \case
     ShapePtrBV _tag w -> CLM.LLVMPointerRepr w
@@ -590,8 +590,8 @@ traversePtrShapeWithType ::
   Applicative m =>
   PtrModeRepr mode ->
   (forall x. C.TypeRepr x -> tag x -> m (tag' x)) ->
-  PtrShape ext wptr tag mode t ->
-  m (PtrShape ext wptr tag' mode t)
+  PtrShape ext wptr mode tag t ->
+  m (PtrShape ext wptr mode tag' t)
 traversePtrShapeWithType md f =
   \case
     ShapePtrBV tag w ->
@@ -612,7 +612,7 @@ traversePtrShapeWithType md f =
          in PrecondPtrData precondOffset <$> traversePtrTargetWithType md g precondTarget
 
 -- | Get the @tag@ on this 'PtrShape'. (See 'Grease.Shape.Shape'.)
-getPtrTag :: PtrShape ext w tag ptrData t -> tag t
+getPtrTag :: PtrShape ext w ptrData tag t -> tag t
 getPtrTag =
   \case
     ShapePtrBV tag _w -> tag
@@ -620,7 +620,7 @@ getPtrTag =
     ShapePtr tag _ -> tag
 
 -- | Set the @tag@ on this 'PtrShape'. (See 'Grease.Shape.Shape'.)
-setPtrTag :: PtrShape ext w tag ptrData t -> tag t -> PtrShape ext w tag ptrData t
+setPtrTag :: PtrShape ext w ptrData tag t -> tag t -> PtrShape ext w ptrData tag t
 setPtrTag shape tag =
   case shape of
     ShapePtrBV _tag w -> ShapePtrBV tag w
@@ -628,7 +628,7 @@ setPtrTag shape tag =
     ShapePtr _tag ptrData -> ShapePtr tag ptrData
 
 -- | A 'Lens.Lens' for the @tag@ on this 'PtrShape'. (See 'Grease.Shape.Shape'.)
-ptrShapeTag :: Lens.Lens' (PtrShape ext w tag ptrData t) (tag t)
+ptrShapeTag :: Lens.Lens' (PtrShape ext w ptrData tag t) (tag t)
 ptrShapeTag = Lens.lens getPtrTag setPtrTag
 
 minimalPtrShape ::
@@ -639,7 +639,7 @@ minimalPtrShape ::
   ) =>
   (forall t'. C.TypeRepr t' -> m (tag t')) ->
   NatRepr w ->
-  m (PtrShape ext wptr tag ptrData (CLM.LLVMPointerType w))
+  m (PtrShape ext wptr ptrData tag (CLM.LLVMPointerType w))
 minimalPtrShape mkTag w =
   ShapePtrBV <$> mkTag (CLM.LLVMPointerRepr w) <*> pure w
 
@@ -650,7 +650,7 @@ parseJsonPtrShape ::
   -- | Parser for @tag@s
   (forall t. Aeson.KeyMap Aeson.Value -> Aeson.Parser (tag t)) ->
   Aeson.Value ->
-  Aeson.Parser (Some (PtrShape ext w tag 'Precond))
+  Aeson.Parser (Some (PtrShape ext w 'Precond tag))
 parseJsonPtrShape parseTag =
   Aeson.withObject "Shape" $ \v -> do
     ty <- v .: "type" :: Aeson.Parser Text
@@ -687,13 +687,13 @@ parseJsonPtrShape parseTag =
   parseJsonPtrTarget ::
     Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8))) =>
     Aeson.Value ->
-    Aeson.Parser (PtrTarget w tag 'Precond)
+    Aeson.Parser (PtrTarget w 'Precond tag)
   parseJsonPtrTarget v =
     ptrTarget Nothing . Seq.fromList <$> Aeson.listParser parseJsonMemShape v
 
   parseJsonMemShape ::
     Aeson.Value ->
-    Aeson.Parser (MemShape w tag 'Precond)
+    Aeson.Parser (MemShape w 'Precond tag)
   parseJsonMemShape =
     Aeson.withObject "MemShape" $ \v -> do
       ty <- (v .: "type" :: Aeson.Parser Text)
@@ -731,7 +731,7 @@ x64StackPtrShape ::
   -- symbolic bytes.
   Maybe [Word8] ->
   ExtraStackSlots ->
-  PtrShape ext wptr NoTag 'Precond (CLM.LLVMPointerType wptr)
+  PtrShape ext wptr 'Precond NoTag (CLM.LLVMPointerType wptr)
 x64StackPtrShape returnAddrBytes stackArgSlots =
   let ptrWidth = Bytes 8
       (returnAddr, returnAddrSize) = returnAddrMemShape returnAddrBytes ptrWidth
@@ -761,7 +761,7 @@ ppcStackPtrShape ::
   -- symbolic bytes.
   Maybe [Word8] ->
   ExtraStackSlots ->
-  PtrShape ext wptr NoTag 'Precond (CLM.LLVMPointerType wptr)
+  PtrShape ext wptr 'Precond NoTag (CLM.LLVMPointerType wptr)
 ppcStackPtrShape returnAddrBytes stackArgSlots =
   let ptrWidth = CLB.bitsToBytes (natValue ?ptrWidth)
       (returnAddr, returnAddrSize) = returnAddrMemShape returnAddrBytes ptrWidth
@@ -785,7 +785,7 @@ ppcStackPtrShape returnAddrBytes stackArgSlots =
 -- does /not/ store the return address on the stack.
 armStackPtrShape ::
   ExtraStackSlots ->
-  PtrShape ext wptr NoTag 'Precond (CLM.LLVMPointerType wptr)
+  PtrShape ext wptr 'Precond NoTag (CLM.LLVMPointerType wptr)
 armStackPtrShape stackArgSlots =
   let ptrWidth = Bytes 4
       (stackArgs, stackArgsSize) = stackArgMemShapes stackArgSlots ptrWidth
@@ -803,7 +803,7 @@ stackSizeInMiB = 1024 * kib
   kib = 1024
 
 -- Helper, not exported
-returnAddrMemShape :: Maybe [Word8] -> Bytes -> (MemShape wptr NoTag 'Precond, Bytes)
+returnAddrMemShape :: Maybe [Word8] -> Bytes -> (MemShape wptr 'Precond NoTag, Bytes)
 returnAddrMemShape returnAddrBytes ptrWidth =
   case returnAddrBytes of
     Just bs ->
@@ -812,7 +812,7 @@ returnAddrMemShape returnAddrBytes ptrWidth =
     Nothing -> (Initialized NoTag ptrWidth, ptrWidth)
 
 -- Helper, not exported
-stackArgMemShapes :: ExtraStackSlots -> Bytes -> ([MemShape wptr NoTag 'Precond], Bytes)
+stackArgMemShapes :: ExtraStackSlots -> Bytes -> ([MemShape wptr 'Precond NoTag], Bytes)
 stackArgMemShapes stackArgSlots ptrWidth =
   let stackArgs =
         List.replicate
@@ -855,8 +855,8 @@ bytesToPointers ::
   proxy w ->
   tag (CLM.LLVMPointerType w) ->
   Cursor ext (CLM.LLVMPointerType w ': ts) ->
-  PtrTarget w tag 'Precond ->
-  Either ModifyPtrError (PtrTarget w tag 'Precond)
+  PtrTarget w 'Precond tag ->
+  Either ModifyPtrError (PtrTarget w 'Precond tag)
 bytesToPointers proxy tag path tgt =
   case (path, tgt) of
     -- At the end of the path, grow/initialize the pointer here
@@ -887,10 +887,10 @@ modifyPtrTarget ::
   proxy w ->
   -- | See 'growPtrTarget', 'initializePtrTarget', and
   -- 'initializeOrGrowPtrTarget'
-  (PtrTarget w tag 'Precond -> Either ModifyPtrError (PtrTarget w tag 'Precond)) ->
+  (PtrTarget w 'Precond tag -> Either ModifyPtrError (PtrTarget w 'Precond tag)) ->
   Cursor ext (CLM.LLVMPointerType w ': ts) ->
-  PtrTarget w tag 'Precond ->
-  Either ModifyPtrError (PtrTarget w tag 'Precond)
+  PtrTarget w 'Precond tag ->
+  Either ModifyPtrError (PtrTarget w 'Precond tag)
 modifyPtrTarget proxy modify path tgt =
   case (path, tgt) of
     -- At the end of the path, grow/initialize/whatever the pointer here

@@ -43,7 +43,7 @@ import What4.FunctionName qualified as WFN
 -- | A view of a 'LDU.Info'
 data DITypeView
   = Bv
-  | Ptr !(PtrShape.PtrTarget 64 NoTag 'PtrShape.Precond)
+  | Ptr !(PtrShape.PtrTarget 64 'PtrShape.Precond NoTag)
 
 -- This function assumes x86_64
 decodeBasicTypeName :: String -> Maybe DITypeView
@@ -97,7 +97,7 @@ minTypeSize =
 --
 -- It is acceptable for this function to under-estimate the size of a type:
 -- GREASE's heuristics will expand the allocation as necessary.
-asPtrTarget :: CLM.HasPtrWidth 64 => LDU.Info -> PtrShape.PtrTarget 64 NoTag 'PtrShape.Precond
+asPtrTarget :: CLM.HasPtrWidth 64 => LDU.Info -> PtrShape.PtrTarget 64 'PtrShape.Precond NoTag
 asPtrTarget =
   \case
     LDU.ArrInfo _elemTy -> PtrShape.PtrTarget Nothing Seq.empty
@@ -112,7 +112,7 @@ asPtrTarget =
 
   -- For structs, we need to add uninitialized padding bytes between their
   -- fields.
-  structPtrTarget :: [LDU.StructFieldInfo] -> PtrShape.PtrTarget 64 NoTag 'PtrShape.Precond
+  structPtrTarget :: [LDU.StructFieldInfo] -> PtrShape.PtrTarget 64 'PtrShape.Precond NoTag
   structPtrTarget fields =
     let ?ptrWidth = knownNat @64
      in let tgt = PtrShape.ptrTarget Nothing (fieldsPtrTarget fields)
@@ -127,7 +127,7 @@ asPtrTarget =
                   , "Found size " ++ show tgtSize
                   ]
 
-  fieldsPtrTarget :: [LDU.StructFieldInfo] -> Seq (PtrShape.MemShape 64 NoTag 'PtrShape.Precond)
+  fieldsPtrTarget :: [LDU.StructFieldInfo] -> Seq (PtrShape.MemShape 64 'PtrShape.Precond NoTag)
   fieldsPtrTarget =
     let ?ptrWidth = knownNat @64
      in snd . Foldable.foldl' go (0, Seq.empty)
@@ -178,13 +178,13 @@ decodeType =
 
 -- | Infer the 'Shape' of a single argument from debug information
 diArgShape ::
-  ( ExtShape ext NoTag 'PtrShape.Precond ~ PtrShape ext 64 NoTag 'PtrShape.Precond
+  ( ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext 64 'PtrShape.Precond NoTag
   , CLM.HasPtrWidth 64
   ) =>
   Seq (Maybe DITypeView) ->
   Int ->
   C.TypeRepr t ->
-  Either Shape.MinimalShapeError (Shape ext NoTag 'PtrShape.Precond t)
+  Either Shape.MinimalShapeError (Shape ext 'PtrShape.Precond NoTag t)
 diArgShape tyViews i t = do
   let fallback = Shape.minimalShapeWithPtrs (const NoTag) t
   case tyViews Seq.!? i of
@@ -199,13 +199,13 @@ diArgShape tyViews i t = do
 
 -- | Deduce initial argument shapes from types contained in LLVM debug info.
 diArgShapes ::
-  ( ExtShape ext NoTag 'PtrShape.Precond ~ PtrShape ext 64 NoTag 'PtrShape.Precond
+  ( ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext 64 'PtrShape.Precond NoTag
   , CLM.HasPtrWidth 64
   ) =>
   WFN.FunctionName ->
   Ctx.Assignment C.TypeRepr args ->
   L.Module ->
-  Either Shape.MinimalShapeError (Ctx.Assignment (Shape ext NoTag 'PtrShape.Precond) args)
+  Either Shape.MinimalShapeError (Ctx.Assignment (Shape ext 'PtrShape.Precond NoTag) args)
 diArgShapes fnName argTys llvmMod = do
   let defaults = TFC.traverseFC (Shape.minimalShapeWithPtrs (const NoTag)) argTys
   let fnSymb = L.Symbol (Text.unpack (WFN.functionName fnName))

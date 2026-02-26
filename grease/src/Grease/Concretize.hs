@@ -84,7 +84,7 @@ data InitialState sym ext argTys wptr
 -- | Arguments ('Args') that have been concretized
 data ConcArgs sym ext argTys
   = ConcArgs
-  { concArgsShapes :: Ctx.Assignment (Shape ext (Conc.ConcRV' sym) 'ShapePtr.Precond) argTys
+  { concArgsShapes :: Ctx.Assignment (Shape ext 'ShapePtr.Precond (Conc.ConcRV' sym)) argTys
   }
 
 -- | Turn 'ConcArgs' back into a 'C.RegMap' that can be used to re-execute
@@ -200,16 +200,16 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   -- Helper to concretize a PtrTarget
   concretizePtrTarget ::
     (forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)) ->
-    ShapePtr.PtrTarget wptr (CS.RegValue' sym) 'ShapePtr.NoData ->
-    IO (ShapePtr.PtrTarget wptr (Conc.ConcRV' sym) 'ShapePtr.NoData)
+    ShapePtr.PtrTarget wptr 'ShapePtr.NoData (CS.RegValue' sym) ->
+    IO (ShapePtr.PtrTarget wptr 'ShapePtr.NoData (Conc.ConcRV' sym))
   concretizePtrTarget concRV (ShapePtr.PtrTarget bid ms) =
     ShapePtr.PtrTarget bid <$> traverse (concretizeMemShape concRV) ms
 
   -- Helper to concretize a MemShape
   concretizeMemShape ::
     (forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)) ->
-    ShapePtr.MemShape wptr (CS.RegValue' sym) 'ShapePtr.NoData ->
-    IO (ShapePtr.MemShape wptr (Conc.ConcRV' sym) 'ShapePtr.NoData)
+    ShapePtr.MemShape wptr 'ShapePtr.NoData (CS.RegValue' sym) ->
+    IO (ShapePtr.MemShape wptr 'ShapePtr.NoData (Conc.ConcRV' sym))
   concretizeMemShape concRV = \case
     ShapePtr.Uninitialized bytes -> pure (ShapePtr.Uninitialized bytes)
     ShapePtr.Initialized tag bytes ->

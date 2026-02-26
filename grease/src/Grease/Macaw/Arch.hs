@@ -201,7 +201,7 @@ data ArchContext arch = ArchContext
        type -}
     -- A mapping from syscall numbers to names.
     _archSyscallCodeMapping :: IntMap Text
-  , _archStackPtrShape :: PtrShape (Symbolic.MacawExt arch) (MC.ArchAddrWidth arch) NoTag 'Precond (CLM.LLVMPointerType (MC.ArchAddrWidth arch))
+  , _archStackPtrShape :: PtrShape (Symbolic.MacawExt arch) (MC.ArchAddrWidth arch) 'Precond NoTag (CLM.LLVMPointerType (MC.ArchAddrWidth arch))
   -- ^ Shape of the stack pointer
   --
   -- A function that writes to the stack on architectures where it grows down

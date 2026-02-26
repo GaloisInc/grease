@@ -105,7 +105,7 @@ type RefineHeuristic sym bak ext tys =
   ArgShapes ext NoTag tys ->
   IO (HeuristicResult ext tys)
 
-selectArg :: ArgSelector ext argTys ts t -> Lens' (ArgShapes ext NoTag argTys) (Shape ext NoTag 'ShapePtr.Precond t)
+selectArg :: ArgSelector ext argTys ts t -> Lens' (ArgShapes ext NoTag argTys) (Shape ext 'ShapePtr.Precond NoTag t)
 selectArg sel = argShapes . ixF' (sel ^. argSelectorIndex)
 
 newtype MemoryErrorHeuristic sym ext w argTys
@@ -132,14 +132,14 @@ refinePtrArg ::
   ) =>
   GreaseLogAction ->
   ArgShapes ext NoTag argTys ->
-  ((regTy ~ CLMP.LLVMPointerType w) => PtrTarget w NoTag 'ShapePtr.Precond -> Either ModifyPtrError (PtrTarget w NoTag 'ShapePtr.Precond)) ->
+  ((regTy ~ CLMP.LLVMPointerType w) => PtrTarget w 'ShapePtr.Precond NoTag -> Either ModifyPtrError (PtrTarget w 'ShapePtr.Precond NoTag)) ->
   ArgSelector ext argTys ts regTy ->
   IO (HeuristicResult ext argTys)
 refinePtrArg la args modify sel =
   case args ^. selectArg sel of
     ShapeExt (ShapePtrBV _tag w) | Just Refl <- testEquality w ?ptrWidth -> do
       let
-        pt :: ShapePtr.PtrTarget w NoTag 'ShapePtr.Precond
+        pt :: ShapePtr.PtrTarget w 'ShapePtr.Precond NoTag
         pt = ptrTarget Nothing Seq.empty
       doLog la $ Diag.HeuristicPtrTarget pt
       let result = modify pt
@@ -262,7 +262,7 @@ modPtr ::
   Anns.Annotations sym ext argTys ->
   sym ->
   ArgShapes ext NoTag argTys ->
-  (PtrTarget w NoTag 'ShapePtr.Precond -> PtrTarget w NoTag 'ShapePtr.Precond) ->
+  (PtrTarget w 'ShapePtr.Precond NoTag -> PtrTarget w 'ShapePtr.Precond NoTag) ->
   CLMP.LLVMPtr sym w0 ->
   IO (HeuristicResult ext argTys)
 modPtr la anns sym args modify ptr = do
@@ -283,8 +283,8 @@ growPtrTargetUpToBv ::
   Semigroup (tag (C.VectorType (CLMP.LLVMPointerType 8))) =>
   sym ->
   WI.SymBV sym w' ->
-  PtrTarget w tag 'ShapePtr.Precond ->
-  PtrTarget w tag 'ShapePtr.Precond
+  PtrTarget w 'ShapePtr.Precond tag ->
+  PtrTarget w 'ShapePtr.Precond tag
 growPtrTargetUpToBv sym symBv =
   case WI.asBV (Maybe.fromMaybe symBv (WI.getUnannotatedTerm sym symBv)) of
     Nothing -> growPtrTarget
@@ -338,7 +338,7 @@ handleUB la anns sym _loc args =
         case args ^. selectArg sel of
           ShapeExt (ShapePtrBV _tag w) | Just Refl <- testEquality w ?ptrWidth -> do
             let
-              pt :: ShapePtr.PtrTarget wptr NoTag 'ShapePtr.Precond
+              pt :: ShapePtr.PtrTarget wptr 'ShapePtr.Precond NoTag
               pt = ptrTarget Nothing (Seq.singleton (Uninitialized 1))
             doLog la $ Diag.HeuristicPtrTarget pt
             let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag $ ShapePtr.PrecondPtrData (Offset 0) pt)
