@@ -922,12 +922,10 @@ bytesToPointers proxy tag path tgt =
     -- Need to keep dereferencing as specified by the path
     (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget _ ms) ->
       case ms Seq.!? idx of
-        Just (Pointer tag' ptrData) -> do
+        Just (Pointer tag' (PrecondPtrData offset subTgt)) -> do
           C.Refl <- Right $ lastCons (Proxy @(CLM.LLVMPointerType w)) (Proxy @ts')
-          case ptrData of
-            PrecondPtrData offset subTgt -> do
-              subTgt' <- bytesToPointers proxy tag rest subTgt
-              Right (ptrTarget Nothing (Seq.update idx (Pointer tag' (PrecondPtrData offset subTgt')) ms))
+          subTgt' <- bytesToPointers proxy tag rest subTgt
+          Right (ptrTarget Nothing (Seq.update idx (Pointer tag' (PrecondPtrData offset subTgt')) ms))
         Just Exactly{} -> Right (ptrTargetToPtrs proxy tag tgt)
         Just Initialized{} -> Right (ptrTargetToPtrs proxy tag tgt)
         Just Uninitialized{} -> Right (ptrTargetToPtrs proxy tag tgt)
