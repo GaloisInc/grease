@@ -89,6 +89,11 @@ newtype ExtraStackSlots = ExtraStackSlots {getExtraStackSlots :: Int}
   deriving newtype (Enum, Eq, Integral, Num, Ord, Read, Real, Show)
 
 -- | Mode indicating what pointer metadata is present
+-- This mode allows us to share 'PtrShape' between usages
+-- where we know what a pointer points to (when the user specifies the shape)
+-- and when we do not know what a pointer points to (its runtime representation).
+-- This mode switching allows us to use the runtime representation of shapes with 'NoData'
+-- for various precondition assertion languages.
 data PtrDataMode = Precond | NoData
 
 -- | Pointer data that may or may not be present
