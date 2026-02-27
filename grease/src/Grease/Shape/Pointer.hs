@@ -210,25 +210,21 @@ instance (KnownPtrMode ptrData, MC.PrettyF tag) => PP.Pretty (MemShape wptr ptrD
           , PP.viaShow (CLB.bytesToInteger bs)
           ]
       Pointer tag ptrData ->
-        case knownPtrMode @ptrData of
-          PrecondRepr ->
-            case ptrData of
-              PrecondPtrData offset tgt ->
-                PP.hcat
-                  [ "ptr"
-                  , ppTag tag
-                  , ":"
-                  , PP.pretty tgt
-                  , "+" PP.<> PP.viaShow offset
-                  ]
-          NoDataRepr ->
-            case ptrData of
-              NoPtrData ->
-                PP.hcat
-                  [ "ptr"
-                  , ppTag tag
-                  , ":removed"
-                  ]
+        case (knownPtrMode @ptrData, ptrData) of
+          (PrecondRepr, PrecondPtrData offset tgt) ->
+            PP.hcat
+              [ "ptr"
+              , ppTag tag
+              , ":"
+              , PP.pretty tgt
+              , "+" PP.<> PP.viaShow offset
+              ]
+          (NoDataRepr, NoPtrData) ->
+            PP.hcat
+              [ "ptr"
+              , ppTag tag
+              , ":removed"
+              ]
       Exactly bs -> "exactly:" PP.<+> PP.pretty bs
 
 -- | Instances for MemShape wptr 'Precond
@@ -278,14 +274,11 @@ traverseMemShapeWithType mode f =
     Pointer tag ptrData ->
       Pointer
         <$> f (CLM.LLVMPointerRepr ?ptrWidth) tag
-        <*> case mode of
-          PrecondRepr ->
-            case ptrData of
-              PrecondPtrData offset (PtrTarget bid shapes) ->
-                PrecondPtrData offset <$> (PtrTarget bid <$> traverse (traverseMemShapeWithType mode f) shapes)
-          NoDataRepr ->
-            case ptrData of
-              NoPtrData -> pure NoPtrData
+        <*> case (mode, ptrData) of
+          (PrecondRepr, PrecondPtrData offset (PtrTarget bid shapes)) ->
+            PrecondPtrData offset <$> (PtrTarget bid <$> traverse (traverseMemShapeWithType mode f) shapes)
+          (NoDataRepr, NoPtrData) ->
+            pure NoPtrData
     Exactly bs ->
       Exactly
         <$> traverse (traverseTaggedByte (f (CLM.LLVMPointerRepr (C.knownNat @8)))) bs
@@ -600,14 +593,11 @@ instance (KnownPtrMode ptrData, MC.PrettyF tag) => MC.PrettyF (PtrShape ext w pt
    where
     prettyPtrData :: tag (CLM.LLVMPointerType w) -> PtrData ptrData w tag -> PP.Doc ann
     prettyPtrData tag dat =
-      case knownPtrMode @ptrData of
-        PrecondRepr ->
-          case dat of
-            PrecondPtrData offset tgt ->
-              PP.pretty tgt PP.<> "+" PP.<> PP.viaShow offset PP.<> ppTag tag
-        NoDataRepr ->
-          case dat of
-            NoPtrData -> "ptr" PP.<> ppTag tag PP.<> ":removed"
+      case (knownPtrMode @ptrData, dat) of
+        (PrecondRepr, PrecondPtrData offset tgt) ->
+          PP.pretty tgt PP.<> "+" PP.<> PP.viaShow offset PP.<> ppTag tag
+        (NoDataRepr, NoPtrData) ->
+          "ptr" PP.<> ppTag tag PP.<> ":removed"
 
 -- | Instances for PtrShape ext w 'Precond
 instance TFC.FunctorFC (PtrShape ext w 'Precond) where
