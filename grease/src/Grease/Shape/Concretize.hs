@@ -28,6 +28,17 @@ import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Numeric.Natural (Natural)
 
+-- | Look up a block in the allocation map, panicking with a descriptive message if not found
+lookupBlock ::
+  String ->
+  Integer ->
+  Map Natural (PtrShape.PtrTarget wptr 'PtrShape.NoData (Conc.ConcRV' sym)) ->
+  PtrShape.PtrTarget wptr 'PtrShape.NoData (Conc.ConcRV' sym)
+lookupBlock callerName blockNum allocMap =
+  case Map.lookup (fromInteger blockNum) allocMap of
+    Just target -> target
+    Nothing -> panic callerName ["Block " ++ show blockNum ++ " not found in allocMap"]
+
 -- | Turns 'PtrShape.Initialized' into 'PtrShape.Exactly'.
 -- Transforms 'NoData pointers into 'Precond pointers using allocMap.
 concMemShape ::
@@ -46,14 +57,12 @@ concMemShape allocMap =
     PtrShape.Pointer tag PtrShape.NoPtrData ->
       let ptr = Conc.unConcRV' tag
           blockNum = CLMP.concBlock ptr
-       in case Map.lookup (fromInteger blockNum) allocMap of
-            Just target ->
-              let concTarget = concPtrTarget allocMap target
-                  offsetBV = CLMP.concOffset ptr
-                  offsetBytes = BV.asUnsigned offsetBV
-                  offset = PtrShape.Offset (CLB.toBytes offsetBytes)
-               in PtrShape.Pointer tag (PtrShape.PrecondPtrData offset concTarget)
-            Nothing -> panic "concMemShape" ["Block " ++ show blockNum ++ " not found in allocMap during concretization (concMemShape)"]
+          target = lookupBlock "concMemShape" blockNum allocMap
+          concTarget = concPtrTarget allocMap target
+          offsetBV = CLMP.concOffset ptr
+          offsetBytes = BV.asUnsigned offsetBV
+          offset = PtrShape.Offset (CLB.toBytes offsetBytes)
+       in PtrShape.Pointer tag (PtrShape.PrecondPtrData offset concTarget)
     PtrShape.Exactly bs -> PtrShape.Exactly bs
 
 concPtrTarget ::
@@ -82,14 +91,13 @@ concPtrShape allocMap =
           blockNum = CLMP.concBlock ptr
        in if blockNum == 0
             then PtrShape.ShapePtrBVLit tag (CLMP.concWidth ptr) (CLMP.concOffset ptr)
-            else case Map.lookup (fromInteger blockNum) allocMap of
-              Just target ->
-                let concTarget = concPtrTarget allocMap target
-                    offsetBV = CLMP.concOffset ptr
-                    offsetBytes = BV.asUnsigned offsetBV
-                    offset = PtrShape.Offset (CLB.toBytes offsetBytes)
-                 in PtrShape.ShapePtr tag (PtrShape.PrecondPtrData offset concTarget)
-              Nothing -> panic "concPtrTarget" $ ["Block " ++ show blockNum ++ " not found in allocMap during concretization (concPtrShape)"]
+            else
+              let target = lookupBlock "concPtrShape" blockNum allocMap
+                  concTarget = concPtrTarget allocMap target
+                  offsetBV = CLMP.concOffset ptr
+                  offsetBytes = BV.asUnsigned offsetBV
+                  offset = PtrShape.Offset (CLB.toBytes offsetBytes)
+               in PtrShape.ShapePtr tag (PtrShape.PrecondPtrData offset concTarget)
 
 concShape ::
   CLMP.HasPtrWidth wptr =>
