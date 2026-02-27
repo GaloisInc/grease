@@ -131,7 +131,11 @@ data ShapesAst ext w
 type instance Shape.ExtShape (Parse ext w) = ParsePtrShape w
 
 -- | Like 'PtrShape.PtrShape', except that 'PtrShape.PtrTarget' is replaced
--- by 'BlockId'. Always uses 'Precond mode during parsing.
+-- by 'BlockId'.
+--
+-- Note: The ptrData parameter is required for kind compatibility with ExtShape,
+-- but parsing always uses 'Precond mode (shapes haven't been through Setup yet).
+-- The parameter exists solely to match the kind expected by the Shape type family.
 type ParsePtrShape :: Nat -> PtrShape.PtrDataMode -> (C.CrucibleType -> Type) -> C.CrucibleType -> Type
 data ParsePtrShape w ptrData tag t where
   ParseShapePtrBV ::
