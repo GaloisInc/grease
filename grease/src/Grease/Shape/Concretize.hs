@@ -28,16 +28,27 @@ import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Numeric.Natural (Natural)
 
--- | Look up a block in the allocation map, panicking with a descriptive message if not found
-lookupBlock ::
+-- | Look up a block in the allocation map and create PrecondPtrData from a concrete pointer
+--
+-- This helper eliminates duplication between concMemShape and concPtrShape by
+-- encapsulating the logic of: looking up the block, concretizing the target,
+-- extracting the offset, and constructing PrecondPtrData.
+lookupBlockAndCreatePtrData ::
+  CLMP.HasPtrWidth wptr =>
   String ->
-  Integer ->
   Map Natural (PtrShape.PtrTarget wptr 'PtrShape.NoData (Conc.ConcRV' sym)) ->
-  PtrShape.PtrTarget wptr 'PtrShape.NoData (Conc.ConcRV' sym)
-lookupBlock callerName blockNum allocMap =
-  case Map.lookup (fromInteger blockNum) allocMap of
-    Just target -> target
-    Nothing -> panic callerName ["Block " ++ show blockNum ++ " not found in allocMap"]
+  Conc.ConcRegValue sym (CLMP.LLVMPointerType wptr) ->
+  PtrShape.PtrData 'PtrShape.Precond wptr (Conc.ConcRV' sym)
+lookupBlockAndCreatePtrData callerName allocMap ptr =
+  let blockNum = CLMP.concBlock ptr
+      target = case Map.lookup (fromInteger blockNum) allocMap of
+        Just t -> t
+        Nothing -> panic callerName ["Block " ++ show blockNum ++ " not found in allocMap"]
+      concTarget = concPtrTarget allocMap target
+      offsetBV = CLMP.concOffset ptr
+      offsetBytes = BV.asUnsigned offsetBV
+      offset = PtrShape.Offset (CLB.toBytes offsetBytes)
+   in PtrShape.PrecondPtrData offset concTarget
 
 -- | Turns 'PtrShape.Initialized' into 'PtrShape.Exactly'.
 -- Transforms 'NoData pointers into 'Precond pointers using allocMap.
@@ -56,13 +67,8 @@ concMemShape allocMap =
            in PtrShape.Exactly (List.map concByte (Vec.toList tag))
     PtrShape.Pointer tag PtrShape.NoPtrData ->
       let ptr = Conc.unConcRV' tag
-          blockNum = CLMP.concBlock ptr
-          target = lookupBlock "concMemShape" blockNum allocMap
-          concTarget = concPtrTarget allocMap target
-          offsetBV = CLMP.concOffset ptr
-          offsetBytes = BV.asUnsigned offsetBV
-          offset = PtrShape.Offset (CLB.toBytes offsetBytes)
-       in PtrShape.Pointer tag (PtrShape.PrecondPtrData offset concTarget)
+          ptrData = lookupBlockAndCreatePtrData "concMemShape" allocMap ptr
+       in PtrShape.Pointer tag ptrData
     PtrShape.Exactly bs -> PtrShape.Exactly bs
 
 concPtrTarget ::
@@ -92,12 +98,8 @@ concPtrShape allocMap =
        in if blockNum == 0
             then PtrShape.ShapePtrBVLit tag (CLMP.concWidth ptr) (CLMP.concOffset ptr)
             else
-              let target = lookupBlock "concPtrShape" blockNum allocMap
-                  concTarget = concPtrTarget allocMap target
-                  offsetBV = CLMP.concOffset ptr
-                  offsetBytes = BV.asUnsigned offsetBV
-                  offset = PtrShape.Offset (CLB.toBytes offsetBytes)
-               in PtrShape.ShapePtr tag (PtrShape.PrecondPtrData offset concTarget)
+              let ptrData = lookupBlockAndCreatePtrData "concPtrShape" allocMap ptr
+               in PtrShape.ShapePtr tag ptrData
 
 concShape ::
   CLMP.HasPtrWidth wptr =>

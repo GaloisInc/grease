@@ -653,7 +653,11 @@ traversePtrShapeWithType md f =
         <$> f (CLM.LLVMPointerRepr ?ptrWidth) tag
         <*> traversePtrDataHelper f ptrData
  where
-  traversePtrDataHelper :: Applicative m => (forall x. C.TypeRepr x -> tag x -> m (tag' x)) -> PtrData mode wptr tag -> m (PtrData mode wptr tag')
+  traversePtrDataHelper ::
+    Applicative m =>
+    (forall x. C.TypeRepr x -> tag x -> m (tag' x)) ->
+    PtrData mode wptr tag ->
+    m (PtrData mode wptr tag')
   traversePtrDataHelper g dat =
     case md of
       NoDataRepr -> pure NoPtrData

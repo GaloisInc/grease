@@ -331,7 +331,10 @@ printRle c n = do
   s = PP.pretty @[Char] [c, c]
 
 -- | Ignores @tag@s.
-printTgt :: PtrShape.KnownPtrMode ptrData => PtrShape.PtrTarget w ptrData tag -> Printer w tag (PP.Doc Void)
+printTgt ::
+  PtrShape.KnownPtrMode ptrData =>
+  PtrShape.PtrTarget w ptrData tag ->
+  Printer w tag (PP.Doc Void)
 printTgt (PtrShape.PtrTarget _ memShapes) = do
   docs <- traverse printMemShape memShapes
   pure (PP.align (PP.fillSep (Foldable.toList docs)))
@@ -345,7 +348,11 @@ bytesToInt :: CLB.Bytes -> Int
 bytesToInt = integerToInt . CLB.bytesToInteger
 
 -- | Ignores @tag@s.
-printMemShape :: forall ptrData w tag. PtrShape.KnownPtrMode ptrData => PtrShape.MemShape w ptrData tag -> Printer w tag (PP.Doc Void)
+printMemShape ::
+  forall ptrData w tag.
+  PtrShape.KnownPtrMode ptrData =>
+  PtrShape.MemShape w ptrData tag ->
+  Printer w tag (PP.Doc Void)
 printMemShape = \case
   PtrShape.Uninitialized bytes -> printRle '#' (bytesToInt bytes)
   PtrShape.Initialized _tag bytes -> printRle 'X' (bytesToInt bytes)
