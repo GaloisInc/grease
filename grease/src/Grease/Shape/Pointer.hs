@@ -56,7 +56,7 @@ import Data.Aeson.Types qualified as Aeson
 import Data.BitVector.Sized (BV)
 import Data.BitVector.Sized qualified as BV
 import Data.Foldable qualified as Foldable
-import Data.Kind (Type)
+import Data.Kind (Constraint, Type)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Parameterized.Classes (ShowF)
@@ -106,12 +106,14 @@ data instance PtrData 'Precond w tag
   , precondTarget :: PtrTarget w 'Precond tag
   }
 
-data PtrModeRepr (tp :: PtrDataMode) where
+type PtrModeRepr :: PtrDataMode -> Type
+data PtrModeRepr tp where
   PrecondRepr :: PtrModeRepr 'Precond
   NoDataRepr :: PtrModeRepr 'NoData
 
--- | Typeclass for types with a known PtrDataMode at compile time
-class KnownPtrMode (mode :: PtrDataMode) where
+-- | Typeclass for types with a known 'PtrDataMode' at compile time
+type KnownPtrMode :: PtrDataMode -> Constraint
+class KnownPtrMode mode where
   knownPtrMode :: PtrModeRepr mode
 
 instance KnownPtrMode 'Precond where
