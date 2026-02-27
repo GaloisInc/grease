@@ -46,6 +46,7 @@ import Data.Text (Text)
 import Data.Tuple qualified as Tuple
 import Data.Void (Void)
 import Data.Void qualified as Void
+import Grease.Panic (panic)
 import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.Pointer (BlockId (BlockId), PtrShape)
@@ -265,11 +266,8 @@ printPtrWithOffset getOffset =
               printBlockOffset blk offset
         PtrShape.NoDataRepr ->
           case dat of
-            PtrShape.NoPtrData -> do
-              -- Simplified: this case should not occur after refactoring
-              -- Keep for backward compatibility with any legacy code
-              let offset = getOffset tag dat
-              pure ("<?+" PP.<> PP.viaShow offset PP.<> ">")
+            PtrShape.NoPtrData ->
+              panic "printPtrWithOffset" ["Attempted to print PtrShape with NoData mode"]
 
 printBv :: NatRepr w' -> Printer w tag (PP.Doc ann)
 printBv w' = do
@@ -362,8 +360,7 @@ printMemShape = \case
       PtrShape.NoDataRepr ->
         case dat of
           PtrShape.NoPtrData ->
-            -- Simplified: should not occur after refactoring
-            pure "<?+?>"
+            panic "printMemShape" ["Attempted to print MemShape Pointer with NoData mode"]
   PtrShape.Exactly bytes ->
     let ppWord8 = PP.pretty . padHex 2
      in pure (PP.fillSep (List.map (ppWord8 . PtrShape.taggedByteValue) bytes))

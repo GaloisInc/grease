@@ -46,6 +46,7 @@ import GHC.Natural (Natural)
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic (Diagnostic (SetupDiagnostic), GreaseLogAction)
+import Grease.Panic (panic)
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Setup.Diagnostic qualified as Diag
 import Grease.Shape (
@@ -247,9 +248,7 @@ setupPtr la bak layout nm sel target = do
           allocMap <- use setupAllocMap
           setupAllocMap .= Map.insert blockNum targetNoData allocMap
         Nothing ->
-          -- Block number is symbolic, which shouldn't happen for malloc'd pointers
-          -- but we'll just skip storing in the map in this case
-          pure ()
+          panic "setupPtr" ["Block number is symbolic for malloc'd pointer"]
 
       pure (p, PtrTarget bid ms')
  where

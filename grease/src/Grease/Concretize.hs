@@ -197,7 +197,6 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
       , concErr = cErr
       }
  where
-  -- Helper to concretize a PtrTarget
   concretizePtrTarget ::
     (forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)) ->
     ShapePtr.PtrTarget wptr 'ShapePtr.NoData (CS.RegValue' sym) ->
@@ -205,7 +204,6 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   concretizePtrTarget concRV (ShapePtr.PtrTarget bid ms) =
     ShapePtr.PtrTarget bid <$> traverse (concretizeMemShape concRV) ms
 
-  -- Helper to concretize a MemShape
   concretizeMemShape ::
     (forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)) ->
     ShapePtr.MemShape wptr 'ShapePtr.NoData (CS.RegValue' sym) ->
@@ -223,7 +221,6 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
     ShapePtr.Exactly bytes ->
       ShapePtr.Exactly <$> traverse (concretizeTaggedByte concRV) bytes
 
-  -- Helper to concretize a TaggedByte
   concretizeTaggedByte ::
     (forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)) ->
     ShapePtr.TaggedByte (CS.RegValue' sym) ->
