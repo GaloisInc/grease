@@ -954,12 +954,10 @@ modifyPtrTarget proxy modify path tgt =
     -- Need to keep dereferencing as specified by the path
     (CursorExt (DereferencePtr @_ @_ @ts' idx rest), PtrTarget _ ms) ->
       case ms Seq.!? idx of
-        Just (Pointer tag ptrData) -> do
+        Just (Pointer tag (PrecondPtrData offset subTgt)) -> do
           C.Refl <- pure $ lastCons (Proxy @(CLM.LLVMPointerType w)) (Proxy @ts')
-          case ptrData of
-            PrecondPtrData offset subTgt -> do
-              subTgt' <- modifyPtrTarget proxy modify rest subTgt
-              Right (ptrTarget Nothing (Seq.update idx (Pointer tag (PrecondPtrData offset subTgt')) ms))
+          subTgt' <- modifyPtrTarget proxy modify rest subTgt
+          Right (ptrTarget Nothing (Seq.update idx (Pointer tag (PrecondPtrData offset subTgt')) ms))
         Just _ -> Left ModifyPtrMismatchedSelector
         Nothing -> Left (ModifyPtrPathOutOfBounds idx (Seq.length ms))
     (CursorExt (DereferenceByte _ _), _) ->
