@@ -1,5 +1,5 @@
-;; This is a regression test, other tests were not testing that we printed non-zero offsets.
-;; We make sure that concretization maintains non-zero offsets here.
+; This is a regression test, other tests were not testing that we printed non-zero offsets.
+; We make sure that concretization maintains non-zero offsets here.
 ;; flags {"--symbol", "test",  "--initial-precondition", "tests/llvm/extra/out-of-bound-shape.txt", "--no-heuristics"}
 ;; go(prog)
 
