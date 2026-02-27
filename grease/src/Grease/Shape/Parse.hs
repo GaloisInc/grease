@@ -111,7 +111,7 @@ memShape allocs =
     Exactly wds ->
       Either.Right (PtrShape.Exactly (List.map (PtrShape.TaggedByte NoTag) wds))
     Pointer blk off ->
-      (PtrShape.Pointer NoTag . PtrShape.PrecondPtrData off)
+      PtrShape.Pointer NoTag . PtrShape.PrecondPtrData off
         <$> case lookupAlloc blk allocs of
           Maybe.Just tgt -> ptrTarget (removeAlloc blk allocs) tgt (Just blk)
           Maybe.Nothing -> Either.Left blk
