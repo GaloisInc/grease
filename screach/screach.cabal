@@ -1,0 +1,296 @@
+cabal-version: 3.0
+name: screach
+version: 0.1.0
+homepage: https://github.com/GaloisInc/grease
+license: BSD-3-Clause
+license-file: LICENSE
+author: Galois, Inc.
+maintainer: grease@galois.com
+copyright: Galois, Inc. 2026
+build-type: Simple
+-- extra-doc-files: README.md
+
+common shared
+  default-language: GHC2021
+  build-depends: base >= 4.16
+
+  -- See doc/dev.md#style
+  --
+  -- We can't use `-Werror=prepositive...` because of ndmitchell/ghcid#358.
+  ghc-options:
+    -Werror=missing-export-lists
+    -Wprepositive-qualified-module
+
+  -- Specifying -Wall and -Werror can cause the project to fail to build on
+  -- newer versions of GHC simply due to new warnings being added to -Wall. To
+  -- prevent this from happening we manually list which warnings should be
+  -- considered errors. We also list some warnings that are not in -Wall, though
+  -- try to avoid "opinionated" warnings (though this judgement is clearly
+  -- subjective).
+  --
+  -- Warnings are grouped by the GHC version that introduced them, and then
+  -- alphabetically.
+  --
+  -- A list of warnings and the GHC version in which they were introduced is
+  -- available here:
+  -- https://ghc.gitlab.haskell.org/ghc/doc/users_guide/using-warnings.html
+
+  -- Since GHC 9.4 or earlier:
+  ghc-options:
+    -Wall
+    -Werror=ambiguous-fields
+    -Werror=compat-unqualified-imports
+    -Werror=deferred-type-errors
+    -Werror=deprecated-flags
+    -Werror=deprecations
+    -Werror=deriving-defaults
+    -Werror=deriving-typeable
+    -Werror=dodgy-foreign-imports
+    -Werror=duplicate-exports
+    -Werror=empty-enumerations
+    -Werror=gadt-mono-local-binds
+    -Werror=identities
+    -Werror=inaccessible-code
+    -Werror=incomplete-patterns
+    -Werror=incomplete-record-updates
+    -Werror=incomplete-uni-patterns
+    -Werror=inline-rule-shadowing
+    -Werror=misplaced-pragmas
+    -Werror=missed-extra-shared-lib
+    -Werror=missing-exported-signatures
+    -Werror=missing-fields
+    -Werror=missing-home-modules
+    -Werror=missing-methods
+    -Werror=missing-pattern-synonym-signatures
+    -Werror=missing-signatures
+    -Werror=name-shadowing
+    -Werror=noncanonical-monad-instances
+    -Werror=noncanonical-monoid-instances
+    -Werror=operator-whitespace
+    -Werror=operator-whitespace-ext-conflict
+    -Werror=orphans
+    -Werror=overflowed-literals
+    -Werror=overlapping-patterns
+    -Werror=partial-fields
+    -Werror=partial-type-signatures
+    -Werror=redundant-bang-patterns
+    -Werror=redundant-record-wildcards
+    -Werror=redundant-strictness-flags
+    -Werror=simplifiable-class-constraints
+    -Werror=star-binder
+    -Werror=star-is-type
+    -Werror=tabs
+    -Werror=type-defaults
+    -Werror=typed-holes
+    -Werror=type-equality-out-of-scope
+    -Werror=type-equality-requires-operators
+    -Werror=unicode-bidirectional-format-characters
+    -Werror=unrecognised-pragmas
+    -Werror=unrecognised-warning-flags
+    -Werror=unsupported-calling-conventions
+    -Werror=unsupported-llvm-version
+    -Werror=unticked-promoted-constructors
+    -Werror=unused-do-bind
+    -Werror=unused-imports
+    -Werror=unused-record-wildcards
+    -Werror=warnings-deprecations
+    -Werror=wrong-do-bind
+
+  if impl(ghc < 9.8)
+    ghc-options:
+      -Werror=forall-identifier
+
+  if impl(ghc >= 9.8)
+    ghc-options:
+      -Werror=incomplete-export-warnings
+      -Werror=inconsistent-flags
+      -Werror=missing-poly-kind-signatures
+
+  -- TODO: Enable these warnings when supporting these GHC versions.
+  --
+  -- if impl(ghc >= 9.10)
+  --   -Werror=badly-staged-types
+  --   -Werror=data-kinds-tc
+  --   -Werror=deprecated-type-abstractions
+  --   -Werror=incomplete-record-selectors
+
+  -- if impl(ghc >= 9.12)
+  --   -Werror=view-pattern-signatures
+
+library
+    import: shared
+    hs-source-dirs: src
+    exposed-modules:
+        Screach
+        Screach.AnalysisLoc
+        Screach.CallGraph
+        Screach.Config
+        Screach.Diagnostic
+        Screach.Distance
+        Screach.Distance.Diagnostic
+        Screach.Ecfs
+        Screach.Explore
+        Screach.FunctionOverride
+        Screach.FunctionOverride.Sscanf
+        Screach.GoalEvaluator
+        Screach.GoalEvaluator.Diagnostic
+        Screach.Heuristic
+        Screach.LoadedELF
+        Screach.LocationExecutionFeature
+        Screach.Panic
+        Screach.PathSplittingSchedFeature
+        Screach.Personality
+        Screach.RefinementOptions
+        Screach.ResolveCall
+        Screach.Run.Diagnostic
+        Screach.SchedulerFeature
+        Screach.ShortestDistanceScheduler
+        Screach.RefineFeature
+    build-depends:
+        attoparsec,
+        bv-sized,
+        bytestring,
+        cassava,
+        containers,
+        crucible,
+        crucible-debug,
+        crucible-llvm,
+        crucible-symio,
+        crucible-syntax,
+        crucible-macaw-debug,
+        directory,
+        elf-edit,
+        elf-edit-ecfs,
+        exceptions,
+        fgl,
+        filepath,
+        grease,
+        grease-x86,
+        lens,
+        lumberjack,
+        macaw-base,
+        macaw-loader,
+        macaw-loader-x86,
+        macaw-symbolic,
+        macaw-symbolic-syntax,
+        macaw-x86,
+        macaw-x86-symbolic,
+        macaw-x86-syntax,
+        megaparsec,
+        mtl,
+        panic,
+        parameterized-utils,
+        prettyprinter,
+        psqueues,
+        safe-exceptions,
+        stubs-common,
+        text,
+        time,
+        vector,
+        what4,
+        transformers,
+        safe
+
+library screach-cli
+    import: shared
+    hs-source-dirs: cli/
+    exposed-modules:
+        Screach.Cli
+    build-depends:
+        grease,
+        grease-cli,
+        megaparsec,
+        optparse-applicative,
+        screach,
+        text,
+        what4
+
+executable screach
+    import: shared
+    main-is: Main.hs
+    hs-source-dirs: app
+    build-depends:
+        screach,
+        screach-cli,
+
+library screach-dist-test-cli
+    import: shared
+    hs-source-dirs: test/distCLI/
+    exposed-modules:
+        DistCLI
+    build-depends:
+      screach-cli,
+      screach,
+      optparse-applicative,
+      lumberjack,
+      macaw-x86,
+      macaw-x86-symbolic,
+      macaw-x86-syntax,
+      macaw-base,
+      parameterized-utils,
+      crucible,
+      crucible-llvm,
+      crucible-symio,
+      crucible-syntax,
+      prettyprinter,
+      macaw-symbolic,
+      macaw-symbolic-syntax,
+      grease,
+      grease-x86,
+      containers,
+      bytestring,
+      what4,
+      mtl
+
+-- provides a CLI entrypoint to distance testing
+executable screach-dist-test-entrypoint
+    import: shared
+    main-is: DistTest.hs
+    hs-source-dirs: test
+    build-depends:
+      screach-dist-test-cli,
+      optparse-applicative
+
+test-suite screach-dist-test
+    import: shared
+    type: exitcode-stdio-1.0
+    hs-source-dirs: test
+    main-is: DistTestSuite.hs
+    build-depends:
+      screach-dist-test-cli,
+      screach
+    build-depends:
+        directory,
+        filepath ^>= { 1.4, 1.5.4.0 },
+        file-embed ^>= 0.0.16,
+        hslua ^>= 2.3.1,
+        lumberjack,
+        oughta ^>= 0.3,
+        prettyprinter ^>= 1.7.1,
+        tasty ^>= 1.5.3,
+        tasty-hunit ^>= 0.10.2,
+        text,
+        what4,
+        grease
+
+
+
+test-suite screach-test
+    import: shared
+    type: exitcode-stdio-1.0
+    hs-source-dirs: test
+    main-is: Test.hs
+    build-depends:
+        screach,
+        screach-cli,
+    build-depends:
+        directory,
+        filepath ^>= { 1.4, 1.5.4.0 },
+        file-embed ^>= 0.0.16,
+        hslua ^>= 2.3.1,
+        lumberjack,
+        oughta ^>= 0.3,
+        prettyprinter ^>= 1.7.1,
+        tasty ^>= 1.5.3,
+        tasty-hunit ^>= 0.10.2,
+        text,

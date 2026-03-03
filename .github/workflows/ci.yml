@@ -106,6 +106,9 @@ jobs:
     - name: Build grease-exe
       run: cabal build pkg:grease-exe pkg:grease-diagrams
 
+    - name: Build screach
+      run: cabal build pkg:screach
+
     - name: Install solvers
       run: .github/ci.sh install_system_deps
       env:
@@ -117,6 +120,9 @@ jobs:
 
     - name: Test grease-exe
       run: cabal test pkg:grease-exe
+
+    - name: Test screach
+      run: cabal test pkg:screach
 
     # This step will produce a Github-flavored Markdown report on the "job
     # summary" page. The report will first contain the output of `hpc report`

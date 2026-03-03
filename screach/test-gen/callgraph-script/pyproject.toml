@@ -1,0 +1,14 @@
+[project]
+name = "callgraph-script"
+version = "0.1.0"
+description = "A ghidra script that produces a tab separated callgraph of callsite addresses to callees"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pyghidra>=2.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "ghidra-stubs>=11.4",
+]
