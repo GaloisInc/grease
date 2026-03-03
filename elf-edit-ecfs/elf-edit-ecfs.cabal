@@ -1,0 +1,74 @@
+cabal-version: 2.2
+name: elf-edit-ecfs
+version: 0.1
+synopsis: Utilities for reading and analyzing ECFS files using elf-edit
+description:
+  Utilities for reading and analyzing [extended core file snapshot
+  (ECFS)](https://github.com/elfmaster/ecfs) files using
+  [`elf-edit`](https://github.com/GaloisInc/elf-edit).
+  .
+  This package comes with the following example programs that demonstrate how to
+  use the API:
+  .
+  * @readecfs@: Parses and prints the details of an ECFS file to stdout.
+  .
+  * @et-flip@: Flip an ELF file from `ET_NONE` to `ET_CORE` (or vice versa).
+license: BSD-3-Clause
+license-file: LICENSE
+author: Ryan Scott
+maintainer: rscott@galois.com
+copyright: Galois Inc., 2025
+category: Data
+build-type: Simple
+extra-doc-files: README.md
+
+source-repository head
+  type: git
+  location: https://github.com/GaloisInc/grease
+  subdir: elf-edit-ecfs
+
+common shared
+    ghc-options: -Wall
+    build-depends: base >= 4.16 && < 5
+    default-language: Haskell2010
+
+library
+    import: shared
+    exposed-modules:
+      Data.ElfEdit.Ecfs
+      Data.ElfEdit.Ecfs.Personality
+      Data.ElfEdit.Prim.Auxv
+    build-depends:
+      binary,
+      bytestring,
+      containers,
+      elf-edit,
+      elf-edit-core-dump,
+      prettyprinter,
+      text,
+      vector,
+    hs-source-dirs: src
+
+executable readecfs
+    import: shared
+    main-is: ReadEcfs.hs
+    build-depends:
+      bytestring,
+      elf-edit,
+      elf-edit-core-dump,
+      elf-edit-ecfs,
+      optparse-applicative,
+      text,
+      vector,
+    hs-source-dirs: tools
+
+executable et-flip
+    import: shared
+    main-is: EtFlip.hs
+    build-depends:
+      bytestring,
+      elf-edit,
+      elf-edit-ecfs,
+      mmap,
+      optparse-applicative,
+    hs-source-dirs: tools
