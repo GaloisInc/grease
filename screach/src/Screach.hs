@@ -1608,7 +1608,7 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
 
 verifyReachable ::
   ( p ~ SP.ScreachSimulatorState p0 sym bak ext (CS.RegEntry sym ret) arch t tys w
-  , TFC.TraversableFC (Shape.ExtShape ext Shape.Precond)
+  , TFC.TraversableFC (Shape.ExtShape ext 'Shape.Precond)
   , CCE.IsSyntaxExtension ext
   , GU.OnlineSolverAndBackend solver sym bak t st fm
   , 16 CT.<= w
