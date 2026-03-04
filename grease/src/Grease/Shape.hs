@@ -69,7 +69,7 @@ import Data.Traversable qualified as Traversable
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import GHC.Show qualified as GShow
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (KnownPtrMode (knownPtrMode), PtrDataMode (NoData, Precond), PtrModeRepr, PtrShape, minimalPtrShape, parseJsonPtrShape, ptrShapeType, traversePtrShapeWithType)
+import Grease.Shape.Pointer (KnownPtrMode (knownPtrMode), PtrDataMode (Precond), PtrModeRepr, PtrShape, minimalPtrShape, parseJsonPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel (HasPtrWidth)
