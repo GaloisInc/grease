@@ -42,7 +42,11 @@ import Lang.Crucible.Utils.Timeout (Timeout)
 import What4.FunctionName (FunctionName)
 
 data PathStrategy
-  = -- | Depth-first search.
+  = -- | Breadth-first search.
+    --
+    -- Never merge paths, and explore paths in a breadth-first traversal.
+    Bfs
+  | -- | Depth-first search.
     --
     -- Never merge paths, and explore paths in a depth-first traversal.
     Dfs

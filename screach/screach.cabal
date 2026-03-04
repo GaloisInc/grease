@@ -138,12 +138,10 @@ library
         Screach.LoadedELF
         Screach.LocationExecutionFeature
         Screach.Panic
-        Screach.PathSplittingSchedFeature
         Screach.Personality
         Screach.RefinementOptions
         Screach.ResolveCall
         Screach.Run.Diagnostic
-        Screach.SchedulerFeature
         Screach.ShortestDistanceScheduler
         Screach.RefineFeature
     build-depends:

@@ -194,3 +194,6 @@
     - { name: Data.Parameterized.Map, as: MapF }
     - { name: Data.Parameterized.TraversableF, as: TF }
     - { name: Data.Parameterized.TraversableFC, as: TFC }
+
+    # grease
+    - { name: Grease.Scheduler, as: Sched }
