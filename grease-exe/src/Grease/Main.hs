@@ -143,10 +143,9 @@ import Grease.Requirement qualified as GReq
 import Grease.Setup qualified as GSetup
 import Grease.Shape (ArgShapes, ExtShape)
 import Grease.Shape qualified as Shape
-import Grease.Shape.Concretize (concShape)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Parse qualified as Parse
-import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Grease.Solver (withSolverOnlineBackend)
 import Grease.SymIO qualified as GSIO
 import Grease.Syntax (parseOverridesYaml, parsedProgramCfgMap, resolveOverridesYaml)
@@ -507,19 +506,21 @@ interestingConcretizedShapes ::
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   -- | Default/initial/minimal shapes
-  Ctx.Assignment (Shape.Shape ext tag) argTys ->
+  Ctx.Assignment (Shape.Shape ext 'Precond tag) argTys ->
   Conc.ConcArgs sym ext argTys ->
   Ctx.Assignment (Const Bool) argTys
-interestingConcretizedShapes names initArgs (Conc.ConcArgs cArgs) =
-  let cShapes = fmapFC (Shape.tagWithType . concShape) cArgs
-   in let initArgs' = fmapFC Shape.tagWithType initArgs
-       in let isLlvmArg name = "%" `List.isPrefixOf` name
-           in Ctx.zipWith
-                ( \(Const name) (Const isDefault) ->
-                    Const ((name `List.elem` interestingRegs || isLlvmArg name) && not isDefault)
-                )
-                names
-                (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgs')
+interestingConcretizedShapes names initArgs cArgs =
+  let initArgsWithType = fmapFC Shape.tagWithType initArgs
+      cShapes = fmapFC Shape.tagWithType (Conc.concArgsShapes cArgs)
+      isLlvmArg name = "%" `List.isPrefixOf` name
+   in Ctx.zipWith
+        ( \(Const name) (Const isDefault) ->
+            Const ((name `List.elem` interestingRegs || isLlvmArg name) && not isDefault)
+        )
+        names
+        -- Check if the shape has changed during concretization. When we concretize, we transform the shape
+        -- for initialized bytes and Ptr's to bvlits so this captures when there is interesting data to print.
+        (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgsWithType)
 
 -- | Compute the initial 'ArgShapes' for a Macaw CFG.
 --
@@ -782,7 +783,7 @@ macawInitState ::
   C.GlobalVar ToConc.ToConcretizeType ->
   GSetup.SetupMem sym ->
   GSIO.InitializedFs sym wptr ->
-  GSetup.Args sym ext (Symbolic.MacawCrucibleRegTypes arch) ->
+  GSetup.Args sym ext (Symbolic.MacawCrucibleRegTypes arch) wptr ->
   IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
 macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConcVar setupMem initFs args = do
   let sym = CB.backendGetSym bak

@@ -15,7 +15,7 @@ import Data.Macaw.CFG qualified as MC
 import Grease.Cursor (CursorExt, ppCursor)
 import Grease.Cursor.Pointer (Dereference, ppDereference)
 import Grease.Diagnostic.Severity (Severity (Debug, Info))
-import Grease.Shape.Pointer (PtrTarget)
+import Grease.Shape.Pointer (KnownPtrMode, PtrTarget)
 import Grease.Shape.Selector (ArgSelector, argSelectorPath)
 import Prettyprinter qualified as PP
 
@@ -35,7 +35,10 @@ data Diagnostic where
     ArgSelector ext argTys ts t ->
     Diagnostic
   HeuristicPtrTarget ::
-    MC.PrettyF tag => PtrTarget w tag -> Diagnostic
+    forall w tag ptrData.
+    (KnownPtrMode ptrData, MC.PrettyF tag) =>
+    PtrTarget w ptrData tag ->
+    Diagnostic
 
 instance PP.Pretty Diagnostic where
   pretty =

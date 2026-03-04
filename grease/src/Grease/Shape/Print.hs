@@ -4,6 +4,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -81,7 +82,7 @@ aliasNext (BlockId bid) as =
 emptyAllocs :: Allocs
 emptyAllocs = Allocs IntMap.empty IntMap.empty 0
 
-data PrinterConfig w = PrinterConfig
+data PrinterConfig w tag = PrinterConfig
   { cfgAddrWidth :: AddrWidthRepr w
   , cfgRleThreshold :: Int
   -- ^ Threshold for applying run-length encoding (RLE) to sequences of
@@ -89,15 +90,15 @@ data PrinterConfig w = PrinterConfig
   }
 
 -- | 'ReaderT'/'State' monad for pretty-printing
-newtype Printer w a
-  = Printer {runPrinter :: ReaderT.ReaderT (PrinterConfig w) (State Allocs) a}
+newtype Printer w tag a
+  = Printer {runPrinter :: ReaderT.ReaderT (PrinterConfig w tag) (State Allocs) a}
   deriving (Applicative, Functor, Monad)
 
-deriving instance MonadReader (PrinterConfig w) (Printer w)
-deriving instance MonadState Allocs (Printer w)
+deriving instance MonadReader (PrinterConfig w tag) (Printer w tag)
+deriving instance MonadState Allocs (Printer w tag)
 
 -- | Run a 'Printer', printing all of the 'Shape's and then the allocations.
-evalPrinter :: PrinterConfig w -> Printer w (PP.Doc ann) -> PP.Doc ann
+evalPrinter :: PrinterConfig w tag -> Printer w tag (PP.Doc ann) -> PP.Doc ann
 evalPrinter cfg p =
   let (doc, as) =
         State.runState (ReaderT.runReaderT (runPrinter p) cfg) emptyAllocs
@@ -105,7 +106,7 @@ evalPrinter cfg p =
         then doc
         else doc PP.<> PP.line PP.<> PP.line PP.<> printAllocs (cfgAddrWidth cfg) as
 
-printerAlloc :: Printer w (PP.Doc Void) -> Maybe BlockId -> Printer w BlockId
+printerAlloc :: Printer w tag (PP.Doc Void) -> Maybe BlockId -> Printer w tag BlockId
 printerAlloc computeDoc bid = do
   -- The sequencing of block number allocations is important for legibility: It's
   -- nicer when pointers have lower block numbers than the pointers inside the
@@ -122,10 +123,10 @@ printerAlloc computeDoc bid = do
   State.modify (\as'' -> as''{allocs = IntMap.insert k doc (allocs as'')})
   pure blk
 
-addrWidth :: Printer w (AddrWidthRepr w)
+addrWidth :: Printer w tag (AddrWidthRepr w)
 addrWidth = Printer (ReaderT.asks cfgAddrWidth)
 
-rleThreshold :: Printer w Int
+rleThreshold :: Printer w tag Int
 rleThreshold = Printer (ReaderT.asks cfgRleThreshold)
 
 printAllocs :: AddrWidthRepr w -> Allocs -> PP.Doc ann
@@ -144,15 +145,17 @@ printAllocs aw as =
    in PP.vsep docs
 
 -- | Print 'Shape's associated with given names (e.g., register names)
+--
+-- Note: Only works with shapes in 'Precond mode.
 printNamedShapesFiltered ::
   PP.Pretty nm =>
-  ExtShape ext ~ PtrShape ext w =>
+  ExtShape ext 'PtrShape.Precond tag ~ PtrShape ext w 'PtrShape.Precond tag =>
   -- | Names
   Ctx.Assignment (Const.Const nm) tys ->
   -- | Only print those 'Shape's with 'True' in the corresponding entry here
   Ctx.Assignment (Const.Const Bool) tys ->
-  Ctx.Assignment (Shape ext tag) tys ->
-  Printer w (PP.Doc ann)
+  Ctx.Assignment (Shape ext 'PtrShape.Precond tag) tys ->
+  Printer w tag (PP.Doc ann)
 printNamedShapesFiltered names filt shapes =
   TFC.foldlMFC'
     ( \doc (Product.Pair (Product.Pair (Const.Const nm) s) (Const.Const b)) ->
@@ -164,13 +167,15 @@ printNamedShapesFiltered names filt shapes =
     (Ctx.zipWith Product.Pair (Ctx.zipWith Product.Pair names shapes) filt)
 
 -- | Print 'Shape's associated with given names (e.g., register names)
+--
+-- Note: Only works with shapes in 'Precond mode.
 printNamedShapes ::
   PP.Pretty nm =>
-  ExtShape ext ~ PtrShape ext w =>
+  ExtShape ext 'PtrShape.Precond tag ~ PtrShape ext w 'PtrShape.Precond tag =>
   -- | Names
   Ctx.Assignment (Const.Const nm) tys ->
-  Ctx.Assignment (Shape ext tag) tys ->
-  Printer w (PP.Doc ann)
+  Ctx.Assignment (Shape ext 'PtrShape.Precond tag) tys ->
+  Printer w tag (PP.Doc ann)
 printNamedShapes names =
   printNamedShapesFiltered
     names
@@ -178,24 +183,24 @@ printNamedShapes names =
 
 -- | Print a single named 'Shape'
 --
--- Ignores @tag@s.
+-- Ignores @tag@s. Only works with shapes in 'Precond mode.
 printNamed ::
   PP.Pretty nm =>
-  ExtShape ext ~ PtrShape ext w =>
+  ExtShape ext 'PtrShape.Precond tag ~ PtrShape ext w 'PtrShape.Precond tag =>
   -- | Name
   nm ->
-  Shape ext tag ty ->
-  Printer w (PP.Doc ann)
+  Shape ext 'PtrShape.Precond tag ty ->
+  Printer w tag (PP.Doc ann)
 printNamed name s =
   ((PP.pretty name PP.<> ": ") PP.<>) Functor.<$> printShape s
 
 -- | Print a single 'Shape'
 --
--- Ignores @tag@s.
+-- Ignores @tag@s. Only works with shapes in 'Precond mode.
 printShape ::
-  ExtShape ext ~ PtrShape ext w =>
-  Shape ext tag ty ->
-  Printer w (PP.Doc ann)
+  ExtShape ext 'PtrShape.Precond tag ~ PtrShape ext w 'PtrShape.Precond tag =>
+  Shape ext 'PtrShape.Precond tag ty ->
+  Printer w tag (PP.Doc ann)
 printShape =
   \case
     Shape.ShapeBool _tag -> pure "bool"
@@ -204,45 +209,48 @@ printShape =
     Shape.ShapeStruct _tag fields -> printStruct fields
     Shape.ShapeExt ext -> printPtr ext
 
--- | Ignores @tag@s.
+-- | Print a struct
 printStruct ::
-  ExtShape ext ~ PtrShape ext w =>
-  Ctx.Assignment (Shape ext tag) ctx ->
-  Printer w (PP.Doc ann)
+  ExtShape ext 'PtrShape.Precond tag ~ PtrShape ext w 'PtrShape.Precond tag =>
+  Ctx.Assignment (Shape ext 'PtrShape.Precond tag) ctx ->
+  Printer w tag (PP.Doc ann)
 printStruct fields = do
   docs <- Monad.sequence (TFC.toListFC printShape fields)
   pure (PP.braces (PP.hcat (List.intersperse ", " docs)))
 
--- | Ignores @tag@s.
-printPtr :: PtrShape ext w tag ty -> Printer w (PP.Doc ann)
+-- | Print a PtrShape
+printPtr ::
+  PtrShape ext w 'PtrShape.Precond tag ty ->
+  Printer w tag (PP.Doc ann)
 printPtr =
   \case
     PtrShape.ShapePtrBV _tag w -> printBv w
     PtrShape.ShapePtrBVLit _tag w bv -> printBvLit w bv
-    PtrShape.ShapePtr _tag offset tgt@(PtrShape.PtrTarget bid _) -> do
+    PtrShape.ShapePtr _tag (PtrShape.PrecondPtrData offset tgt) -> do
+      let bid = PtrShape.ptrTargetBlock tgt
       blk <- printerAlloc (printTgt tgt) bid
       printBlockOffset blk offset
 
-printBv :: NatRepr w' -> Printer w (PP.Doc ann)
+printBv :: NatRepr w' -> Printer w tag (PP.Doc ann)
 printBv w' = do
   -- TODO: assert that width % 8 == 0?
   let bytes = NatRepr.widthVal w' `div` 8
   let prettyByte = List.replicate bytes (PP.pretty ("XX" :: Text))
   pure (PP.hsep prettyByte)
 
-printBvLit :: NatRepr w' -> BV w' -> Printer w (PP.Doc ann)
+printBvLit :: NatRepr w' -> BV w' -> Printer w tag (PP.Doc ann)
 printBvLit w' bv =
   -- On `4`: There are 8 bits in a byte, and two hex digits denote one byte
   let hexDigits = NatRepr.widthVal w' `div` 4
    in pure (PP.pretty (padHex hexDigits (BV.asUnsigned bv)))
 
-printBlockOffset :: BlockId -> PtrShape.Offset -> Printer w (PP.Doc ann)
+printBlockOffset :: BlockId -> PtrShape.Offset -> Printer w tag (PP.Doc ann)
 printBlockOffset blk off = do
   b <- printBlk blk
   o <- printOff off
   pure (b PP.<> "+" PP.<> o)
 
-printBlk :: BlockId -> Printer w (PP.Doc ann)
+printBlk :: BlockId -> Printer w tag (PP.Doc ann)
 printBlk (BlockId blk) = do
   aw <- addrWidth
   let padding =
@@ -252,7 +260,7 @@ printBlk (BlockId blk) = do
           DMM.Addr64 -> 6
   pure (PP.pretty (padHex padding blk))
 
-printOff :: PtrShape.Offset -> Printer w (PP.Doc ann)
+printOff :: PtrShape.Offset -> Printer w tag (PP.Doc ann)
 printOff (PtrShape.Offset off) = do
   aw <- addrWidth
   let padding =
@@ -274,7 +282,7 @@ padHex pad v =
    in zs List.++ initial
 
 -- | RLE-encode either @##@ or @XX@ if length > 8
-printRle :: Char -> Int -> Printer w (PP.Doc ann)
+printRle :: Char -> Int -> Printer w tag (PP.Doc ann)
 printRle c n = do
   t <- rleThreshold
   pure $
@@ -284,8 +292,10 @@ printRle c n = do
  where
   s = PP.pretty @[Char] [c, c]
 
--- | Ignores @tag@s.
-printTgt :: PtrShape.PtrTarget w tag -> Printer w (PP.Doc Void)
+-- | Ignores @tag@s. Only works with targets in 'Precond mode.
+printTgt ::
+  PtrShape.PtrTarget w 'PtrShape.Precond tag ->
+  Printer w tag (PP.Doc Void)
 printTgt (PtrShape.PtrTarget _ memShapes) = do
   docs <- traverse printMemShape memShapes
   pure (PP.align (PP.fillSep (Foldable.toList docs)))
@@ -298,14 +308,17 @@ integerToInt = fromIntegral
 bytesToInt :: CLB.Bytes -> Int
 bytesToInt = integerToInt . CLB.bytesToInteger
 
--- | Ignores @tag@s.
-printMemShape :: PtrShape.MemShape w tag -> Printer w (PP.Doc Void)
+-- | Ignores @tag@s. Only works with MemShape in 'Precond mode.
+printMemShape ::
+  PtrShape.MemShape w 'PtrShape.Precond tag ->
+  Printer w tag (PP.Doc Void)
 printMemShape = \case
   PtrShape.Uninitialized bytes -> printRle '#' (bytesToInt bytes)
   PtrShape.Initialized _tag bytes -> printRle 'X' (bytesToInt bytes)
-  PtrShape.Pointer _tag off target@(PtrShape.PtrTarget bid _) -> do
-    blk <- printerAlloc (printTgt target) bid
-    printBlockOffset blk off
+  PtrShape.Pointer _tag (PtrShape.PrecondPtrData offset tgt) -> do
+    let bid = PtrShape.ptrTargetBlock tgt
+    blk <- printerAlloc (printTgt tgt) bid
+    printBlockOffset blk offset
   PtrShape.Exactly bytes ->
     let ppWord8 = PP.pretty . padHex 2
      in pure (PP.fillSep (List.map (ppWord8 . PtrShape.taggedByteValue) bytes))

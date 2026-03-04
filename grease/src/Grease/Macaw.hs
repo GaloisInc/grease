@@ -63,7 +63,7 @@ import Grease.Panic (panic)
 import Grease.Setup (InitialMem (InitialMem), SetupMem, getSetupMem)
 import Grease.Shape (ArgShapes (ArgShapes), Shape (ShapeBool, ShapeExt, ShapeStruct))
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (PtrShape (ShapePtrBV, ShapePtrBVLit))
+import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape (ShapePtrBV, ShapePtrBVLit))
 import Grease.Syntax (ResolvedOverridesYaml)
 import Grease.Utility (printHandle)
 import Lang.Crucible.Analysis.Postdom qualified as C
@@ -308,7 +308,7 @@ minimalArgShapes _bak arch mbEntryAddr = do
   mkRegShape ::
     forall tp.
     MC.ArchReg arch tp ->
-    m (Shape (Symbolic.MacawExt arch) NoTag (Symbolic.ToCrucibleType tp))
+    m (Shape (Symbolic.MacawExt arch) 'Grease.Shape.Pointer.Precond NoTag (Symbolic.ToCrucibleType tp))
   mkRegShape r =
     if
       | Just Refl <- testEquality r MC.sp_reg ->
@@ -324,12 +324,12 @@ minimalArgShapes _bak arch mbEntryAddr = do
               case testEquality w $ MT.knownNat @(MC.ArchAddrWidth arch) of
                 Just C.Refl ->
                   let bv = BV.mkBV w (fromIntegral (EL.memWordValue ipVal))
-                   in pure (ShapeExt (ShapePtrBVLit NoTag w bv))
+                   in pure (ShapeExt (Grease.Shape.Pointer.ShapePtrBVLit NoTag w bv))
                 Nothing -> panic "minimalArgShapes" ["Bad stack pointer width"]
       | otherwise -> do
           shape <- case MT.typeRepr r of
             MT.BoolTypeRepr -> pure (ShapeBool NoTag)
-            MT.BVTypeRepr w -> pure $ ShapeExt (ShapePtrBV NoTag w)
+            MT.BVTypeRepr w -> pure $ ShapeExt (Grease.Shape.Pointer.ShapePtrBV NoTag w)
             MT.TupleTypeRepr P.List.Nil -> pure $ ShapeStruct NoTag Ctx.empty
             _ ->
               -- None of our supported architectures have registers with types

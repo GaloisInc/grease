@@ -125,7 +125,7 @@ import Grease.Setup qualified as Setup
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
 import Grease.Shape.NoTag (NoTag)
-import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Grease.Solver (Solver, solverAdapter)
 import Grease.SymIO qualified as GSIO
 import Grease.Utility (tshow)
@@ -295,7 +295,7 @@ consumer ::
   CS.ExecResult p sym ext r ->
   GreaseLogAction ->
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
-  RefinementData sym bak ext argTys ->
+  RefinementData sym bak ext argTys w ->
   C.ProofConsumer sym t (ProveRefineResult sym ext argTys)
 consumer bak execResult la bbMap refineData = do
   let RefinementData
@@ -411,13 +411,13 @@ execCfg bak execData = do
         pure (r, o, Seq.empty)
 
 -- | Data needed for refinement
-data RefinementData sym bak ext argTys
+data RefinementData sym bak ext argTys wptr
   = RefinementData
   { refineAnns :: Anns.Annotations sym ext argTys
   , refineArgNames :: Ctx.Assignment (Const String) argTys
   , refineArgShapes :: ArgShapes ext NoTag argTys
   , refineHeuristics :: [RefineHeuristic sym bak ext argTys]
-  , refineInitState :: Conc.InitialState sym ext argTys
+  , refineInitState :: Conc.InitialState sym ext argTys wptr
   , refineSolver :: Solver
   , refineSolverTimeout :: C.Timeout
   }
@@ -437,7 +437,7 @@ proveAndRefine ::
   CS.ExecResult p sym ext r ->
   GreaseLogAction ->
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
-  RefinementData sym bak ext argTys ->
+  RefinementData sym bak ext argTys w ->
   CB.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
 proveAndRefine bak execResult la bbMap refineData goals = do
@@ -493,7 +493,7 @@ execAndRefine ::
   W4FM.FloatModeRepr fm ->
   GreaseLogAction ->
   C.GlobalVar CLM.Mem ->
-  RefinementData sym bak ext argTys ->
+  RefinementData sym bak ext argTys w ->
   IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
   ExecData p sym ext ret ->
   m (ProveRefineResult sym ext argTys)
@@ -597,7 +597,7 @@ refineOnce ::
     C.GlobalVar ToConc.ToConcretizeType ->
     Setup.SetupMem sym ->
     GSIO.InitializedFs sym wptr ->
-    Setup.Args sym ext argTys ->
+    Setup.Args sym ext argTys wptr ->
     IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
   ) ->
   IO (ProveRefineResult sym ext argTys)
@@ -658,7 +658,7 @@ refinementLoop ::
   , CLM.HasPtrWidth w
   , MC.MemWidth w
   , ExtShape ext ~ PtrShape ext w
-  , PrettyExt ext NoTag
+  , PrettyExt ext 'Precond NoTag
   ) =>
   GreaseLogAction ->
   BoundsOpts ->

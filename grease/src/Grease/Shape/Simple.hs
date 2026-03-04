@@ -107,16 +107,17 @@ parseArgU64 = ArgU64 <$> parseBV64
     pure (BV.mkBV (knownNat @64) i)
 
 toShape ::
-  Shape.ExtShape ext ~ PtrShape ext wptr =>
-  SimpleShape -> Some (Shape ext NoTag)
+  Shape.ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext wptr 'PtrShape.Precond NoTag =>
+  SimpleShape ->
+  Some (Shape ext 'PtrShape.Precond NoTag)
 toShape =
   \case
     BufUninit n ->
       let tgt = PtrShape.ptrTarget Nothing (Seq.singleton (PtrShape.Uninitialized n))
-       in Some (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.Offset 0) tgt))
+       in Some (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.PrecondPtrData (PtrShape.Offset 0) tgt)))
     BufInit n ->
       let tgt = PtrShape.ptrTarget Nothing (Seq.singleton (PtrShape.Initialized NoTag n))
-       in Some (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.Offset 0) tgt))
+       in Some (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.PrecondPtrData (PtrShape.Offset 0) tgt)))
     ArgU32 bv ->
       Some (Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag (knownNat @32) bv))
     ArgU64 bv ->
@@ -124,7 +125,7 @@ toShape =
 
 -- | Override 'Shape.ArgShapes' using 'SimpleShape's (generally from the CLI)
 useSimpleShapes ::
-  Shape.ExtShape ext ~ PtrShape ext w =>
+  Shape.ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext w 'PtrShape.Precond NoTag =>
   CLM.HasPtrWidth w =>
   -- | Argument names
   Ctx.Assignment (Const.Const String) tys ->

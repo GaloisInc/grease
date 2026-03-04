@@ -69,7 +69,7 @@ import Data.Traversable qualified as Traversable
 import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import GHC.Show qualified as GShow
 import Grease.Shape.NoTag (NoTag (NoTag))
-import Grease.Shape.Pointer (PtrShape, minimalPtrShape, parseJsonPtrShape, ptrShapeType, traversePtrShapeWithType)
+import Grease.Shape.Pointer (KnownPtrMode (knownPtrMode), PtrDataMode (Precond), PtrModeRepr, PtrShape, minimalPtrShape, parseJsonPtrShape, ptrShapeType, traversePtrShapeWithType)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel (HasPtrWidth)
@@ -95,38 +95,39 @@ instance ShowF f => Show (SomeTyped f) where
 --
 -- * @ext@: Crucible syntax extension (e.g., LLVM or Macaw)
 -- * @tag@: Parameterized \"tag\" value for every constructor
+-- * @ptrData@: Mode indicating whether pointer metadata is present
 -- * @t@: Crucible type of this 'Shape'
 --
 -- The @tag@ can be used to attach arbitrary (Crucible-type-parameterized) data
 -- to each constructor. It is used to attach 'Lang.Crucible.Simulator.RegValue's
 -- in "Grease.Setup", and then 'Lang.Crucible.Concretize.ConcRegValue's in
 -- "Grease.Concretize".
-type Shape :: Type -> (C.CrucibleType -> Type) -> C.CrucibleType -> Type
-data Shape ext tag t where
-  ShapeBool :: tag C.BoolType -> Shape ext tag C.BoolType
+type Shape :: Type -> PtrDataMode -> (C.CrucibleType -> Type) -> C.CrucibleType -> Type
+data Shape ext ptrData tag t where
+  ShapeBool :: tag C.BoolType -> Shape ext ptrData tag C.BoolType
   ShapeFloat ::
-    tag (C.FloatType fi) -> C.FloatInfoRepr fi -> Shape ext tag (C.FloatType fi)
+    tag (C.FloatType fi) -> C.FloatInfoRepr fi -> Shape ext ptrData tag (C.FloatType fi)
   ShapeExt ::
-    ExtShape ext tag t ->
-    Shape ext tag t
+    ExtShape ext ptrData tag t ->
+    Shape ext ptrData tag t
   ShapeStruct ::
     tag (C.StructType ctx) ->
-    Ctx.Assignment (Shape ext tag) ctx ->
-    Shape ext tag (C.StructType ctx)
+    Ctx.Assignment (Shape ext ptrData tag) ctx ->
+    Shape ext ptrData tag (C.StructType ctx)
   ShapeUnit ::
     tag C.UnitType ->
-    Shape ext tag C.UnitType
+    Shape ext ptrData tag C.UnitType
 
 -- | Type family for defining extensions to 'Shape' (via 'ShapeExt').
 --
 -- For documentation on these type parameters, see 'Shape'.
-type ExtShape :: Type -> (C.CrucibleType -> Type) -> C.CrucibleType -> Type
+type ExtShape :: Type -> PtrDataMode -> (C.CrucibleType -> Type) -> C.CrucibleType -> Type
 type family ExtShape ext
 
-class ShowF (ExtShape ext tag) => ShowExt ext tag
-instance ShowF (ExtShape ext tag) => ShowExt ext tag
+class ShowF (ExtShape ext ptrData tag) => ShowExt ext ptrData tag
+instance ShowF (ExtShape ext ptrData tag) => ShowExt ext ptrData tag
 
-instance (ShowExt ext tag, ShowF tag) => Show (Shape ext tag t) where
+instance (ShowExt ext ptrData tag, ShowF tag) => Show (Shape ext ptrData tag t) where
   show = showF
 
 -- | Returns @'Just' 'Refl'@ iff the shapes are identical.
@@ -138,9 +139,9 @@ instance (ShowExt ext tag, ShowF tag) => Show (Shape ext tag t) where
 -- on 'TestEquality', because 'Shape' is not a singleton.
 instance
   ( TestEquality tag
-  , TestEquality (ExtShape ext tag)
+  , TestEquality (ExtShape ext ptrData tag)
   ) =>
-  TestEquality (Shape ext tag)
+  TestEquality (Shape ext ptrData tag)
   where
   testEquality =
     \cases
@@ -158,7 +159,7 @@ showTag :: ShowF tag => tag x -> String
 showTag tag = List.concat ["[", showF tag, "]"]
 
 -- | Intended for debugging
-instance (ShowExt ext tag, ShowF tag) => ShowF (Shape ext tag) where
+instance (ShowExt ext ptrData tag, ShowF tag) => ShowF (Shape ext ptrData tag) where
   showF =
     \case
       ShapeBool tag -> "bool" List.++ showTag tag
@@ -173,17 +174,17 @@ instance (ShowExt ext tag, ShowF tag) => ShowF (Shape ext tag) where
       ShapeUnit tag -> "unit" List.++ showTag tag
       ShapeExt ext -> showF ext
 
-class MC.PrettyF (ExtShape ext tag) => PrettyExt ext tag
-instance MC.PrettyF (ExtShape ext tag) => PrettyExt ext tag
+class MC.PrettyF (ExtShape ext ptrData tag) => PrettyExt ext ptrData tag
+instance MC.PrettyF (ExtShape ext ptrData tag) => PrettyExt ext ptrData tag
 
-instance (MC.PrettyF tag, PrettyExt ext tag) => PP.Pretty (Shape ext tag t) where
+instance (MC.PrettyF tag, PrettyExt ext ptrData tag) => PP.Pretty (Shape ext ptrData tag t) where
   pretty = MC.prettyF
 
 -- | Helper, not exported
 ppTag :: MC.PrettyF tag => tag x -> PP.Doc ann
 ppTag tag = PP.hcat ["[", MC.prettyF tag, "]"]
 
-instance (MC.PrettyF tag, PrettyExt ext tag) => MC.PrettyF (Shape ext tag) where
+instance (MC.PrettyF tag, PrettyExt ext ptrData tag) => MC.PrettyF (Shape ext ptrData tag) where
   prettyF =
     \case
       ShapeBool tag -> "bool" PP.<> ppTag tag
@@ -193,30 +194,40 @@ instance (MC.PrettyF tag, PrettyExt ext tag) => MC.PrettyF (Shape ext tag) where
       ShapeUnit tag -> "unit" PP.<> ppTag tag
       ShapeExt ext -> MC.prettyF ext
 
-instance TFC.TraversableFC (ExtShape ext) => TFC.FunctorFC (Shape ext) where
+instance
+  (TFC.TraversableFC (ExtShape ext ptrMode)) =>
+  TFC.FunctorFC (Shape ext ptrMode)
+  where
   fmapFC = TFC.fmapFCDefault
 
-instance TFC.TraversableFC (ExtShape ext) => TFC.FoldableFC (Shape ext) where
+instance
+  (TFC.TraversableFC (ExtShape ext ptrMode)) =>
+  TFC.FoldableFC (Shape ext ptrMode)
+  where
   foldMapFC = TFC.foldMapFCDefault
 
-instance TFC.TraversableFC (ExtShape ext) => TFC.TraversableFC (Shape ext) where
-  traverseFC f =
-    \case
-      ShapeBool tag -> ShapeBool <$> f tag
-      ShapeFloat tag fi -> ShapeFloat <$> f tag <*> pure fi
-      ShapeStruct tag fields ->
-        ShapeStruct <$> f tag <*> traverseFC (traverseFC f) fields
-      ShapeUnit tag -> ShapeUnit <$> f tag
-      ShapeExt ext -> ShapeExt <$> traverseFC f ext
+instance
+  (TFC.TraversableFC (ExtShape ext ptrMode)) =>
+  TFC.TraversableFC (Shape ext ptrMode)
+  where
+  traverseFC f = \case
+    ShapeBool tag -> ShapeBool <$> f tag
+    ShapeFloat tag fi -> ShapeFloat <$> f tag <*> pure fi
+    ShapeStruct tag fields ->
+      ShapeStruct <$> f tag <*> TFC.traverseFC (TFC.traverseFC f) fields
+    ShapeUnit tag -> ShapeUnit <$> f tag
+    ShapeExt ext -> ShapeExt <$> TFC.traverseFC f ext
 
 traverseShapeWithType ::
   CLM.HasPtrWidth wptr =>
   Applicative m =>
-  (ExtShape ext ~ PtrShape ext wptr) =>
+  (ExtShape ext ptrData tag ~ PtrShape ext wptr ptrData tag) =>
+  (ExtShape ext ptrData tag' ~ PtrShape ext wptr ptrData tag') =>
+  PtrModeRepr ptrData ->
   (forall x. C.TypeRepr x -> tag x -> m (tag' x)) ->
-  Shape ext tag t ->
-  m (Shape ext tag' t)
-traverseShapeWithType f =
+  Shape ext ptrData tag t ->
+  m (Shape ext ptrData tag' t)
+traverseShapeWithType mode f =
   \case
     ShapeBool tag -> ShapeBool <$> f C.BoolRepr tag
     ShapeFloat tag fi -> ShapeFloat <$> f (C.FloatRepr fi) tag <*> pure fi
@@ -224,23 +235,25 @@ traverseShapeWithType f =
       let fieldTypes = fmapFC (shapeType ptrShapeType) fields
        in ShapeStruct
             <$> f (C.StructRepr fieldTypes) tag
-            <*> traverseFC (traverseShapeWithType f) fields
+            <*> traverseFC (traverseShapeWithType mode f) fields
     ShapeUnit tag -> ShapeUnit <$> f C.UnitRepr tag
-    ShapeExt ext -> ShapeExt <$> traversePtrShapeWithType f ext
+    ShapeExt ext -> ShapeExt <$> traversePtrShapeWithType mode f ext
 
 tagWithType ::
   CLM.HasPtrWidth wptr =>
-  (ExtShape ext ~ PtrShape ext wptr) =>
-  Shape ext tag t ->
-  Shape ext C.TypeRepr t
-tagWithType = runIdentity . traverseShapeWithType (\typeRepr _tag -> Identity typeRepr)
+  KnownPtrMode ptrData =>
+  (ExtShape ext ptrData tag ~ PtrShape ext wptr ptrData tag) =>
+  (ExtShape ext ptrData C.TypeRepr ~ PtrShape ext wptr ptrData C.TypeRepr) =>
+  Shape ext ptrData tag t ->
+  Shape ext ptrData C.TypeRepr t
+tagWithType = runIdentity . traverseShapeWithType knownPtrMode (\typeRepr _tag -> Identity typeRepr)
 
 type instance ExtShape (Symbolic.MacawExt arch) = PtrShape (Symbolic.MacawExt arch) (MC.ArchAddrWidth arch)
 type instance ExtShape LLVM = PtrShape LLVM 64
 
 getTag ::
-  (forall t'. ExtShape ext tag t' -> tag t') ->
-  Shape ext tag t ->
+  (forall t'. ExtShape ext ptrData tag t' -> tag t') ->
+  Shape ext ptrData tag t ->
   tag t
 getTag extTag =
   \case
@@ -251,10 +264,10 @@ getTag extTag =
     ShapeExt ext -> extTag ext
 
 setTag ::
-  (forall t'. ExtShape ext tag t' -> tag t' -> ExtShape ext tag t') ->
-  Shape ext tag t ->
+  (forall t'. ExtShape ext ptrData tag t' -> tag t' -> ExtShape ext ptrData tag t') ->
+  Shape ext ptrData tag t ->
   tag t ->
-  Shape ext tag t
+  Shape ext ptrData tag t
 setTag extTag shape tag =
   case shape of
     ShapeBool _tag -> ShapeBool tag
@@ -264,16 +277,16 @@ setTag extTag shape tag =
     ShapeExt ext -> ShapeExt (extTag ext tag)
 
 shapeTag ::
-  (forall t'. Lens.Lens' (ExtShape ext tag t') (tag t')) ->
-  Lens.Lens' (Shape ext tag t) (tag t)
+  (forall t'. Lens.Lens' (ExtShape ext ptrData tag t') (tag t')) ->
+  Lens.Lens' (Shape ext ptrData tag t) (tag t)
 shapeTag extLens =
   Lens.lens
     (getTag (Lens.view extLens))
     (setTag (flip (Lens.set extLens)))
 
 shapeType ::
-  (forall t'. ExtShape ext tag t' -> C.TypeRepr t') ->
-  Shape ext tag t ->
+  (forall t'. ExtShape ext ptrData tag t' -> C.TypeRepr t') ->
+  Shape ext ptrData tag t ->
   C.TypeRepr t
 shapeType extType =
   \case
@@ -286,10 +299,10 @@ shapeType extType =
 
 minimalShape ::
   Applicative m =>
-  (forall t'. C.TypeRepr t' -> m (ExtShape ext tag t')) ->
+  (forall t'. C.TypeRepr t' -> m (ExtShape ext ptrData tag t')) ->
   (forall t'. C.TypeRepr t' -> m (tag t')) ->
   C.TypeRepr t ->
-  m (Shape ext tag t)
+  m (Shape ext ptrData tag t)
 minimalShape ext mkTag =
   \case
     t@C.BoolRepr -> ShapeBool <$> mkTag t
@@ -308,14 +321,14 @@ instance PP.Pretty MinimalShapeError where
     "Can't make minimal shape for type " <> PP.viaShow t
 
 minimalShapeWithPtrs ::
-  forall t ext tag w.
-  ( ExtShape ext ~ PtrShape ext w
+  forall t ext tag w ptrData.
+  ( ExtShape ext ptrData tag ~ PtrShape ext w ptrData tag
   , CLM.HasPtrWidth w
   , Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8)))
   ) =>
   (forall t'. C.TypeRepr t' -> tag t') ->
   C.TypeRepr t ->
-  Either MinimalShapeError (Shape ext tag t)
+  Either MinimalShapeError (Shape ext ptrData tag t)
 minimalShapeWithPtrs mkTag =
   minimalShape
     ( \case
@@ -326,13 +339,13 @@ minimalShapeWithPtrs mkTag =
 
 type ArgShapes :: Type -> (C.CrucibleType -> Type) -> Ctx C.CrucibleType -> Type
 newtype ArgShapes ext tag tys = ArgShapes
-  { _argShapes :: Ctx.Assignment (Shape ext tag) tys
+  { _argShapes :: Ctx.Assignment (Shape ext 'Precond tag) tys
   }
 makeLenses ''ArgShapes
 
-deriving instance (ShowExt ext tag, ShowF tag) => Show (ArgShapes ext tag tys)
+deriving instance (ShowExt ext 'Precond tag, ShowF tag) => Show (ArgShapes ext tag tys)
 
-instance (MC.PrettyF tag, PrettyExt ext tag) => PP.Pretty (ArgShapes ext tag tys) where
+instance (MC.PrettyF tag, PrettyExt ext 'Precond tag) => PP.Pretty (ArgShapes ext tag tys) where
   pretty (ArgShapes regs) =
     MC.foldlFC (\doc rShape -> PP.vcat [doc, PP.pretty rShape]) "" regs
 
@@ -358,13 +371,13 @@ instance PP.Pretty TypeMismatch where
 -- | A mapping from argument name to the shape for that argument. Intended to be used with
 -- 'replaceShapes' to initialize members of an initial 'ArgShape' with user or elsewhere defined shapes.
 newtype ParsedShapes ext
-  = ParsedShapes {_getParsedShapes :: Map.Map Text (C.Some (Shape ext NoTag))}
+  = ParsedShapes {_getParsedShapes :: Map.Map Text (C.Some (Shape ext 'Precond NoTag))}
 
 -- | Given an initial, provisional list of arguments and a set of replacements
 -- for some of them, calculate a new list of arguments.
 replaceShapes ::
   forall ext w tys.
-  ExtShape ext ~ PtrShape ext w =>
+  ExtShape ext 'Precond NoTag ~ PtrShape ext w 'Precond NoTag =>
   HasPtrWidth w =>
   -- | Argument names
   Ctx.Assignment (Const.Const String) tys ->
@@ -378,7 +391,7 @@ replaceShapes names (ArgShapes args) (ParsedShapes replacements) =
   ArgShapes
     <$> Ctx.zipWithM (\(Const.Const nm) s -> replaceOne nm s) names args
  where
-  replaceOne :: String -> Shape ext NoTag t -> Either TypeMismatch (Shape ext NoTag t)
+  replaceOne :: String -> Shape ext 'Precond NoTag t -> Either TypeMismatch (Shape ext 'Precond NoTag t)
   replaceOne nm s =
     case Map.lookup (Text.pack nm) replacements of
       Just (C.Some replace) ->
@@ -400,10 +413,10 @@ parseJsonShape ::
   -- | Parser for @tag@s
   (forall t. Aeson.KeyMap Aeson.Value -> Aeson.Parser (tag t)) ->
   -- | Parser for 'ExtShape's
-  (Aeson.Value -> Aeson.Parser (Some (ExtShape ext tag))) ->
+  (Aeson.Value -> Aeson.Parser (Some (ExtShape ext 'Precond tag))) ->
   -- | JSON value to parse
   Aeson.Value ->
-  Aeson.Parser (Some (Shape ext tag))
+  Aeson.Parser (Some (Shape ext 'Precond tag))
 parseJsonShape parseTag parseExt =
   Aeson.withObject "Shape" $ \v -> do
     ty <- v .: "type" :: Aeson.Parser Text
@@ -444,18 +457,18 @@ parseJsonShape parseTag parseExt =
 -- | Given a parser for @tag@s, parse 'Shape's containing 'PtrShape's from JSON
 parseJsonShapeWithPtrs ::
   Semigroup (tag (C.VectorType (CLM.LLVMPointerType 8))) =>
-  ExtShape ext ~ PtrShape ext w =>
+  ExtShape ext 'Precond tag ~ PtrShape ext w 'Precond tag =>
   -- | Parser for @tag@s
   (forall t. Aeson.KeyMap Aeson.Value -> Aeson.Parser (tag t)) ->
   -- | JSON value to parse
   Aeson.Value ->
-  Aeson.Parser (Some (Shape ext tag))
+  Aeson.Parser (Some (Shape ext 'Precond tag))
 parseJsonShapeWithPtrs parseTag =
   parseJsonShape parseTag (parseJsonPtrShape parseTag)
 
 -- | Parse a series of 'Shape's containing 'PtrShape's from JSON
 parseJsonShapes ::
-  ExtShape ext ~ PtrShape ext w =>
+  ExtShape ext 'Precond NoTag ~ PtrShape ext w 'Precond NoTag =>
   HasPtrWidth w =>
   -- | Path to file containing JSON, used in error messages
   FilePath ->

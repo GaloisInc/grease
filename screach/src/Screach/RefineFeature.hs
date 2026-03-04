@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
@@ -32,6 +33,7 @@ import Data.Parameterized.Ctx (Ctx)
 import Data.Parameterized.Nonce (Nonce)
 import Data.Parameterized.Nonce qualified as Nonce
 import GHC.IORef qualified as IORef
+import GHC.TypeLits (type Natural)
 import Grease.Bug qualified as GR
 import Grease.Concretize qualified as GR
 import Grease.Concretize.ToConcretize qualified as ToConc
@@ -90,16 +92,18 @@ data RefineResult sym ext aty
 -- - @scope@ type-level nonce generator name for 'What4.Expr.Expr'
 -- - @ext@: language extension, see "Lang.Crucible.CFG.Extension"
 -- - @aty@: Crucible argument types for the target function
+-- - @w@: pointer width (Natural)
 type SrchRefineData ::
   Type ->
   Type ->
   Type ->
   Type ->
   Ctx CT.CrucibleType ->
+  Natural ->
   Type
-data SrchRefineData sym bak scope ext aty = SrchRefineData
+data SrchRefineData sym bak scope ext aty w = SrchRefineData
   { _refineErrMap :: IORef (Map.Map (Nonce scope CT.BaseBoolType) (ErrorDescription sym))
-  , _greaseRefineData :: GR.RefinementData sym bak ext aty
+  , _greaseRefineData :: GR.RefinementData sym bak ext aty w
   , _refineResult :: Maybe (RefineResult sym ext aty)
   -- ^ At termination if this is a ProveBug we store the CEX
   -- and details about what bug this CEX is for
@@ -109,21 +113,21 @@ data SrchRefineData sym bak scope ext aty = SrchRefineData
 Lens.makeLenses ''SrchRefineData
 
 type HasRefinmentState ::
-  Type -> Type -> Type -> Type -> Type -> CT.Ctx CT.CrucibleType -> Constraint
+  Type -> Type -> Type -> Type -> Type -> CT.Ctx CT.CrucibleType -> Natural -> Constraint
 
 -- | Class for Refinement state, each state has to hold onto its
 -- refinement data for `proveAndRefine`
-class HasRefinmentState p sym bak t ext aty | p -> sym ext where
-  refinementState :: Lens.Lens' p (SrchRefineData sym bak t ext aty)
+class HasRefinmentState p sym bak t ext aty w | p -> sym ext where
+  refinementState :: Lens.Lens' p (SrchRefineData sym bak t ext aty w)
 
 -- | Constraints for collaboration between the scheduler
 -- refinement and record replay so that refinement can add
 -- saved states to a new state and setup replay on that new initial
 -- state
-type HasScreachPersonality p sym bak t ext tys ret rtp =
+type HasScreachPersonality p sym bak t ext tys ret rtp w =
   ( CS.RegEntry sym ret ~ rtp
   , Sched.HasSchedulerState p p sym ext rtp
-  , HasRefinmentState p sym bak t ext tys
+  , HasRefinmentState p sym bak t ext tys w
   , CR.HasReplayState p p sym ext (CS.RegEntry sym ret)
   , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
   )
@@ -182,7 +186,7 @@ refineState ::
   , ExtShape ext ~ PtrShape ext w
   , C.IsSyntaxExtension ext
   , Sched.HasSchedulerState p p sym ext rtp
-  , HasRefinmentState p sym bak t ext tys
+  , HasRefinmentState p sym bak t ext tys w
   , CR.HasReplayState p p sym ext (CS.RegEntry sym ret)
   , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
   , CB.IsSymInterface sym
@@ -224,7 +228,7 @@ refineState bak sla gla refineReplay st config = do
       pure C.ExecutionFeatureNoChange
     GR.ProveBug bi cdata ->
       let
-        rstate :: Lens.Lens' (C.ExecResult p sym ext rtp) (SrchRefineData sym bak t ext tys)
+        rstate :: Lens.Lens' (C.ExecResult p sym ext rtp) (SrchRefineData sym bak t ext tys w)
         rstate = Sched.execResultContextLens . C.cruciblePersonality . refinementState
         nres =
           st
@@ -278,7 +282,7 @@ refineFeature ::
   , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
   , ExtShape ext ~ PtrShape ext w
   , C.IsSyntaxExtension ext
-  , HasScreachPersonality p sym bak t ext tys ret rtp
+  , HasScreachPersonality p sym bak t ext tys ret rtp w
   , CB.IsSymInterface sym
   , ToConc.HasToConcretize p
   , 16 CT.<= w
@@ -315,7 +319,7 @@ sdseExecFeatures ::
   , WPO.OnlineSolver solver
   , WE.Flags fm ~ fs
   , C.IsSyntaxExtension ext
-  , HasRefinmentState p sym bak scope ext tys
+  , HasRefinmentState p sym bak scope ext tys w
   , ToConc.HasToConcretize p
   , 16 CT.<= w
   , CLM.HasPtrWidth w
@@ -336,7 +340,7 @@ sdseExecFeatures ::
   ) ->
   Sched.PrioritizationFunction p sym ext rtp ->
   -- | Determines if a given state is the target state for SDSE
-  (HasRefinmentState p sym bak scope ext tys => C.ExecResult p sym ext rtp -> IO Bool) ->
+  (HasRefinmentState p sym bak scope ext tys w => C.ExecResult p sym ext rtp -> IO Bool) ->
   RftOpt.AllSolutions ->
   [C.ExecutionFeature p sym ext (CS.RegEntry sym ret)]
 sdseExecFeatures bak sla gla refineReplay initCFG priorityFunc isTarget exploreMore =

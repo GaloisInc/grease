@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -23,7 +24,7 @@ import Grease.Entrypoint (Entrypoint, EntrypointLocation)
 import Grease.Output (BatchStatus)
 import Grease.Requirement (Requirement, displayReq)
 import Grease.Shape (ArgShapes (ArgShapes), ExtShape, PrettyExt)
-import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Grease.Shape.Print qualified as ShapePP
 import Grease.Time (Nanoseconds, nanosToMillis)
 import Lang.Crucible.Analysis.Postdom qualified as C
@@ -49,8 +50,8 @@ data Diagnostic where
     PP.Doc Void -> Diagnostic
   LoadedPrecondition ::
     forall w ext tag tys.
-    ( ExtShape ext ~ PtrShape ext w
-    , PrettyExt ext tag
+    ( ExtShape ext 'Precond tag ~ PtrShape ext w 'Precond tag
+    , PrettyExt ext 'Precond tag
     ) =>
     FilePath ->
     MM.AddrWidthRepr w ->
@@ -140,7 +141,7 @@ instance PP.Pretty Diagnostic where
       Unsupported e -> "Not yet supported:" PP.<+> fmap absurd e
       UserError e -> "User error:" PP.<+> fmap absurd e
    where
-    printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w
+    printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w tag
     printCfg w =
       ShapePP.PrinterConfig
         { ShapePP.cfgAddrWidth = w

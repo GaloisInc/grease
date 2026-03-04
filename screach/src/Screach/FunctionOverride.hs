@@ -34,7 +34,7 @@ customScreachOverrides ::
   , MC.MemWidth w
   , w ~ MC.ArchAddrWidth arch
   , ext ~ MS.MacawExt arch
-  , p' ~ SP.ScreachSimulatorState p sym bak (MS.MacawExt arch) rtp arch t aty
+  , p' ~ SP.ScreachSimulatorState p sym bak (MS.MacawExt arch) rtp arch t aty w
   ) =>
   ScreachLogAction ->
   CLSIO.LLVMFileSystem w ->

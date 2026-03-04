@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -18,7 +19,7 @@ import Grease.Diagnostic.Severity (Severity (Debug, Info, Warn))
 import Grease.ErrorDescription (ErrorDescription)
 import Grease.Heuristic.Result qualified as Heuristic
 import Grease.Shape (ArgShapes (ArgShapes), ExtShape, PrettyExt)
-import Grease.Shape.Pointer (PtrShape)
+import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Grease.Shape.Print qualified as ShapePP
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
@@ -51,8 +52,8 @@ data Diagnostic where
     Diagnostic
   RefinementFinalPrecondition ::
     forall w ext tag tys.
-    ( ExtShape ext ~ PtrShape ext w
-    , PrettyExt ext tag
+    ( ExtShape ext 'Precond tag ~ PtrShape ext w 'Precond tag
+    , PrettyExt ext 'Precond tag
     ) =>
     MM.AddrWidthRepr w ->
     -- | Argument names
@@ -69,8 +70,8 @@ data Diagnostic where
     Diagnostic
   RefinementUsingPrecondition ::
     forall w ext tag tys.
-    ( ExtShape ext ~ PtrShape ext w
-    , PrettyExt ext tag
+    ( ExtShape ext 'Precond tag ~ PtrShape ext w 'Precond tag
+    , PrettyExt ext 'Precond tag
     ) =>
     MM.AddrWidthRepr w ->
     -- | Argument names
@@ -161,7 +162,7 @@ instance PP.Pretty Diagnostic where
               Just err -> PP.pretty err
           ]
    where
-    printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w
+    printCfg :: MM.AddrWidthRepr w -> ShapePP.PrinterConfig w tag
     printCfg w =
       ShapePP.PrinterConfig
         { ShapePP.cfgAddrWidth = w

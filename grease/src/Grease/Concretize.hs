@@ -1,5 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -45,6 +48,7 @@ import Grease.Shape qualified as Shape
 import Grease.Shape.Concretize (concShape)
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
+import Grease.Shape.Pointer qualified as ShapePtr
 import Grease.Shape.Print qualified as ShapePP
 import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
@@ -66,9 +70,9 @@ import What4.Interface qualified as WI
 -- * Data to be concretized
 
 -- | Initial state, to be concretized into 'ConcretizedData'
-data InitialState sym ext argTys
+data InitialState sym ext argTys wptr
   = InitialState
-  { initStateArgs :: Args sym ext argTys
+  { initStateArgs :: Args sym ext argTys wptr
   , initStateFs :: SymIO.InitialFileSystemContents sym
   , initStateMem :: InitialMem sym
   }
@@ -78,8 +82,10 @@ data InitialState sym ext argTys
 -- * Concretization
 
 -- | Arguments ('Args') that have been concretized
-newtype ConcArgs sym ext argTys
-  = ConcArgs {getConcArgs :: Ctx.Assignment (Shape ext (Conc.ConcRV' sym)) argTys}
+data ConcArgs sym ext argTys
+  = ConcArgs
+  { concArgsShapes :: Ctx.Assignment (Shape ext 'ShapePtr.Precond (Conc.ConcRV' sym)) argTys
+  }
 
 -- | Turn 'ConcArgs' back into a 'C.RegMap' that can be used to re-execute
 -- a CFG.
@@ -144,20 +150,25 @@ makeConcretizedData ::
   bak ->
   WE.GroundEvalFn t ->
   Maybe (ErrorDescription sym) ->
-  InitialState sym ext argTys ->
+  InitialState sym ext argTys wptr ->
   CS.RegValue sym ToConcretizeType ->
   IO (ConcretizedData sym ext argTys)
 makeConcretizedData bak groundEvalFn minfo initState extra = do
   let InitialState
-        { initStateArgs = Args initArgs
+        { initStateArgs = Args initArgs initAllocMap
         , initStateFs = initFs
         , initStateMem = InitialMem initMem
         } = initState
   let sym = CB.backendGetSym bak
   let ctx = Conc.ConcCtx @sym @t groundEvalFn CLMP.concPtrFnMap
   let concRV :: forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)
-      concRV t = fmap (Conc.ConcRV' @sym) . Conc.groundRegValue @sym @t ctx t . CS.unRV
-  cArgs <- liftIO (traverseFC (Shape.traverseShapeWithType concRV) initArgs)
+      concRV t v = Conc.ConcRV' @sym <$> Conc.groundRegValue @sym @t ctx t (CS.unRV v)
+  -- First concretize shapes to NoData mode
+  cArgsNoData <- liftIO (traverseFC (Shape.traverseShapeWithType ShapePtr.NoDataRepr concRV) initArgs)
+  -- Concretize allocation map (needed temporarily for transformation)
+  cAllocMap <- traverse (concretizePtrTarget concRV) initAllocMap
+  -- Transform NoData shapes to Precond using allocMap
+  let cArgs = fmapFC (concShape cAllocMap) cArgsNoData
   let WE.GroundEvalFn gFn = groundEvalFn
   let toWord8 :: BV.BV 8 -> Word8
       toWord8 = fromIntegral . BV.asUnsigned
@@ -185,6 +196,39 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
       , concMem = ConcMem cMem
       , concErr = cErr
       }
+ where
+  concretizePtrTarget ::
+    (forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)) ->
+    ShapePtr.PtrTarget wptr 'ShapePtr.NoData (CS.RegValue' sym) ->
+    IO (ShapePtr.PtrTarget wptr 'ShapePtr.NoData (Conc.ConcRV' sym))
+  concretizePtrTarget concRV (ShapePtr.PtrTarget bid ms) =
+    ShapePtr.PtrTarget bid <$> traverse (concretizeMemShape concRV) ms
+
+  concretizeMemShape ::
+    (forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)) ->
+    ShapePtr.MemShape wptr 'ShapePtr.NoData (CS.RegValue' sym) ->
+    IO (ShapePtr.MemShape wptr 'ShapePtr.NoData (Conc.ConcRV' sym))
+  concretizeMemShape concRV = \case
+    ShapePtr.Uninitialized bytes -> pure (ShapePtr.Uninitialized bytes)
+    ShapePtr.Initialized tag bytes ->
+      ShapePtr.Initialized
+        <$> concRV (C.VectorRepr (CLM.LLVMPointerRepr (knownNat @8))) tag
+        <*> pure bytes
+    ShapePtr.Pointer tag ShapePtr.NoPtrData ->
+      ShapePtr.Pointer
+        <$> concRV (CLM.LLVMPointerRepr ?ptrWidth) tag
+        <*> pure ShapePtr.NoPtrData
+    ShapePtr.Exactly bytes ->
+      ShapePtr.Exactly <$> traverse (concretizeTaggedByte concRV) bytes
+
+  concretizeTaggedByte ::
+    (forall tp. C.TypeRepr tp -> CS.RegValue' sym tp -> IO (Conc.ConcRV' sym tp)) ->
+    ShapePtr.TaggedByte (CS.RegValue' sym) ->
+    IO (ShapePtr.TaggedByte (Conc.ConcRV' sym))
+  concretizeTaggedByte concRV (ShapePtr.TaggedByte tag val) =
+    ShapePtr.TaggedByte
+      <$> concRV (CLM.LLVMPointerRepr (knownNat @8)) tag
+      <*> pure val
 
 ---------------------------------------------------------------------
 
@@ -201,11 +245,10 @@ printConcArgs ::
   ConcArgs sym ext argTys ->
   PP.Doc ann
 printConcArgs addrWidth argNames filt (ConcArgs cArgs) =
-  let cShapes = fmapFC concShape cArgs
-   in let rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
-       in ShapePP.evalPrinter
-            (ShapePP.PrinterConfig addrWidth rleThreshold)
-            (ShapePP.printNamedShapesFiltered argNames filt cShapes)
+  let rleThreshold = 8 -- this matches uses in Grease.Refine.Diagnostic
+   in ShapePP.evalPrinter
+        (ShapePP.PrinterConfig addrWidth rleThreshold)
+        (ShapePP.printNamedShapesFiltered argNames filt cArgs)
 
 -- | Helper, not exported
 showHex' :: Integral a => a -> String
@@ -224,7 +267,7 @@ printConcExtra ::
   PP.Doc ann
 printConcExtra vals =
   PP.vsep $
-    PP.pretty "Concretized values:"
+    PP.pretty ("Concretized values:" :: Text)
       : map (PP.indent 2 . ppValue) vals
  where
   ppBv8 = PP.pretty . padHex 2 . BV.asUnsigned
@@ -238,7 +281,7 @@ printConcExtra vals =
             C.VectorRepr (C.BVRepr w)
               | Just C.Refl <- testEquality w (knownNat @8) ->
                   PP.fillSep (List.map (\(Conc.ConcRV' b) -> ppBv8 b) (toList val))
-            _ -> PP.pretty "<can't print this value>"
+            _ -> PP.pretty ("<can't print this value>" :: Text)
       ]
 
 -- | Pretty-print the concretized filesystem
@@ -247,7 +290,7 @@ printConcFs ::
   PP.Doc ann
 printConcFs cFs =
   PP.vsep $
-    PP.pretty "Concretized filesystem:"
+    PP.pretty ("Concretized filesystem:" :: Text)
       : map (PP.indent 2 . uncurry ppFile) (Map.toList (getConcFs cFs))
  where
   ppWord8 = PP.pretty . padHex 2

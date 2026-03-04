@@ -52,9 +52,9 @@ import Test.Tasty.HUnit qualified as TH
 import Test.Tasty.Hedgehog qualified as TTH
 
 eqShape ::
-  (forall t1' t2'. ExtShape ext NoTag t1' -> ExtShape ext NoTag t2' -> Bool) ->
-  Shape ext NoTag t1 ->
-  Shape ext NoTag t2 ->
+  (forall t1' t2'. ExtShape ext 'PtrShape.Precond NoTag t1' -> ExtShape ext 'PtrShape.Precond NoTag t2' -> Bool) ->
+  Shape ext 'PtrShape.Precond NoTag t1 ->
+  Shape ext 'PtrShape.Precond NoTag t2 ->
   Bool
 eqShape eqExt s1 s2 =
   case (s1, s2) of
@@ -65,9 +65,9 @@ eqShape eqExt s1 s2 =
     (_, _) -> False
 
 eqShapes ::
-  (forall t1' t2'. ExtShape ext NoTag t1' -> ExtShape ext NoTag t2' -> Bool) ->
-  Ctx.Assignment (Shape ext NoTag) ts1 ->
-  Ctx.Assignment (Shape ext NoTag) ts2 ->
+  (forall t1' t2'. ExtShape ext 'PtrShape.Precond NoTag t1' -> ExtShape ext 'PtrShape.Precond NoTag t2' -> Bool) ->
+  Ctx.Assignment (Shape ext 'PtrShape.Precond NoTag) ts1 ->
+  Ctx.Assignment (Shape ext 'PtrShape.Precond NoTag) ts2 ->
   Bool
 eqShapes eqExt c1 c2 =
   case (c1, c2) of
@@ -77,8 +77,8 @@ eqShapes eqExt c1 c2 =
       eqShape eqExt x1 x2 && eqShapes eqExt c1' c2'
     (_, _) -> False
 
-eqMemShape :: PtrShape.MemShape w NoTag -> PtrShape.MemShape w NoTag -> Bool
-eqMemShape (PtrShape.Pointer ty off tgt) (PtrShape.Pointer ty' off' tgt') =
+eqMemShape :: PtrShape.MemShape w 'PtrShape.Precond NoTag -> PtrShape.MemShape w 'PtrShape.Precond NoTag -> Bool
+eqMemShape (PtrShape.Pointer ty (PtrShape.PrecondPtrData off tgt)) (PtrShape.Pointer ty' (PtrShape.PrecondPtrData off' tgt')) =
   ty == ty'
     && off == off'
     && eqPtrTarget tgt tgt'
@@ -89,14 +89,14 @@ eqMemShape x y = x == y
 -- 0: x
 -- 1: y
 -- The parser will then parse the blockIDs as 0 and 1 accordingly.
-eqPtrTarget :: PtrShape.PtrTarget w NoTag -> PtrShape.PtrTarget w NoTag -> Bool
+eqPtrTarget :: PtrShape.PtrTarget w 'PtrShape.Precond NoTag -> PtrShape.PtrTarget w 'PtrShape.Precond NoTag -> Bool
 eqPtrTarget (PtrShape.PtrTarget _ mems) (PtrShape.PtrTarget _ mems') =
   Seq.length mems == Seq.length mems'
     && all (uncurry eqMemShape) (Seq.zip mems mems')
 
 eqPtrShape ::
-  PtrShape w ext NoTag t1 ->
-  PtrShape w ext NoTag t2 ->
+  PtrShape w ext 'PtrShape.Precond NoTag t1 ->
+  PtrShape w ext 'PtrShape.Precond NoTag t2 ->
   Bool
 eqPtrShape s1 s2 =
   case (s1, s2) of
@@ -106,27 +106,27 @@ eqPtrShape s1 s2 =
       case testEquality w w' of
         Maybe.Nothing -> False
         Maybe.Just Equality.Refl -> bv == bv'
-    (PtrShape.ShapePtr NoTag off1 tgt1, PtrShape.ShapePtr NoTag off2 tgt2) ->
-      off1 == off2 && eqPtrTarget tgt1 tgt2
+    (PtrShape.ShapePtr NoTag (PtrShape.PrecondPtrData mOffset1 tgt1), PtrShape.ShapePtr NoTag (PtrShape.PrecondPtrData mOffset2 tgt2)) ->
+      mOffset1 == mOffset2 && eqPtrTarget tgt1 tgt2
     (_, _) -> False
 
 genShapes ::
-  H.Gen (Some (Shape ext NoTag)) ->
-  H.Gen (Some (Ctx.Assignment (Shape ext NoTag)))
+  H.Gen (Some (Shape ext 'PtrShape.Precond NoTag)) ->
+  H.Gen (Some (Ctx.Assignment (Shape ext 'PtrShape.Precond NoTag)))
 genShapes gShape = do
   xs <- HG.list (HR.linear 0 16) gShape
   pure (Ctx.fromList xs)
 
 genStruct ::
-  H.Gen (Some (Shape ext NoTag)) ->
-  H.Gen (Some (Shape ext NoTag))
+  H.Gen (Some (Shape ext 'PtrShape.Precond NoTag)) ->
+  H.Gen (Some (Shape ext 'PtrShape.Precond NoTag))
 genStruct gShape = do
   Some xs <- genShapes gShape
   pure (Some (Shape.ShapeStruct NoTag xs))
 
 genShape ::
-  H.Gen (Some (ExtShape ext NoTag)) ->
-  H.Gen (Some (Shape ext NoTag))
+  H.Gen (Some (ExtShape ext 'PtrShape.Precond NoTag)) ->
+  H.Gen (Some (Shape ext 'PtrShape.Precond NoTag))
 genShape genExt =
   HG.recursive
     HG.choice
@@ -142,7 +142,7 @@ genShape genExt =
 maxBytes :: Integral a => a
 maxBytes = 32
 
-genPtrShape :: CLMP.HasPtrWidth w => H.Gen (Some (PtrShape ext w NoTag))
+genPtrShape :: CLMP.HasPtrWidth w => H.Gen (Some (PtrShape ext w 'PtrShape.Precond NoTag))
 genPtrShape =
   HG.choice
     [ do
@@ -161,12 +161,12 @@ genPtrShape =
             pure (Some (PtrShape.ShapePtrBVLit NoTag w' bv))
     , do
         (tgt, offset) <- genPtrTarget
-        pure (Some (PtrShape.ShapePtr NoTag offset tgt))
+        pure (Some (PtrShape.ShapePtr NoTag (PtrShape.PrecondPtrData offset tgt)))
     ]
 
 genPtrTarget ::
   CLMP.HasPtrWidth wptr =>
-  H.Gen (PtrShape.PtrTarget wptr NoTag, PtrShape.Offset)
+  H.Gen (PtrShape.PtrTarget wptr 'PtrShape.Precond NoTag, PtrShape.Offset)
 genPtrTarget = do
   memShapes <- HG.list (HR.linear 0 16) genMemShape
   -- Use smart constructor to avoid "non-canonical" instances
@@ -176,7 +176,7 @@ genPtrTarget = do
   let offset = PtrShape.Offset (CLB.toBytes offsetInt)
   pure (tgt, offset)
 
-genMemShape :: CLMP.HasPtrWidth wptr => H.Gen (PtrShape.MemShape wptr NoTag)
+genMemShape :: CLMP.HasPtrWidth wptr => H.Gen (PtrShape.MemShape wptr 'PtrShape.Precond NoTag)
 genMemShape = do
   -- Don't generate zero bytes, because then printing then parsing doesn't
   -- roundtrip
@@ -194,31 +194,31 @@ genMemShape = do
     ]
     [ do
         (tgt, offset) <- genPtrTarget
-        pure $ PtrShape.Pointer NoTag offset tgt
+        pure $ PtrShape.Pointer NoTag (PtrShape.PrecondPtrData offset tgt)
     ]
 
-printCfg :: Print.PrinterConfig 64
+printCfg :: Print.PrinterConfig 64 tag
 printCfg =
   Print.PrinterConfig
     { Print.cfgAddrWidth = Addr64
     , Print.cfgRleThreshold = 16 -- lower than `maxBytes` to exercise RLE
     }
 
-doPrintNamed :: Text -> Shape LLVM NoTag ty -> Text
+doPrintNamed :: Text -> Shape LLVM 'PtrShape.Precond NoTag ty -> Text
 doPrintNamed nm s =
   let doc = Print.evalPrinter printCfg (Print.printNamed nm s)
    in PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions doc)
 
-doPrint :: Shape LLVM NoTag ty -> Text
+doPrint :: Shape LLVM 'PtrShape.Precond NoTag ty -> Text
 doPrint s =
   let doc = Print.evalPrinter printCfg (Print.printShape s)
    in PP.renderStrict (PP.layoutPretty PP.defaultLayoutOptions doc)
 
-testPrint :: String -> Text -> Shape LLVM NoTag ty -> TT.TestTree
+testPrint :: String -> Text -> Shape LLVM 'PtrShape.Precond NoTag ty -> TT.TestTree
 testPrint name printed s =
   TH.testCase name (TH.assertEqual name printed (doPrint s))
 
-testParse :: String -> Text -> Shape LLVM NoTag ty -> TT.TestTree
+testParse :: String -> Text -> Shape LLVM 'PtrShape.Precond NoTag ty -> TT.TestTree
 testParse testName shapeSource shapeExpected = do
   let ?ptrWidth = NatRepr.knownNat @64
   let shapeName = "test"
@@ -241,12 +241,12 @@ testParse testName shapeSource shapeExpected = do
 
 ptrShape ::
   PtrShape.Offset ->
-  [PtrShape.MemShape 64 NoTag] ->
-  Shape LLVM NoTag (LLVMPointerType 64)
+  [PtrShape.MemShape 64 'PtrShape.Precond NoTag] ->
+  Shape LLVM 'PtrShape.Precond NoTag (LLVMPointerType 64)
 ptrShape offset =
-  Shape.ShapeExt . PtrShape.ShapePtr NoTag offset . PtrShape.PtrTarget Maybe.Nothing . Seq.fromList
+  Shape.ShapeExt . (\tgt -> PtrShape.ShapePtr NoTag (PtrShape.PrecondPtrData offset tgt)) . PtrShape.PtrTarget Maybe.Nothing . Seq.fromList
 
-printThenParse :: Shape LLVM NoTag t -> IO (Some (Shape LLVM NoTag))
+printThenParse :: Shape LLVM 'PtrShape.Precond NoTag t -> IO (Some (Shape LLVM 'PtrShape.Precond NoTag))
 printThenParse s = do
   let ?ptrWidth = NatRepr.knownNat @64
   let name = "test"
@@ -351,9 +351,9 @@ shapeTests =
     , testPrint
         "Print Pointer"
         "000000+0000000000000000\n\n000000: 000001+0000000000000000\n000001: "
-        (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0) (PtrShape.PtrTarget Maybe.Nothing Seq.Empty)])
+        (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.PrecondPtrData (PtrShape.Offset 0) (PtrShape.PtrTarget Maybe.Nothing Seq.Empty))])
     , testPrint
         "Print Pointer with non-zero offset"
         "000000+0000000000000000\n\n000000: 000001+00000000000000ff\n000001: "
-        (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.Offset 0xff) (PtrShape.PtrTarget Maybe.Nothing Seq.Empty)])
+        (ptrShape (PtrShape.Offset 0) [PtrShape.Pointer NoTag (PtrShape.PrecondPtrData (PtrShape.Offset 0xff) (PtrShape.PtrTarget Maybe.Nothing Seq.Empty))])
     ]
