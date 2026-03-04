@@ -514,8 +514,8 @@ interestingConcretizedShapes names initArgs cArgs =
       cShapes = fmapFC Shape.tagWithType (Conc.concArgsShapes cArgs)
       isLlvmArg name = "%" `List.isPrefixOf` name
    in Ctx.zipWith
-        ( \(Const name) (Const _isDefault) ->
-            Const (name `List.elem` interestingRegs || isLlvmArg name)
+        ( \(Const name) (Const isDefault) ->
+            Const ((name `List.elem` interestingRegs || isLlvmArg name) && not isDefault)
         )
         names
         -- Check if the shape has changed during concretization. When we concretize, we transform the shape

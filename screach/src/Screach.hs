@@ -397,8 +397,8 @@ interestingConcretizedShapes names initArgs cArgs =
   let initArgsWithType = TFC.fmapFC Shape.tagWithType initArgs
       cShapes = TFC.fmapFC Shape.tagWithType (Conc.concArgsShapes cArgs)
    in Ctx.zipWith
-        ( \(Const name) (Const _isDefault) ->
-            Const (name `List.elem` interestingRegs)
+        ( \(Const name) (Const isDefault) ->
+            Const (name `List.elem` interestingRegs && not isDefault)
         )
         names
         (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgsWithType)
