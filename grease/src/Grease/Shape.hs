@@ -194,7 +194,6 @@ instance (MC.PrettyF tag, PrettyExt ext ptrData tag) => MC.PrettyF (Shape ext pt
       ShapeUnit tag -> "unit" PP.<> ppTag tag
       ShapeExt ext -> MC.prettyF ext
 
--- | Instances for Shape ext 'Precond
 instance
   (TFC.TraversableFC (ExtShape ext 'Precond)) =>
   TFC.FunctorFC (Shape ext 'Precond)
@@ -219,7 +218,6 @@ instance
     ShapeUnit tag -> ShapeUnit <$> f tag
     ShapeExt ext -> ShapeExt <$> TFC.traverseFC f ext
 
--- | Instances for Shape ext 'NoData
 instance
   (TFC.TraversableFC (ExtShape ext 'NoData)) =>
   TFC.FunctorFC (Shape ext 'NoData)
