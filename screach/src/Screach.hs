@@ -102,7 +102,6 @@ import Grease.Refine qualified as GR
 import Grease.Refine.Diagnostic qualified as RDiag
 import Grease.Setup qualified as GS
 import Grease.Shape qualified as Shape
-import Grease.Shape.Concretize (concShape)
 import Grease.Shape.NoTag qualified as Shape
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Parse qualified as Shape
