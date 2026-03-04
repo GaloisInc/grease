@@ -1,6 +1,6 @@
 ; Copyright (c) Galois, Inc. 2025
 
-; Ensure that DFS and SSE report the same overall result when one path hits
+; Ensure that BFS, DFS, and SSE report the same overall result when one path hits
 ; a possible bug and the other cannot be refined (in this case, due to the loop
 ; bound).
 ;
@@ -22,6 +22,11 @@
 ;; flags {"--path-strategy", "sse"}
 ;; go(prog)
 ;; check_not "Possible bug(s):"
+;; check 'reached maximum number of loop iterations'
+
+;; flags {"--symbol", "test"}
+;; flags {"--path-strategy", "bfs"}
+;; go(prog)
 ;; check 'reached maximum number of loop iterations'
 
 ;; flags {"--symbol", "test"}

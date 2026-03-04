@@ -100,6 +100,7 @@ import Grease.Output (renderJSON)
 import Grease.Pretty (prettyPtrFnMap)
 import Grease.Refine qualified as GR
 import Grease.Refine.Diagnostic qualified as RDiag
+import Grease.Scheduler qualified as Sched
 import Grease.Setup qualified as GS
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag qualified as Shape
@@ -157,7 +158,6 @@ import Screach.Personality qualified as SP
 import Screach.RefineFeature qualified as RFT
 import Screach.ResolveCall (ecfsLookupFunctionHandleDispatch)
 import Screach.Run.Diagnostic qualified as Diag
-import Screach.SchedulerFeature qualified as Sched
 import Screach.ShortestDistanceScheduler qualified as SDSE
 import System.Directory (Permissions, getPermissions)
 import System.Exit qualified as Exit
@@ -667,7 +667,7 @@ analyzeSyntax conf sla gla halloc archCtx = do
     (GMSH.ExecutingAddressAction (\_ -> pure ()))
     addrOvs
     entryCfgs
-    Sched.defaultPrioritizationFunction
+    defaultPrioritizationFunction
  where
   -- \| Retrieve the function name from an S-expression program's
   -- 'AnalysisLoc'. Throw an exception if an address was given.
@@ -822,6 +822,11 @@ containingFunctionFromRloc rloc def =
     (ResolvedTargetLocSymbol _ (Just addr), _) -> pure addr
     _ -> throw TargetAddressWithoutContainingFunction
 
+-- | Default prioritization function that assigns no priority.
+-- Returns 'Nothing' for all paths, allowing the scheduler to use its default ordering.
+defaultPrioritizationFunction :: Sched.PrioritizationFunction p sym ext rtp
+defaultPrioritizationFunction _ _ = pure Nothing
+
 withPrioritizationFunction ::
   (MonadFail m, MonadIO m) =>
   Conf.Config ->
@@ -847,7 +852,7 @@ withPrioritizationFunction ::
 withPrioritizationFunction conf avoidList archCtx cfgCache sla gla elf halloc resolvedTargetLoc k =
   if not $ Conf.explore conf
     then
-      k Sched.defaultPrioritizationFunction
+      k defaultPrioritizationFunction
     else do
       cgPath <- case Conf.callgraph conf of
         Just c -> pure c
@@ -894,7 +899,7 @@ withPrioritizationFunction conf avoidList archCtx cfgCache sla gla elf halloc re
           Sched.PrioritizationFunction p sym ext rtp
         cgPfunc = case SAL.resolvedTargetAddr resolvedTargetLoc of
           Just targetAddr -> pfuncFromTargetAddr targetAddr
-          _ -> Sched.defaultPrioritizationFunction
+          _ -> defaultPrioritizationFunction
       k cgPfunc
 
 loadAddrOvs ::
@@ -1563,35 +1568,35 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
     let mbElf = snd . Elf.getElf <$> mbEhi
     let macawDbgExtImpl =
           MDebug.macawExtImpl prettyPtrFnMap memVar (archCtx ^. archVals) mbElf
-    let
-      execFeatures follow =
-        -- We want to apply path splitting before we apply record replay, so that replay
-        -- aborts the state that was path split that is not on
-        -- the replayed path. The logging feature should be last so it observes items right before
-        -- they reach the Crucible execution itself.
-        List.concat
-          [ RFT.sdseExecFeatures
-              bak
-              sla
-              gla
-              (Conf.refineReplay conf)
-              initShape
-              pFunc
-              (handleTarget archCtx Proxy sla argNames (initArgs ^. Shape.argShapes))
-              (Conf.allSolutions conf)
-          , [SR.replayFeature follow]
-          , [SR.recordFeature]
-          , List.map CS.genericToExecutionFeature genericExecFeats
-          , if GO.debug (Conf.debugOpts conf)
-              then [Dbg.debugger macawDbgExtImpl]
-              else []
-          ]
-    let startFeats = execFeatures False
+    -- We want to apply path splitting before we apply record replay, so that replay
+    -- aborts the state that was path split that is not on
+    -- the replayed path. The logging feature should be last so it observes items right before
+    -- they reach the Crucible execution itself.
+    (sdseFeats, savedRef) <-
+      RFT.sdseExecFeatures
+        bak
+        sla
+        gla
+        (Conf.refineReplay conf)
+        initShape
+        pFunc
+        (handleTarget archCtx Proxy sla argNames (initArgs ^. Shape.argShapes))
+        (Conf.allSolutions conf)
+    let startFeats =
+          List.concat
+            [ sdseFeats
+            , [SR.replayFeature False]
+            , [SR.recordFeature]
+            , List.map CS.genericToExecutionFeature genericExecFeats
+            , if GO.debug (Conf.debugOpts conf)
+                then [Dbg.debugger macawDbgExtImpl]
+                else []
+            ]
 
     setupAssertThenAssume bak
     firstState <- initShape initArgs Nothing
-    result <- CS.executeCrucible startFeats firstState
-    let saved = Sched.getTargetResults result
+    _result <- CS.executeCrucible startFeats firstState
+    saved <- IORef.readIORef savedRef
     doLog sla $ Diag.RefinementResultCount $ length saved
     verifyReachable sla gla bak initShape genericExecFeats saved
  where
@@ -1625,12 +1630,12 @@ verifyReachable ::
     IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
   ) ->
   [CS.GenericExecutionFeature sym] ->
-  [Sched.SavedState p sym ext (CS.RegEntry sym ret)] ->
+  [RFT.SavedState p sym ext (CS.RegEntry sym ret)] ->
   IO ()
 verifyReachable la gla bak initShape genericExecFeats saved = do
   let refineResults =
         flip Maybe.mapMaybe saved $ \save ->
-          let ctx = CSE.execStateContext (Sched._savedExecState save)
+          let ctx = CSE.execStateContext (RFT.savedExecState save)
               p = ctx ^. CS.cruciblePersonality
               rst = SP._refineState p
            in case rst ^. RFT.refineResult of

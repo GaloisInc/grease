@@ -1,6 +1,6 @@
 ; Copyright (c) Galois, Inc. 2025
 
-; Test that SSE and DFS strategies give the same result.
+; Test that all path strategies give the same result.
 
 (defun @test ((b Bool)) Unit
   (start start:
@@ -15,6 +15,11 @@
 
 ;; flags {"--symbol", "test"}
 ;; flags {"--path-strategy", "sse"}
+;; go(prog)
+;; uninit_stack()
+
+;; flags {"--symbol", "test"}
+;; flags {"--path-strategy", "bfs"}
 ;; go(prog)
 ;; uninit_stack()
 

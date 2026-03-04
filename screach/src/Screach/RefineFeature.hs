@@ -19,13 +19,17 @@ module Screach.RefineFeature (
   refineErrMap,
   HasScreachPersonality,
   sdseExecFeatures,
+
+  -- * Saved target results
+  SavedState (..),
+  createSaveItem,
 ) where
 
-import Control.Lens ((&), (.~), (?~), (^.))
+import Control.Lens ((&), (.~), (?~))
 import Control.Lens qualified as Lens
 import Control.Monad.IO.Class (MonadIO)
 import Data.Data (Proxy (Proxy))
-import Data.IORef (IORef, readIORef)
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Kind (Constraint, Type)
 import Data.Macaw.CFG qualified as MC
 import Data.Map qualified as Map
@@ -43,6 +47,7 @@ import Grease.ErrorDescription (ErrorDescription)
 import Grease.Heuristic qualified as GH
 import Grease.Refine qualified as GR
 import Grease.Refine.Diagnostic qualified as GRDiag
+import Grease.Scheduler qualified as Sched
 import Grease.Shape (ArgShapes, ExtShape)
 import Grease.Shape.NoTag qualified as Shape
 import Grease.Shape.Pointer (PtrShape)
@@ -60,10 +65,8 @@ import Lumberjack qualified as LJ
 import Screach.Diagnostic (ScreachLogAction)
 import Screach.Diagnostic qualified as Diag
 import Screach.Panic qualified as Scrch
-import Screach.PathSplittingSchedFeature qualified as PthSplit
 import Screach.RefinementOptions qualified as RftOpt
 import Screach.Run.Diagnostic qualified as RDiag
-import Screach.SchedulerFeature qualified as Sched
 import What4.Expr qualified as WE
 import What4.Interface qualified as WI
 import What4.Protocol.Online qualified as WPO
@@ -126,47 +129,70 @@ class HasRefinmentState p sym bak t ext aty w | p -> sym ext where
 -- state
 type HasScreachPersonality p sym bak t ext tys ret rtp w =
   ( CS.RegEntry sym ret ~ rtp
-  , Sched.HasSchedulerState p p sym ext rtp
   , HasRefinmentState p sym bak t ext tys w
   , CR.HasReplayState p p sym ext (CS.RegEntry sym ret)
   , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
   )
 
--- | This function takes a fresh initial state (from a given refinement) and adds whatever paused states are in the worklist to it.
--- This situation is not ideal because the refined state my be further than some other state on the worklist from the target.
--- Once we hit a branch we will get to visit the scheduler again but until that point we are forced to run the refinement.
--- Ideally we would take the refinement and add it to the worklist. Then let the scheduler pick the best state
--- This is not possible because we cannot pause this state until all other features have "observed" the initial state.
--- The worklist can only hold running states but many features need to see the non-running state first so we are forced to let this
--- initial state bubble up. There is some potential hack we could do where we could mark an initial state that should be paused right after
--- all features see it or something but it would be really ugly.
+-- | Saved symbolic execution result with backend state.
+--
+-- When a target is reached during SDSE, the result and backend state are
+-- captured so they can be verified later.
+data SavedState p sym ext rtp
+  = SavedState
+  { savedBackendState :: CB.AssumptionState sym
+  , savedExecState :: C.ExecState p sym ext rtp
+  }
 
+-- | Create a 'SavedState' from an 'C.ExecResult' by capturing the current
+-- backend state.
+createSaveItem ::
+  C.ExecResult p sym ext rtp ->
+  IO (SavedState p sym ext rtp)
+createSaveItem st =
+  let simCtx = C.execResultContext st
+   in C.withBackend simCtx $ \bak -> do
+        bakState <- CB.getBackendState bak
+        pure
+          SavedState
+            { savedBackendState = bakState
+            , savedExecState = C.ResultState st
+            }
+
+-- | Take a fresh initial state (from a given refinement) and set it up for replay.
+--
+-- Returning this via 'C.ExecutionFeatureNewState' is not ideal because the
+-- simulator will immediately begin exploring this state, without consulting
+-- the worklist. But the refined state may be further than some other state on
+-- the worklist from the target. Once we hit a branch we will get to visit the
+-- scheduler again but until that point we are forced to run the refinement.
+-- Ideally we would take the refinement and add it to the worklist. Then let
+-- the scheduler pick the best state. This is not possible because we cannot
+-- pause this state until all other features have "observed" the initial state.
+-- The worklist can only hold running states but many features need to see the
+-- non-running state first so we are forced to let this initial state bubble up.
+-- There is some potential hack we could do where we could mark an initial state
+-- that should be paused right after all features see it or something but it
+-- would be really ugly.
+--
 -- Overall while this situation isn't ideally it is not super problematic because straightline symbolic execution on the refined state until some
 -- split is relatively cheap.
 pauseLinearState ::
-  ( Sched.HasSchedulerState p p sym ext rtp
-  , CR.HasReplayState p p sym ext (CS.RegEntry sym ret)
-  ) =>
+  (CR.HasReplayState p p sym ext (CS.RegEntry sym ret)) =>
   sym ->
   -- | The new init state
   C.ExecState p sym ext rtp ->
   -- | The trace to replay when starting the new state
   CR.RecordedTrace sym ->
-  -- | Wether to replay the trace after refinement
+  -- | Whether to replay the trace after refinement
   RftOpt.RefineReplay ->
-  Sched.WorkList p sym ext rtp ->
   IO (C.ExecState p sym ext rtp)
-pauseLinearState sym st trc (RftOpt.RefineReplay shouldReplay) worklist =
+pauseLinearState sym st trc (RftOpt.RefineReplay shouldReplay) =
   case st of
     C.InitialState ctx glb ah tyRepr cont -> do
-      -- we've create a fresh ctx... we need to copy the worklist.
-      let newCtx =
-            ctx
-              & C.cruciblePersonality . Sched.schedulerWorklist
-                .~ worklist
       empTrc <- CR.emptyRecordedTrace sym
       let toUseTrace = if shouldReplay then trc else empTrc
-      let stWithTrace = newCtx & C.cruciblePersonality . CR.replayState . CR.initialTrace .~ toUseTrace
+      let stWithTrace = ctx & C.cruciblePersonality . CR.replayState . CR.initialTrace .~ toUseTrace
       pure $ C.InitialState stWithTrace glb ah tyRepr cont
     -- TODO instead of panicking we can just make the callback return a newtype of an init state
     _ -> Scrch.panic "pauseLinearState" ["Expecting an initial state"]
@@ -185,7 +211,6 @@ refineState ::
   , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
   , ExtShape ext ~ PtrShape ext w
   , C.IsSyntaxExtension ext
-  , Sched.HasSchedulerState p p sym ext rtp
   , HasRefinmentState p sym bak t ext tys w
   , CR.HasReplayState p p sym ext (CS.RegEntry sym ret)
   , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
@@ -212,7 +237,8 @@ refineState ::
 refineState bak sla gla refineReplay st config = do
   let SrchRefineData{_greaseRefineData = rdata, _refineErrMap = errMapRef, _llvmMemVar = memvar} = Lens.view (C.cruciblePersonality . refinementState) (C.execResultContext st)
   LJ.writeLog gla (GrDiag.RefineDiagnostic (GRDiag.ExecutionResult memvar st))
-  obls <- Sched.getActiveObligations (C.ResultState st)
+  obls <- C.withBackend (C.execResultContext st) $ \bak' ->
+    CB.getProofObligations bak'
   errMap <- readIORef errMapRef
   refResult <- GR.proveAndRefine bak st gla errMap rdata obls
   trc <- getRecordedTrace st
@@ -259,7 +285,6 @@ refineState bak sla gla refineReplay st config = do
           initSt
           trc
           refineReplay
-          (C.execResultContext st ^. C.cruciblePersonality . Sched.schedulerWorklist)
  where
   getRecordedTrace result = do
     -- These panics are impossible. Because we use path splitting, there will
@@ -305,13 +330,16 @@ refineFeature bak sla gla refineReplay initCfg = C.ExecutionFeature $ \case
       RDiag.RefinementStateTimedOut
     pure
       C.ExecutionFeatureNoChange
-  C.ResultState r -> refineState bak sla gla refineReplay r initCfg
+  C.ResultState r ->
+    refineState bak sla gla refineReplay r initCfg
   _ -> pure C.ExecutionFeatureNoChange
 
+-- | Create the execution features for SDSE (Shortest Distance Symbolic Execution).
+--
+-- Returns the features and an IO action to retrieve saved target results.
 sdseExecFeatures ::
   forall rtp sym ret p ext scope st fs bak solver tys w fm.
   ( rtp ~ CS.RegEntry sym ret
-  , Sched.HasSchedulerState p p sym ext rtp
   , CB.IsSymInterface sym
   , sym ~ WE.ExprBuilder scope st fs
   , bak ~ CBO.OnlineBackend solver scope st fs
@@ -342,18 +370,33 @@ sdseExecFeatures ::
   -- | Determines if a given state is the target state for SDSE
   (HasRefinmentState p sym bak scope ext tys w => C.ExecResult p sym ext rtp -> IO Bool) ->
   RftOpt.AllSolutions ->
-  [C.ExecutionFeature p sym ext (CS.RegEntry sym ret)]
-sdseExecFeatures bak sla gla refineReplay initCFG priorityFunc isTarget exploreMore =
-  let
-    schedCallback :: Sched.SchedulerCallback p sym ext rtp
-    schedCallback = Sched.scheduleForLaterCallback sla priorityFunc
-   in
-    -- It is important that  the refine feature comes before the scheduler so that we refine aborted states.
-    -- otherwise we will just skip the state and throw it away since it is not a target abort.
-    [ refineFeature bak sla gla refineReplay initCFG
-    , Sched.schedulerFeature sla exploreMore isTarget
-    , PthSplit.pathSplitFeature
-        sla
-        schedCallback
-        (CBO.considerSatisfiability bak)
-    ]
+  -- | Returns the features and an IORef to retrieve saved target results after execution
+  IO ([C.ExecutionFeature p sym ext (CS.RegEntry sym ret)], IORef [SavedState p sym ext rtp])
+sdseExecFeatures bak sla gla refineReplay initCFG priorityFunc isTargetPred (RftOpt.AllSolutions exploreMore) = do
+  -- Create IORef for collecting target results
+  savedRef <- newIORef []
+
+  -- Create the scheduler features using Grease.Scheduler
+  let satPolicy =
+        Sched.withSatisfiabilityCheck (CBO.considerSatisfiability bak) $
+          Sched.priorityPolicy priorityFunc
+  let resultCallback r = do
+        t <- isTargetPred r
+        if t
+          then do
+            saved <- createSaveItem r
+            modifyIORef' savedRef (saved :)
+            if exploreMore
+              then pure Sched.ContinueExploring
+              else pure Sched.StopExploring
+          else pure Sched.ContinueExploring
+  (bf, rf, _wq) <- Sched.schedulerFeatures bak satPolicy resultCallback
+
+  let feats =
+        -- It is important that the refine feature comes before the scheduler so that we refine aborted states.
+        -- otherwise we will just skip the state and throw it away since it is not a target abort.
+        [ refineFeature bak sla gla refineReplay initCFG
+        , rf
+        , bf
+        ]
+  pure (feats, savedRef)
