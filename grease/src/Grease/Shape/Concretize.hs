@@ -28,11 +28,7 @@ import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Numeric.Natural (Natural)
 
--- | Look up a block in the allocation map and create PrecondPtrData from a concrete pointer
---
--- This helper eliminates duplication between concMemShape and concPtrShape by
--- encapsulating the logic of: looking up the block, concretizing the target,
--- extracting the offset, and constructing PrecondPtrData.
+-- | Look up a block in the allocation map and create 'PrecondPtrData' from a concretized pointer
 lookupBlockAndCreatePtrData ::
   CLMP.HasPtrWidth wptr =>
   String ->
