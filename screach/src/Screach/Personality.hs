@@ -7,11 +7,14 @@ module Screach.Personality (
   greaseSimulatorState,
   recordState,
   replayState,
+  distState,
   mkScreachSimulatorState,
 ) where
 
 import Control.Lens (makeLenses)
 import Control.Lens qualified as Lens
+import Data.IORef (IORef)
+import Data.IORef qualified as IORef
 import Data.Kind (Type)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as MS
@@ -26,7 +29,6 @@ import Lang.Crucible.Simulator.RecordAndReplay qualified as CSR
 import Lang.Crucible.Types qualified as CT
 import Screach.Distance qualified as Dist
 import Screach.RefineFeature qualified as RFT
-import Screach.SchedulerFeature qualified as Sched
 import Screach.ShortestDistanceScheduler qualified as ShortDistSched
 
 -- | The Screach \"personality\".
@@ -43,9 +45,7 @@ type ScreachSimulatorState ::
   Type -> Type -> Type -> Type -> Type -> Type -> Type -> C.Ctx CT.CrucibleType -> Natural -> Type
 data ScreachSimulatorState p sym bak ext rtp arch t aty w = ScreachSimulatorState
   { _greaseSimulatorState :: GMSS.GreaseSimulatorState MDebug.MacawCommand sym arch
-  , _schedulerState ::
-      Sched.SchedulerState (ScreachSimulatorState p sym bak ext rtp arch t aty w) sym ext rtp
-  , _distState :: Dist.DijkstraCaches
+  , _distState :: IORef Dist.DijkstraCaches
   , _recordState ::
       CSR.RecordState (ScreachSimulatorState p sym bak ext rtp arch t aty w) sym ext rtp
   , _replayState ::
@@ -56,17 +56,7 @@ data ScreachSimulatorState p sym bak ext rtp arch t aty w = ScreachSimulatorStat
 makeLenses ''ScreachSimulatorState
 
 instance ShortDistSched.HasDistancesState (ScreachSimulatorState p sym bak ext rtp arch t aty w) where
-  distanceState = distState
-
-instance
-  Sched.HasSchedulerState
-    (ScreachSimulatorState p sym bak ext rtp arch t aty w)
-    (ScreachSimulatorState p sym bak ext rtp arch t aty w)
-    sym
-    ext
-    rtp
-  where
-  schedulerState = schedulerState
+  distancesRef = _distState
 
 instance
   ( ext ~ MS.MacawExt arch
@@ -143,11 +133,11 @@ mkScreachSimulatorState sym halloc gss schrRefineData = do
   recState <- CSR.mkRecordState halloc
   empTrace <- CSR.emptyRecordedTrace sym
   repState <- CSR.mkReplayState halloc empTrace
+  distRef <- IORef.newIORef Dist.emptyDijkstraCaches
   pure
     ScreachSimulatorState
       { _greaseSimulatorState = gss
-      , _schedulerState = Sched.emptySchedulerState
-      , _distState = Dist.emptyDijkstraCaches
+      , _distState = distRef
       , _recordState = recState
       , _replayState = repState
       , _refineState = schrRefineData
