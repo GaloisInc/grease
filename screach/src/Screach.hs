@@ -385,23 +385,24 @@ interestingRegs =
 --
 -- This is clearly a bit of a hack, but leads to concise and readable output.
 interestingConcretizedShapes ::
+  forall ext wptr sym argTys tag.
   CLM.HasPtrWidth wptr =>
   (Shape.ExtShape ext ~ Shape.PtrShape ext wptr) =>
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   -- | Default/initial/minimal shapes
-  Ctx.Assignment (Shape.Shape ext tag) argTys ->
+  Ctx.Assignment (Shape.Shape ext 'Shape.Precond tag) argTys ->
   ConcArgs sym ext argTys ->
   Ctx.Assignment (Const Bool) argTys
-interestingConcretizedShapes names initArgs (ConcArgs cArgs) =
-  let cShapes = TFC.fmapFC (Shape.tagWithType . concShape) cArgs
-   in let initArgs' = TFC.fmapFC Shape.tagWithType initArgs
-       in Ctx.zipWith
-            ( \(Const name) (Const isDefault) ->
-                Const (name `List.elem` interestingRegs && not isDefault)
-            )
-            names
-            (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgs')
+interestingConcretizedShapes names initArgs cArgs =
+  let initArgsWithType = TFC.fmapFC Shape.tagWithType initArgs
+      cShapes = TFC.fmapFC Shape.tagWithType (Conc.concArgsShapes cArgs)
+   in Ctx.zipWith
+        ( \(Const name) (Const _isDefault) ->
+            Const (name `List.elem` interestingRegs)
+        )
+        names
+        (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgsWithType)
 
 -- | Log a message to 'stderr' along with the current time.
 log :: MonadIO m => GD.Severity -> PP.Doc a -> m ()
@@ -994,7 +995,7 @@ initCFG ::
     aty ->
   Maybe (IORef.IORef (Map.Map (Nonce.Nonce t CCC.BaseBoolType) (GH.ErrorDescription sym))) ->
   IO
-    (CS.ExecState (SP.ScreachSimulatorState p sym bak ext rtp arch t aty) sym ext (CS.RegEntry sym ret))
+    (CS.ExecState (SP.ScreachSimulatorState p sym bak ext rtp arch t aty 64) sym ext (CS.RegEntry sym ret))
 initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
   let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` CCC.cfgHandle entryRegSsaCfg) mbEntryAddr
    in \bak gla sla macawCfgConfig halloc conf archCtx archRegSpec mbTargetAddr mbStartupOvSomeSsaCfg rtLoc memVar setupHook execAction addrOvs argShapes mbErrMaps -> do
@@ -1347,7 +1348,7 @@ analyzeElf conf sla gla halloc archCtx = do
 handleTarget ::
   forall p' p sym ext bak rtp arch t aty wptr tag.
   ( p
-      ~ SP.ScreachSimulatorState p' sym bak ext rtp arch t aty
+      ~ SP.ScreachSimulatorState p' sym bak ext rtp arch t aty wptr
   , ext ~ MS.MacawExt arch
   , CLM.HasPtrWidth
       wptr
@@ -1358,14 +1359,14 @@ handleTarget ::
   ScreachLogAction ->
   Ctx.Assignment (Const String) aty ->
   -- | Default/initial/minimal shapes
-  Ctx.Assignment (Shape.Shape ext tag) aty ->
+  Ctx.Assignment (Shape.Shape ext 'Shape.Precond tag) aty ->
   CS.ExecResult p sym ext rtp ->
   IO
     Bool
 handleTarget archCtx _ sla argNames initArgs st =
   let rst =
         ( CS.execResultContext st ^. CS.cruciblePersonality . RFT.refinementState ::
-            RFT.SrchRefineData sym bak t ext aty
+            RFT.SrchRefineData sym bak t ext aty wptr
         )
    in case RFT._refineResult rst of
         Just (RFT.RefineResult bid cData _trace) | isReachedBug bid -> do
@@ -1607,8 +1608,8 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
       _else -> panic "setupAssertThenAssume" (List.map show warns)
 
 verifyReachable ::
-  ( p ~ SP.ScreachSimulatorState p0 sym bak ext (CS.RegEntry sym ret) arch t tys
-  , TFC.TraversableFC (Shape.ExtShape ext)
+  ( p ~ SP.ScreachSimulatorState p0 sym bak ext (CS.RegEntry sym ret) arch t tys w
+  , TFC.TraversableFC (Shape.ExtShape ext Shape.Precond)
   , CCE.IsSyntaxExtension ext
   , GU.OnlineSolverAndBackend solver sym bak t st fm
   , 16 CT.<= w
@@ -1645,7 +1646,7 @@ verifyReachable la gla bak initShape genericExecFeats saved = do
   Monad.forM_ (zip [1 ..] refineResults) $ \(no, refineResult) -> do
     doLog la (Diag.VerifyReachable (length refineResults) no)
     let cData = RFT.refineResultConcData refineResult
-    let concArgShapes = Conc.getConcArgs (Conc.concArgs cData)
+    let concArgShapes = Conc.concArgsShapes (Conc.concArgs cData)
     let untagArgs = TFC.fmapFC (TFC.fmapFC (const Shape.NoTag)) concArgShapes
     -- TODO(internal#144): Incorporate the concretized filesystem.
     st <- initShape (Shape.ArgShapes untagArgs) Nothing
