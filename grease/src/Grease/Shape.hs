@@ -195,44 +195,20 @@ instance (MC.PrettyF tag, PrettyExt ext ptrData tag) => MC.PrettyF (Shape ext pt
       ShapeExt ext -> MC.prettyF ext
 
 instance
-  (TFC.TraversableFC (ExtShape ext 'Precond)) =>
-  TFC.FunctorFC (Shape ext 'Precond)
+  (TFC.TraversableFC (ExtShape ext ptrMode)) =>
+  TFC.FunctorFC (Shape ext ptrMode)
   where
   fmapFC = TFC.fmapFCDefault
 
 instance
-  (TFC.TraversableFC (ExtShape ext 'Precond)) =>
-  TFC.FoldableFC (Shape ext 'Precond)
+  (TFC.TraversableFC (ExtShape ext ptrMode)) =>
+  TFC.FoldableFC (Shape ext ptrMode)
   where
   foldMapFC = TFC.foldMapFCDefault
 
 instance
-  (TFC.TraversableFC (ExtShape ext 'Precond)) =>
-  TFC.TraversableFC (Shape ext 'Precond)
-  where
-  traverseFC f = \case
-    ShapeBool tag -> ShapeBool <$> f tag
-    ShapeFloat tag fi -> ShapeFloat <$> f tag <*> pure fi
-    ShapeStruct tag fields ->
-      ShapeStruct <$> f tag <*> TFC.traverseFC (TFC.traverseFC f) fields
-    ShapeUnit tag -> ShapeUnit <$> f tag
-    ShapeExt ext -> ShapeExt <$> TFC.traverseFC f ext
-
-instance
-  (TFC.TraversableFC (ExtShape ext 'NoData)) =>
-  TFC.FunctorFC (Shape ext 'NoData)
-  where
-  fmapFC = TFC.fmapFCDefault
-
-instance
-  (TFC.TraversableFC (ExtShape ext 'NoData)) =>
-  TFC.FoldableFC (Shape ext 'NoData)
-  where
-  foldMapFC = TFC.foldMapFCDefault
-
-instance
-  (TFC.TraversableFC (ExtShape ext 'NoData)) =>
-  TFC.TraversableFC (Shape ext 'NoData)
+  (TFC.TraversableFC (ExtShape ext ptrMode)) =>
+  TFC.TraversableFC (Shape ext ptrMode)
   where
   traverseFC f = \case
     ShapeBool tag -> ShapeBool <$> f tag
