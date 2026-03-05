@@ -11,12 +11,13 @@
 module Screach.ShortestDistanceScheduler (sdsePrioritizationFunction, HasDistancesState (..)) where
 
 import Control.Applicative ((<|>))
-import Control.Lens
-import Control.Lens qualified as Lens
+import Control.Lens ((^.))
 import Control.Monad (forM)
 import Control.Monad.Reader (ReaderT (runReaderT))
-import Control.Monad.State (MonadIO (liftIO), MonadTrans (lift), StateT)
-import Control.Monad.Trans.Maybe
+import Control.Monad.State (MonadIO (liftIO), StateT, runStateT)
+import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
+import Data.IORef (IORef)
+import Data.IORef qualified as IORef
 import Data.Macaw.CFG qualified as MM
 import Data.Macaw.X86 qualified as MA
 import Data.Maybe qualified as Maybe
@@ -24,6 +25,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Some qualified as Some
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch qualified as GRS
+import Grease.Scheduler qualified as Sched
 import Lang.Crucible.CFG.Core qualified as CCC
 import Lang.Crucible.FunctionHandle qualified as CFH
 import Lang.Crucible.Simulator.CallFrame qualified as C
@@ -37,16 +39,12 @@ import Screach.Diagnostic qualified as ScrchDiagnostic
 import Screach.Distance qualified as Dist
 import Screach.LoadedELF (LoadedELF (..))
 import Screach.Panic (panic)
-import Screach.SchedulerFeature qualified as Sched
 import What4.Interface qualified as WI
 import What4.ProgramLoc qualified as WPL
 
--- the personality that gets passed to the shortest distance prioritzation function also need to allow storing a cache
+-- | Class for personality types that provide access to a mutable distance cache.
 class HasDistancesState p where
-  distanceState :: Lens.Lens' p Dist.DijkstraCaches
-
-instance (HasDistancesState p) => HasDistancesState (C.SimState p sym ext rtp f a) where
-  distanceState = C.stateContext . C.cruciblePersonality . distanceState
+  distancesRef :: p -> IORef Dist.DijkstraCaches
 
 getPausedFrameStatementNode :: C.PausedFrame p sym ext rtp f -> Dist.StatementNode
 getPausedFrameStatementNode paused =
@@ -162,6 +160,14 @@ callStackFromSimState st = do
   frmToICFGBlock (C.SomeFrame (C.MF cf)) = Just <$> Dist.interBlockIDFromFrame cf
   frmToICFGBlock _ = pure Nothing
 
+-- | Run a 'StateT DijkstraCaches IO' computation using an 'IORef' for mutable state.
+runWithCachesRef :: IORef Dist.DijkstraCaches -> StateT Dist.DijkstraCaches IO a -> IO a
+runWithCachesRef ref action = do
+  caches <- IORef.readIORef ref
+  (result, caches') <- runStateT action caches
+  IORef.writeIORef ref caches'
+  pure result
+
 -- TODO(internal#115) we need a counting feature or something to get the history distance
 sdsePrioritizationFunction ::
   forall p sym ext rtp.
@@ -189,12 +195,13 @@ sdsePrioritizationFunction tgtAddr tgtFunction archCtx cg cache distConfig sla g
         , mem = mem
         , pltStubs = pltStubs
         } = lElf
-      maybeRes :: MaybeT (Dist.DistanceMonad (C.SimState p sym ext rtp f ('Just args))) Dist.Distance
+      cachesRef = distancesRef (state ^. C.stateContext . C.cruciblePersonality)
+      maybeRes :: MaybeT (Dist.DistanceMonad Dist.DijkstraCaches) Dist.Distance
       maybeRes =
         do
           (cfg, snode) <- MaybeT $ liftIO $ getExplorationEntry state frame
           let rcall (Dist.FunctionEntry fentry) (Dist.Callsite callsite) = CG.resolveCall cg cache sla gla mem halloc archCtx symMap pltStubs fentry callsite
-          Dist.CallStack cs <- MaybeT $ lift $ zoom distanceState $ Just <$> callStackFromSimState state
+          Dist.CallStack cs <- MaybeT $ liftIO $ runWithCachesRef cachesRef (Just <$> callStackFromSimState state)
           let poppedCS = Maybe.fromMaybe [] $ tailMay cs
           let
             isT ::
@@ -222,13 +229,13 @@ sdsePrioritizationFunction tgtAddr tgtFunction archCtx cg cache distConfig sla g
                         }
                   )
           let x =
-                Lens.zoom distanceState $
-                  Dist.computeMinDistanceTargetsFromStatmementExt cfg sla snode (Dist.IsTarget isT) retHandler rcall
+                Dist.computeMinDistanceTargetsFromStatmementExt cfg sla snode (Dist.IsTarget isT) retHandler rcall
           MaybeT x
    in do
-        prevDist <- fromIntegral <$> liftIO (getTraceDistance state)
+        prevDist <- fromIntegral <$> getTraceDistance state
         x <-
-          runReaderT (runMaybeT maybeRes) distConfig
+          runWithCachesRef cachesRef $
+            runReaderT (runMaybeT maybeRes) distConfig
         pure $
-          (\(Dist.Distance dist) -> Sched.DistPriority $ dist + prevDist)
+          (\(Dist.Distance dist) -> Sched.Priority $ dist + prevDist)
             <$> x

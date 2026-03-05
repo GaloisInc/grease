@@ -118,8 +118,8 @@ import Grease.Heuristic (HeuristicResult (CantRefine, PossibleBug, RefinedPrecon
 import Grease.Heuristic.Result (CantRefine (Exhausted, Exit, MissingFunc, MissingSemantics, MutableGlobal, SolverTimeout, SolverUnknown, Timeout, Unsupported))
 import Grease.Options (BoundsOpts)
 import Grease.Options qualified as Opts
-import Grease.Panic (panic)
 import Grease.Refine.Diagnostic qualified as Diag
+import Grease.Scheduler qualified as Sched
 import Grease.Setup (InitialMem)
 import Grease.Setup qualified as Setup
 import Grease.Setup.Annotations qualified as Anns
@@ -140,7 +140,6 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.Simulator qualified as CS
-import Lang.Crucible.Simulator.PathSplitting qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
@@ -375,13 +374,13 @@ execCfg ::
   ) =>
   bak ->
   ExecData p sym ext ret ->
-  -- | The result of a single execution (in 'Opts.Dfs' mode, of a single path),
-  -- the proof obligations resulting from that execution, and any suspended
-  -- paths.
+  -- | The result of a single execution (in 'Opts.Dfs' or 'Opts.Bfs' mode,
+  -- of a single path), the proof obligations resulting from that execution,
+  -- and any suspended paths.
   IO
     ( CS.ExecResult p sym ext (CS.RegEntry sym ret)
     , CB.ProofObligations sym
-    , Seq (C.WorkItem p sym ext (CS.RegEntry sym ret))
+    , Seq (Sched.WorkItem p sym ext (CS.RegEntry sym ret))
     )
 execCfg bak execData = do
   let ExecData
@@ -395,16 +394,17 @@ execCfg bak execData = do
   withCleanup $
     case strat of
       Opts.Dfs -> do
-        resultRef <- IORef.newIORef Nothing
-        (_n, rest) <- C.executeCrucibleDFSPaths feats initialState $ \r -> do
-          IORef.writeIORef resultRef (Just r)
-          pure False -- don't continue exploring other paths
-        mbResult <- IORef.readIORef resultRef
-        case mbResult of
-          Nothing -> panic "execCfg" ["executeCrucibleDFSPaths didn't return a result"]
-          Just r -> do
-            o <- CB.getProofObligations bak
-            pure (r, o, rest)
+        (bf, rf, wq) <- Sched.schedulerFeatures bak Sched.dfsPolicy (\_ -> pure Sched.ContinueExploring)
+        r <- CS.executeCrucible (feats ++ [bf, rf]) initialState
+        o <- CB.getProofObligations bak
+        rest <- Sched.drainAll wq
+        pure (r, o, rest)
+      Opts.Bfs -> do
+        (bf, rf, wq) <- Sched.schedulerFeatures bak Sched.bfsPolicy (\_ -> pure Sched.ContinueExploring)
+        r <- CS.executeCrucible (feats ++ [bf, rf]) initialState
+        o <- CB.getProofObligations bak
+        rest <- Sched.drainAll wq
+        pure (r, o, rest)
       Opts.Sse -> do
         r <- CS.executeCrucible feats initialState
         o <- CB.getProofObligations bak
@@ -512,6 +512,9 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
           Opts.Dfs -> do
             loc <- WI.getCurrentProgramLoc (CB.backendGetSym bak)
             doLog la (Diag.RefinementFinishedPath loc (shortResult refineResult))
+          Opts.Bfs -> do
+            loc <- WI.getCurrentProgramLoc (CB.backendGetSym bak)
+            doLog la (Diag.RefinementFinishedPath loc (shortResult refineResult))
           Opts.Sse -> pure ()
         pure (refineResult, remaining)
 
@@ -534,9 +537,9 @@ execAndRefine bak _fm la memVar refineData bbMapRef execData = do
           (next Seq.:<| rest) -> do
             let firstResult = C.SubgoalResult True r
             let computeNextResult = do
-                  doLog la (Diag.ResumingFromBranch (C.workItemLoc next))
+                  doLog la (Diag.ResumingFromBranch (Sched.workItemLoc next))
                   IORef.writeIORef remainingRef rest
-                  initSt <- C.restoreWorkItem next
+                  initSt <- Sched.restoreWorkItem next
                   (nextRes, additionalPaths) <- refineOne initSt
                   IORef.modifyIORef remainingRef (<> additionalPaths)
                   C.SubgoalResult True <$> go nextRes
