@@ -9,5 +9,4 @@
 int test(int *x) {
   return x[4096];
 }
-// TODO(#3)
-// all: check "maximum iterations exceeded"
+// all: ok()

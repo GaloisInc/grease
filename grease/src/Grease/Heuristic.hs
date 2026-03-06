@@ -79,9 +79,12 @@ import Numeric.Natural (Natural)
 import Prettyprinter qualified as PP
 import Text.LLVM.AST qualified as L
 import What4.Expr qualified as WE
+import What4.Expr.App qualified as W4
+import What4.Expr.WeightedSum qualified as WSum
 import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4
 import What4.ProgramLoc qualified as WPL
+import What4.SemiRing qualified as SR
 
 doLog :: GreaseLogAction -> Diag.Diagnostic -> IO ()
 doLog la diag = LJ.writeLog la (HeuristicDiagnostic diag)
@@ -124,6 +127,10 @@ newtype MemoryErrorHeuristic sym ext w argTys
         IO (HeuristicResult ext argTys)
       )
 
+-- | Refine a pointer argument's shape by modifying its target allocation.
+-- When 'Maybe Offset' is 'Nothing', the offset is left unchanged (defaulting
+-- to 'Offset 0' for new pointers). When 'Just', the offset is overridden,
+-- which is used to handle negative access offsets.
 refinePtrArg ::
   ( ExtShape ext ~ PtrShape ext w
   , Cursor.CursorExt ext ~ Dereference ext w
@@ -133,9 +140,10 @@ refinePtrArg ::
   GreaseLogAction ->
   ArgShapes ext NoTag argTys ->
   ((regTy ~ CLMP.LLVMPointerType w) => PtrTarget w 'ShapePtr.Precond NoTag -> Either ModifyPtrError (PtrTarget w 'ShapePtr.Precond NoTag)) ->
+  Maybe Offset ->
   ArgSelector ext argTys ts regTy ->
   IO (HeuristicResult ext argTys)
-refinePtrArg la args modify sel =
+refinePtrArg la args modify mOffset sel =
   case args ^. selectArg sel of
     ShapeExt (ShapePtrBV _tag w) | Just Refl <- testEquality w ?ptrWidth -> do
       let
@@ -148,14 +156,16 @@ refinePtrArg la args modify sel =
       case result of
         Left err -> panic "refinePtrArg" [show (PP.pretty err)]
         Right pt' -> do
-          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (ShapePtr.PrecondPtrData (Offset 0) pt'))
+          let offset = Maybe.fromMaybe (Offset 0) mOffset
+          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (ShapePtr.PrecondPtrData offset pt'))
           pure $ RefinedPrecondition args'
-    ShapeExt (ShapePtr _tag (ShapePtr.PrecondPtrData offset pt)) -> do
+    ShapeExt (ShapePtr _tag (ShapePtr.PrecondPtrData existingOffset pt)) -> do
       doLog la $ Diag.HeuristicPtrTarget pt
       let result = modify pt
       case result of
         Left err -> panic "refinePtrArg" [show (PP.pretty err)]
         Right pt' -> do
+          let offset = Maybe.fromMaybe existingOffset mOffset
           let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (ShapePtr.PrecondPtrData offset pt'))
           pure $ RefinedPrecondition args'
     _ -> pure Unknown
@@ -177,7 +187,7 @@ newPointer la argNames args sel = do
   let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
   doLog la $ Diag.DefaultHeuristicsBytesToPtr argName sel
   let path = sel ^. argSelectorPath
-  refinePtrArg la args (bytesToPointers ?ptrWidth NoTag path) sel
+  refinePtrArg la args (bytesToPointers ?ptrWidth NoTag path) Nothing sel
 
 -- | Grow and/or initialize an allocation
 handleMemErr ::
@@ -185,15 +195,18 @@ handleMemErr ::
   , Cursor.CursorExt ext ~ Dereference ext w
   , CLMP.HasPtrWidth w
   , Cursor.Last ts ~ CLMP.LLVMPointerType w
+  , CB.IsSymInterface sym
+  , sym ~ WE.ExprBuilder t st fs
   ) =>
   GreaseLogAction ->
+  sym ->
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
   AnyMemError sym ->
   ArgSelector ext argTys ts regTy ->
   IO (HeuristicResult ext argTys)
-handleMemErr la argNames args err sel =
+handleMemErr la sym argNames args err sel =
   case err of
     -- Most of the time, expanding an allocation backing a function won't help
     -- with calling the function. The one exception to this rule is when the
@@ -206,12 +219,83 @@ handleMemErr la argNames args err sel =
     (AnyMemErrorLLVM (Mem.MemoryError _op (Mem.BadFunctionPointer fle)))
       | fle /= Mem.RawBitvector ->
           pure Unknown
+    AnyMemErrorLLVM (Mem.MemoryError op _reason) -> do
+      let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
+      let accessSize = memOpAccessSize op
+      let ptrs = memOpPtrs op
+      case ptrs of
+        [ptr] | Just Refl <- testPtrWidth ptr -> do
+          -- Single pointer operation - try to extract a constant offset
+          let offset = CLMP.llvmPointerOffset ptr
+          case tryExtractConstantOffset sym offset of
+            Just constantOffset -> do
+              let signedBytes = BV.asSigned ?ptrWidth constantOffset
+              -- The Offset field controls where the pointer sits within its
+              -- backing allocation. For non-negative offsets the pointer is at
+              -- the start (Offset 0) and we grow forward. For negative offsets
+              -- the access is *before* the pointer, so we place it further in:
+              --
+              --   Non-negative (e.g. ptr[2], 4-byte load):
+              --
+              --     Offset = 0
+              --     |
+              --     v
+              --     +--+--+--+--+--+--+
+              --     |  |  |XX|XX|XX|XX|  totalSize = offset + accessSize
+              --     +--+--+--+--+--+--+
+              --           ^-----------^
+              --           access at ptr+2, 4 bytes
+              --
+              --   Negative (e.g. ptr[-3], 1-byte load):
+              --
+              --              Offset = 3
+              --              |
+              --              v
+              --     +--+--+--+
+              --     |XX|  |  |  totalSize = max(abs(offset), accessSize)
+              --     +--+--+--+
+              --     ^--^
+              --     access at ptr-3, 1 byte
+              --
+              let (mOffset, totalSize) =
+                    if signedBytes < 0
+                      then
+                        let absOff = abs signedBytes
+                         in (Just (Offset (CLB.toBytes absOff)), max absOff accessSize)
+                      else (Nothing, BV.asUnsigned constantOffset + accessSize)
+              doLog la $ Diag.DecomposingOffset argName signedBytes sel
+              doLog la $ Diag.DefaultHeuristicsGrowAndInitMem argName sel
+              let path = sel ^. argSelectorPath
+              let modifyTarget :: ShapePtr.PtrTarget w 'ShapePtr.Precond NoTag -> ShapePtr.PtrTarget w 'ShapePtr.Precond NoTag
+                  modifyTarget tgt =
+                    let currentSize = CLB.bytesToInteger (ShapePtr.ptrTargetSize ?ptrWidth tgt)
+                     in if currentSize >= totalSize
+                          then initializeOrGrowPtrTarget NoTag tgt
+                          else growPtrTargetUpTo (CLB.toBytes totalSize) tgt
+              refinePtrArg la args (modifyPtrTarget ?ptrWidth (Right . modifyTarget) path) mOffset sel
+            Nothing -> growIncrementally la argName args sel
+        _ -> growIncrementally la argName args sel
     _ -> do
       let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
-      doLog la $ Diag.DefaultHeuristicsGrowAndInitMem argName sel
-      let modifyInner = Right . initializeOrGrowPtrTarget NoTag
-      let path = sel ^. argSelectorPath
-      refinePtrArg la args (modifyPtrTarget ?ptrWidth modifyInner path) sel
+      growIncrementally la argName args sel
+ where
+  growIncrementally ::
+    forall ext w argTys ts regTy.
+    ( ExtShape ext ~ PtrShape ext w
+    , Cursor.CursorExt ext ~ Dereference ext w
+    , CLMP.HasPtrWidth w
+    , Cursor.Last ts ~ CLMP.LLVMPointerType w
+    ) =>
+    GreaseLogAction ->
+    String ->
+    ArgShapes ext NoTag argTys ->
+    ArgSelector ext argTys ts regTy ->
+    IO (HeuristicResult ext argTys)
+  growIncrementally la' argName args' sel' = do
+    doLog la' $ Diag.DefaultHeuristicsGrowAndInitMem argName sel'
+    let modifyInner = Right . initializeOrGrowPtrTarget NoTag
+    let path = sel' ^. argSelectorPath
+    refinePtrArg la' args' (modifyPtrTarget ?ptrWidth modifyInner path) Nothing sel'
 
 testPtrWidth ::
   ( CLMP.HasPtrWidth wptr
@@ -270,11 +354,55 @@ modPtr la anns sym args modify ptr = do
   case Anns.lookupPtrAnnotation anns sym ?ptrWidth ptr of
     Just (Anns.SomePtrSelector (SelectArg sel)) -> do
       let path = sel ^. argSelectorPath
-      refinePtrArg la args (modifyPtrTarget ?ptrWidth (Right . modify) path) sel
+      refinePtrArg la args (modifyPtrTarget ?ptrWidth (Right . modify) path) Nothing sel
     Just (Anns.SomePtrSelector (SelectRet{})) ->
       pure Unknown
     Nothing ->
       pure Unknown
+
+-- | Try to extract a constant offset from a pointer offset expression.
+-- Returns the constant if the offset is concrete or can be decomposed as base + constant.
+tryExtractConstantOffset ::
+  forall sym w t st fs.
+  ( WI.IsExprBuilder sym
+  , sym ~ WE.ExprBuilder t st fs
+  , 1 C.<= w
+  ) =>
+  sym ->
+  WI.SymBV sym w ->
+  Maybe (BV.BV w)
+tryExtractConstantOffset sym offset =
+  let w = WI.bvWidth offset
+      sr = SR.SemiRingBVRepr SR.BVArithRepr w
+   in WI.asBV (Maybe.fromMaybe offset (WI.getUnannotatedTerm sym offset))
+        <|> case W4.asSemiRingSum sr offset of
+          Just ws -> case WSum.asAffineVar ws of
+            Just (coeff, _base, constantOffset)
+              | coeff == BV.one w -> Just constantOffset
+            _ -> Nothing
+          Nothing -> Nothing
+
+-- | Extract the access size in bytes from a memory operation
+memOpAccessSize ::
+  WI.IsExprBuilder sym =>
+  Mem.MemoryOp sym w ->
+  Integer
+memOpAccessSize = \case
+  Mem.MemLoadOp storTy _ _ _ -> CLB.bytesToInteger (CLM.storageTypeSize storTy)
+  Mem.MemStoreOp storTy _ _ _ -> CLB.bytesToInteger (CLM.storageTypeSize storTy)
+  Mem.MemStoreBytesOp _ _ mLen _ ->
+    case mLen >>= WI.asBV of
+      Just bv -> BV.asUnsigned bv
+      Nothing -> 0
+  Mem.MemCopyOp _ _ len _ ->
+    case WI.asBV len of
+      Just bv -> BV.asUnsigned bv
+      Nothing -> 0
+  Mem.MemInvalidateOp _ _ _ len _ ->
+    case WI.asBV len of
+      Just bv -> BV.asUnsigned bv
+      Nothing -> 0
+  Mem.MemLoadHandleOp _ _ _ _ -> 0 -- Unknown size, fall back to incremental growth
 
 -- | Helper, not exported
 growPtrTargetUpToBv ::
@@ -576,7 +704,7 @@ llvmHeuristics ::
   [RefineHeuristic sym bak LLVM argTys]
 llvmHeuristics la =
   let ptrHeuristic :: MemoryErrorHeuristic sym LLVM wptr argTys
-      ptrHeuristic = MemoryErrorHeuristic (\_sym _loc -> handleMemErr la)
+      ptrHeuristic = MemoryErrorHeuristic (\sym _loc -> handleMemErr la sym)
       byteHeuristic :: MemoryErrorHeuristic sym LLVM 8 argTys
       byteHeuristic = MemoryErrorHeuristic (\_sym _loc argNames args _err sel -> newPointer la argNames args sel)
    in pointerHeuristics la ptrHeuristic byteHeuristic
@@ -637,5 +765,5 @@ macawHeuristics la rNames =
           -- 1048576 fresh, bound variables, one for each byte in the stack).
           -- See !218 for details.
           pure Unknown
-      else handleMemErr la argNames args e sel
-  handleMemErr' _ _ argNames args e@(AnyMemErrorMacaw _) sel = handleMemErr la argNames args e sel
+      else handleMemErr la sym argNames args e sel
+  handleMemErr' sym _ argNames args e@(AnyMemErrorMacaw _) sel = handleMemErr la sym argNames args e sel
