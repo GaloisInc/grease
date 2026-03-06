@@ -27,9 +27,10 @@ import Lang.Crucible.LLVM.Extension qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
+import Lang.Crucible.Simulator.ExecutionTree (stateGlobals, stateSymInterface)
+import Lang.Crucible.Simulator.GlobalState qualified as CGS
 import Lumberjack qualified as LJ
 import What4.FunctionName qualified as WFN
-import What4.Interface qualified as WI
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMSimulatorHooksDiagnostic diag)
@@ -70,48 +71,63 @@ extensionExec la halloc dl errorSymbolicFunCalls baseExt stmt st =
   case stmt of
     -- LLVM_LoadHandle: This statement is invoked any time a function handle
     -- is resolved before calling the function. We override this because
-    -- crucible-llvm's default behavior when resolving a symbolic function
-    -- handle is to throw an exception. For consistency with grease's Macaw
-    -- frontend, however, we override this so that calling a symbolic function
-    -- handle causes the function to be skipped (unless the user overrides
-    -- this with --error-symbolic-fun-calls, in which case we fall back to
-    -- crucible-llvm's default behavior).
+    -- crucible-llvm's default behavior when resolving an unresolvable function
+    -- pointer is to generate a proof obligation that always fails. For
+    -- consistency with grease's Macaw frontend, however, we override this so
+    -- that calling an unresolvable function pointer causes the function to be
+    -- skipped (unless the user overrides this with --error-symbolic-fun-calls,
+    -- in which case we fall back to crucible-llvm's default behavior).
     CLLVM.LLVM_LoadHandle mvar _ltp ptrReg args ret
       | let ptr = CS.regValue ptrReg
-      , not (getErrorSymbolicFunCalls errorSymbolicFunCalls)
-      , Nothing <- WI.asNat (CLMP.llvmPointerBlock ptr) -> do
-          let ptrWidth = CLMP.ptrWidth ptr
-          Refl <-
-            -- LLVM_LoadHandle binds an existentially quantified type variable
-            -- representing the pointer width, but grease's `ExtShape LLVM`
-            -- instance only works if the pointer width is 64 bits in
-            -- particular. As such, the most direct way to make this code
-            -- typecheck is to check if the LLVM_LoadHandle's pointer width is
-            -- 64 at runtime, which we do with `testEquality` below.
-            case testEquality ptrWidth (NatRepr.knownNat @64) of
-              Just r ->
-                pure r
-              Nothing ->
-                panic
-                  "extensionExec"
-                  [ "LLVM frontend with non-64-bit pointer size"
-                  , show ptrWidth
-                  ]
-          let funcName = WFN.functionNameFromText "_grease_symbolic_fn"
-          hdl <- C.mkHandle' halloc funcName args ret
-          case createSkipOverride la dl mvar funcName ret of
-            Right ov -> do
-              doLog la Diag.SkippedSymbolicFnHandleCall
-              pure
-                ( CS.HandleFnVal hdl
-                , insertFunctionHandle st hdl (CS.UseOverride ov)
-                )
-            -- If we cannot create an LLVM skip override for the given types,
-            -- then fall back on the default implementation of
-            -- LLVM_LoadHandle. This will ultimately fail when it encounters
-            -- the symbolic function pointer.
-            Left _err ->
-              defaultExec
+      , not (getErrorSymbolicFunCalls errorSymbolicFunCalls) -> do
+          let sym = st ^. stateSymInterface
+          let globals = st ^. stateGlobals
+          case CGS.lookupGlobal mvar globals of
+            Nothing -> defaultExec
+            Just mem -> do
+              mhandle <- CLM.doLookupHandle sym mem ptr
+              case mhandle of
+                Right{} ->
+                  -- The pointer resolves to a known function handle, so
+                  -- use the default implementation.
+                  defaultExec
+                Left{} -> do
+                  -- The pointer cannot be resolved to a function handle.
+                  -- Create a skip override instead of failing.
+                  let ptrWidth = CLMP.ptrWidth ptr
+                  Refl <-
+                    -- LLVM_LoadHandle binds an existentially quantified type
+                    -- variable representing the pointer width, but grease's
+                    -- `ExtShape LLVM` instance only works if the pointer width
+                    -- is 64 bits in particular. As such, the most direct way to
+                    -- make this code typecheck is to check if the
+                    -- LLVM_LoadHandle's pointer width is 64 at runtime, which
+                    -- we do with `testEquality` below.
+                    case testEquality ptrWidth (NatRepr.knownNat @64) of
+                      Just r ->
+                        pure r
+                      Nothing ->
+                        panic
+                          "extensionExec"
+                          [ "LLVM frontend with non-64-bit pointer size"
+                          , show ptrWidth
+                          ]
+                  let funcName = WFN.functionNameFromText "_grease_symbolic_fn"
+                  hdl <- C.mkHandle' halloc funcName args ret
+                  case createSkipOverride la dl mvar funcName ret of
+                    Right ov -> do
+                      doLog la Diag.SkippedSymbolicFnHandleCall
+                      pure
+                        ( CS.HandleFnVal hdl
+                        , insertFunctionHandle st hdl (CS.UseOverride ov)
+                        )
+                    -- If we cannot create an LLVM skip override for the
+                    -- given types, then fall back on the default
+                    -- implementation of LLVM_LoadHandle. This will
+                    -- ultimately fail when it encounters the unresolvable
+                    -- function pointer.
+                    Left _err ->
+                      defaultExec
     _ ->
       defaultExec
  where

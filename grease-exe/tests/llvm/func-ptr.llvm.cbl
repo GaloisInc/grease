@@ -14,7 +14,7 @@
 ;; go(prog)
 ;; check "Goal failed:"
 ;; check "Failed to load function handle"
-;; check "Cannot resolve a symbolic pointer to a function handle"
+;; check "The given pointer could not be resolved to a callable function"
 ;; no_heuristic()
 
 (defun @test ((p (Ptr 64))) Unit
