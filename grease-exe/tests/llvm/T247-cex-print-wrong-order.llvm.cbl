@@ -31,7 +31,6 @@
 ;; 000000: 00 2a
 ;; ]]
 
-; TODO(#247): Why is this printed in reverse order?
 ;; flags {"--symbol", "test"}
 ;; flags {"--initial-precondition", "tests/llvm/extra/T247-cex-print-wrong-order.txt"}
 ;; go(prog)
@@ -40,5 +39,5 @@
 ;; 
 ;; %0: 000000+0000000000000000
 ;; 
-;; 000000: 2a 00
+;; 000000: 00 2a
 ;; ]]
