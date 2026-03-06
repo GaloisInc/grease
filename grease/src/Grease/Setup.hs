@@ -373,7 +373,7 @@ setupPtr la bak layout nm sel target = do
     let offset = memShapeSize ?ptrWidth memShape
     offsetBv <- liftIO (WI.bvLit sym ?ptrWidth (BV.mkBV ?ptrWidth (fromIntegral offset)))
     ptr' <- liftIO $ CLMP.ptrAdd sym ?ptrWidth ptr offsetBv
-    pure (idx + 1, ptr', memShape' Seq.<| written)
+    pure (idx + 1, ptr', written Seq.|> memShape')
 
 {-
 Note [Initializing empty pointer shapes]
