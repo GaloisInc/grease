@@ -25,7 +25,6 @@
   (defblock no-abort:
     (return regs)))
 
-; TODO(#247): Why is this printed in reverse order?
 ;; check [[
-;; 2a ##*ff
+;; ##*ff 2a
 ;; ]]
