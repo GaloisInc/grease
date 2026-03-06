@@ -127,6 +127,10 @@ newtype MemoryErrorHeuristic sym ext w argTys
         IO (HeuristicResult ext argTys)
       )
 
+-- | Refine a pointer argument's shape by modifying its target allocation.
+-- When 'Maybe Offset' is 'Nothing', the offset is left unchanged (defaulting
+-- to 'Offset 0' for new pointers). When 'Just', the offset is overridden,
+-- which is used to handle negative access offsets.
 refinePtrArg ::
   ( ExtShape ext ~ PtrShape ext w
   , Cursor.CursorExt ext ~ Dereference ext w
@@ -136,9 +140,10 @@ refinePtrArg ::
   GreaseLogAction ->
   ArgShapes ext NoTag argTys ->
   ((regTy ~ CLMP.LLVMPointerType w) => PtrTarget w 'ShapePtr.Precond NoTag -> Either ModifyPtrError (PtrTarget w 'ShapePtr.Precond NoTag)) ->
+  Maybe Offset ->
   ArgSelector ext argTys ts regTy ->
   IO (HeuristicResult ext argTys)
-refinePtrArg la args modify sel =
+refinePtrArg la args modify mOffset sel =
   case args ^. selectArg sel of
     ShapeExt (ShapePtrBV _tag w) | Just Refl <- testEquality w ?ptrWidth -> do
       let
@@ -151,14 +156,16 @@ refinePtrArg la args modify sel =
       case result of
         Left err -> panic "refinePtrArg" [show (PP.pretty err)]
         Right pt' -> do
-          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (ShapePtr.PrecondPtrData (Offset 0) pt'))
+          let offset = Maybe.fromMaybe (Offset 0) mOffset
+          let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (ShapePtr.PrecondPtrData offset pt'))
           pure $ RefinedPrecondition args'
-    ShapeExt (ShapePtr _tag (ShapePtr.PrecondPtrData offset pt)) -> do
+    ShapeExt (ShapePtr _tag (ShapePtr.PrecondPtrData existingOffset pt)) -> do
       doLog la $ Diag.HeuristicPtrTarget pt
       let result = modify pt
       case result of
         Left err -> panic "refinePtrArg" [show (PP.pretty err)]
         Right pt' -> do
+          let offset = Maybe.fromMaybe existingOffset mOffset
           let args' = args & selectArg sel .~ ShapeExt (ShapePtr NoTag (ShapePtr.PrecondPtrData offset pt'))
           pure $ RefinedPrecondition args'
     _ -> pure Unknown
@@ -180,7 +187,7 @@ newPointer la argNames args sel = do
   let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
   doLog la $ Diag.DefaultHeuristicsBytesToPtr argName sel
   let path = sel ^. argSelectorPath
-  refinePtrArg la args (bytesToPointers ?ptrWidth NoTag path) sel
+  refinePtrArg la args (bytesToPointers ?ptrWidth NoTag path) Nothing sel
 
 -- | Grow and/or initialize an allocation
 handleMemErr ::
@@ -222,20 +229,50 @@ handleMemErr la sym argNames args err sel =
           let offset = CLMP.llvmPointerOffset ptr
           case tryExtractConstantOffset sym offset of
             Just constantOffset -> do
-              -- We found a constant offset - grow by that amount plus access size
-              let constantBytes = BV.asUnsigned constantOffset
-              let totalSize = constantBytes + accessSize
-              doLog la $ Diag.DecomposingOffset argName constantBytes sel
+              let signedBytes = BV.asSigned ?ptrWidth constantOffset
+              -- The Offset field controls where the pointer sits within its
+              -- backing allocation. For non-negative offsets the pointer is at
+              -- the start (Offset 0) and we grow forward. For negative offsets
+              -- the access is *before* the pointer, so we place it further in:
+              --
+              --   Non-negative (e.g. ptr[2], 4-byte load):
+              --
+              --     Offset = 0
+              --     |
+              --     v
+              --     +--+--+--+--+--+--+
+              --     |  |  |XX|XX|XX|XX|  totalSize = offset + accessSize
+              --     +--+--+--+--+--+--+
+              --           ^-----------^
+              --           access at ptr+2, 4 bytes
+              --
+              --   Negative (e.g. ptr[-3], 1-byte load):
+              --
+              --              Offset = 3
+              --              |
+              --              v
+              --     +--+--+--+
+              --     |XX|  |  |  totalSize = max(abs(offset), accessSize)
+              --     +--+--+--+
+              --     ^--^
+              --     access at ptr-3, 1 byte
+              --
+              let (mOffset, totalSize) =
+                    if signedBytes < 0
+                      then
+                        let absOff = abs signedBytes
+                         in (Just (Offset (CLB.toBytes absOff)), max absOff accessSize)
+                      else (Nothing, BV.asUnsigned constantOffset + accessSize)
+              doLog la $ Diag.DecomposingOffset argName signedBytes sel
               doLog la $ Diag.DefaultHeuristicsGrowAndInitMem argName sel
               let path = sel ^. argSelectorPath
-              -- Grow to at least totalSize, or if already large enough, just initialize
               let modifyTarget :: ShapePtr.PtrTarget w 'ShapePtr.Precond NoTag -> ShapePtr.PtrTarget w 'ShapePtr.Precond NoTag
                   modifyTarget tgt =
                     let currentSize = CLB.bytesToInteger (ShapePtr.ptrTargetSize ?ptrWidth tgt)
                      in if currentSize >= totalSize
                           then initializeOrGrowPtrTarget NoTag tgt
                           else growPtrTargetUpTo (CLB.toBytes totalSize) tgt
-              refinePtrArg la args (modifyPtrTarget ?ptrWidth (Right . modifyTarget) path) sel
+              refinePtrArg la args (modifyPtrTarget ?ptrWidth (Right . modifyTarget) path) mOffset sel
             Nothing -> growIncrementally la argName args sel
         _ -> growIncrementally la argName args sel
     _ -> do
@@ -258,7 +295,7 @@ handleMemErr la sym argNames args err sel =
     doLog la' $ Diag.DefaultHeuristicsGrowAndInitMem argName sel'
     let modifyInner = Right . initializeOrGrowPtrTarget NoTag
     let path = sel' ^. argSelectorPath
-    refinePtrArg la' args' (modifyPtrTarget ?ptrWidth modifyInner path) sel'
+    refinePtrArg la' args' (modifyPtrTarget ?ptrWidth modifyInner path) Nothing sel'
 
 testPtrWidth ::
   ( CLMP.HasPtrWidth wptr
@@ -317,7 +354,7 @@ modPtr la anns sym args modify ptr = do
   case Anns.lookupPtrAnnotation anns sym ?ptrWidth ptr of
     Just (Anns.SomePtrSelector (SelectArg sel)) -> do
       let path = sel ^. argSelectorPath
-      refinePtrArg la args (modifyPtrTarget ?ptrWidth (Right . modify) path) sel
+      refinePtrArg la args (modifyPtrTarget ?ptrWidth (Right . modify) path) Nothing sel
     Just (Anns.SomePtrSelector (SelectRet{})) ->
       pure Unknown
     Nothing ->
