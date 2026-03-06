@@ -39,6 +39,15 @@ data Diagnostic where
     (KnownPtrMode ptrData, MC.PrettyF tag) =>
     PtrTarget w ptrData tag ->
     Diagnostic
+  DecomposingOffset ::
+    forall ext w argTys ts t.
+    CursorExt ext ~ Dereference ext w =>
+    -- | Argument name
+    String ->
+    -- | Constant offset extracted
+    Integer ->
+    ArgSelector ext argTys ts t ->
+    Diagnostic
 
 instance PP.Pretty Diagnostic where
   pretty =
@@ -64,6 +73,17 @@ instance PP.Pretty Diagnostic where
           [ "Heuristic: refining pointer target: "
           , PP.pretty tgt
           ]
+      DecomposingOffset @ext argName constantOff sel ->
+        mconcat
+          [ "Heuristic: decomposed pointer offset for "
+          , ppCursor
+              (PP.pretty argName)
+              (ppDereference @ext)
+              (sel ^. argSelectorPath)
+          , ", constant offset: "
+          , PP.viaShow constantOff
+          , " bytes"
+          ]
 
 severity :: Diagnostic -> Severity
 severity =
@@ -71,3 +91,4 @@ severity =
     DefaultHeuristicsGrowAndInitMem{} -> Info
     DefaultHeuristicsBytesToPtr{} -> Info
     HeuristicPtrTarget{} -> Debug
+    DecomposingOffset{} -> Info
