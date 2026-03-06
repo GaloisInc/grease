@@ -38,10 +38,10 @@ excludeMustFail obligation minfo =
   let reason = C.simErrorReason (obligation ^. Lens.to CB.proofGoal ^. W4.labeledPredMsg)
    in List.or @[]
         [ case minfo of
-            -- Symbolic function pointers may arise from calling function pointers that
-            -- appear in function arguments. This is not a bug, just something GREASE
-            -- can't handle.
-            Just (CrucibleLLVMError (Mem.BBMemoryError (Mem.MemoryError _ (Mem.BadFunctionPointer Mem.SymbolicPointer))) _) ->
+            -- Unresolvable function pointers may arise from calling function pointers
+            -- that appear in function arguments. This is not a bug, just something
+            -- GREASE can't handle.
+            Just (CrucibleLLVMError (Mem.BBMemoryError (Mem.MemoryError _ (Mem.BadFunctionPointer _))) _) ->
               True
             Just (MacawMemError (UnmappedGlobalMemoryAccess _)) ->
               False
