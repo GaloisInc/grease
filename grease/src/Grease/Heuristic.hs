@@ -79,9 +79,12 @@ import Numeric.Natural (Natural)
 import Prettyprinter qualified as PP
 import Text.LLVM.AST qualified as L
 import What4.Expr qualified as WE
+import What4.Expr.App qualified as W4
+import What4.Expr.WeightedSum qualified as WSum
 import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4
 import What4.ProgramLoc qualified as WPL
+import What4.SemiRing qualified as SR
 
 doLog :: GreaseLogAction -> Diag.Diagnostic -> IO ()
 doLog la diag = LJ.writeLog la (HeuristicDiagnostic diag)
@@ -185,15 +188,18 @@ handleMemErr ::
   , Cursor.CursorExt ext ~ Dereference ext w
   , CLMP.HasPtrWidth w
   , Cursor.Last ts ~ CLMP.LLVMPointerType w
+  , CB.IsSymInterface sym
+  , sym ~ WE.ExprBuilder t st fs
   ) =>
   GreaseLogAction ->
+  sym ->
   -- | Argument names
   Ctx.Assignment (Const String) argTys ->
   ArgShapes ext NoTag argTys ->
   AnyMemError sym ->
   ArgSelector ext argTys ts regTy ->
   IO (HeuristicResult ext argTys)
-handleMemErr la argNames args err sel =
+handleMemErr la sym argNames args err sel =
   case err of
     -- Most of the time, expanding an allocation backing a function won't help
     -- with calling the function. The one exception to this rule is when the
@@ -206,12 +212,53 @@ handleMemErr la argNames args err sel =
     (AnyMemErrorLLVM (Mem.MemoryError _op (Mem.BadFunctionPointer fle)))
       | fle /= Mem.RawBitvector ->
           pure Unknown
+    AnyMemErrorLLVM (Mem.MemoryError op _reason) -> do
+      let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
+      let accessSize = memOpAccessSize op
+      let ptrs = memOpPtrs op
+      case ptrs of
+        [ptr] | Just Refl <- testPtrWidth ptr -> do
+          -- Single pointer operation - try to extract a constant offset
+          let offset = CLMP.llvmPointerOffset ptr
+          case tryExtractConstantOffset sym offset of
+            Just constantOffset -> do
+              -- We found a constant offset - grow by that amount plus access size
+              let constantBytes = BV.asUnsigned constantOffset
+              let totalSize = constantBytes + accessSize
+              doLog la $ Diag.DecomposingOffset argName constantBytes sel
+              doLog la $ Diag.DefaultHeuristicsGrowAndInitMem argName sel
+              let path = sel ^. argSelectorPath
+              -- Grow to at least totalSize, or if already large enough, just initialize
+              let modifyTarget :: ShapePtr.PtrTarget w 'ShapePtr.Precond NoTag -> ShapePtr.PtrTarget w 'ShapePtr.Precond NoTag
+                  modifyTarget tgt =
+                    let currentSize = CLB.bytesToInteger (ShapePtr.ptrTargetSize ?ptrWidth tgt)
+                     in if currentSize >= totalSize
+                          then initializeOrGrowPtrTarget NoTag tgt
+                          else growPtrTargetUpTo (CLB.toBytes totalSize) tgt
+              refinePtrArg la args (modifyPtrTarget ?ptrWidth (Right . modifyTarget) path) sel
+            Nothing -> growIncrementally la argName args sel
+        _ -> growIncrementally la argName args sel
     _ -> do
       let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
-      doLog la $ Diag.DefaultHeuristicsGrowAndInitMem argName sel
-      let modifyInner = Right . initializeOrGrowPtrTarget NoTag
-      let path = sel ^. argSelectorPath
-      refinePtrArg la args (modifyPtrTarget ?ptrWidth modifyInner path) sel
+      growIncrementally la argName args sel
+ where
+  growIncrementally ::
+    forall ext w argTys ts regTy.
+    ( ExtShape ext ~ PtrShape ext w
+    , Cursor.CursorExt ext ~ Dereference ext w
+    , CLMP.HasPtrWidth w
+    , Cursor.Last ts ~ CLMP.LLVMPointerType w
+    ) =>
+    GreaseLogAction ->
+    String ->
+    ArgShapes ext NoTag argTys ->
+    ArgSelector ext argTys ts regTy ->
+    IO (HeuristicResult ext argTys)
+  growIncrementally la' argName args' sel' = do
+    doLog la' $ Diag.DefaultHeuristicsGrowAndInitMem argName sel'
+    let modifyInner = Right . initializeOrGrowPtrTarget NoTag
+    let path = sel' ^. argSelectorPath
+    refinePtrArg la' args' (modifyPtrTarget ?ptrWidth modifyInner path) sel'
 
 testPtrWidth ::
   ( CLMP.HasPtrWidth wptr
@@ -275,6 +322,50 @@ modPtr la anns sym args modify ptr = do
       pure Unknown
     Nothing ->
       pure Unknown
+
+-- | Try to extract a constant offset from a pointer offset expression.
+-- Returns the constant if the offset is concrete or can be decomposed as base + constant.
+tryExtractConstantOffset ::
+  forall sym w t st fs.
+  ( WI.IsExprBuilder sym
+  , sym ~ WE.ExprBuilder t st fs
+  , 1 C.<= w
+  ) =>
+  sym ->
+  WI.SymBV sym w ->
+  Maybe (BV.BV w)
+tryExtractConstantOffset sym offset =
+  let w = WI.bvWidth offset
+      sr = SR.SemiRingBVRepr SR.BVArithRepr w
+   in WI.asBV (Maybe.fromMaybe offset (WI.getUnannotatedTerm sym offset))
+        <|> case W4.asSemiRingSum sr offset of
+          Just ws -> case WSum.asAffineVar ws of
+            Just (coeff, _base, constantOffset)
+              | coeff == BV.one w -> Just constantOffset
+            _ -> Nothing
+          Nothing -> Nothing
+
+-- | Extract the access size in bytes from a memory operation
+memOpAccessSize ::
+  WI.IsExprBuilder sym =>
+  Mem.MemoryOp sym w ->
+  Integer
+memOpAccessSize = \case
+  Mem.MemLoadOp storTy _ _ _ -> CLB.bytesToInteger (CLM.storageTypeSize storTy)
+  Mem.MemStoreOp storTy _ _ _ -> CLB.bytesToInteger (CLM.storageTypeSize storTy)
+  Mem.MemStoreBytesOp _ _ mLen _ ->
+    case mLen >>= WI.asBV of
+      Just bv -> BV.asUnsigned bv
+      Nothing -> 0
+  Mem.MemCopyOp _ _ len _ ->
+    case WI.asBV len of
+      Just bv -> BV.asUnsigned bv
+      Nothing -> 0
+  Mem.MemInvalidateOp _ _ _ len _ ->
+    case WI.asBV len of
+      Just bv -> BV.asUnsigned bv
+      Nothing -> 0
+  Mem.MemLoadHandleOp _ _ _ _ -> 0 -- Unknown size, fall back to incremental growth
 
 -- | Helper, not exported
 growPtrTargetUpToBv ::
@@ -576,7 +667,7 @@ llvmHeuristics ::
   [RefineHeuristic sym bak LLVM argTys]
 llvmHeuristics la =
   let ptrHeuristic :: MemoryErrorHeuristic sym LLVM wptr argTys
-      ptrHeuristic = MemoryErrorHeuristic (\_sym _loc -> handleMemErr la)
+      ptrHeuristic = MemoryErrorHeuristic (\sym _loc -> handleMemErr la sym)
       byteHeuristic :: MemoryErrorHeuristic sym LLVM 8 argTys
       byteHeuristic = MemoryErrorHeuristic (\_sym _loc argNames args _err sel -> newPointer la argNames args sel)
    in pointerHeuristics la ptrHeuristic byteHeuristic
@@ -637,5 +728,5 @@ macawHeuristics la rNames =
           -- 1048576 fresh, bound variables, one for each byte in the stack).
           -- See !218 for details.
           pure Unknown
-      else handleMemErr la argNames args e sel
-  handleMemErr' _ _ argNames args e@(AnyMemErrorMacaw _) sel = handleMemErr la argNames args e sel
+      else handleMemErr la sym argNames args e sel
+  handleMemErr' sym _ argNames args e@(AnyMemErrorMacaw _) sel = handleMemErr la sym argNames args e sel
