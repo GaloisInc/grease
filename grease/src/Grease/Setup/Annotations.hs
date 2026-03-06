@@ -25,9 +25,9 @@ import Control.Lens ((%=), (^.))
 import Control.Lens.TH (makeLenses)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State.Class (MonadState)
+import Data.IntMap.Strict (IntMap)
+import Data.IntMap.Strict qualified as IntMap
 import Data.Macaw.CFG qualified as MC
-import Data.Map.Strict (Map)
-import Data.Map.Strict qualified as Map
 import Data.Maybe qualified as Maybe
 import Data.Parameterized.Map qualified as MapF
 import Data.Parameterized.Some (Some (Some))
@@ -35,6 +35,7 @@ import Data.Proxy (Proxy (Proxy))
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
+import Grease.Panic (panic)
 import Grease.Shape.Selector (Selector, selectorPath)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
@@ -69,29 +70,16 @@ instance MapF.OrdF (WI.SymAnnotation sym) => MapF.OrdF (BVAnn sym) where
       MapF.GTF -> MapF.GTF
   {-# INLINE compareF #-}
 
--- | A newtype around @'WI.SymAnnotation' sym 'WI.BaseIntegerType'@. This is
--- done so that the 'Ord' instance can be defined in terms of the underlying
--- `WI.SymAnnotation`'s 'OrdF' instance.
-newtype IntegerAnn sym = IntegerAnn (WI.SymAnnotation sym WI.BaseIntegerType)
-
-instance C.TestEquality (WI.SymAnnotation sym) => Eq (IntegerAnn sym) where
-  IntegerAnn ann1 == IntegerAnn ann2 =
-    Maybe.isJust (C.testEquality ann1 ann2)
-  {-# INLINE (==) #-}
-
-instance MapF.OrdF (WI.SymAnnotation sym) => Ord (IntegerAnn sym) where
-  compare (IntegerAnn ann1) (IntegerAnn ann2) =
-    case MapF.compareF ann1 ann2 of
-      MapF.LTF -> LT
-      MapF.EQF -> EQ
-      MapF.GTF -> GT
-  {-# INLINE compare #-}
-
--- | Track the provenance of symbolic values using 'WI.SymAnnotation's.
+-- | Track the provenance of symbolic values.
+--
+-- Block numbers are tracked using concrete integer values as IntMap keys.
+-- This relies on the invariant that all pointer blocks from Crucible's doMalloc
+-- are concrete. Derived pointers (via ptrAdd, mux, etc.) preserve the original
+-- concrete block number as a subexpression.
 data Annotations sym ext argTys
   = Annotations
   { _baseAnns :: MapF.MapF (WI.SymAnnotation sym) (SomeBaseSelector ext argTys)
-  , _blockAnns :: Map (IntegerAnn sym) (Some (SomePtrSelector ext argTys))
+  , _blockAnns :: IntMap (Some (SomePtrSelector ext argTys))
   , _offsetAnns :: MapF.MapF (BVAnn sym) (SomePtrSelector ext argTys)
   }
 
@@ -101,7 +89,7 @@ empty :: Annotations sym ext argTys
 empty =
   Annotations
     { _baseAnns = MapF.empty
-    , _blockAnns = Map.empty
+    , _blockAnns = IntMap.empty
     , _offsetAnns = MapF.empty
     }
 
@@ -139,18 +127,21 @@ annotatePtr ::
   CLMP.LLVMPtr sym w ->
   m (CLMP.LLVMPtr sym w)
 annotatePtr sym sel ptr = do
-  block <- liftIO $ WI.natToInteger sym (CLMP.llvmPointerBlock ptr)
-  (blockann, ptr') <- case WI.getAnnotation sym block of
-    Just ann -> pure (ann, ptr)
-    Nothing -> liftIO $ CLMP.annotatePointerBlock sym ptr
   Refl <- pure $ Cursor.lastCons (Proxy @regTy) (Proxy @ts)
-  blockAnns %= Map.insert (IntegerAnn blockann) (Some (SomePtrSelector sel))
-  let offset = CLMP.llvmPointerOffset ptr'
-  (offann, ptr'') <- case WI.getAnnotation sym offset of
-    Just ann -> pure (ann, ptr')
-    Nothing -> liftIO $ CLMP.annotatePointerOffset sym ptr'
+  let blockNat = CLMP.llvmPointerBlock ptr
+  case WI.asNat blockNat of
+    Just blockNum ->
+      blockAnns %= IntMap.insert (fromIntegral blockNum) (Some (SomePtrSelector sel))
+    Nothing ->
+      panic
+        "annotatePtr"
+        ["Encountered symbolic block number in pointer annotation"]
+  let offset = CLMP.llvmPointerOffset ptr
+  (offann, ptr') <- case WI.getAnnotation sym offset of
+    Just ann -> pure (ann, ptr)
+    Nothing -> liftIO $ CLMP.annotatePointerOffset sym ptr
   offsetAnns %= MapF.insert (BVAnn offann) (SomePtrSelector sel)
-  pure ptr''
+  pure ptr'
 
 ---------------------------------------------------------------------
 
@@ -192,13 +183,20 @@ lookupSomePtrBlockAnnotation ::
   CLMP.LLVMPtr sym w ->
   Maybe (Some (SomePtrSelector ext argTys))
 lookupSomePtrBlockAnnotation anns sym ptr = do
-  let block = WI.natToIntegerPure (CLMP.llvmPointerBlock ptr)
-  ann <- Maybe.listToMaybe (findAnnotations sym WI.BaseIntegerRepr block)
+  blockNum <- getConcreteBlock (CLMP.llvmPointerBlock ptr)
   -- In this lookup, 'Nothing' may arise if this pointer was created by a
   -- "skip" override (see "Grease.Skip"), because such overrides use the
   -- "setup" machinery, but discard the map that tracks the annotations on
   -- values they create.
-  Map.lookup (IntegerAnn ann) (_blockAnns anns)
+  IntMap.lookup (fromIntegral blockNum) (_blockAnns anns)
+ where
+  getConcreteBlock blockNat = tryDirect <|> tryUnannotated
+   where
+    int = WI.natToIntegerPure blockNat
+    tryDirect = WI.asInteger int
+    tryUnannotated = do
+      term <- WI.getUnannotatedTerm sym int
+      WI.asInteger term
 
 lookupPtrBlockAnnotation ::
   ( CB.IsSymInterface sym

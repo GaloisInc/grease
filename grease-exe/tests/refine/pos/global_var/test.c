@@ -19,4 +19,13 @@ void test(int x) {
   }
 }
 
-// all: ok()
+// arm: ok()
+// x64: ok()
+
+// On PPC32, the memory model produces an ITE over a function-backed array for
+// the global memory state after the first branch. Yices cannot handle this
+// expression type, so the goal is reported as a possible bug rather than being
+// proved. This would work with another solver (e.g., it works with Z3).
+//
+// ppc32: check "we do not support if/then/else expressions at type function-backed array with solver Yices."
+// ppc32: could_not_infer()
