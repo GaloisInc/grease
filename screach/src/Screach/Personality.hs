@@ -20,6 +20,7 @@ import Data.Parameterized.Ctx qualified as C
 import GHC.TypeLits (type Natural)
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Macaw.SimulatorState qualified as GMSS
+import Grease.SimulatorState.Networking qualified as GSN
 import Lang.Crucible.Debug qualified as Dbg
 import Lang.Crucible.FunctionHandle (HandleAllocator)
 import Lang.Crucible.Simulator.RecordAndReplay qualified as CSR
@@ -105,6 +106,10 @@ instance
   where
   macawLazySimulatorState = greaseSimulatorState . GMSS.macawLazySimulatorState
   {-# INLINEABLE macawLazySimulatorState #-}
+
+instance GSN.HasServerSocketFds (ScreachSimulatorState p sym bak ext rtp arch t aty w) where
+  serverSocketFdsL = greaseSimulatorState . GSN.serverSocketFdsL
+  {-# INLINE serverSocketFdsL #-}
 
 instance
   (MC.ArchAddrWidth arch ~ w) =>

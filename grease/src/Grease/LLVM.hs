@@ -20,6 +20,7 @@ import Grease.LLVM.SetupHook (SetupHook (SetupHook))
 import Grease.LLVM.SimulatorHooks (greaseLlvmExtImpl)
 import Grease.Options (ErrorSymbolicFunCalls)
 import Grease.Setup (SetupMem (getSetupMem))
+import Grease.SimulatorState.Networking qualified as GSN
 import Grease.Utility (OnlineSolverAndBackend, printHandle)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.CFG.Core qualified as C
@@ -43,6 +44,7 @@ initState ::
   , CLM.HasPtrWidth (ArchWidth arch)
   , CLM.HasLLVMAnn sym
   , HasToConcretize p
+  , GSN.HasServerSocketFds p
   , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
