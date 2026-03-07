@@ -29,9 +29,10 @@ import Grease.Skip.Diagnostic qualified as Diag
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.LLVM.DataLayout qualified as Mem
-import Lang.Crucible.LLVM.Functions qualified as CLLVM
-import Lang.Crucible.LLVM.Intrinsics qualified as CLI
+import Lang.Crucible.LLVM.DataLayout as Mem (DataLayout)
+import Lang.Crucible.LLVM.Functions as CLLVM (bindLLVMHandle)
+import Lang.Crucible.LLVM.Intrinsics as CLLVM (LLVMOverride (LLVMOverride, llvmOvDecl, llvmOvDefn), SomeLLVMOverride (SomeLLVMOverride))
+import Lang.Crucible.LLVM.Intrinsics.Declare as Decl (Declare (Declare, decName, decRet), SomeDeclare (SomeDeclare))
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.Translation (LLVMContext)
 import Lang.Crucible.LLVM.Translation qualified as CLT
@@ -105,7 +106,7 @@ createSkipOverride la dl memVar funcName retTy = do
           skipOverride la dl memVar funcName retTy shape
   Right override
 
--- | Try to create a skip override from a 'L.Declare' and an 'LLVMContext'.
+-- | Try to create a skip override from a 'Decl.Declare' and an 'LLVMContext'.
 --
 -- See 'createSkipOverride' for details.
 declSkipOverride ::
@@ -119,27 +120,26 @@ declSkipOverride ::
   ) =>
   GreaseLogAction ->
   LLVMContext arch ->
-  L.Declare ->
-  Maybe (CLI.SomeLLVMOverride p sym ext)
-declSkipOverride la llvmCtx decl =
-  let ?lc = llvmCtx ^. CLT.llvmTypeCtx
-   in CLT.llvmDeclToFunHandleRepr' decl $ \argTys retTy -> do
-        shape <-
-          case minimalShapeWithPtrs (const NoTag) retTy of
-            Left _err -> Nothing
-            Right shape -> Just shape
-        let dl = llvmCtx ^. CLT.llvmTypeCtx . to CLTC.llvmDataLayout
-        let L.Symbol name = L.decName decl
-        let fnName = WFN.functionNameFromText (Text.pack name)
-        Just $
-          CLI.SomeLLVMOverride $
-            CLI.LLVMOverride
-              { CLI.llvmOverride_declare = decl
-              , CLI.llvmOverride_args = argTys
-              , CLI.llvmOverride_ret = retTy
-              , CLI.llvmOverride_def = \mvar _args ->
-                  skipOverride la dl mvar fnName retTy shape
-              }
+  Decl.SomeDeclare ->
+  Maybe (CLLVM.SomeLLVMOverride p sym ext)
+declSkipOverride la llvmCtx someDecl = do
+  Decl.SomeDeclare
+    decl@(Decl.Declare{Decl.decRet = retTy}) <-
+    pure someDecl
+  shape <-
+    case minimalShapeWithPtrs (const NoTag) retTy of
+      Left _err -> Nothing
+      Right shape -> Just shape
+  let dl = llvmCtx ^. CLT.llvmTypeCtx . to CLTC.llvmDataLayout
+  let L.Symbol name = Decl.decName decl
+  let fnName = WFN.functionNameFromText (Text.pack name)
+  Just $
+    CLLVM.SomeLLVMOverride $
+      CLLVM.LLVMOverride
+        { llvmOvDecl = decl
+        , llvmOvDefn = \mvar _args ->
+            skipOverride la dl mvar fnName retTy shape
+        }
 
 -- | Try to create and register an override for a declared function.
 --
