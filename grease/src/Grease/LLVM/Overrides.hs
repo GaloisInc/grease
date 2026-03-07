@@ -35,7 +35,8 @@ import Grease.LLVM.Overrides.SExp (LLVMSExpOverride (lsoAuxiliaryOverrides, lsoF
 import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.Overrides (CantResolveOverrideCallback (CantResolveOverrideCallback))
 import Grease.Skip (declSkipOverride, registerSkipOverride)
-import Grease.Syntax.Overrides (concBvOverride, freshBytesOverride, tryBindTypedOverride)
+import Grease.Syntax.Overrides (freshBytesOverride, tryBindTypedOverride)
+import Grease.Syntax.Overrides.Concretize qualified as Conc
 import Grease.Utility (OnlineSolverAndBackend, llvmOverrideName)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
@@ -408,16 +409,43 @@ registerLLVMForwardDeclarations bak mvar funOvs errCb fwdDecs = do
         -- S-expression files with forward-declarations of them.
         case fwdDecName of
           "conc-bv-8" -> do
-            ok <- tryBindTypedOverride hdl (concBvOverride bak (C.knownNat @8))
+            ok <- tryBindTypedOverride hdl (Conc.concBvOverride bak (C.knownNat @8))
             unless ok (cannotResolve fwdDecName hdl)
           "conc-bv-16" -> do
-            ok <- tryBindTypedOverride hdl (concBvOverride bak (C.knownNat @16))
+            ok <- tryBindTypedOverride hdl (Conc.concBvOverride bak (C.knownNat @16))
             unless ok (cannotResolve fwdDecName hdl)
           "conc-bv-32" -> do
-            ok <- tryBindTypedOverride hdl (concBvOverride bak (C.knownNat @32))
+            ok <- tryBindTypedOverride hdl (Conc.concBvOverride bak (C.knownNat @32))
             unless ok (cannotResolve fwdDecName hdl)
           "conc-bv-64" -> do
-            ok <- tryBindTypedOverride hdl (concBvOverride bak (C.knownNat @64))
+            ok <- tryBindTypedOverride hdl (Conc.concBvOverride bak (C.knownNat @64))
+            unless ok (cannotResolve fwdDecName hdl)
+          "conc-bool" -> do
+            ok <- tryBindTypedOverride hdl (Conc.concBoolOverride bak)
+            unless ok (cannotResolve fwdDecName hdl)
+          "conc-integer" -> do
+            ok <- tryBindTypedOverride hdl (Conc.concIntegerOverride bak)
+            unless ok (cannotResolve fwdDecName hdl)
+          "conc-nat" -> do
+            ok <- tryBindTypedOverride hdl (Conc.concNatOverride bak)
+            unless ok (cannotResolve fwdDecName hdl)
+          "conc-ptr-32" -> do
+            ok <- tryBindTypedOverride hdl (Conc.concPtrOverride bak (C.knownNat @32))
+            unless ok (cannotResolve fwdDecName hdl)
+          "conc-ptr-64" -> do
+            ok <- tryBindTypedOverride hdl (Conc.concPtrOverride bak (C.knownNat @64))
+            unless ok (cannotResolve fwdDecName hdl)
+          "conc-vector-bv-8" -> do
+            ok <- tryBindTypedOverride hdl (Conc.concVectorBvOverride bak (C.knownNat @8))
+            unless ok (cannotResolve fwdDecName hdl)
+          "conc-vector-bv-16" -> do
+            ok <- tryBindTypedOverride hdl (Conc.concVectorBvOverride bak (C.knownNat @16))
+            unless ok (cannotResolve fwdDecName hdl)
+          "conc-vector-bv-32" -> do
+            ok <- tryBindTypedOverride hdl (Conc.concVectorBvOverride bak (C.knownNat @32))
+            unless ok (cannotResolve fwdDecName hdl)
+          "conc-vector-bv-64" -> do
+            ok <- tryBindTypedOverride hdl (Conc.concVectorBvOverride bak (C.knownNat @64))
             unless ok (cannotResolve fwdDecName hdl)
           "fresh-bytes" -> do
             ok <- tryBindTypedOverride hdl (freshBytesOverride ?ptrWidth)

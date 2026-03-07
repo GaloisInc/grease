@@ -27,17 +27,37 @@ additional types and operations, see:
 There are a few overrides that are only available in S-expression files
 (programs or overrides).
 ```
-(declare @conc-bv-8 ((bv (Bitvector 8))) (Vector (Bitvector 8)))
-(declare @conc-bv-16 ((bv (Bitvector 16))) (Vector (Bitvector 16)))
-(declare @conc-bv-32 ((bv (Bitvector 32))) (Vector (Bitvector 32)))
-(declare @conc-bv-64 ((bv (Bitvector 64))) (Vector (Bitvector 64)))
+(declare @conc-bool ((b Bool)) Bool)
+(declare @conc-bv-8 ((bv (Bitvector 8))) (Bitvector 8))
+(declare @conc-bv-16 ((bv (Bitvector 16))) (Bitvector 16))
+(declare @conc-bv-32 ((bv (Bitvector 32))) (Bitvector 32))
+(declare @conc-bv-64 ((bv (Bitvector 64))) (Bitvector 64))
+(declare @conc-integer ((i Integer)) Integer)
+(declare @conc-nat ((n Nat)) Nat)
+(declare @conc-ptr-32 ((p (Ptr 32))) (Ptr 32))
+(declare @conc-ptr-64 ((p (Ptr 64))) (Ptr 64))
+(declare @conc-vector-bv-8 ((v (Vector (Bitvector 8)))) (Vector (Bitvector 8)))
+(declare @conc-vector-bv-16 ((v (Vector (Bitvector 16)))) (Vector (Bitvector 16)))
+(declare @conc-vector-bv-32 ((v (Vector (Bitvector 32)))) (Vector (Bitvector 32)))
+(declare @conc-vector-bv-64 ((v (Vector (Bitvector 64)))) (Vector (Bitvector 64)))
 (declare @fresh-bytes ((name (String Unicode)) (num (Bitvector w))) (Vector (Bitvector 8)))
 ```
 
-### `@conc-bv-*`
+### `@conc-bool`, `@conc-integer`, `@conc-nat`, `@conc-bv-*`
 
-These overrides request a model from the SMT solver and return the value of the
-input bitvector in the model.
+These overrides request a model from the SMT solver and return the concrete
+value of the input in the model.
+
+### `@conc-ptr-*`
+
+These overrides request a model from the SMT solver and return a pointer with
+both the block number and offset concretized in the same model.
+
+### `@conc-vector-bv-*`
+
+These overrides request a model from the SMT solver and return a vector where
+all bitvector elements have been concretized in the same model. This ensures
+consistency across all elements of the vector.
 
 ### `@fresh-bytes`
 
