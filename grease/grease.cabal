@@ -276,6 +276,7 @@ library
     Grease.SymIO
     Grease.Syntax
     Grease.Syntax.Overrides
+    Grease.Syntax.Overrides.Concretize
     Grease.Syscall
     Grease.Time
     Grease.Utility

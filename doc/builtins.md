@@ -210,10 +210,19 @@ The following overrides are only available in S-expression files (programs or ov
 See [The S-expression language](sexp.md) for more details.
 
 ```
-(declare @conc-bv-8 ((bv (Bitvector 8))) (Vector (Bitvector 8)))
-(declare @conc-bv-16 ((bv (Bitvector 16))) (Vector (Bitvector 16)))
-(declare @conc-bv-32 ((bv (Bitvector 32))) (Vector (Bitvector 32)))
-(declare @conc-bv-64 ((bv (Bitvector 64))) (Vector (Bitvector 64)))
+(declare @conc-bool ((b Bool)) Bool)
+(declare @conc-bv-8 ((bv (Bitvector 8))) (Bitvector 8))
+(declare @conc-bv-16 ((bv (Bitvector 16))) (Bitvector 16))
+(declare @conc-bv-32 ((bv (Bitvector 32))) (Bitvector 32))
+(declare @conc-bv-64 ((bv (Bitvector 64))) (Bitvector 64))
+(declare @conc-integer ((i Integer)) Integer)
+(declare @conc-nat ((n Nat)) Nat)
+(declare @conc-ptr-32 ((p (Ptr 32))) (Ptr 32))
+(declare @conc-ptr-64 ((p (Ptr 64))) (Ptr 64))
+(declare @conc-vector-bv-8 ((v (Vector (Bitvector 8)))) (Vector (Bitvector 8)))
+(declare @conc-vector-bv-16 ((v (Vector (Bitvector 16)))) (Vector (Bitvector 16)))
+(declare @conc-vector-bv-32 ((v (Vector (Bitvector 32)))) (Vector (Bitvector 32)))
+(declare @conc-vector-bv-64 ((v (Vector (Bitvector 64)))) (Vector (Bitvector 64)))
 (declare @fresh-bytes ((name (String Unicode)) (num (Bitvector w))) (Vector (Bitvector 8)))
 ```
 
