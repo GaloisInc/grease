@@ -1604,6 +1604,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
                 GLP.GreaseLLVMPersonality
                   { GLP._dbgContext = dbgCtx
                   , GLP._toConcretize = toConc
+                  , GLP._serverSocketFds = Map.empty
                   }
           LLVM.initState
             bak
