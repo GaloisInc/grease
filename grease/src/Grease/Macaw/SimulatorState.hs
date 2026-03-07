@@ -36,7 +36,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
 import Data.Parameterized.Some (Some)
 import Grease.Concretize.ToConcretize qualified as ToConc
-import Grease.Macaw.SimulatorState.Networking qualified as GMSN
+import Grease.SimulatorState.Networking qualified as GSN
 import Lang.Crucible.Debug qualified as Dbg
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Simulator qualified as CS
@@ -79,7 +79,7 @@ data GreaseSimulatorState cExt sym arch = GreaseSimulatorState
   , _macawLazySimulatorState :: Symbolic.MacawLazySimulatorState sym (MC.ArchAddrWidth arch)
   -- ^ The state used in the lazy @macaw-symbolic@ memory model, on top of
   -- which @grease@ is built.
-  , _serverSocketFds :: Map.Map Integer (Some GMSN.ServerSocketInfo)
+  , _serverSocketFds :: Map.Map Integer (Some GSN.ServerSocketInfo)
   -- ^ A map from registered socket file descriptors to their corresponding
   -- metadata. See @Note [The networking story]@ in
   -- "Grease.Macaw.Overrides.Networking".
@@ -107,7 +107,9 @@ emptyGreaseSimulatorState toConcVar dbgCtx =
 -- supply their own personality types that extend 'GreaseSimulatorState'
 -- further.
 class
-  Symbolic.HasMacawLazySimulatorState p sym (MC.ArchAddrWidth arch) =>
+  ( Symbolic.HasMacawLazySimulatorState p sym (MC.ArchAddrWidth arch)
+  , GSN.HasServerSocketFds p
+  ) =>
   HasGreaseSimulatorState p cExt sym arch
     | p -> cExt sym arch
   where
@@ -161,6 +163,9 @@ instance
 
 instance HasGreaseSimulatorState (GreaseSimulatorState cExt sym arch) cExt sym arch where
   greaseSimulatorState = id
+
+instance GSN.HasServerSocketFds (GreaseSimulatorState cExt sym arch) where
+  serverSocketFdsL = serverSocketFds
 
 stateDiscoveredFnHandles ::
   HasGreaseSimulatorState p cExt sym arch =>

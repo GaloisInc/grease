@@ -7,7 +7,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Grease.Macaw.SimulatorState.Networking (
+module Grease.SimulatorState.Networking (
   -- * @ServerSocketInfo@ and friends
   ServerSocketInfo (..),
   SocketDomain (..),
@@ -21,11 +21,16 @@ module Grease.Macaw.SimulatorState.Networking (
   socketFilePath,
   acceptAfUnixFilePath,
   acceptAfInetFilePath,
+
+  -- * @HasServerSocketFds@
+  HasServerSocketFds (..),
 ) where
 
+import Control.Lens (Lens')
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
 import Data.Kind (Type)
+import Data.Map.Strict qualified as Map
 import Data.Parameterized.Some (Some (Some))
 import Data.Word (Word16)
 import Prettyprinter qualified as PP
@@ -47,7 +52,7 @@ data ServerSocketInfo domain = ServerSocketInfo
   , serverSocketAddress :: Maybe (SocketAddress domain)
   -- ^ If this socket has been assigned via @bind()@, this is
   -- @'Just' addr@. If not, this is 'Nothing'. The type of @addr@ depends on
-  -- the socket domain—see the Haddocks for 'SocketAddress'.
+  -- the socket domain---see the Haddocks for 'SocketAddress'.
   , serverSocketNextConnection :: Word
   -- ^ The number to use for the socket file allocated by the next call to
   -- @accept()@.
@@ -168,3 +173,8 @@ mkSocketPathPrefix
     "/network"
       FilePath.</> show (PP.pretty (fromSocketDomainRepr domainRepr))
       FilePath.</> show (PP.pretty typ)
+
+-- | A class for personality types that contain a map of server socket file
+-- descriptors.
+class HasServerSocketFds p where
+  serverSocketFdsL :: Lens' p (Map.Map Integer (Some ServerSocketInfo))
