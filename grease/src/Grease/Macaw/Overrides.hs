@@ -43,6 +43,7 @@ import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, Maca
 import Grease.Overrides (CantResolveOverrideCallback (CantResolveOverrideCallback))
 import Grease.Skip (registerSkipOverride)
 import Grease.Syntax.Overrides qualified as SExp
+import Grease.Syntax.Overrides.Concretize qualified as Conc
 import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
@@ -347,10 +348,19 @@ lookupMacawForwardDeclarationOverride bak funOvs decName hdl =
           let ov = SExp.freshBytesOverride @_ @p @sym @(Symbolic.MacawExt arch) ?ptrWidth
           (C.Refl, C.Refl) <- SExp.checkTypedOverrideHandleCompat hdl ov
           Just (CS.runTypedOverride (C.handleName hdl) ov)
-        "conc-bv-8" -> SExp.tryConcBvOverride bak (C.knownNat @8) hdl
-        "conc-bv-16" -> SExp.tryConcBvOverride bak (C.knownNat @16) hdl
-        "conc-bv-32" -> SExp.tryConcBvOverride bak (C.knownNat @32) hdl
-        "conc-bv-64" -> SExp.tryConcBvOverride bak (C.knownNat @64) hdl
+        "conc-bv-8" -> Conc.tryConcBvOverride bak (C.knownNat @8) hdl
+        "conc-bv-16" -> Conc.tryConcBvOverride bak (C.knownNat @16) hdl
+        "conc-bv-32" -> Conc.tryConcBvOverride bak (C.knownNat @32) hdl
+        "conc-bv-64" -> Conc.tryConcBvOverride bak (C.knownNat @64) hdl
+        "conc-bool" -> Conc.tryConcBoolOverride bak hdl
+        "conc-integer" -> Conc.tryConcIntegerOverride bak hdl
+        "conc-nat" -> Conc.tryConcNatOverride bak hdl
+        "conc-ptr-32" -> Conc.tryConcPtrOverride bak (C.knownNat @32) hdl
+        "conc-ptr-64" -> Conc.tryConcPtrOverride bak (C.knownNat @64) hdl
+        "conc-vector-bv-8" -> Conc.tryConcVectorBvOverride bak (C.knownNat @8) hdl
+        "conc-vector-bv-16" -> Conc.tryConcVectorBvOverride bak (C.knownNat @16) hdl
+        "conc-vector-bv-32" -> Conc.tryConcVectorBvOverride bak (C.knownNat @32) hdl
+        "conc-vector-bv-64" -> Conc.tryConcVectorBvOverride bak (C.knownNat @64) hdl
         _ -> Nothing
     Just mso -> do
       let someForwardedOv = GMOS.msoSomeFunctionOverride mso
