@@ -214,6 +214,11 @@ executable grease
   main-is: Main.hs
   build-depends: grease-exe
 
+  -- GHC's default nursery is ~4MB, which causes excessive GC.
+  -- 
+  -- https://downloads.haskell.org/ghc/latest/docs/users_guide/runtime_control.html#rts-flag-A-size
+  ghc-options: -rtsopts "-with-rtsopts=-A8m"
+
 test-suite grease-tests
   import: shared
   hs-source-dirs: tests
