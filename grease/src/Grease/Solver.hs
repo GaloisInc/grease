@@ -7,11 +7,13 @@
 module Grease.Solver (
   Solver (..),
   solverAdapter,
+  problemFeatures,
   withSolverOnlineBackend,
 ) where
 
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.Bits ((.|.))
 import Data.Parameterized.Nonce (NonceGenerator)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
@@ -102,5 +104,12 @@ withSolverOnlineBackend solver fm ng bakAction =
   unsatFeatures :: C.UnsatFeatures
   unsatFeatures = C.NoUnsatFeatures
 
-  problemFeatures :: W4.ProblemFeatures
-  problemFeatures = W4.noFeatures
+-- | Goal proving requires bitvectors, integer arithmetic, structs, and
+-- symbolic arrays. These features must also be set on the backend so that
+-- the solver process supports them when started via 'withSolverProcess'.
+problemFeatures :: W4.ProblemFeatures
+problemFeatures =
+  W4.useBitvectors
+  .|. W4.useIntegerArithmetic
+  .|. W4.useStructs
+  .|. W4.useSymbolicArrays

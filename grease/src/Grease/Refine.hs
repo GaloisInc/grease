@@ -4,6 +4,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- |
 -- Copyright   : (c) Galois, Inc. 2024
@@ -85,7 +86,6 @@ module Grease.Refine (
 import Control.Applicative ((<|>))
 import Control.Exception.Safe qualified as X
 import Control.Lens ((^.))
-import Control.Monad qualified as Monad
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Functor.Const (Const)
@@ -126,11 +126,18 @@ import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
-import Grease.Solver (Solver, solverAdapter)
+import Grease.Solver (Solver (Bitwuzla, Cvc4, Cvc5, Yices, Z3), problemFeatures)
 import Grease.SymIO qualified as GSIO
 import Grease.Utility (tshow)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Prove qualified as C
+import Lang.Crucible.Utils.Seconds qualified as CTO
+import What4.Config qualified as W4Cfg
+import What4.Solver.Bitwuzla qualified as W4Bitwuzla
+import What4.Solver.CVC4 qualified as W4CVC4
+import What4.Solver.CVC5 qualified as W4CVC5
+import What4.Solver.Yices qualified as W4Yices
+import What4.Solver.Z3 qualified as W4Z3
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
@@ -149,7 +156,7 @@ import What4.Expr.App qualified as W4
 import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4
-import What4.Solver qualified as W4
+import What4.Protocol.Online qualified as WPO
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (RefineDiagnostic diag)
@@ -449,16 +456,65 @@ proveAndRefine bak execResult la bbMap refineData goals = do
   let sym = CB.backendGetSym bak
   let solver = refineSolver refineData
   let tout = refineSolverTimeout refineData
-  let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
-  let strat = C.ProofStrategy prover combiner
   let cons = consumer bak execResult la bbMap refineData
   case goals of
     Nothing -> pure ProveSuccess
-    Just goals' ->
-      liftIO (runExceptT (C.proveGoals strat goals' cons))
-        Monad.>>= \case
-          Left C.TimedOut -> pure (ProveCantRefine SolverTimeout)
-          Right r -> pure r
+    Just goals' -> do
+      -- Configure solver timeout before the solver process is started.
+      -- For Yices, this also ensures the solver starts in interactive mode
+      -- (required for push-pop with timeouts).
+      configureSolverTimeout sym solver tout
+      -- Use a separate solver process for goal proving so that the
+      -- must-fail heuristic (which queries the main backend's solver
+      -- via withSolverProcess) sees a clean solver state without
+      -- leaked assumptions from the prover's push/pop frames.
+      sProc <- (WPO.startSolverProcess problemFeatures Nothing sym :: IO (WPO.SolverProcess t solver))
+      X.finally
+        ( do
+            let prover = C.onlineProver sym sProc
+            let strat = C.ProofStrategy prover combiner
+            liftIO (runExceptT (C.proveGoals strat goals' cons))
+              >>= \case
+                Left C.TimedOut -> pure (ProveCantRefine SolverTimeout)
+                Right r -> pure r
+        )
+        (do _ <- WPO.shutdownSolverProcess sProc; pure ())
+
+configureSolverTimeout ::
+  WI.IsExprBuilder sym =>
+  sym ->
+  Solver ->
+  C.Timeout ->
+  IO ()
+configureSolverTimeout sym solver tout = do
+  let cfg = WI.getConfiguration sym
+  case tout of
+    C.Timeout secs -> do
+      let timeoutMs = fromIntegral (CTO.secondsToInt secs * 1000) :: Integer
+      case solver of
+        Bitwuzla -> do
+          timeoutOpt <- W4Cfg.getOptionSetting W4Bitwuzla.bitwuzlaTimeout cfg
+          _ <- W4Cfg.setOpt timeoutOpt timeoutMs
+          pure ()
+        Yices -> do
+          let timeoutSecs = fromIntegral (CTO.secondsToInt secs) :: Integer
+          timeoutOpt <- W4Cfg.getOptionSetting W4Yices.yicesGoalTimeout cfg
+          _ <- W4Cfg.setOpt timeoutOpt timeoutSecs
+          interactiveOpt <- W4Cfg.getOptionSetting W4Yices.yicesEnableInteractive cfg
+          _ <- W4Cfg.setOpt interactiveOpt True
+          pure ()
+        Z3 -> do
+          timeoutOpt <- W4Cfg.getOptionSetting W4Z3.z3Timeout cfg
+          _ <- W4Cfg.setOpt timeoutOpt timeoutMs
+          pure ()
+        Cvc4 -> do
+          timeoutOpt <- W4Cfg.getOptionSetting W4CVC4.cvc4Timeout cfg
+          _ <- W4Cfg.setOpt timeoutOpt timeoutMs
+          pure ()
+        Cvc5 -> do
+          timeoutOpt <- W4Cfg.getOptionSetting W4CVC5.cvc5Timeout cfg
+          _ <- W4Cfg.setOpt timeoutOpt timeoutMs
+          pure ()
 
 processExecResult ::
   CS.ExecResult p sym ext r ->

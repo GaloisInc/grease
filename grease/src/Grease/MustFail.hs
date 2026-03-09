@@ -93,13 +93,13 @@ oneMustFail bak obligations = do
   mustFail <-
     WI.andAllOf sym Lens.folded
       Monad.=<< Traversable.traverse (mustFailPred bak) obligations
-  let onlineDisabled = Monad.fail "`must-fail` requires online solving to be enabled"
-  withSolverProcess bak onlineDisabled Function.$ \solverProc ->
-    WPO.checkSatisfiable solverProc "must-fail heuristic" mustFail
-      Monad.>>= \case
-        W4.Unknown -> pure False
-        W4.Sat () -> pure False
-        W4.Unsat () -> pure True
+  let onlineDisabled = fail "`must-fail` requires online solving to be enabled"
+  withSolverProcess bak onlineDisabled Function.$ \solverProc -> do
+    result <- WPO.checkSatisfiable solverProc "must-fail heuristic" mustFail
+    case result of
+      W4.Unknown -> pure False
+      W4.Sat () -> pure False
+      W4.Unsat () -> pure True
 
 -- | After heuristics have failed to classify some collection of errors,
 -- apply the \"one must fail\" heuristic: Was at least one of the predicates
