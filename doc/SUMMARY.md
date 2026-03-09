@@ -8,7 +8,7 @@
 - [Installation](./install.md)
 - [Usage](./usage.md)
 - [Ghidra plugin](./ghidra-plugin.md)
-- [Ghidra batch plugin](./ghidra-batch-plugin.md) (For use cases that require complete analysis of a large program)
+- [Ghidra batch plugin](./ghidra-batch-plugin.md)
 - [Overrides](./overrides.md)
 - [The S-expression language](./sexp.md)
 
@@ -36,7 +36,7 @@
 - [Fancy Haskell idioms](dev/haskell-idioms.md)
 - [Linting](dev/lint.md)
 - [On-boarding](dev/on-boarding.md)
-- [Ghidra Script Development with Type Stubs](dev/ghidra-script-dev.md)
+- [Ghidra script development](dev/ghidra-script-dev.md)
 - [Glossary](dev/glossary.md)
 - [Practices](dev/practices.md)
 - [Profiling](dev/profiling.md)
