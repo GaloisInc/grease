@@ -36,7 +36,7 @@ import Data.Word (Word16)
 import Prettyprinter qualified as PP
 import System.FilePath qualified as FilePath
 
--- See Note [The networking story] in Grease.Macaw.Overrides.Networking for a
+-- See Note [The networking story] in Grease.Overrides.Networking for a
 -- high-level overview of how these data types are used to model network IO.
 
 -- | A collection of metadata about sockets that is useful for server programs
@@ -121,7 +121,7 @@ instance PP.Pretty SocketType where
   pretty SockSeqpacket = "SOCK_SEQPACKET"
 
 -- These functions implement the file path conventions described in
--- Note [The networking story] in Grease.Macaw.Overrides.Networking.
+-- Note [The networking story] in Grease.Overrides.Networking.
 
 -- | In the @socket()@ override, the returned socket file descriptor is modeled
 -- with a file located at @/network/<domain_macro>/<type_macro>/socket@.

@@ -9,6 +9,9 @@
 {- HLINT ignore "Use panic" -}
 
 -- | Shared networking override logic, used by both Macaw and LLVM backends.
+--
+-- See @Note [The networking story]@ for an overview of how GREASE models
+-- network I/O.
 module Grease.Overrides.Networking (
   -- * Core call implementations
   callSocket,
@@ -59,6 +62,110 @@ import What4.Interface qualified as WI
 import What4.ProgramLoc qualified as WPL
 import What4.Protocol.Online qualified as WPO
 import What4.Utils.ResolveBounds.BV qualified as WURB
+
+{-
+Note [The networking story]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+GREASE has limited support for socket I/O. We define enough overrides (see
+`networkOverrides`) to simulate basic socket server and client programs. These
+overrides emulate socket connections by opening specific files on the symbolic
+filesystem.
+
+When a program invokes socket(domain, type, protocol), the following file will
+be opened:
+
+  /network/<domain_macro>/<type_macro>/socket
+
+Where:
+
+\* <domain_macro> is the name of the C macro that corresponds to the `domain`
+  value passed to socket(). For example, a `domain` value of 2 corresponds to
+  the AF_INET macro, so that would result in /network/AF_INET/...
+
+\* <type_macro> is the name of the C macro that corresponds to the `type` value
+  passed to socket(). For example, a `type` value of 1 corresponds to the
+  SOCK_STREAM macro, so that would reult in /network/.../SOCK_STREAM/...
+
+For servers, the contents of this .../socket file don't matter that much. For
+clients, this file is used for network communication, so
+`read`ing/`recv`ing from this file simulates receiving a message from the
+server, and `send`ing/`write`ing to this file simulates sending a message to
+the server.
+
+When a program invokes accept(sockfd, addr, addrlen), a file will be opened at
+a path depending on the socket domain:
+
+\* If it is an AF_UNIX socket, the following file will be opened:
+
+    <sun_path>/<seq_num>
+
+  Where:
+
+  * <sun_path> is the value in the `sun_path` field of the `sockaddr_un` struct
+    passed to bind() when binding the socket.
+
+  * <seq_num> indicates the order in which each call to accept() was made. For
+    example, the first accept() call will be given a <seq_num> of 0, the second
+    accept() call will be given a <seq_num> of 1, etc.
+
+\* If it is an AF_INET or AF_INET6 socket, the  following file will be opened:
+
+    /network/<domain_macro>/<type_macro>/<port>/<seq_num>
+
+  Where:
+
+  * <domain_macro> and <type_macro> are the same values as in the socket() case.
+    <port> is the same value that was passed to bind() when assigning a name to
+    the socket. (We'll describe how GREASE looks up these values in a bit.)
+
+  * <seq_num> indicates the order in which each call to accept() was made.
+
+These overrides use a crucible-symio LLVMFileSystem under the hood to track
+these files. One limitation of an LLVMFileSystem is that there isn't a simple
+way to associate extra metadata with each file. That is to say, after socket()
+returns a file descriptor, there isn't an easy way to use that file descriptor
+to look up its file path, port number, the number of connections etc. One might
+be tempted to pass around a GlobalVar containing this metadata, but it's not
+obvious what CrucibleType such a GlobalVar would have, since we would need some
+kind of map-like structure.
+
+Our solution to this problem is to add a `serverSocketFDs` field to the
+personality state (e.g., `GreaseSimulatorState` for Macaw or
+`GreaseLLVMPersonality` for LLVM), which is passed around across all overrides.
+This contains a map of file descriptors to ServerSocketInfo, which is a
+collection of metadata that gradually gets filled in after calls to socket()
+and bind(). This is not a perfect solution (more on this in a bit), but it is
+sufficient to handle the kinds of network programs we are targeting.
+
+Note that this metadata is only needed in service of figuring out the name of
+the filepath that accept() opens, which is only needed for servers. Clients do
+not need to invoke accept(), which is why there is not a corresponding
+ClientSocketInfo data type.
+
+There are a variety of limitations surrounding how this works to be aware of:
+
+\* The personality state is passed around in the `personality` of each
+  OverrideSim, which does not participate in symbolic branching and merging.
+  One could imagine a program for which this is problematic (e.g., a socket
+  that conditionally gets created depeneding on the value of symbolic data),
+  but we do not anticipate this being an issue in practice.
+
+\* Because the names of crucible-symio filepaths must be concrete, a socket's
+  domain, type, and path (for AF_UNIX sockets) or port number (for AF_INET{6}
+  sockets) must all be concrete, since they all appear in filepath names.
+  Again, we do not anticipate many programs in the wild will try to make this
+  information symbolic. The file descriptor for each socket must also be
+  concrete, but since crucible-symio always allocates concrete file descriptors
+  anyway, this requirement is easily satisfied.
+
+\* The domain value passed to socket() must be listed in the `socketDomainMap`.
+  We could, in theory, support other forms of communication, but we do not do so
+  at present.
+
+\* The type value passed to socket() must be listed in the `socketTypeMap`.
+  We could, in theory, support other forms of communication semantics, but we
+  do not do so at present.
+-}
 
 -- | Override for the @accept(2)@ function. This function looks up the metadata
 -- associated with the socket file descriptor argument, allocates a new socket
