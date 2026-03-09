@@ -34,7 +34,7 @@ data GreaseLLVMPersonality cExt sym t
   , _serverSocketFds :: Map.Map Integer (Some GSN.ServerSocketInfo)
   -- ^ A map from registered socket file descriptors to their corresponding
   -- metadata. See @Note [The networking story]@ in
-  -- "Grease.Macaw.Overrides.Networking".
+  -- "Grease.Overrides.Networking".
   }
 
 makeLenses ''GreaseLLVMPersonality

@@ -82,7 +82,7 @@ data GreaseSimulatorState cExt sym arch = GreaseSimulatorState
   , _serverSocketFds :: Map.Map Integer (Some GSN.ServerSocketInfo)
   -- ^ A map from registered socket file descriptors to their corresponding
   -- metadata. See @Note [The networking story]@ in
-  -- "Grease.Macaw.Overrides.Networking".
+  -- "Grease.Overrides.Networking".
   , _dbgContext :: Dbg.Context cExt sym (Symbolic.MacawExt arch) (Symbolic.ArchRegStruct arch)
   }
 

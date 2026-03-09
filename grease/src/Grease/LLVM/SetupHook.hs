@@ -48,6 +48,25 @@ import What4.FunctionName qualified as WFN
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LLVMSetupHookDiagnostic diag)
 
+-- | Convert network LLVM overrides into basic LLVM override templates.
+networkOvTemplates ::
+  forall arch p sym bak w scope st fs solver.
+  ( OnlineSolverAndBackend solver sym bak scope st fs
+  , CLM.HasPtrWidth w
+  , w ~ 64
+  , CLM.HasLLVMAnn sym
+  , GSN.HasServerSocketFds p
+  , ?memOpts :: CLM.MemOptions
+  ) =>
+  bak ->
+  CLSIO.LLVMFileSystem w ->
+  CS.GlobalVar CLM.Mem ->
+  Seq.Seq (CLI.OverrideTemplate p sym LLVM arch)
+networkOvTemplates bak fs mvar =
+  fmap
+    (\(CLI.SomeLLVMOverride ov) -> CLI.basic_llvm_override ov)
+    (Seq.fromList (networkLLVMOverrides bak fs mvar))
+
 -- | Hook to run before executing a CFG.
 --
 -- Note that @sym@ is a type parameter so that users can define 'SetupHook's
@@ -92,12 +111,8 @@ syntaxSetupHook la ovs skipFuns prog cfgs errCb =
     let mvar = CLT.llvmMemVar llvmCtx
 
     -- Register built-in, networking, and user overrides.
-    let networkOvTemplates =
-          fmap
-            (\(CLI.SomeLLVMOverride ov) -> CLI.basic_llvm_override ov)
-            (Seq.fromList (networkLLVMOverrides bak fs mvar))
     funOvs <-
-      registerLLVMSexpOverrides la (builtinLLVMOverrides fs <> networkOvTemplates) ovs skipFuns bak llvmCtx fs prog errCb
+      registerLLVMSexpOverrides la (builtinLLVMOverrides fs <> networkOvTemplates bak fs mvar) ovs skipFuns bak llvmCtx fs prog errCb
 
     -- In addition to binding function handles for the user overrides,
     -- we must also redirect function handles resulting from parsing
@@ -148,12 +163,8 @@ moduleSetupHook la ovs skipFuns trans cfgs errCb =
     -- ...and then register overrides. We register overrides *after*
     -- registering defined functions so that overrides take precedence over
     -- defined functions.
-    let networkOvTemplates =
-          fmap
-            (\(CLI.SomeLLVMOverride ov) -> CLI.basic_llvm_override ov)
-            (Seq.fromList (networkLLVMOverrides bak fs mvar))
     funOvs <-
-      GLO.registerLLVMModuleOverrides la (builtinLLVMOverrides fs <> networkOvTemplates) ovs skipFuns bak llvmCtx fs llvmMod errCb
+      GLO.registerLLVMModuleOverrides la (builtinLLVMOverrides fs <> networkOvTemplates bak fs mvar) ovs skipFuns bak llvmCtx fs llvmMod errCb
     -- If a startup override exists and it contains forward declarations,
     -- then we redirect the function handles to actually call the respective
     -- overrides.
