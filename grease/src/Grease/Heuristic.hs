@@ -216,65 +216,66 @@ handleMemErr la sym argNames args err sel =
     -- Note [Initializing empty pointer shapes] in Grease.Setup, this scenario
     -- can actually happen when refining a function pointer argument to a
     -- function.)
-    (AnyMemErrorLLVM (Mem.MemoryError _op (Mem.BadFunctionPointer fle)))
-      | fle /= Mem.RawBitvector ->
+    (AnyMemErrorLLVM (Mem.MemoryError op reason))
+      | Mem.BadFunctionPointer fle <- reason
+      , fle /= Mem.RawBitvector ->
           pure Unknown
-    AnyMemErrorLLVM (Mem.MemoryError op _reason) -> do
-      let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
-      let accessSize = memOpAccessSize op
-      let ptrs = memOpPtrs op
-      case ptrs of
-        [ptr] | Just Refl <- testPtrWidth ptr -> do
-          -- Single pointer operation - try to extract a constant offset
-          let offset = CLMP.llvmPointerOffset ptr
-          case tryExtractConstantOffset sym offset of
-            Just constantOffset -> do
-              let signedBytes = BV.asSigned ?ptrWidth constantOffset
-              -- The Offset field controls where the pointer sits within its
-              -- backing allocation. For non-negative offsets the pointer is at
-              -- the start (Offset 0) and we grow forward. For negative offsets
-              -- the access is *before* the pointer, so we place it further in:
-              --
-              --   Non-negative (e.g. ptr[2], 4-byte load):
-              --
-              --     Offset = 0
-              --     |
-              --     v
-              --     +--+--+--+--+--+--+
-              --     |  |  |XX|XX|XX|XX|  totalSize = offset + accessSize
-              --     +--+--+--+--+--+--+
-              --           ^-----------^
-              --           access at ptr+2, 4 bytes
-              --
-              --   Negative (e.g. ptr[-3], 1-byte load):
-              --
-              --              Offset = 3
-              --              |
-              --              v
-              --     +--+--+--+
-              --     |XX|  |  |  totalSize = max(abs(offset), accessSize)
-              --     +--+--+--+
-              --     ^--^
-              --     access at ptr-3, 1 byte
-              --
-              let (mOffset, totalSize) =
-                    if signedBytes < 0
-                      then
-                        let absOff = abs signedBytes
-                         in (Just (Offset (CLB.toBytes absOff)), max absOff accessSize)
-                      else (Nothing, BV.asUnsigned constantOffset + accessSize)
-              doLog la $ Diag.DecomposingOffset argName signedBytes sel
-              doLog la $ Diag.DefaultHeuristicsGrowAndInitMem argName sel
-              let path = sel ^. argSelectorPath
-              let modifyTarget :: ShapePtr.PtrTarget w 'ShapePtr.Precond NoTag -> ShapePtr.PtrTarget w 'ShapePtr.Precond NoTag
-                  modifyTarget tgt =
-                    let currentSize = CLB.bytesToInteger (ShapePtr.ptrTargetSize ?ptrWidth tgt)
-                     in if currentSize >= totalSize
-                          then initializeOrGrowPtrTarget NoTag tgt
-                          else growPtrTargetUpTo (CLB.toBytes totalSize) tgt
-              refinePtrArg la args (modifyPtrTarget ?ptrWidth (Right . modifyTarget) path) mOffset sel
-            Nothing -> growIncrementally la argName args sel
-        _ -> growIncrementally la argName args sel
+      | otherwise -> do
+          let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
+          let accessSize = memOpAccessSize op
+          let ptrs = memOpPtrs op
+          case ptrs of
+            [ptr] | Just Refl <- testPtrWidth ptr -> do
+              -- Single pointer operation - try to extract a constant offset
+              let offset = CLMP.llvmPointerOffset ptr
+              case tryExtractConstantOffset sym offset of
+                Just constantOffset -> do
+                  let signedBytes = BV.asSigned ?ptrWidth constantOffset
+                  -- The Offset field controls where the pointer sits within its
+                  -- backing allocation. For non-negative offsets the pointer is at
+                  -- the start (Offset 0) and we grow forward. For negative offsets
+                  -- the access is *before* the pointer, so we place it further in:
+                  --
+                  --   Non-negative (e.g. ptr[2], 4-byte load):
+                  --
+                  --     Offset = 0
+                  --     |
+                  --     v
+                  --     +--+--+--+--+--+--+
+                  --     |  |  |XX|XX|XX|XX|  totalSize = offset + accessSize
+                  --     +--+--+--+--+--+--+
+                  --           ^-----------^
+                  --           access at ptr+2, 4 bytes
+                  --
+                  --   Negative (e.g. ptr[-3], 1-byte load):
+                  --
+                  --              Offset = 3
+                  --              |
+                  --              v
+                  --     +--+--+--+
+                  --     |XX|  |  |  totalSize = max(abs(offset), accessSize)
+                  --     +--+--+--+
+                  --     ^--^
+                  --     access at ptr-3, 1 byte
+                  --
+                  let (mOffset, totalSize) =
+                        if signedBytes < 0
+                          then
+                            let absOff = abs signedBytes
+                             in (Just (Offset (CLB.toBytes absOff)), max absOff accessSize)
+                          else (Nothing, BV.asUnsigned constantOffset + accessSize)
+                  doLog la $ Diag.DecomposingOffset argName signedBytes sel
+                  doLog la $ Diag.DefaultHeuristicsGrowAndInitMem argName sel
+                  let path = sel ^. argSelectorPath
+                  let modifyTarget :: ShapePtr.PtrTarget w 'ShapePtr.Precond NoTag -> ShapePtr.PtrTarget w 'ShapePtr.Precond NoTag
+                      modifyTarget tgt =
+                        let currentSize = CLB.bytesToInteger (ShapePtr.ptrTargetSize ?ptrWidth tgt)
+                         in if currentSize >= totalSize
+                              then initializeOrGrowPtrTarget NoTag tgt
+                              else growPtrTargetUpTo (CLB.toBytes totalSize) tgt
+                  refinePtrArg la args (modifyPtrTarget ?ptrWidth (Right . modifyTarget) path) mOffset sel
+                Nothing -> growIncrementally la argName args sel
+            _ -> growIncrementally la argName args sel
     _ -> do
       let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
       growIncrementally la argName args sel
