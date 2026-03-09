@@ -189,7 +189,6 @@ library
     , what4
 
   exposed-modules:
-    Grease.Main.Diagnostic
     Grease.AssertProperty
     Grease.BranchTracer
     Grease.BranchTracer.Diagnostic
@@ -203,8 +202,8 @@ library
     Grease.Cursor.Pointer
     Grease.Diagnostic
     Grease.Diagnostic.Severity
-    Grease.ErrorDescription
     Grease.Entrypoint
+    Grease.ErrorDescription
     Grease.ExecutionFeatures
     Grease.Heuristic
     Grease.Heuristic.Diagnostic
@@ -215,8 +214,8 @@ library
     Grease.LLVM.Overrides
     Grease.LLVM.Overrides.Builtin
     Grease.LLVM.Overrides.Declare
-    Grease.LLVM.Overrides.Networking
     Grease.LLVM.Overrides.Diagnostic
+    Grease.LLVM.Overrides.Networking
     Grease.LLVM.Overrides.SExp
     Grease.LLVM.Personality
     Grease.LLVM.SetupHook
@@ -240,22 +239,22 @@ library
     Grease.Macaw.Overrides.Networking
     Grease.Macaw.Overrides.SExp
     Grease.Macaw.PLT
+    Grease.Macaw.RegName
+    Grease.Macaw.ResolveCall
+    Grease.Macaw.ResolveCall.Diagnostic
     Grease.Macaw.SetupHook
     Grease.Macaw.SetupHook.Diagnostic
     Grease.Macaw.Shapes
     Grease.Macaw.SimulatorHooks
     Grease.Macaw.SimulatorHooks.Diagnostic
     Grease.Macaw.SimulatorState
-    Grease.Overrides.Networking
-    Grease.SimulatorState.Networking
-    Grease.Macaw.RegName
-    Grease.Macaw.ResolveCall
-    Grease.Macaw.ResolveCall.Diagnostic
     Grease.Macaw.SkippedCall
     Grease.Macaw.Syscall
+    Grease.Main.Diagnostic
     Grease.MustFail
     Grease.Options
     Grease.Output
+    Grease.Overrides.Networking
     Grease.Panic
     Grease.Pretty
     Grease.Refine
@@ -267,11 +266,12 @@ library
     Grease.Shape
     Grease.Shape.Concretize
     Grease.Shape.NoTag
+    Grease.Shape.Parse
     Grease.Shape.Pointer
+    Grease.Shape.Print
     Grease.Shape.Selector
     Grease.Shape.Simple
-    Grease.Shape.Parse
-    Grease.Shape.Print
+    Grease.SimulatorState.Networking
     Grease.Skip
     Grease.Skip.Diagnostic
     Grease.Solver
