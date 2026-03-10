@@ -14,7 +14,7 @@ import Control.Applicative ((<|>))
 import Control.Lens ((^.))
 import Control.Monad (forM)
 import Control.Monad.Reader (ReaderT (runReaderT))
-import Control.Monad.State (MonadIO (liftIO), StateT, runStateT)
+import Control.Monad.State (MonadIO (liftIO), MonadTrans (lift), StateT, runStateT)
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
 import Data.IORef (IORef)
 import Data.IORef qualified as IORef
@@ -201,7 +201,7 @@ sdsePrioritizationFunction tgtAddr tgtFunction archCtx cg cache distConfig sla g
         do
           (cfg, snode) <- MaybeT $ liftIO $ getExplorationEntry state frame
           let rcall (Dist.FunctionEntry fentry) (Dist.Callsite callsite) = CG.resolveCall cg cache sla gla mem halloc archCtx symMap pltStubs fentry callsite
-          Dist.CallStack cs <- MaybeT $ liftIO $ runWithCachesRef cachesRef (Just <$> callStackFromSimState state)
+          Dist.CallStack cs <- MaybeT $ lift $ Just <$> callStackFromSimState state
           let poppedCS = Maybe.fromMaybe [] $ tailMay cs
           let
             isT ::

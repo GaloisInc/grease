@@ -392,10 +392,11 @@ withSatisfiabilityCheck considerSat policy =
               CB.addAssumption bak (CB.BranchCondition loc (C.pausedLoc pf) p')
               let ctx = st ^. C.stateTree . C.actContext
               C.ExecutionFeatureNewState <$> runReaderT (C.resumeFrame pf ctx) st
-          CBO.UnsatisfiableContext ->
-            -- Neither branch feasible: let execution continue normally
-            -- (this will likely result in an abort)
-            pure C.ExecutionFeatureNoChange
+          CBO.UnsatisfiableContext -> do
+            mnext <- dequeue wq
+            case mnext of
+              Nothing -> pure C.ExecutionFeatureNoChange
+              Just next -> C.ExecutionFeatureNewState <$> restoreWorkItem next
           CBO.IndeterminateBranchResult ->
             -- Both branches may be feasible: delegate to the underlying policy
             policyOnBranch policy wq p trueFrame falseFrame bt st
