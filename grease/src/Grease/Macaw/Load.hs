@@ -13,6 +13,7 @@ module Grease.Macaw.Load (
   LoadedProgram (..),
   LoadError (..),
   load,
+  loadEcfs,
   dumpSections,
   memSegOffToJson,
 ) where
@@ -25,6 +26,7 @@ import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString qualified as BS
 import Data.ElfEdit qualified as Elf
 import Data.ElfEdit.CoreDump qualified as CoreDump
+import Data.ElfEdit.Ecfs qualified as Ecfs
 import Data.Function ((&))
 import Data.List qualified as List
 import Data.Macaw.BinaryLoader qualified as Loader
@@ -44,7 +46,9 @@ import Data.Vector qualified as Vec
 import Data.Word (Word64)
 import Grease.Diagnostic (Diagnostic (LoadDiagnostic), GreaseLogAction)
 import Grease.Entrypoint (Entrypoint, EntrypointLocation (EntrypointAddress, EntrypointCoreDump, EntrypointSymbolName), entrypointLocation)
+import Grease.Macaw.Ecfs qualified as GME
 import Grease.Macaw.Load.Diagnostic qualified as Diag
+import Grease.Macaw.PLT qualified as GMP
 import Grease.Utility (functionNameFromByteString, tshow)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
@@ -72,6 +76,12 @@ data LoadedProgram arch
   , progEntrypointAddrs :: Map Entrypoint (MC.ArchSegmentOff arch)
   -- ^ The entrypoint addresses after resolving the user-supplied
   -- 'Entrypoint'.
+  , progIsEcfs :: Bool
+  -- ^ True if the loaded binary is an ECFS coredump file.
+  , progEcfsPltStubs :: Maybe [GMP.PltStub]
+  -- ^ PLT stubs extracted from ECFS metadata, if available. This is
+  -- 'Just' for ECFS files that contain PLT/GOT information, and 'Nothing'
+  -- for raw ELF files or ECFS files without PLT metadata.
   }
 
 -- | Errors that can occur during binary loading
@@ -88,6 +98,8 @@ data LoadError
   | CoreDumpPcError CoreDump.CoreDumpAnalyzeError
   | CoreDumpAddressUnresolvable Word64
   | CoreDumpNoEntrypoint
+  | EcfsDecodeError Text.Text
+  | EcfsPltStubError Text.Text
 
 instance PP.Pretty LoadError where
   pretty =
@@ -118,6 +130,10 @@ instance PP.Pretty LoadError where
           PP.<+> ", but this could not be resolved to an address in the binary."
       CoreDumpNoEntrypoint ->
         "Could not find an entrypoint address in the binary."
+      EcfsDecodeError err ->
+        "Failed to decode ECFS file:" PP.<+> PP.pretty err
+      EcfsPltStubError msg ->
+        "ECFS PLT stub error:" PP.<+> PP.pretty msg
 
 -- | Compute the 'LC.LoadOptions' for the binary being analyzed. Note that we do
 -- different things depending on whether the binary is a position-independent
@@ -141,7 +157,8 @@ loadOptions pie =
     { LC.loadOffset = if pie then Just 0x10000000 else Nothing
     }
 
-load ::
+-- | Internal helper that loads either a raw ELF or ECFS binary.
+loadWithBinaryType ::
   forall arch.
   ( 16 C.<= MC.ArchAddrWidth arch
   , Symbolic.SymArchConstraints arch
@@ -151,9 +168,11 @@ load ::
   GreaseLogAction ->
   [Entrypoint] ->
   Permissions ->
-  Elf.ElfHeaderInfo (MC.RegAddrWidth (MC.ArchReg arch)) ->
-  IO (Either LoadError (LoadedProgram arch))
-load la userEntrypoints perms elf = runExceptT $ do
+  GME.BinaryType (MC.RegAddrWidth (MC.ArchReg arch)) ->
+  ExceptT LoadError IO (LoadedProgram arch)
+loadWithBinaryType la userEntrypoints perms binaryType = do
+  let elf = GME.binaryHeaderInfo binaryType
+  let isEcfs = GME.isEcfsBinary binaryType
   let loadOpts = loadOptions (Elf.elfIsPie perms elf)
   loaded <- liftIO $ Loader.loadBinary @arch loadOpts elf
   let mem = Loader.memoryImage loaded
@@ -219,6 +238,11 @@ load la userEntrypoints perms elf = runExceptT $ do
             Map.empty
             dynFunSegOffs
 
+  -- Extract PLT stubs from ECFS metadata if this is an ECFS binary
+  let ecfsPltStubs = case binaryType of
+        GME.EcfsBinary ecfs -> Just $ GME.findEcfsPltStubs loadOpts ecfs
+        GME.RawElfBinary _ -> Nothing
+
   return
     LoadedProgram
       { progLoadedBinary = loaded
@@ -226,7 +250,42 @@ load la userEntrypoints perms elf = runExceptT $ do
       , progSymMap = symMap
       , progDynFunMap = dynFunMap
       , progEntrypointAddrs = entryAddrMap
+      , progIsEcfs = isEcfs
+      , progEcfsPltStubs = ecfsPltStubs
       }
+
+load ::
+  forall arch.
+  ( 16 C.<= MC.ArchAddrWidth arch
+  , Symbolic.SymArchConstraints arch
+  , Loader.BinaryLoader arch (Elf.ElfHeaderInfo (MC.RegAddrWidth (MC.ArchReg arch)))
+  , ?memOpts :: CLM.MemOptions
+  ) =>
+  GreaseLogAction ->
+  [Entrypoint] ->
+  Permissions ->
+  Elf.ElfHeaderInfo (MC.RegAddrWidth (MC.ArchReg arch)) ->
+  IO (Either LoadError (LoadedProgram arch))
+load la userEntrypoints perms elf =
+  runExceptT $ loadWithBinaryType la userEntrypoints perms (GME.RawElfBinary elf)
+
+-- | Load an ECFS coredump file for analysis. This is similar to 'load', but
+-- extracts PLT stub information from ECFS metadata rather than relying on
+-- heuristics.
+loadEcfs ::
+  forall arch.
+  ( 16 C.<= MC.ArchAddrWidth arch
+  , Symbolic.SymArchConstraints arch
+  , Loader.BinaryLoader arch (Elf.ElfHeaderInfo (MC.RegAddrWidth (MC.ArchReg arch)))
+  , ?memOpts :: CLM.MemOptions
+  ) =>
+  GreaseLogAction ->
+  [Entrypoint] ->
+  Permissions ->
+  Ecfs.Ecfs (MC.RegAddrWidth (MC.ArchReg arch)) ->
+  IO (Either LoadError (LoadedProgram arch))
+loadEcfs la userEntrypoints perms ecfs =
+  runExceptT $ loadWithBinaryType la userEntrypoints perms (GME.EcfsBinary ecfs)
 
 -- Helper, not exported
 --

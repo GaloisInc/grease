@@ -1,14 +1,23 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- TODO(internal#141): Switch from `X.throw` to `Either`
-{- HLINT ignore "Use Either" -}
-
-module Screach.Ecfs (
+-- |
+-- Copyright        : (c) Galois, Inc. 2026
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+--
+-- Support for ECFS (Extended Core File Snapshot) coredump files
+module Grease.Macaw.Ecfs (
+  BinaryType (..),
+  readBinaryWithEcfs,
+  binaryHeaderInfo,
+  isEcfsBinary,
   findEcfsPltStubs,
+  EcfsError (..),
 ) where
 
 import Control.Exception qualified as X
+import Data.ByteString qualified as BS
 import Data.ElfEdit qualified as Elf
 import Data.ElfEdit.Ecfs qualified as Ecfs
 import Data.Macaw.Memory.LoadCommon qualified as MML
@@ -20,6 +29,44 @@ import Grease.Macaw.PLT qualified as GMP
 import Numeric (showHex)
 import Prettyprinter qualified as PP
 
+-- | A union type representing either a raw ELF binary or an ECFS coredump file.
+-- This allows us to distinguish between the two at the type level.
+data BinaryType w
+  = RawElfBinary (Elf.ElfHeaderInfo w)
+  | EcfsBinary (Ecfs.Ecfs w)
+
+-- | Extract the underlying ELF header information from either binary type.
+binaryHeaderInfo :: BinaryType w -> Elf.ElfHeaderInfo w
+binaryHeaderInfo (RawElfBinary ehi) = ehi
+binaryHeaderInfo (EcfsBinary ecfs) = Ecfs.ecfsElfHeaderInfo ecfs
+
+-- | Check if a binary is an ECFS file.
+isEcfsBinary :: BinaryType w -> Bool
+isEcfsBinary (RawElfBinary _) = False
+isEcfsBinary (EcfsBinary _) = True
+
+-- | Read a binary file and attempt to decode it as ECFS first, falling back to
+-- raw ELF if it's not an ECFS file. This implements the lazy detection pattern
+-- used in screach.
+readBinaryWithEcfs :: BS.ByteString -> Either Ecfs.EcfsDecodeError (Elf.SomeElf BinaryType)
+readBinaryWithEcfs bs =
+  case Ecfs.decodeEcfs bs of
+    Right (Elf.SomeElf ecfs) ->
+      -- Successfully decoded as ECFS
+      Right $ Elf.SomeElf (EcfsBinary ecfs)
+    Left (Ecfs.InvalidEcfsMagic _ _) ->
+      -- Not an ECFS file (missing magic bytes), fall back to raw ELF
+      case Elf.decodeElfHeaderInfo bs of
+        Right (Elf.SomeElf ehi) ->
+          Right $ Elf.SomeElf (RawElfBinary ehi)
+        Left (off, err) ->
+          -- If ELF parsing also fails, report the ELF error
+          Left $ Ecfs.DecodeElfHeaderInfoError off err
+    Left err ->
+      -- ECFS file with other decoding errors (corrupted ECFS file)
+      Left err
+
+-- | Error type for ECFS PLT stub discovery
 data EcfsError
   = UnknownPltStub
       Word64 -- The PLT stub's address

@@ -180,6 +180,7 @@ library
     , crucible-symio
     , crucible-syntax
     , elf-edit
+    , elf-edit-ecfs
     , llvm-pretty
     , llvm-pretty-bc-parser
     , macaw-aarch32
