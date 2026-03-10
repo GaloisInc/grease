@@ -384,21 +384,14 @@ withSatisfiabilityCheck considerSat policy =
         loc <- WI.getCurrentProgramLoc sym
         result <- considerSat (Just loc) p
         case result of
-          CBO.NoBranch True ->
-            -- Only the true branch is feasible: continue with it directly
+          CBO.NoBranch b ->
             C.withBackend (st ^. C.stateContext) $ \bak -> do
-              let pf1' = C.forgetPostdomFrame trueFrame
-              CB.addAssumption bak (CB.BranchCondition loc (C.pausedLoc pf1') p)
+              let frm = if b then trueFrame else falseFrame
+              let pf = C.forgetPostdomFrame frm
+              p' <- if b then pure p else WI.notPred sym p
+              CB.addAssumption bak (CB.BranchCondition loc (C.pausedLoc pf) p')
               let ctx = st ^. C.stateTree . C.actContext
-              C.ExecutionFeatureNewState <$> runReaderT (C.resumeFrame pf1' ctx) st
-          CBO.NoBranch False ->
-            -- Only the false branch is feasible: continue with it directly
-            C.withBackend (st ^. C.stateContext) $ \bak -> do
-              pnot <- WI.notPred sym p
-              let pf2' = C.forgetPostdomFrame falseFrame
-              CB.addAssumption bak (CB.BranchCondition loc (C.pausedLoc pf2') pnot)
-              let ctx = st ^. C.stateTree . C.actContext
-              C.ExecutionFeatureNewState <$> runReaderT (C.resumeFrame pf2' ctx) st
+              C.ExecutionFeatureNewState <$> runReaderT (C.resumeFrame pf ctx) st
           CBO.UnsatisfiableContext ->
             -- Neither branch feasible: let execution continue normally
             -- (this will likely result in an abort)
