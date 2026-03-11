@@ -211,6 +211,10 @@ registerLLVMOverrides la builtinOvs userOvs skipFuns bak llvmCtx fs defns decls 
   builtinFwdDeclOvs <-
     CLI.register_llvm_overrides_ llvmCtx builtinOvsList fwdDeclDecls
   -- For LLVM modules, we need to also try the "lowered" overrides.
+  --
+  -- The Crucible-LLVM "ABI" only has `LLVMPointer`s, not e.g., raw bitvectors.
+  -- Lowering turns non-pointer arguments and return values into pointers. See
+  -- Lang.Crucible.LLVM.Intrinsics.Cast for more details.
   let loweredOvs = Cast.lowerOverrideTemplate <$> builtinOvs
   let ovs = Foldable.toList (loweredOvs <> builtinOvs)
   builtinDeclOvs <-
