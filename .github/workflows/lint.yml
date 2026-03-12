@@ -43,14 +43,12 @@ jobs:
       - name: Check for broken links
         uses: langston-barrett/mdlynx/.github/actions/mdlynx@v0.3.0
 
-      - name: Check for trailing whitespace
-        run: >
-          python3 scripts/lint/whitespace.py
-          $(git ls-files '*.cabal')
-          $(git ls-files '*.hs')
-          $(git ls-files '*.md')
-          $(git ls-files '*.py')
-          $(git ls-files '*.scala')
+      # action was added more recently than most recent release, so just pin with SHA
+      - uses: langston-barrett/ttlint/.github/actions/install-ttlint@5392ad54ddcf04a8a7c8110a1354d7a0ecaeb078
+        with:
+          version: "0.1.0"
+
+      - run: git ls-files -z --exclude-standard '*.cabal' '*.hs' '*.md' '*.py' '*.scala' | xargs -0 ttlint
 
       - name: Install ruff
         uses: astral-sh/ruff-action@v3

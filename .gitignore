@@ -1,9 +1,8 @@
 cabal.project.local
 dist-newstyle/
 
-# see ./lint
-build.ninja
-.out
+# see lun.toml
+.lun/
 
 # hpc files
 *.tix
