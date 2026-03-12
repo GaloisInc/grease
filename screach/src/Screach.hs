@@ -80,6 +80,7 @@ import Grease.Macaw qualified as GM
 import Grease.Macaw.Arch (ArchContext, ArchReloc, archInfo, archRelocSupported, archVals)
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery qualified as GMD
+import Grease.Macaw.Ecfs qualified as GME
 import Grease.Macaw.Entrypoint qualified as GME
 import Grease.Macaw.Load qualified as GL
 import Grease.Macaw.Load.Relocation (RelocType (SymbolReloc), elfRelocationMap)
@@ -147,7 +148,6 @@ import Screach.Config qualified as Conf
 import Screach.Diagnostic (Diagnostic (RunDiagnostic), ScreachLogAction)
 import Screach.Diagnostic qualified as SD
 import Screach.Distance qualified as Dist
-import Screach.Ecfs qualified as SE
 import Screach.FunctionOverride qualified as SF
 import Screach.GoalEvaluator qualified as GE
 import Screach.Heuristic (isReachedBug, reachedHeuristic)
@@ -715,6 +715,8 @@ loadElfFromConfig conf sla gla archCtx = do
       Left e@GL.CoreDumpPcError{} -> badElf e
       Left e@GL.CoreDumpAddressUnresolvable{} -> badElf e
       Left e@GL.CoreDumpNoEntrypoint{} -> badElf e
+      Left e@GL.EcfsDecodeError{} -> badElf e
+      Left e@GL.EcfsPltStubError{} -> badElf e
       Right prog -> pure prog
   let GL.LoadedProgram
         { GL.progLoadedBinary = bin
@@ -722,6 +724,8 @@ loadElfFromConfig conf sla gla archCtx = do
         , GL.progSymMap = symMap
         , GL.progDynFunMap = dynFunMap
         , GL.progEntrypointAddrs = entrypointAddrs
+        , GL.progIsEcfs = _
+        , GL.progEcfsPltStubs = _
         } = loadedProg
   let loadOffset = fromMaybe 0 (LC.loadOffset loadOpts)
   let mem = MBL.memoryImage bin
@@ -754,7 +758,7 @@ loadElfFromConfig conf sla gla archCtx = do
             Left err@GMP.CouldNotResolvePltStub{} -> malformedElf sla (PP.pretty err)
             Right pltStubs -> pure pltStubs
       EcfsBinary ecfs -> do
-        let ecfsPltStubs = SE.findEcfsPltStubs loadOpts ecfs
+        let ecfsPltStubs = GME.findEcfsPltStubs loadOpts ecfs
         resolvedEcfsPltStubs <-
           traverse
             ( \(GMP.PltStub addr name) ->
