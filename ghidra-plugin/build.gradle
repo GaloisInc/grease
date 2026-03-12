@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,10 +15,10 @@
  */
 // Builds a Ghidra Extension for a given Ghidra installation.
 //
-// An absolute path to the Ghidra installation directory must be supplied either by setting the 
+// An absolute path to the Ghidra installation directory must be supplied either by setting the
 // GHIDRA_INSTALL_DIR environment variable or Gradle project property:
 //
-//     > export GHIDRA_INSTALL_DIR=<Absolute path to Ghidra> 
+//     > export GHIDRA_INSTALL_DIR=<Absolute path to Ghidra>
 //     > gradle
 //
 //         or
@@ -55,7 +55,7 @@ else {
 apply from: new File(ghidraInstallDir).getCanonicalPath() + "/GPL/nativePlatforms.gradle"
 
 repositories {
-	// Declare dependency repositories here.  This is not needed if dependencies are manually 
+	// Declare dependency repositories here.  This is not needed if dependencies are manually
 	// dropped into the lib/ directory.
 	// See https://docs.gradle.org/current/userguide/declaring_repositories.html for more info.
 	// Ex: mavenCentral()
@@ -116,14 +116,14 @@ task installExtension(type: Copy) {
 	def dirName = buildExtension.destinationDirectory.get()
 	def archiveName = buildExtension.archiveBaseName.get()
 	def archiveExt = buildExtension.archiveExtension.get()
-    
+
 	def zipFile = file("${dirName}/${archiveName}.${archiveExt}")
 
     // Define the output directory where the contents will be extracted
-    def outputDir = file("${ghidraInstallDir}/Ghidra/Extensions/") 
+    def outputDir = file("${ghidraInstallDir}/Ghidra/Extensions/")
 
     // Specify the source of the copy operation as the contents of the ZIP file
-    from zipTree(zipFile) 
+    from zipTree(zipFile)
 
     // Specify the destination directory for the extracted contents
     into outputDir
@@ -135,7 +135,7 @@ test {
 	useJUnit()
 	jvmArgs '--add-exports=java.desktop/sun.awt=ALL-UNNAMED',
 		'--add-opens=java.desktop/java.awt=ALL-UNNAMED',
-		'--add-opens=java.desktop/javax.swing=ALL-UNNAMED',      
+		'--add-opens=java.desktop/javax.swing=ALL-UNNAMED',
 		'--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED'
 	forkEvery 1
 

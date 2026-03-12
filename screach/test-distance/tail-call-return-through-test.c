@@ -8,7 +8,7 @@ int bar(int);
 int baz(int y) { return y + 1; }
 
 int bar(int y) {
-   __attribute__((musttail)) return baz(y); 
+   __attribute__((musttail)) return baz(y);
 }
 
 void long_path() { bar(1); }

@@ -1,4 +1,4 @@
-FROM ${BUILD_BASE_PARENT} AS builder 
+FROM ${BUILD_BASE_PARENT} AS builder
 
 RUN apt-get update
 RUN apt-get install -y build-essential curl libffi-dev libffi8ubuntu1 libgmp-dev libgmp10 libncurses-dev zlib1g-dev
@@ -7,7 +7,7 @@ RUN apt-get install -y build-essential curl libffi-dev libffi8ubuntu1 libgmp-dev
 RUN curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_GHC_VERSION=9.10.2 BOOTSTRAP_HASKELL_CABAL_VERSION=latest BOOTSTRAP_HASKELL_INSTALL_STACK=0 BOOTSTRAP_HASKELL_INSTALL_HLS=0 BOOTSTRAP_HASKELL_ADJUST_BASHRC=P sh
 
 ADD ./ /bracelet
-WORKDIR /bracelet 
+WORKDIR /bracelet
 ENV PATH="/root/.cabal/bin:/root/.ghcup/bin:$PATH"
 RUN cabal build exe:screach
 RUN cp "$(cabal list-bin -v0 exe:screach)" /usr/local/bin/screach

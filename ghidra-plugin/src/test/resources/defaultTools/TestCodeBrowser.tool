@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- From https://github.com/NationalSecurityAgency/ghidra/blob/dbb9e7feeebe0ab68e05239b46a5ad3f12f02ab7/Ghidra/Features/Base/src/test/resources/defaultTools/TestCodeBrowser.tool#L1
-    
+
     IP: Ghidra
 
     The license for this file is provided by the accompanying LICENSE file within this directory.
