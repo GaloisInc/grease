@@ -1,0 +1,77 @@
+ignore = ["./deps/**/*", "*.bat", "*.bc", "*.elf", "*.exe"]
+
+# ---------------------------------------------------------
+# haskell
+
+[[formatter]]
+name = "fourmolu"
+configs = ["fourmolu.yaml"]
+files = ["*.hs"]
+args = "all"
+check = "fourmolu --mode check"
+cmd = "fourmolu"
+
+[[tool]]
+name = "hlint"
+configs = [".hlint.yaml"]
+files = ["grease*/**/*.hs"]
+
+# ---------------------------------------------------------
+# make
+
+# this checks Makefile syntax, -n is a POSIX flag that means "don't run"
+[[tool]]
+name = "make -n"
+
+# ---------------------------------------------------------
+# markdown
+
+[[tool]]
+name = "mdlynx"
+
+[[tool]]
+name = "typos"
+configs = []
+files = ["doc/**/*"]
+
+# ---------------------------------------------------------
+# python
+
+[[tool]]
+name = "ruff check"
+configs = []
+
+[[tool]]
+name = "ruff format"
+configs = []
+
+# ---------------------------------------------------------
+# scala
+
+[[linter]]
+name = "spotless"
+configs = []
+cd = "ghidra-plugin"
+cmd = "./gradlew spotlessCheck"
+files = ["*.scala"]
+
+# ---------------------------------------------------------
+# shell
+
+# this checks shell syntax, -n is a POSIX flag that means "don't run"
+[[tool]]
+name = "bash -n"
+
+# ---------------------------------------------------------
+# text
+
+[[linter]]
+name = "stale-todo.py"
+cmd = "python3 scripts/lint/stale-todo.py"
+args = "all"
+files = ["**/Makefile", "*.cabal", "*.md", "*.mk", "*.project", "*.py", "*.scala", "*.sh"]
+
+[[tool]]
+name = "ttlint"
+# some of these have significant trailing whitespace
+ignore = ["grease-exe/tests/**/*"]

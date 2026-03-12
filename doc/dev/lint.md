@@ -1,35 +1,31 @@
 # Linting
 
-## Makefile
+## Lūn
 
-GREASE employs a variety of linting tools, which are coordinated via Make. We
-do our best to keep the `Makefile` up-to-date, but the ground truth of which
-linters are run on what files and in what configuration is always supplied by
-the CI system.
+GREASE employs a variety of linting tools, which can optionally be coordinated
+via [Lūn]. We do our best to keep `lun.toml` up to date, but the ground truth of
+which linters are run on what files and in what configuration is always supplied
+by the CI system. To run them all:
 
-To list the targets:
-
-```sh
-make -f scripts/lint/Makefile help
-```
-
-To run them all:
+[Lūn]: https://github.com/langston-barrett/lun
 
 ```sh
-make -j4 -f scripts/lint/Makefile
+lun run
 ```
 
-When using [ghcid], the linting script can be run on every save with:
+Lūn can run just the formatters, or run the linters in "fix" mode where
+applicable. See the `--help` output for more information.
+
+We recommend using this as a [pre-commit hook]:
 ```sh
-ghcid \
-  --command "cabal repl lib:grease pkg:grease-cli pkg:grease-exe" \
-  --lint='make -j4 -f scripts/lint/Makefile hs'
+cat <<'EOF' > .git/hooks/pre-commit
+#!/usr/bin/env bash
+lun run --check --staged
+EOF
+chmod +x .git/hooks/pre-commit
 ```
 
-[ghcid]: https://github.com/ndmitchell/ghcid
-
-To create a pre-commit hook, simply add the `make` invocation to the Fourmolu
-pre-commit hook described below.
+[pre-commit hook]: https://git-scm.com/docs/githooks#_pre_commit
 
 ## Generic scripts
 
@@ -49,24 +45,6 @@ fourmolu --mode inplace $(git ls-files '*.hs')
 
 One can configure [auto-format on save](https://code.visualstudio.com/docs/editing/codebasics#_formatting) to avoid formatting issues.
 The repo is already formatted with fourmolu so new formatting changes should be localized to behavioral changes. Further discussion of the rationale for the enforcement of a fourmolu style and commit hygiene is available in this [formatting discussion](./formatting.md).
-
-To create a [pre-commit hook](https://git-scm.com/docs/githooks#_pre_commit):
-```
-cat <<'EOF' > .git/hooks/pre-commit
-#!/usr/bin/env bash
-
-# Run Fourmolu on changed files before committing
-
-set -eu
-
-files=$(git diff --diff-filter=d --name-only --cached -- '*.hs')
-if [[ -n "${files}" ]]; then
-    fourmolu --mode inplace ${files[@]}
-    git add ${files[@]}
-fi
-EOF
-chmod +x .git/hooks/pre-commit
-```
 
 ## hlint
 
@@ -101,6 +79,16 @@ git ls-files -z --exclude-standard '*.py' | xargs -0 ruff check
 ## spotless
 
 See the [Ghidra batch plugin docs](../ghidra-batch-plugin.md).
+
+## ttlint
+
+We lint text files with [ttlint].
+
+```sh
+git ls-files -z --exclude-standard '*.cabal' '*.hs' '*.md' '*.py' '*.scala' | xargs -0 ttlint
+```
+
+[ttlint]: https://github.com/langston-barrett/ttlint
 
 ## typos
 
