@@ -28,9 +28,9 @@ function not_until(needle, target)
     fail()
   else
     local start_of_not, end_of_not = string.find(text, target, start-1, true)
-    if start_of_not ~= nil and end_of_not < start then 
+    if start_of_not ~= nil and end_of_not < start then
       fail()
-    end 
+    end
     seek(start - 1)
     here(needle)
   end

@@ -7,7 +7,7 @@
 
 void target() {}
 
-// the idea with this function is that it is fastest to simply return 
+// the idea with this function is that it is fastest to simply return
 int longfunc(int n) {
   int z = 0;
   if (n == 1) {
@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
 
 
 // first we check that we do start computing longfunc
-// then we check that we return from longfunc, 
+// then we check that we return from longfunc,
 // after we return from longfunc it should not be the case
 // that we get another check of longfunc's distance
 

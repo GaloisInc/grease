@@ -15,7 +15,7 @@ RUN wget -O /sbin/dumb-init https://github.com/Yelp/dumb-init/releases/download/
 RUN chmod a+x /sbin/dumb-init
 RUN ./configure
 RUN make
-RUN make install 
+RUN make install
 RUN ct-ng x86_64-unknown-linux-gnu
 RUN  CT_EXPERIMENTAL=y CT_ALLOW_BUILD_AS_ROOT=y CT_ALLOW_BUILD_AS_ROOT_SURE=y ct-ng build
 
@@ -42,7 +42,7 @@ RUN unzip -x ghidra.zip
 COPY ./callgraph-script/ /callgraph-script
 
 
-WORKDIR /callgraph-script 
+WORKDIR /callgraph-script
 
 RUN uv sync --locked --no-dev
 
