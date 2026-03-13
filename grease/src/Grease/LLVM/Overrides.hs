@@ -215,6 +215,11 @@ registerLLVMOverrides la builtinOvs userOvs skipFuns bak llvmCtx fs defns decls 
   -- The Crucible-LLVM "ABI" only has `LLVMPointer`s, not e.g., raw bitvectors.
   -- Lowering turns non-pointer arguments and return values into pointers. See
   -- Lang.Crucible.LLVM.Intrinsics.Cast for more details.
+  --
+  -- We need to register *both* the unlowered and lowered overrides because
+  -- users can e.g., analyze an LLVM bitcode module with a user-provided
+  -- S-expression override that calls a built-in override via its unlowered
+  -- signature.
   let loweredOvs = Cast.lowerOverrideTemplate <$> builtinOvs
   let ovs = Foldable.toList (loweredOvs <> builtinOvs)
   builtinDeclOvs <-
