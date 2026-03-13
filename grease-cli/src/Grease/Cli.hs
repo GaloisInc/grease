@@ -229,6 +229,18 @@ simpleShapesParser = fmap Map.fromList $ Opt.many $ do
             <> Opt.metavar "ARG:N"
             <> Opt.help "initialize argument ARG to an unsigned 64-bit integer"
         )
+    , Opt.option
+        (withArgName Simple.parseArgStr)
+        ( Opt.long "arg-str"
+            <> Opt.metavar "ARG:STRING"
+            <> Opt.help "initialize argument ARG to a pointer to a concrete, null-terminated, UTF-8 string"
+        )
+    , Opt.option
+        (withArgName Simple.parseArgSymStr)
+        ( Opt.long "arg-sym-str"
+            <> Opt.metavar "ARG:N"
+            <> Opt.help "initialize argument ARG to a pointer to a symbolic null-terminated string buffer of N bytes"
+        )
     ]
 
 addrOverridesParser :: Opt.Parser [(Integer, FilePath)]

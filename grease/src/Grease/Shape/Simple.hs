@@ -16,6 +16,8 @@ module Grease.Shape.Simple (
   parseBufUninit,
   parseArgU32,
   parseArgU64,
+  parseArgStr,
+  parseArgSymStr,
   toShape,
   useSimpleShapes,
 ) where
@@ -24,6 +26,7 @@ import Control.Applicative (Alternative (empty), asum)
 import Control.Monad qualified as Monad
 import Data.BitVector.Sized (BV)
 import Data.BitVector.Sized qualified as BV
+import Data.ByteString qualified as BS
 import Data.Functor.Const qualified as Const
 import Data.Map.Strict (Map)
 import Data.Parameterized.Context qualified as Ctx
@@ -32,6 +35,7 @@ import Data.Parameterized.Some (Some (Some))
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
 import Data.Void (Void)
 import Data.Word (Word32, Word64)
 import Grease.Shape (Shape)
@@ -57,6 +61,10 @@ data SimpleShape
     ArgU32 !(BV 32)
   | -- | A 64-bit unsigned integer
     ArgU64 !(BV 64)
+  | -- | A pointer to a concrete null-terminated string
+    ArgStr !Text
+  | -- | A pointer to a symbolic null-terminated string buffer of @n@ bytes (including the null terminator)
+    ArgSymStr !Bytes
   deriving Show
 
 -- | Parse a symbol from 'TM.Tokens'.
@@ -106,6 +114,12 @@ parseArgU64 = ArgU64 <$> parseBV64
       fail ("Integer outside of 64-bit range: " ++ show i)
     pure (BV.mkBV (knownNat @64) i)
 
+parseArgStr :: TM.Parsec Void Text SimpleShape
+parseArgStr = ArgStr <$> TM.takeRest
+
+parseArgSymStr :: TM.Parsec Void Text SimpleShape
+parseArgSymStr = ArgSymStr <$> parseBytes
+
 toShape ::
   Shape.ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext wptr 'PtrShape.Precond NoTag =>
   SimpleShape ->
@@ -122,6 +136,18 @@ toShape =
       Some (Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag (knownNat @32) bv))
     ArgU64 bv ->
       Some (Shape.ShapeExt (PtrShape.ShapePtrBVLit NoTag (knownNat @64) bv))
+    ArgStr str ->
+      -- A concrete null-terminated string
+      let bytes = BS.unpack (Text.encodeUtf8 str)
+          taggedBytes = fmap (\b -> PtrShape.TaggedByte NoTag b) (bytes ++ [0]) -- add null terminator
+          tgt = PtrShape.ptrTarget Nothing (Seq.singleton (PtrShape.Exactly taggedBytes))
+       in Some (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.PrecondPtrData (PtrShape.Offset 0) tgt)))
+    ArgSymStr n ->
+      -- A symbolic null-terminated string: n-1 symbolic bytes followed by a concrete null terminator
+      let symBytes = PtrShape.Initialized NoTag (n - 1)
+          nullByte = PtrShape.Exactly [PtrShape.TaggedByte NoTag 0]
+          tgt = PtrShape.ptrTarget Nothing (Seq.fromList [symBytes, nullByte])
+       in Some (Shape.ShapeExt (PtrShape.ShapePtr NoTag (PtrShape.PrecondPtrData (PtrShape.Offset 0) tgt)))
 
 -- | Override 'Shape.ArgShapes' using 'SimpleShape's (generally from the CLI)
 useSimpleShapes ::
