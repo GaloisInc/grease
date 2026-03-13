@@ -126,10 +126,11 @@ import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
-import Grease.Solver (Solver, solverAdapter)
+import Grease.Solver (Solver (Cvc4, Cvc5, Yices, Z3))
 import Grease.SymIO qualified as GSIO
 import Grease.Utility (tshow)
 import Lang.Crucible.Backend qualified as CB
+import Lang.Crucible.Backend.Online qualified as CB
 import Lang.Crucible.Backend.Prove qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
@@ -141,15 +142,20 @@ import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.SimError qualified as C
+import Lang.Crucible.Utils.Seconds qualified as CTO
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
 import System.Exit qualified as Exit
 import What4.Expr qualified as WE
 import What4.Expr.App qualified as W4
+import What4.Config qualified as W4Cfg
 import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4
-import What4.Solver qualified as W4
+import What4.Solver.CVC4 qualified as W4.CVC4
+import What4.Solver.CVC5 qualified as W4.CVC5
+import What4.Solver.Yices qualified as W4.Yices
+import What4.Solver.Z3 qualified as W4.Z3
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (RefineDiagnostic diag)
@@ -444,16 +450,51 @@ proveAndRefine bak execResult la bbMap refineData goals = do
   let sym = CB.backendGetSym bak
   let solver = refineSolver refineData
   let tout = refineSolverTimeout refineData
-  let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
-  let strat = C.ProofStrategy prover combiner
   let cons = consumer bak execResult la bbMap refineData
+
+  configureSolverTimeout sym solver tout
   case goals of
     Nothing -> pure ProveSuccess
-    Just goals' ->
-      liftIO (runExceptT (C.proveGoals strat goals' cons))
-        Monad.>>= \case
-          Left C.TimedOut -> pure (ProveCantRefine SolverTimeout)
-          Right r -> pure r
+    Just goals' -> do
+      let onlineDisabled = pure (ProveCantRefine SolverTimeout)
+      CB.withSolverProcess bak onlineDisabled $ \solverProc -> do
+        let prover = C.onlineProver sym solverProc
+        let strat = C.ProofStrategy prover combiner
+        liftIO (runExceptT (C.proveGoals strat goals' cons))
+          Monad.>>= \case
+            Left C.TimedOut -> pure (ProveCantRefine SolverTimeout)
+            Right r -> pure r
+
+configureSolverTimeout ::
+  WI.IsExprBuilder sym =>
+  sym ->
+  Solver ->
+  C.Timeout ->
+  IO ()
+configureSolverTimeout sym solver tout = do
+  let cfg = WI.getConfiguration sym
+  case tout of
+    C.Timeout secs -> do
+      let timeoutMs = fromIntegral (CTO.secondsToInt secs * 1000) :: Integer
+      case solver of
+        Yices -> do
+          -- Yices timeout is in seconds, not milliseconds
+          let timeoutSecs = fromIntegral (CTO.secondsToInt secs) :: Integer
+          timeoutOpt <- W4Cfg.getOptionSetting W4.Yices.yicesGoalTimeout cfg
+          _ <- W4Cfg.setOpt timeoutOpt timeoutSecs
+          pure ()
+        Z3 -> do
+          timeoutOpt <- W4Cfg.getOptionSetting W4.Z3.z3Timeout cfg
+          _ <- W4Cfg.setOpt timeoutOpt timeoutMs
+          pure ()
+        Cvc4 -> do
+          timeoutOpt <- W4Cfg.getOptionSetting W4.CVC4.cvc4Timeout cfg
+          _ <- W4Cfg.setOpt timeoutOpt timeoutMs
+          pure ()
+        Cvc5 -> do
+          timeoutOpt <- W4Cfg.getOptionSetting W4.CVC5.cvc5Timeout cfg
+          _ <- W4Cfg.setOpt timeoutOpt timeoutMs
+          pure ()
 
 processExecResult ::
   CS.ExecResult p sym ext r ->
