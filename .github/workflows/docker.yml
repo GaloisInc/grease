@@ -42,7 +42,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Docker metadata
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         id: meta
         with:
           images: ${{ env.DOCKER_IMAGE }}
@@ -115,7 +115,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Docker metadata
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         id: meta
         with:
           images: ${{ env.DOCKER_IMAGE }}
