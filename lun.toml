@@ -53,6 +53,7 @@ name = "spotless"
 configs = []
 cd = "ghidra-plugin"
 cmd = "./gradlew spotlessCheck"
+args = "none"
 files = ["*.scala"]
 
 # ---------------------------------------------------------
