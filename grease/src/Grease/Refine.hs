@@ -279,6 +279,29 @@ buildErrMaps mbBBMap = do
       , macawAssertionCallback = processMacawAssert
       }
 
+-- | Look up error information for a goal from its annotations. Not exported.
+lookupErrorInfo ::
+  forall sym t st fs.
+  ( CB.IsSymInterface sym
+  , sym ~ WE.ExprBuilder t st fs
+  ) =>
+  sym ->
+  GreaseLogAction ->
+  WI.Pred sym ->
+  C.SimError ->
+  Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
+  IO (Maybe (ErrorDescription sym))
+lookupErrorInfo sym la goalPred simErr bbMap =
+  case findPredAnnotations sym goalPred of
+    [] -> do
+      doLog la Diag.NoAnnotationOnPredicate
+      pure Nothing
+    (ann : _) -> case Map.lookup ann bbMap of
+      Nothing -> do
+        doLog la Diag.PredNotFound
+        pure Nothing
+      info -> pure info
+
 -- | How to consume the results of trying to prove a goal. Not exported.
 consumer ::
   forall p ext r solver sym bak t st argTys w fm.
@@ -308,25 +331,7 @@ consumer bak execResult la bbMap refineData = do
     let sym = CB.backendGetSym bak
     let lp = CB.proofGoal goal
     let simErr = lp ^. W4.labeledPredMsg
-    minfo <-
-      case findPredAnnotations sym (lp ^. W4.labeledPred) of
-        [] -> do
-          -- See gitlab#139, this warning is not fixable by users and already
-          -- has an associated issue, so we filter it out. See also
-          -- https://github.com/GaloisInc/macaw/issues/429 for a proposal to
-          -- improve macaw-symbolic's assertion tracking so that we can
-          -- intercept this properly.
-          Monad.unless
-            ( "PointerRead outside of static memory range"
-                `List.isPrefixOf` C.simErrorReasonMsg (C.simErrorReason simErr)
-            )
-            $ doLog la Diag.NoAnnotationOnPredicate
-          pure Nothing
-        (ann : _) -> case Map.lookup ann bbMap of
-          Nothing -> do
-            doLog la Diag.PredNotFound
-            pure Nothing
-          info -> pure info
+    minfo <- lookupErrorInfo sym la (lp ^. W4.labeledPred) simErr bbMap
     case result of
       C.Proved{} -> do
         doLog la (Diag.SolverGoalPassed (C.simErrorLoc simErr))
