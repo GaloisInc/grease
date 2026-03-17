@@ -155,7 +155,8 @@ case class GreaseConfiguration(
       overridesFile.map(x => Seq("--overrides", x.getPath())).getOrElse(Seq())
 
     val useDebugLine =
-      if useDebugInfo then Seq("--debug-info-types", "precise-debug-info-shapes")
+      if useDebugInfo then
+        Seq("--debug-info-types", "precise-debug-info-shapes")
       else Seq()
 
     baseLine ++ rawLine ++ timeoutLine ++ baseAddr
