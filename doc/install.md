@@ -38,10 +38,10 @@ docker build . --tag grease:latest
 See the [developer's guide](dev/dev.md) for how to build `grease` from source.
 
 When run as a standalone binary, GREASE requires a recent version of one of the
-following SMT solvers: `cvc4`, `cvc5`, `yices`, or `z3`. GREASE is currently
-tested against `yices` version 2.6.5 in CI. Appropriate versions of these SMT
-solvers are already installed in the GREASE Docker image. `grease` will default
-to using `yices` unless you manually specify a solver using the `--solver`
-option.
+following SMT solvers: `bitwuzla`, `cvc4`, `cvc5`, `yices`, or `z3`. GREASE is
+currently tested against `yices` version 2.6.5 in CI. Appropriate versions of
+these SMT solvers are already installed in the GREASE Docker image. `grease`
+will default to using `yices` unless you manually specify a solver using the
+`--solver` option.
 
 <!-- Copyright (c) Galois, Inc. 2024. -->

@@ -95,6 +95,7 @@ ENV LC_ALL=en_US.UTF-8
 COPY --from=build \
   /usr/local/bin/grease \
   /usr/local/bin/grease-tests \
+  /usr/local/bin/bitwuzla \
   /usr/local/bin/cvc4 \
   /usr/local/bin/cvc5 \
   /usr/local/bin/yices \

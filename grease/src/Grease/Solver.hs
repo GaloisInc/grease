@@ -22,7 +22,8 @@ import What4.Solver qualified as W4
 
 -- | The SMT solver to use for solving proof goals.
 data Solver
-  = Cvc4
+  = Bitwuzla
+  | Cvc4
   | Cvc5
   | Yices
   | Z3
@@ -32,6 +33,7 @@ data Solver
 solverAdapter :: Solver -> W4.SolverAdapter t
 solverAdapter solver =
   case solver of
+    Bitwuzla -> W4.bitwuzlaAdapter
     Cvc4 -> W4.cvc4Adapter
     Cvc5 -> W4.cvc5Adapter
     Yices -> W4.yicesAdapter
@@ -56,6 +58,9 @@ withSolverOnlineBackend ::
   m a
 withSolverOnlineBackend solver fm ng bakAction =
   case solver of
+    Bitwuzla ->
+      withSym $ \sym ->
+        C.withBitwuzlaOnlineBackend sym unsatFeatures problemFeatures bakAction
     Cvc4 ->
       withSym $ \sym ->
         C.withCVC4OnlineBackend sym unsatFeatures problemFeatures bakAction
