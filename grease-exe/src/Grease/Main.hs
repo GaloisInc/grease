@@ -126,7 +126,7 @@ import Grease.Macaw.Overrides.Address qualified as AddrOv
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.Overrides.SExp qualified as GMOS
 import Grease.Macaw.PLT qualified as GMPLT
-import Grease.Macaw.RegName (getRegName, mkRegName, regNameToString, regNames)
+import Grease.Macaw.RegName (getRegName, mkRegName)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
 import Grease.Macaw.Shapes qualified as GMS
 import Grease.Macaw.SimulatorHooks (ExecutingAddressAction (ExecutingAddressAction))
@@ -573,8 +573,8 @@ overrideRegs ::
   Ctx.Assignment (CS.RegValue' sym) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
   IO (Ctx.Assignment (CS.RegValue' sym) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)))
 overrideRegs archCtx sym =
-  let rNames = regNames (archCtx ^. GMA.archVals)
-      regTypes = Symbolic.crucArchRegTypes (archCtx ^. GMA.archVals . to Symbolic.archFunctions)
+  let rNames = GMA.archRegNames archCtx
+      regTypes = GMA.archRegTypes archCtx
    in Ctx.traverseWithIndex
         ( \idx reg -> do
             let regName = getRegName rNames idx
@@ -865,13 +865,9 @@ macawRefineOnce ::
   EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
   IO (GRef.ProveRefineResult sym ext argTys)
 macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
-  let regTypes = Symbolic.crucArchRegTypes (archCtx ^. GMA.archVals . to Symbolic.archFunctions)
-  let rNames = regNames (archCtx ^. GMA.archVals)
-  let rNameAssign =
-        Ctx.generate
-          (Ctx.size regTypes)
-          (\idx -> GSetup.ValueName (regNameToString (getRegName rNames idx)))
-  let argNames = fmapFC (Const . GSetup.getValueName) rNameAssign
+  let rNameAssign = GMA.archValueNames archCtx
+      regTypes = GMA.archRegTypes archCtx
+      argNames = GMA.archArgNames archCtx
   GRef.refineOnce
     la
     simOpts
@@ -961,12 +957,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
 
   memVar <- CLM.mkMemVar "grease:memmodel" halloc
   (execFeats, profLogTask) <- macawExecFeats la bak memVar archCtx macawCfgConfig simOpts
-  let regTypes = Symbolic.crucArchRegTypes (archCtx ^. GMA.archVals . to Symbolic.archFunctions)
-  let rNames = regNames (archCtx ^. GMA.archVals)
-  let argNames =
-        Ctx.generate
-          (Ctx.size regTypes)
-          (\idx -> Const (regNameToString (getRegName rNames idx)))
+  let argNames = GMA.archArgNames archCtx
+  let rNames = GMA.archRegNames archCtx
 
   initArgShapes <-
     let opts = GO.simInitPrecondOpts simOpts
@@ -1078,12 +1070,9 @@ simulateRewrittenCfg ::
   EP.EntrypointCfgs (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   IO GOut.BatchStatus
 simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs memPtrTable initMem initArgShapes result execFeats mbCfgAddr entrypointCfgs entrypointCfgsSsa = do
-  let regTypes = Symbolic.crucArchRegTypes (archCtx ^. GMA.archVals . to Symbolic.archFunctions)
-  let rNames = regNames (archCtx ^. GMA.archVals)
-  let argNames =
-        Ctx.generate
-          (Ctx.size regTypes)
-          (\idx -> Const (regNameToString (getRegName rNames idx)))
+  let regTypes = GMA.archRegTypes archCtx
+      argNames = GMA.archArgNames archCtx
+  let rNames = GMA.archRegNames archCtx
 
   res <- case result of
     GRef.RefinementBug b cData ->

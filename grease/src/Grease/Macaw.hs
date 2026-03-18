@@ -50,7 +50,7 @@ import Data.Word (Word64, Word8)
 import GHC.Stack (HasCallStack, callStack)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext, ArchRegs, ArchReloc, archInfo, archInitGlobals, archRelocSupported, archStackPtrShape, archVals)
+import Grease.Macaw.Arch (ArchContext, ArchRegs, ArchReloc, archInfo, archInitGlobals, archRegTypes, archRelocSupported, archStackPtrShape, archVals)
 import Grease.Macaw.Load.Relocation (RelocType (RelativeReloc, SymbolReloc))
 import Grease.Macaw.Overrides.Address (AddressOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
@@ -343,7 +343,7 @@ minimalArgShapes _bak arch mbEntryAddr = do
           pure shape
 
 regStructRepr :: ArchContext arch -> C.TypeRepr (Symbolic.ArchRegStruct arch)
-regStructRepr arch = C.StructRepr . Symbolic.crucArchRegTypes $ arch ^. archVals . to Symbolic.archFunctions
+regStructRepr arch = C.StructRepr $ archRegTypes arch
 
 -- | Produce an initial 'Symbolic.MemModelConfig' value that can do everything
 -- @grease@'s Macaw backend needs, with the exception of looking up function or

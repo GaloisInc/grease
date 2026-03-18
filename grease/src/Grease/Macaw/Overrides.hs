@@ -35,7 +35,7 @@ import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Sequence qualified as Seq
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext, archIntegerArguments, archIntegerReturnRegisters, archVals)
+import Grease.Macaw.Arch (ArchContext, archIntegerArguments, archIntegerReturnRegisters, archRegTypes, archVals)
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride), MacawSExpOverrideError, loadOverrides)
 import Grease.Macaw.Overrides.SExp qualified as GMOS
@@ -86,10 +86,7 @@ macawOverride bak mvar archCtx fnOv =
   genArchVals = archCtx ^. archVals
 
   regsRepr :: C.TypeRepr (Symbolic.ArchRegStruct arch)
-  regsRepr =
-    C.StructRepr $
-      Symbolic.crucArchRegTypes $
-        Symbolic.archFunctions genArchVals
+  regsRepr = C.StructRepr $ archRegTypes archCtx
 
   ov ::
     forall r.
@@ -200,11 +197,7 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
             allOvs
  where
   regsRepr :: C.TypeRepr (Symbolic.ArchRegStruct arch)
-  regsRepr =
-    C.StructRepr $
-      Symbolic.crucArchRegTypes $
-        Symbolic.archFunctions $
-          archCtx ^. archVals
+  regsRepr = C.StructRepr $ archRegTypes archCtx
 
 -- | Like 'mkMacawOverrideMap', with 'builtinStubsOverrides'.
 mkMacawOverrideMapWithBuiltins ::
