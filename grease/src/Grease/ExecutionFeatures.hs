@@ -1,8 +1,10 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Grease.ExecutionFeatures (
   boundedExecFeats,
   pathSatFeat,
+  schedulerFeats,
   greaseExecFeats,
 ) where
 
@@ -12,6 +14,7 @@ import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Options qualified as GO
 import Grease.Panic (panic)
+import Grease.Scheduler qualified as Sched
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
@@ -63,7 +66,26 @@ pathSatFeat bak = do
     _ -> panic "configurePathSatFeature" (List.map show warns)
   pure pathSat
 
--- | Debugger, path satisfiability, and branch tracing features
+-- | Create scheduler execution features based on path strategy.
+--
+-- For 'GO.Dfs' and 'GO.Bfs', returns branch and result features with the
+-- corresponding scheduling policy. For 'GO.Sse', returns no features (SSE
+-- doesn't use the scheduler).
+schedulerFeats ::
+  CB.IsSymBackend sym bak =>
+  bak ->
+  GO.PathStrategy ->
+  IO [CS.ExecutionFeature p sym ext rtp]
+schedulerFeats bak = \case
+  GO.Dfs -> do
+    (bf, rf, _) <- Sched.schedulerFeatures bak Sched.dfsPolicy (\_ -> pure Sched.ContinueExploring)
+    pure [bf, rf]
+  GO.Bfs -> do
+    (bf, rf, _) <- Sched.schedulerFeatures bak Sched.bfsPolicy (\_ -> pure Sched.ContinueExploring)
+    pure [bf, rf]
+  GO.Sse -> pure []
+
+-- | Debugger, path satisfiability, scheduler, and branch tracing features
 greaseExecFeats ::
   ( CB.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
@@ -80,15 +102,18 @@ greaseExecFeats ::
   bak ->
   -- | Debugger configuration, if desired
   Maybe (Dbg.ExtImpl cExt p sym ext ret) ->
+  -- | Path strategy for scheduler features
+  GO.PathStrategy ->
   IO [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)]
-greaseExecFeats la bak dbgOpts = do
-  let execFeats_ =
+greaseExecFeats la bak dbgOpts pathStrat = do
+  let dbgFeats =
         case dbgOpts of
           Just extImpl -> [Dbg.debugger extImpl]
           Nothing -> []
+  schedFeats <- schedulerFeats bak pathStrat
   pathSat <- pathSatFeat bak
   let execFeats =
         CS.genericToExecutionFeature pathSat
           : greaseBranchTracerFeature la
-          : execFeats_
+          : schedFeats List.++ dbgFeats
   pure execFeats

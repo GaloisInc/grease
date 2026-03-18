@@ -5,6 +5,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
@@ -76,7 +77,8 @@ import Data.Maybe qualified as Maybe
 import Data.Parameterized.Classes (IxedF' (ixF'))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
-import Data.Parameterized.Nonce (globalNonceGenerator)
+import Data.IORef (IORef, newIORef)
+import Data.Parameterized.Nonce (Nonce, globalNonceGenerator)
 import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Parameterized.TraversableFC.WithIndex (imapFC)
 import Data.Proxy (Proxy (Proxy))
@@ -97,10 +99,12 @@ import Grease.Cli (optsFromArgs)
 import Grease.Concretize qualified as Conc
 import Grease.Concretize.JSON (concArgsToJson)
 import Grease.Concretize.ToConcretize qualified as ToConc
+import Grease.Cursor qualified as Cursor
+import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic qualified as GDiag
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint qualified as EP
-import Grease.ExecutionFeatures (greaseExecFeats)
+import Grease.ExecutionFeatures (boundedExecFeats, greaseExecFeats)
 import Grease.Heuristic qualified as H
 import Grease.LLVM qualified as LLVM
 import Grease.LLVM.Overrides qualified as GLO
@@ -142,6 +146,8 @@ import Grease.Profiler.Feature (greaseProfilerFeature)
 import Grease.Refine qualified as GRef
 import Grease.Requirement qualified as GReq
 import Grease.Setup qualified as GSetup
+import Grease.Setup.Annotations qualified as Anns
+import Grease.ValueName (ValueName (ValueName), getValueName)
 import Grease.Shape (ArgShapes, ExtShape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag)
@@ -154,7 +160,6 @@ import Grease.Syntax qualified as GSyn
 import Grease.Syscall (builtinGenericSyscalls)
 import Grease.Time (time)
 import Grease.Utility qualified as GUtil
-import Grease.ValueName (ValueName (ValueName), getValueName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
@@ -169,6 +174,7 @@ import Lang.Crucible.LLVM.DataLayout qualified as DataLayout
 import Lang.Crucible.LLVM.Debug qualified as LDebug
 import Lang.Crucible.LLVM.Extension qualified as CLLVM
 import Lang.Crucible.LLVM.Globals qualified as CLLVM
+import Lang.Crucible.LLVM.Intrinsics ()
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as CLSIO
 import Lang.Crucible.LLVM.Syntax (emptyParserHooks, llvmParserHooks)
@@ -430,6 +436,101 @@ checkMustFail bak errs = do
     then pure (Just (GOut.MkBatchBug{GOut.bugDesc = bug, GOut.bugArgs = [], GOut.bugShapes = ""}))
     else pure Nothing
 
+-- | Catch architecture-specific missing-semantics exceptions and convert them
+-- to 'GRef.RefinementCantRefine'.
+catchMissingSemantics :: IO (GRef.RefinementSummary sym ext tys) -> IO (GRef.RefinementSummary sym ext tys)
+catchMissingSemantics act =
+  X.catches
+    act
+    [ X.Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
+        pure $ GRef.RefinementCantRefine $ H.MissingSemantics $ GUtil.pshow ex
+    , X.Handler $ \(ex :: AArch32Symbolic.AArch32Exception) ->
+        pure $ GRef.RefinementCantRefine $ H.MissingSemantics $ GUtil.tshow ex
+    , X.Handler $ \(ex :: PPCSymbolic.SemanticsError) ->
+        pure $ GRef.RefinementCantRefine $ H.MissingSemantics $ GUtil.tshow ex
+    ]
+
+-- | Common helper for building refinement iteration data.
+--
+-- Factors out the common pattern of:
+-- 1. Building error callbacks
+-- 2. Running GSetup.setup
+-- 3. Initializing filesystem and ToConcretize
+-- 4. Creating initial state (via callback)
+-- 5. Building Conc.InitialState and GRef.RefinementData
+mkIterationData ::
+  forall p sym bak ext argTys wptr solver scope st fm rtp.
+  ( CB.IsSymBackend sym bak
+  , sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)
+  , bak ~ CB.OnlineBackend solver scope st (WEB.Flags fm)
+  , WPO.OnlineSolver solver
+  , C.IsSyntaxExtension ext
+  , ToConc.HasToConcretize p
+  , 16 WI.<= wptr
+  , CLM.HasPtrWidth wptr
+  , MC.MemWidth wptr
+  , ExtShape ext ~ PtrShape ext wptr
+  , Cursor.CursorExt ext ~ PtrCursor.Dereference ext wptr
+  , ?memOpts :: CLM.MemOptions
+  ) =>
+  GDiag.GreaseLogAction ->
+  bak ->
+  C.HandleAllocator ->
+  DataLayout ->
+  GO.SimOpts ->
+  Ctx.Assignment ValueName argTys ->
+  Ctx.Assignment C.TypeRepr argTys ->
+  [H.RefineHeuristic sym bak ext argTys] ->
+  H.InitialMem sym ->
+  ArgShapes ext NoTag argTys ->
+  IORef (Map (Nonce scope WI.BaseBoolType) (H.ErrorDescription sym)) ->
+  -- | Callback to create initial state given setup results.
+  -- The implicit parameter constraints ('CLM.HasLLVMAnn', 'MSM.MacawProcessAssertion')
+  -- are provided by 'mkIterationData' via 'GRef.buildErrMaps'.
+  ( (CLM.HasLLVMAnn sym, MSM.MacawProcessAssertion sym) =>
+    GSetup.Args sym ext argTys wptr ->
+    GSetup.SetupMem sym ->
+    Anns.Annotations sym ext argTys ->
+    CS.GlobalVar ToConc.ToConcretizeType ->
+    GSIO.InitializedFs sym wptr ->
+    IO (CS.ExecState p sym ext rtp)
+  ) ->
+  IO (CS.ExecState p sym ext rtp, GRef.RefinementData sym bak ext argTys wptr)
+mkIterationData la bak halloc dl simOpts valueNames regTypes heuristics initMem argShapes errMapRef mkState = do
+  GRef.ErrorCallbacks
+    { GRef.llvmErrCallback = recordLLVMAnnotation
+    , GRef.macawAssertionCallback = processMacawAssert
+    } <-
+    GRef.buildErrMaps (Just errMapRef)
+  let ?recordLLVMAnnotation = recordLLVMAnnotation
+  let ?processMacawAssert = processMacawAssert
+  let sym = CB.backendGetSym bak
+  (args, setupMem@(GSetup.SetupMem setupMemImpl), setupAnns) <-
+    GSetup.setup la bak dl valueNames regTypes argShapes initMem
+  initFs_ <- GSIO.initialLlvmFileSystem halloc sym (GO.simFsOpts simOpts)
+  (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
+  let initFs = initFs_{GSIO.initFsGlobals = globals1}
+  st <- mkState args setupMem setupAnns toConc initFs
+  let concInitState =
+        Conc.InitialState
+          { Conc.initStateArgs = args
+          , Conc.initStateFs = GSIO.initFsContents initFs
+          , Conc.initStateMem = initMem
+          }
+  let bounds = GO.simBoundsOpts simOpts
+  let refineData =
+        GRef.RefinementData
+          { GRef.refineAnns = setupAnns
+          , GRef.refineArgNames = valueNames
+          , GRef.refineArgShapes = argShapes
+          , GRef.refineHeuristics = heuristics
+          , GRef.refineInitState = concInitState
+          , GRef.refineSolver = GO.simSolver simOpts
+          , GRef.refineSolverTimeout = GO.simSolverTimeout bounds
+          }
+  pure (st, refineData)
+
+
 -- | Machine code-specific arguments that are used throughout 'simulateMacawCfg'
 -- and friends. This exists primarily to reduce the number of distinct arguments
 -- we need to pass to these functions. Generally speaking, 'simulateMacawSyntax'
@@ -517,9 +618,9 @@ interestingConcretizedShapes names initArgs cArgs =
       cShapes = fmapFC Shape.tagWithType (Conc.concArgsShapes cArgs)
       isLlvmArg name = "%" `List.isPrefixOf` name
    in Ctx.zipWith
-        ( \vn (Const isDefault) ->
-            let name = getValueName vn
-             in Const ((name `List.elem` interestingRegs || isLlvmArg name) && not isDefault)
+        ( \name (Const isDefault) ->
+            let nameStr = getValueName name
+             in Const ((nameStr `List.elem` interestingRegs || isLlvmArg nameStr) && not isDefault)
         )
         names
         -- Check if the shape has changed during concretization. When we concretize, we transform the shape
@@ -619,7 +720,7 @@ macawExecFeats la bak memVar archCtx macawCfgConfig simOpts = do
                 extImpl = MDebug.macawExtImpl prettyPtrFnMap memVar (archCtx ^. Arch.archVals) mbElf
              in Just extImpl
           else Nothing
-  feats <- greaseExecFeats la bak dbgOpts
+  feats <- greaseExecFeats la bak dbgOpts (GO.simPathStrategy simOpts)
   pure (feats, snd <$> profFeatLog)
 
 llvmExecFeats ::
@@ -640,7 +741,7 @@ llvmExecFeats la bak simOpts memVar = do
         if GO.debug (GO.simDebugOpts simOpts)
           then Just (LDebug.llvmExtImpl memVar)
           else Nothing
-  feats <- greaseExecFeats la bak dbgOpts
+  feats <- greaseExecFeats la bak dbgOpts (GO.simPathStrategy simOpts)
   pure (feats, snd <$> profFeatLog)
 
 initDebugger ::
@@ -827,74 +928,6 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
   let initFsOv = GSIO.initFsOverride initFs
   GM.initState bak la macawExtImpl execCallback halloc memVar setupMem globals initFsOv archCtx setupHook addrOvs personality regs fnOvsMap mbStartupOvSsaCfg ssa
 
-macawRefineOnce ::
-  ( CB.IsSymBackend sym bak
-  , Symbolic.SymArchConstraints arch
-  , CLM.HasPtrWidth wptr
-  , MM.MemWidth wptr
-  , Symbolic.SymArchConstraints arch
-  , GUtil.OnlineSolverAndBackend solver sym bak scope st (WEB.Flags fm)
-  , Show (Arch.ArchReloc arch)
-  , argTys ~ Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)
-  , wptr ~ MC.ArchAddrWidth arch
-  , ext ~ Symbolic.MacawExt arch
-  , ret ~ Symbolic.ArchRegStruct arch
-  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch ret
-  , CLM.HasLLVMAnn sym
-  , ?memOpts :: CLM.MemOptions
-  , ?lc :: CLTC.TypeContext
-  ) =>
-  GDiag.GreaseLogAction ->
-  Arch.ArchContext arch ->
-  GO.SimOpts ->
-  C.HandleAllocator ->
-  MacawCfgConfig arch ->
-  Symbolic.MemPtrTable sym wptr ->
-  ExecutingAddressAction arch ->
-  Macaw.SetupHook sym arch ->
-  AddressOverrides arch ->
-  bak ->
-  WE.FloatModeRepr fm ->
-  ArgShapes ext NoTag argTys ->
-  H.InitialMem sym ->
-  C.GlobalVar CLM.Mem ->
-  [H.RefineHeuristic sym bak ext argTys] ->
-  [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
-  -- | If simulating a binary, this is 'Just' the address of the user-requested
-  -- entrypoint function. Otherwise, this is 'Nothing'.
-  Maybe (MC.ArchSegmentOff arch) ->
-  EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
-  IO (GRef.ProveRefineResult sym ext argTys)
-macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
-  let argNames = archCtx ^. Arch.archValueNames
-      regTypes = archCtx ^. Arch.archRegTypes
-  GRef.refineOnce
-    la
-    simOpts
-    halloc
-    bak
-    fm
-    (mcDataLayout macawCfgConfig)
-    argNames
-    argNames
-    regTypes
-    argShapes
-    initMem
-    memVar
-    heuristics
-    execFeats
-    (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
-    `X.catches` [ X.Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
-                    pure $ GRef.ProveCantRefine $ H.MissingSemantics $ GUtil.pshow ex
-                , X.Handler
-                    ( \(ex :: AArch32Symbolic.AArch32Exception) ->
-                        pure (GRef.ProveCantRefine (H.MissingSemantics (GUtil.tshow ex)))
-                    )
-                , X.Handler
-                    ( \(ex :: PPCSymbolic.SemanticsError) ->
-                        pure (GRef.ProveCantRefine (H.MissingSemantics (GUtil.tshow ex)))
-                    )
-                ]
 
 addressCallBack ::
   MM.MemWidth (MC.RegAddrWidth (MC.ArchReg arch)) =>
@@ -978,26 +1011,39 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
         if GO.simNoHeuristics simOpts
           then [H.mustFailHeuristic]
           else H.macawHeuristics la rNames List.++ [H.mustFailHeuristic]
-  result <- GRef.refinementLoop la bounds argNames initArgShapes $ \argShapes ->
-    macawRefineOnce
-      la
-      archCtx
-      simOpts
-      halloc
-      macawCfgConfig
-      memPtrTable
-      execCallback
-      setupHook
-      addrOvs
+      mkIterData argShapes' errMapRef = do
+        let valueNames = archCtx ^. Arch.archValueNames
+            regTypes' = archCtx ^. Arch.archRegTypes
+        mkIterationData la bak halloc dl simOpts valueNames regTypes' heuristics initMem argShapes' errMapRef
+          (\args setupMem _setupAnns toConc initFs ->
+            macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConc setupMem initFs args)
+
+  -- Initial iteration setup
+  initErrMapRef <- newIORef Map.empty
+  (initState, initRefineData) <- mkIterData initArgShapes initErrMapRef
+
+  -- Create features
+  boundsFeats_ <- boundedExecFeats bounds
+  let boundsFeats = List.map CS.genericToExecutionFeature boundsFeats_
+  (refFeat, readResult) <-
+    GRef.refineFeature
       bak
-      fm
-      argShapes
-      initMem
+      la
+      (GRef.RefineReplay False)
+      (GO.simMaxIters bounds)
       memVar
-      heuristics
-      execFeats
-      mbCfgAddr
-      entrypointCfgsSsa
+      argNames
+      initRefineData
+      initErrMapRef
+      mkIterData
+
+  -- Run execution with all features
+  let allFeats = refFeat : boundsFeats List.++ execFeats
+  result <-
+    catchMissingSemantics $ do
+      _ <- CS.executeCrucible allFeats initState
+      readResult
+
   finalResult <-
     simulateRewrittenCfg
       la
@@ -1039,10 +1085,10 @@ simulateRewrittenCfg ::
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , Show (Arch.ArchReloc arch)
-  , CLM.HasLLVMAnn sym
   , argTys ~ Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)
   , ret ~ Symbolic.ArchRegStruct arch
   , wptr ~ MC.ArchAddrWidth arch
+  , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   , ?lc :: CLTC.TypeContext
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
@@ -1071,7 +1117,7 @@ simulateRewrittenCfg ::
   IO GOut.BatchStatus
 simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs memPtrTable initMem initArgShapes result execFeats mbCfgAddr entrypointCfgs entrypointCfgsSsa = do
   let regTypes = archCtx ^. Arch.archRegTypes
-      argNames = archCtx ^. Arch.archValueNames
+  let argNames = archCtx ^. Arch.archValueNames
   let rNames = archCtx ^. Arch.archRegNames
 
   res <- case result of
@@ -1108,43 +1154,53 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
         let entrypointCfgsSsa' = entrypointCfgsSsa{EP.entrypointCfg = EP.toSsaSomeCfg assertingCfg}
         CB.resetAssumptionState bak
         memVar <- CLM.mkMemVar "grease:memmodel" halloc
-        let heuristics = H.macawHeuristics la rNames
-        new <-
-          macawRefineOnce
-            la
-            archCtx
-            simOpts
-            halloc
-            macawCfgConfig
-            memPtrTable
-            (ExecutingAddressAction $ \_ -> pure ())
-            setupHook
-            addrOvs
+        let bounds = GO.simBoundsOpts simOpts
+            heuristics = H.macawHeuristics la rNames
+            mkIterData argShapes' errMapRef = do
+              let valueNames = archCtx ^. Arch.archValueNames
+                  dl' = mcDataLayout macawCfgConfig
+              mkIterationData la bak halloc dl' simOpts valueNames regTypes heuristics initMem argShapes' errMapRef
+                (\args setupMem _setupAnns toConc initFs ->
+                  macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable (ExecutingAddressAction $ \_ -> pure ()) setupHook addrOvs mbCfgAddr entrypointCfgsSsa' toConc setupMem initFs args)
+
+        reqErrMapRef <- newIORef Map.empty
+        (reqInitState, reqRefineData) <- mkIterData argShapes reqErrMapRef
+
+        boundsFeats_ <- boundedExecFeats bounds
+        let boundsFeats = List.map CS.genericToExecutionFeature boundsFeats_
+        (refFeat, readReqResult) <-
+          GRef.refineFeature
             bak
-            fm
-            argShapes
-            initMem
+            la
+            (GRef.RefineReplay False)
+            (Just 0)  -- No refinement, just prove once
             memVar
-            heuristics
-            execFeats
-            mbCfgAddr
-            entrypointCfgsSsa'
+            argNames
+            reqRefineData
+            reqErrMapRef
+            mkIterData
+
+        let allReqFeats = refFeat : boundsFeats List.++ execFeats
+        new <- do
+          _ <- CS.executeCrucible allReqFeats reqInitState
+          readReqResult
+
         case new of
-          GRef.ProveBug{} ->
+          GRef.RefinementBug{} ->
             panic "simulateRewrittenCfg" ["CFG rewriting introduced a bug!"]
-          GRef.ProveCantRefine{} ->
+          GRef.RefinementCantRefine{} ->
             panic "simulateRewrittenCfg" ["CFG rewriting prevented refinement!"]
-          GRef.ProveSuccess -> do
+          GRef.RefinementSuccess{} -> do
             doLog la Diag.SimulationAllGoalsPassed
             pure GOut.CheckSuccess
-          GRef.ProveNoHeuristic errs -> do
+          GRef.RefinementNoHeuristic errs -> do
             doLog la Diag.SimulationGoalsFailed
             pure $
               GOut.CheckAssertionFailure $
                 NE.toList errs <&> \noHeuristic ->
                   let addrWidth = archCtx ^. Arch.archInfo . to MI.archAddrWidth
                    in toFailedPredicate fm addrWidth argNames regTypes initArgShapes noHeuristic
-          GRef.ProveRefine _ -> do
+          GRef.RefinementItersExceeded -> do
             doLog la Diag.SimulationGoalsFailed
             pure $ GOut.CheckAssertionFailure []
   pure res
@@ -1573,57 +1629,64 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
   let dbgCmdExt = LDebug.llvmCommandExt
   dbgCtx <- initDebugger la dbgOpts dbgCmdExt (C.cfgReturnType cfg)
 
-  recState <- CR.mkRecordState halloc
-  empTrace <- CR.emptyRecordedTrace sym
-  repState <- CR.mkReplayState halloc empTrace
+  let bounds = GO.simBoundsOpts simOpts
+  let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
+  let typeCtx = llvmCtx ^. CLT.llvmTypeCtx
+  let dl = CLTC.llvmDataLayout typeCtx
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
-  let bounds = GO.simBoundsOpts simOpts
   result <- withMemOptions simOpts $ do
-    let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
-    let typeCtx = llvmCtx ^. CLT.llvmTypeCtx
-    let dl = CLTC.llvmDataLayout typeCtx
-    -- See comment above on heuristics in 'simulateMacawCfg'
     let heuristics =
           if GO.simNoHeuristics simOpts
             then [H.mustFailHeuristic]
             else H.llvmHeuristics la List.++ [H.mustFailHeuristic]
-    GRef.refinementLoop la bounds argNames initArgShapes $ \argShapes ->
-      GRef.refineOnce
-        la
-        simOpts
-        halloc
+        mkIterData argShapes errMapRef =
+          mkIterationData la bak halloc dl simOpts valueNames argTys heuristics initMem argShapes errMapRef
+            (\args setupMem _setupAnns toConc initFs -> do
+                recState <- CR.mkRecordState halloc
+                empTrace <- CR.emptyRecordedTrace sym
+                repState <- CR.mkReplayState halloc empTrace
+                let p = GLP.mkGreaseLLVMPersonality dbgCtx toConc recState repState
+                LLVM.initState
+                  bak
+                  la
+                  (CLLVM.llvmExtensionImpl ?memOpts)
+                  p
+                  halloc
+                  (GO.simErrorSymbolicFunCalls simOpts)
+                  setupMem
+                  (GSIO.initFs initFs)
+                  (GSIO.initFsGlobals initFs)
+                  (GSIO.initFsOverride initFs)
+                  llvmCtx
+                  setupHook
+                  (GSetup.argVals args)
+                  mbStartupOvCfg
+                  scfg)
+
+    -- Initial iteration setup
+    initErrMapRef <- newIORef Map.empty
+    (initState, initRefineData) <- mkIterData initArgShapes initErrMapRef
+
+    -- Create features
+    boundsFeats_ <- boundedExecFeats bounds
+    let boundsFeats = List.map CS.genericToExecutionFeature boundsFeats_
+    (refFeat, readResult) <-
+      GRef.refineFeature
         bak
-        fm
-        dl
-        valueNames
-        argNames
-        argTys
-        argShapes
-        initMem
+        la
+        (GRef.RefineReplay False)
+        (GO.simMaxIters bounds)
         memVar
-        heuristics
-        execFeats
-        $ \toConc setupMem initFs args -> do
-          let p =
-                GLP.mkGreaseLLVMPersonality dbgCtx toConc recState repState
-          LLVM.initState
-            bak
-            la
-            (CLLVM.llvmExtensionImpl ?memOpts)
-            p
-            halloc
-            (GO.simErrorSymbolicFunCalls simOpts)
-            setupMem
-            -- TODO: just take the whole initFs
-            (GSIO.initFs initFs)
-            (GSIO.initFsGlobals initFs)
-            (GSIO.initFsOverride initFs)
-            llvmCtx
-            setupHook
-            (GSetup.argVals args)
-            mbStartupOvCfg
-            scfg
+        argNames
+        initRefineData
+        initErrMapRef
+        mkIterData
+
+    -- Run execution with all features
+    let allFeats = refFeat : boundsFeats List.++ execFeats
+    _ <- CS.executeCrucible allFeats initState
+    readResult
 
   res <- case result of
     GRef.RefinementBug b cData ->

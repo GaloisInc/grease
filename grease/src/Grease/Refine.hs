@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
@@ -65,32 +66,36 @@
 -- After refining the precondition, provided no timeout or iteration limit has been
 -- hit, symbolic simulation can be attempted again.
 module Grease.Refine (
+  -- * Core types
   ProveRefineResult (..),
   NoHeuristic (..),
-  proveAndRefine,
-  ExecData (..),
   RefinementData (..),
-  refineOnce,
-  execAndRefine,
   RefinementSummary (..),
-  refinementLoop,
-  buildErrMaps,
   ErrorCallbacks (..),
-  -- The following are used by a downstream project
+
+  -- * Refinement feature
+  RefineReplay (..),
+  refineFeature,
+  pauseLinearState,
+  getRecordedTrace,
+
+  -- * Proving
+  proveAndRefine,
+  processExecResult,
+  buildErrMaps,
 
   -- * Implementation details
   findPredAnnotations,
 ) where
 
 import Control.Applicative ((<|>))
-import Control.Exception.Safe qualified as X
-import Control.Lens ((^.))
+import Control.Lens ((&), (.~), (^.))
+import Control.Lens qualified as Lens
 import Control.Monad qualified as Monad
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.IORef (IORef, modifyIORef, readIORef)
+import Data.IORef (IORef, modifyIORef, readIORef, writeIORef)
 import Data.IORef qualified as IORef
-import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic.Memory qualified as MSM
@@ -100,53 +105,43 @@ import Data.Maybe qualified as Maybe
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Nonce (Nonce)
 import Data.Proxy (Proxy (Proxy))
-import Data.Sequence (Seq)
-import Data.Sequence qualified as Seq
+import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC.IORef (newIORef)
+import GHC.TypeNats (type (<=))
 import Grease.Bug qualified as Bug
 import Grease.Concretize (ConcretizedData)
 import Grease.Concretize qualified as Conc
 import Grease.Concretize.ToConcretize qualified as ToConc
-import Grease.Cursor qualified as Cursor
-import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic (Diagnostic (RefineDiagnostic), GreaseLogAction)
 import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
-import Grease.ExecutionFeatures (boundedExecFeats)
 import Grease.Heuristic (HeuristicResult (CantRefine, PossibleBug, RefinedPrecondition, Unknown), OnlineSolverAndBackend, RefineHeuristic)
 import Grease.Heuristic.Result (CantRefine (Exhausted, Exit, MissingFunc, MissingSemantics, MutableGlobal, SolverTimeout, SolverUnknown, Timeout, Unsupported))
-import Grease.Options (BoundsOpts)
-import Grease.Options qualified as Opts
+import Grease.Panic (panic)
 import Grease.Refine.Diagnostic qualified as Diag
-import Grease.Scheduler qualified as Sched
-import Grease.Setup (InitialMem)
-import Grease.Setup qualified as Setup
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Grease.Solver (Solver, solverAdapter)
-import Grease.SymIO qualified as GSIO
-import Grease.Utility (tshow)
 import Grease.ValueName (ValueName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Prove qualified as C
-import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
-import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.LLVM.DataLayout (DataLayout)
 import Lang.Crucible.LLVM.Errors qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.Simulator qualified as CS
+import Lang.Crucible.Simulator.EvalStmt qualified as CSE
+import Lang.Crucible.Simulator.ExecutionTree (execResultContext, execResultGlobals)
+import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
 import System.Exit qualified as Exit
 import What4.Expr qualified as WE
 import What4.Expr.App qualified as W4
-import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4
 import What4.Solver qualified as W4
@@ -205,43 +200,28 @@ data ProveRefineResult sym ext tys
     ProveRefine (ArgShapes ext NoTag tys)
 
 -- | How to combine intermediate results. Not exported.
+--
+-- Uses the same logic as 'combineResults', but short-circuits when the first
+-- result is already decisive (e.g., 'ProveCantRefine' or 'ProveRefine').
 combiner :: C.Combiner (ExceptT C.TimedOut IO) (ProveRefineResult sym ext argTys)
 combiner = C.Combiner $ \mr1 mr2 -> do
   r1 <- mr1
-  case C.subgoalResult r1 of
-    -- can't refine further, no matter what the other result would be
+  let v1 = C.subgoalResult r1
+  case v1 of
+    -- Short-circuit: these results dominate regardless of other goals
     ProveCantRefine{} -> pure r1
-    -- if we find a refinement, don't bother with other goals
     ProveRefine{} -> pure r1
-    -- if this goal succeeded, continue with the others
     ProveSuccess -> mr2
-    -- a bug is only reachable if there are no other errors
-    ProveBug{} -> do
+    -- For remaining cases, evaluate the second goal and combine
+    _ -> do
       r2 <- mr2
-      case C.subgoalResult r2 of
-        ProveRefine{} -> pure r2
-        ProveCantRefine{} -> pure r2
-        ProveNoHeuristic{} -> pure r2
-        ProveBug{} -> pure r1 -- would be nice to combine r1+r2 here
-        ProveSuccess -> pure r1
-    ProveNoHeuristic errs1 -> do
-      r2 <- mr2
-      let failed = C.SubgoalResult False
-      case C.subgoalResult r2 of
-        ProveCantRefine{} -> pure r2
-        -- if we manage to refine the second goal, use that
-        ProveRefine{} -> pure r2
-        -- otherwise, no heuristic propagates
-        ProveBug{} -> pure r1
-        ProveSuccess -> pure r1
-        ProveNoHeuristic errs2 ->
-          pure (failed (ProveNoHeuristic (errs1 <> errs2)))
+      pure (C.SubgoalResult False (combineResults v1 (C.subgoalResult r2)))
 
 data ErrorCallbacks sym t
   = ErrorCallbacks
   { llvmErrCallback :: LLCS.CallStack -> Mem.BoolAnn sym -> CLLVM.BadBehavior sym -> IO ()
   , macawAssertionCallback :: sym -> WI.Pred sym -> MSM.MacawError sym -> IO (WI.Pred sym)
-  , errorMap :: IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym))
+  , errorMap :: IORef (Map.Map (Nonce t WI.BaseBoolType) (ErrorDescription sym))
   }
 
 -- | Builds a mapping from assertions to errors if those assertions are unprovable
@@ -258,7 +238,7 @@ buildErrMaps ::
   Maybe
     ( IORef
         ( Map.Map
-            (Nonce t C.BaseBoolType)
+            (Nonce t WI.BaseBoolType)
             (ErrorDescription sym)
         )
     ) ->
@@ -289,9 +269,9 @@ lookupErrorInfo ::
   GreaseLogAction ->
   WI.Pred sym ->
   C.SimError ->
-  Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
+  Map.Map (Nonce t WI.BaseBoolType) (ErrorDescription sym) ->
   IO (Maybe (ErrorDescription sym))
-lookupErrorInfo sym la goalPred simErr bbMap =
+lookupErrorInfo sym la goalPred _simErr bbMap =
   case findPredAnnotations sym goalPred of
     [] -> do
       doLog la Diag.NoAnnotationOnPredicate
@@ -307,7 +287,7 @@ consumer ::
   forall p ext r solver sym bak t st argTys w fm.
   ( C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st fm
-  , 16 C.<= w
+  , 16 <= w
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
   , ?memOpts :: CLM.MemOptions
@@ -316,7 +296,7 @@ consumer ::
   bak ->
   CS.ExecResult p sym ext r ->
   GreaseLogAction ->
-  Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
+  Map.Map (Nonce t WI.BaseBoolType) (ErrorDescription sym) ->
   RefinementData sym bak ext argTys w ->
   C.ProofConsumer sym t (ProveRefineResult sym ext argTys)
 consumer bak execResult la bbMap refineData = do
@@ -360,61 +340,6 @@ consumer bak execResult la bbMap refineData = do
         runHeuristics heuristics argShapes
       C.Unknown{} -> pure (ProveCantRefine SolverUnknown)
 
--- | Data needed to execute Crucible
-data ExecData p sym ext ret
-  = ExecData
-  { execFeats :: [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)]
-  , execInitState :: CS.ExecState p sym ext (CS.RegEntry sym ret)
-  , execPathStrat :: Opts.PathStrategy
-  }
-
--- | Helper, not exported
-execCfg ::
-  ( C.IsSyntaxExtension ext
-  , OnlineSolverAndBackend solver sym bak t st fm
-  , 16 C.<= w
-  , CLM.HasPtrWidth w
-  , ToConc.HasToConcretize p
-  , ?memOpts :: CLM.MemOptions
-  ) =>
-  bak ->
-  ExecData p sym ext ret ->
-  -- | The result of a single execution (in 'Opts.Dfs' or 'Opts.Bfs' mode,
-  -- of a single path), the proof obligations resulting from that execution,
-  -- and any suspended paths.
-  IO
-    ( CS.ExecResult p sym ext (CS.RegEntry sym ret)
-    , CB.ProofObligations sym
-    , Seq (Sched.WorkItem p sym ext (CS.RegEntry sym ret))
-    )
-execCfg bak execData = do
-  let ExecData
-        { execFeats = feats
-        , execInitState = initialState
-        , execPathStrat = strat
-        } = execData
-  let withCleanup action = X.finally action $ do
-        CB.resetAssumptionState bak
-        CB.clearProofObligations bak
-  withCleanup $
-    case strat of
-      Opts.Dfs -> do
-        (bf, rf, wq) <- Sched.schedulerFeatures bak Sched.dfsPolicy (\_ -> pure Sched.ContinueExploring)
-        r <- CS.executeCrucible (feats ++ [bf, rf]) initialState
-        o <- CB.getProofObligations bak
-        rest <- Sched.drainAll wq
-        pure (r, o, rest)
-      Opts.Bfs -> do
-        (bf, rf, wq) <- Sched.schedulerFeatures bak Sched.bfsPolicy (\_ -> pure Sched.ContinueExploring)
-        r <- CS.executeCrucible (feats ++ [bf, rf]) initialState
-        o <- CB.getProofObligations bak
-        rest <- Sched.drainAll wq
-        pure (r, o, rest)
-      Opts.Sse -> do
-        r <- CS.executeCrucible feats initialState
-        o <- CB.getProofObligations bak
-        pure (r, o, Seq.empty)
-
 -- | Data needed for refinement
 data RefinementData sym bak ext argTys wptr
   = RefinementData
@@ -432,7 +357,7 @@ proveAndRefine ::
   forall p ext r solver sym bak t st argTys w fm.
   ( C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st fm
-  , 16 C.<= w
+  , 16 <= w
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
   , ?memOpts :: CLM.MemOptions
@@ -441,7 +366,7 @@ proveAndRefine ::
   bak ->
   CS.ExecResult p sym ext r ->
   GreaseLogAction ->
-  Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
+  Map.Map (Nonce t WI.BaseBoolType) (ErrorDescription sym) ->
   RefinementData sym bak ext argTys w ->
   CB.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
@@ -483,174 +408,6 @@ processExecResult =
         <|> processExecResult (CS.AbortedResult ctx r2)
     _ -> Nothing
 
-execAndRefine ::
-  forall ext solver sym bak t st argTys ret w m fm p.
-  ( MonadIO m
-  , C.IsSyntaxExtension ext
-  , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
-  , 16 C.<= w
-  , CLM.HasPtrWidth w
-  , ToConc.HasToConcretize p
-  , ?memOpts :: CLM.MemOptions
-  , ExtShape ext ~ PtrShape ext w
-  ) =>
-  bak ->
-  W4FM.FloatModeRepr fm ->
-  GreaseLogAction ->
-  C.GlobalVar CLM.Mem ->
-  RefinementData sym bak ext argTys w ->
-  IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
-  ExecData p sym ext ret ->
-  m (ProveRefineResult sym ext argTys)
-execAndRefine bak _fm la memVar refineData bbMapRef execData = do
-  let refineOne initSt = do
-        let execData' = execData{execInitState = initSt}
-        (execResult, goals, remaining) <- execCfg bak execData'
-        doLog la (Diag.ExecutionResult memVar execResult)
-        refineResult <-
-          case processExecResult execResult of
-            Just cantRefine -> pure (ProveCantRefine cantRefine)
-            Nothing -> do
-              bbMap <- readIORef bbMapRef
-              proveAndRefine bak execResult la bbMap refineData goals
-        case execPathStrat execData of
-          Opts.Dfs -> do
-            loc <- WI.getCurrentProgramLoc (CB.backendGetSym bak)
-            doLog la (Diag.RefinementFinishedPath loc (shortResult refineResult))
-          Opts.Bfs -> do
-            loc <- WI.getCurrentProgramLoc (CB.backendGetSym bak)
-            doLog la (Diag.RefinementFinishedPath loc (shortResult refineResult))
-          Opts.Sse -> pure ()
-        pure (refineResult, remaining)
-
-  -- Process the state that was passed in
-  let initialState = execInitState execData
-  (refineResult, remainingPaths) <- liftIO (refineOne initialState)
-  remainingRef <- liftIO (IORef.newIORef remainingPaths)
-
-  -- Process new states that may have been generated during execution. Defer to
-  -- `combiner` on how to combine the results from multiple states.
-  let go ::
-        ProveRefineResult sym ext argTys ->
-        IO (ProveRefineResult sym ext argTys)
-      go r = do
-        remaining <- IORef.readIORef remainingRef
-        case remaining of
-          Seq.Empty -> pure r
-          -- Note that we use `SubgoalResult True` because `combiner` doesn't
-          -- actually examine the `Bool`, so it doesn't matter what it is.
-          (next Seq.:<| rest) -> do
-            let firstResult = C.SubgoalResult True r
-            let computeNextResult = do
-                  doLog la (Diag.ResumingFromBranch (Sched.workItemLoc next))
-                  IORef.writeIORef remainingRef rest
-                  initSt <- Sched.restoreWorkItem next
-                  (nextRes, additionalPaths) <- refineOne initSt
-                  IORef.modifyIORef remainingRef (<> additionalPaths)
-                  C.SubgoalResult True <$> go nextRes
-            let combine r1 r2 = runExceptT (C.getCombiner combiner r1 r2)
-            mbRefineResult <-
-              combine (pure firstResult) (liftIO computeNextResult)
-            case mbRefineResult of
-              Left C.TimedOut -> pure (ProveCantRefine SolverTimeout)
-              Right combinedResult -> pure (C.subgoalResult combinedResult)
-  liftIO (go refineResult)
- where
-  -- Very short summary for single-line log message
-  shortResult =
-    \case
-      ProveSuccess -> "success"
-      ProveBug{} -> "likely bug"
-      ProveNoHeuristic{} -> "possible bug"
-      ProveRefine{} -> "refined precondition"
-      ProveCantRefine (Exhausted{}) -> "resource exhausted"
-      ProveCantRefine (Exit (Just code)) -> "exited with " <> tshow code
-      ProveCantRefine (Exit Nothing) -> "exited"
-      ProveCantRefine (MissingFunc (Just nm)) -> "missing function " <> Text.pack nm
-      ProveCantRefine (MissingFunc{}) -> "missing function"
-      ProveCantRefine (MissingSemantics{}) -> "missing semantics"
-      ProveCantRefine (MutableGlobal{}) -> "load from mut global"
-      ProveCantRefine (SolverTimeout{}) -> "solver timeout"
-      ProveCantRefine (SolverUnknown{}) -> "solver unknown"
-      ProveCantRefine (Timeout{}) -> "symex timeout"
-      ProveCantRefine (Unsupported{}) -> "unsupported feature"
-
--- | Run 'Setup.setup' then 'execAndRefine'. Usually passed to 'refinementLoop'.
-refineOnce ::
-  ( CLM.HasPtrWidth wptr
-  , C.IsSyntaxExtension ext
-  , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
-  , ToConc.HasToConcretize p
-  , ?memOpts :: CLM.MemOptions
-  , ExtShape ext ~ PtrShape ext wptr
-  , Cursor.CursorExt ext ~ PtrCursor.Dereference ext wptr
-  ) =>
-  GreaseLogAction ->
-  Opts.SimOpts ->
-  C.HandleAllocator ->
-  bak ->
-  W4FM.FloatModeRepr fm ->
-  DataLayout ->
-  Ctx.Assignment ValueName argTys ->
-  Ctx.Assignment ValueName argTys ->
-  Ctx.Assignment C.TypeRepr argTys ->
-  ArgShapes ext NoTag argTys ->
-  InitialMem sym ->
-  C.GlobalVar CLM.Mem ->
-  [RefineHeuristic sym bak ext argTys] ->
-  [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
-  ( ( MSM.MacawProcessAssertion sym
-    , Mem.HasLLVMAnn sym
-    ) =>
-    C.GlobalVar ToConc.ToConcretizeType ->
-    Setup.SetupMem sym ->
-    GSIO.InitializedFs sym wptr ->
-    Setup.Args sym ext argTys wptr ->
-    IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
-  ) ->
-  IO (ProveRefineResult sym ext argTys)
-refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem memVar heuristics execFeats mkInitState = do
-  let sym = CB.backendGetSym bak
-  ErrorCallbacks
-    { errorMap = bbMapRef
-    , llvmErrCallback = recordLLVMAnnotation
-    , macawAssertionCallback = processMacawAssert
-    } <-
-    buildErrMaps Nothing
-  let ?recordLLVMAnnotation = recordLLVMAnnotation
-  let ?processMacawAssert = processMacawAssert
-  (args, setupMem, setupAnns) <-
-    Setup.setup la bak dl valueNames argTys argShapes initMem
-  initFs_ <- GSIO.initialLlvmFileSystem halloc sym (Opts.simFsOpts simOpts)
-  (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
-  let initFs = initFs_{GSIO.initFsGlobals = globals1}
-  st <- mkInitState toConc setupMem initFs args
-  let concInitState =
-        Conc.InitialState
-          { Conc.initStateArgs = args
-          , Conc.initStateFs = GSIO.initFsContents initFs
-          , Conc.initStateMem = initMem
-          }
-  let boundsOpts = Opts.simBoundsOpts simOpts
-  boundsFeats_ <- boundedExecFeats boundsOpts
-  let boundsFeats = List.map CS.genericToExecutionFeature boundsFeats_
-  let execData =
-        ExecData
-          { execFeats = execFeats List.++ boundsFeats
-          , execInitState = st
-          , execPathStrat = Opts.simPathStrategy simOpts
-          }
-  let refineData =
-        RefinementData
-          { refineAnns = setupAnns
-          , refineArgNames = argNames
-          , refineArgShapes = argShapes
-          , refineHeuristics = heuristics
-          , refineInitState = concInitState
-          , refineSolver = Opts.simSolver simOpts
-          , refineSolverTimeout = Opts.simSolverTimeout boundsOpts
-          }
-  execAndRefine bak fm la memVar refineData bbMapRef execData
 
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)
@@ -659,48 +416,263 @@ data RefinementSummary sym ext tys
   | RefinementCantRefine CantRefine
   | RefinementBug Bug.BugInstance (ConcretizedData sym ext tys)
 
-refinementLoop ::
-  forall sym ext argTys w.
+
+-- | Whether to follow the previously explored trace when refining.
+newtype RefineReplay = RefineReplay {getRefineReplay :: Bool}
+  deriving newtype (Read, Show)
+
+-- | Take a fresh initial state (from a given refinement) and set it up for
+-- replay if configured.
+--
+-- Returning this via 'CS.ExecutionFeatureNewState' is not ideal because the
+-- simulator will immediately begin exploring this state, without consulting
+-- the worklist. But the refined state may be further than some other state on
+-- the worklist from the target. Once we hit a branch we will get to visit the
+-- scheduler again but until that point we are forced to run the refinement.
+-- Ideally we would take the refinement and add it to the worklist. Then let
+-- the scheduler pick the best state. This is not possible because we cannot
+-- pause this state until all other features have "observed" the initial state.
+-- The worklist can only hold running states but many features need to see the
+-- non-running state first so we are forced to let this initial state bubble up.
+-- There is some potential hack we could do where we could mark an initial state
+-- that should be paused right after all features see it or something but it
+-- would be really ugly.
+--
+-- Overall while this situation isn't ideal it is not super problematic because
+-- straightline symbolic execution on the refined state until some split is
+-- relatively cheap.
+--
+-- Panics if the given state is not an 'CS.InitialState'.
+pauseLinearState ::
+  CR.HasReplayState p p sym ext (CS.RegEntry sym ret) =>
+  sym ->
+  -- | The new init state
+  CS.ExecState p sym ext rtp ->
+  -- | The trace to replay when starting the new state
+  CR.RecordedTrace sym ->
+  -- | Whether to replay the trace after refinement
+  RefineReplay ->
+  IO (CS.ExecState p sym ext rtp)
+pauseLinearState sym st trc (RefineReplay shouldReplay) =
+  case st of
+    CS.InitialState ctx glb ah tyRepr cont -> do
+      empTrc <- CR.emptyRecordedTrace sym
+      let toUseTrace = if shouldReplay then trc else empTrc
+      let stWithTrace = ctx & CS.cruciblePersonality . CR.replayState . CR.initialTrace .~ toUseTrace
+      pure $ CS.InitialState stWithTrace glb ah tyRepr cont
+    _ -> panic "pauseLinearState" ["Expecting an initial state"]
+
+-- | Get the recorded trace from an execution result.
+--
+-- Panics if path merging was used (i.e., if globals were merged or a
+-- non-constant branch predicate is encountered). Callers should ensure
+-- path splitting is used.
+getRecordedTrace ::
+  ( CB.IsSymBackend sym bak
+  , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
+  ) =>
+  bak ->
+  CS.ExecResult p sym ext (CS.RegEntry sym ret) ->
+  IO (CR.RecordedTrace sym)
+getRecordedTrace bak result = do
+  let mergeStates _simCtx _loc _pred _globs1 _globs2 =
+        panic "getRecordedTrace" ["Unexpected merged globals"]
+  globs <- execResultGlobals mergeStates result
+  let sym = CB.backendGetSym bak
+  let traceVar =
+        execResultContext result
+          Lens.^. CS.cruciblePersonality . CR.recordState
+  CR.getRecordedTrace globs traceVar sym
+
+-- | Combine two 'ProveRefineResult's, preferring actionable results.
+combineResults ::
+  ProveRefineResult sym ext tys ->
+  ProveRefineResult sym ext tys ->
+  ProveRefineResult sym ext tys
+combineResults old new = case old of
+  -- Can't refine further, no matter what the other result would be
+  ProveCantRefine{} -> old
+  -- If we find a refinement, don't bother with other goals
+  ProveRefine{} -> old
+  -- If this goal succeeded, continue with the others
+  ProveSuccess -> new
+  -- A bug is only reachable if there are no other errors
+  ProveBug{} -> case new of
+    ProveRefine{} -> new
+    ProveCantRefine{} -> new
+    ProveNoHeuristic{} -> new
+    ProveBug{} -> old -- would be nice to combine old+new here
+    ProveSuccess -> old
+  ProveNoHeuristic errs1 -> case new of
+    ProveCantRefine{} -> new
+    -- If we manage to refine the second goal, use that
+    ProveRefine{} -> new
+    -- Otherwise, no heuristic propagates
+    ProveBug{} -> old
+    ProveSuccess -> old
+    ProveNoHeuristic errs2 -> ProveNoHeuristic (errs1 <> errs2)
+
+-- | A Crucible 'CSE.ExecutionFeature' that implements the refinement loop.
+--
+-- When symbolic execution completes (hits a 'CS.ResultState'), the feature
+-- proves the collected obligations and either:
+--
+-- * Restarts execution with refined preconditions ('CSE.ExecutionFeatureNewState')
+-- * Stores the final result and lets execution finish ('CSE.ExecutionFeatureNoChange')
+--
+-- Returns the feature and an IO action to read the final result after
+-- 'CS.executeCrucible' completes.
+refineFeature ::
+  forall p ext solver sym bak t st fm argTys ret w rtp.
   ( C.IsSyntaxExtension ext
-  , 16 C.<= w
+  , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
+  , 16 <= w
   , CLM.HasPtrWidth w
   , MC.MemWidth w
+  , ToConc.HasToConcretize p
+  , CR.HasReplayState p p sym ext (CS.RegEntry sym ret)
+  , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
   , ExtShape ext ~ PtrShape ext w
+  , CS.RegEntry sym ret ~ rtp
   , PrettyExt ext 'Precond NoTag
+  , ?memOpts :: CLM.MemOptions
   ) =>
+  bak ->
   GreaseLogAction ->
-  BoundsOpts ->
+  RefineReplay ->
+  -- | Maximum number of refinement iterations ('Nothing' for unlimited)
+  Maybe Int ->
+  -- | Memory model global variable (for logging)
+  CS.GlobalVar CLM.Mem ->
+  -- | Argument names (for logging)
   Ctx.Assignment ValueName argTys ->
-  ArgShapes ext NoTag argTys ->
-  -- | This callback is usually 'refineOnce'
-  (ArgShapes ext NoTag argTys -> IO (ProveRefineResult sym ext argTys)) ->
-  IO (RefinementSummary sym ext argTys)
-refinementLoop la boundsOpts argNames initArgShapes go = do
+  -- | Initial refinement data for the first iteration
+  RefinementData sym bak ext argTys w ->
+  -- | Initial error map ref for the first iteration
+  IORef (Map.Map (Nonce t WI.BaseBoolType) (ErrorDescription sym)) ->
+  -- | Callback to create a new execution state when refinement is needed.
+  -- Takes the refined shapes and the shared error map ref.
+  -- Returns the new 'CS.ExecState' and updated 'RefinementData'.
+  ( ArgShapes ext NoTag argTys ->
+    IORef (Map.Map (Nonce t WI.BaseBoolType) (ErrorDescription sym)) ->
+    IO (CS.ExecState p sym ext rtp, RefinementData sym bak ext argTys w)
+  ) ->
+  IO
+    ( CSE.ExecutionFeature p sym ext rtp
+    , IO (RefinementSummary sym ext argTys)
+    )
+refineFeature bak la refineReplay maxIters memVar argNames initRefineData initErrMapRef mkIterState = do
+  refineDataRef <- IORef.newIORef initRefineData
+  errMapRefRef <- IORef.newIORef initErrMapRef
+  resultRef <- IORef.newIORef (Nothing :: Maybe (ProveRefineResult sym ext argTys))
+  iterRef <- IORef.newIORef (0 :: Int)
+
+  let addrWidth0 = MC.addrWidthRepr (Proxy @w)
+  doLog la (Diag.RefinementUsingPrecondition addrWidth0 argNames (refineArgShapes initRefineData))
+
   let
-    loop ::
-      Int ->
-      ArgShapes ext NoTag argTys ->
-      IO (RefinementSummary sym ext argTys)
-    loop iters argShapes = do
-      if Maybe.maybe False (iters >=) (Opts.simMaxIters boundsOpts)
-        then do
-          doLog la Diag.RefinementLoopMaximumIterationsExceeded
-          pure RefinementItersExceeded
-        else do
+    -- Very short summary for single-line log message
+    shortResult :: ProveRefineResult sym ext argTys -> Text
+    shortResult =
+      \case
+        ProveSuccess -> "success"
+        ProveBug{} -> "likely bug"
+        ProveNoHeuristic{} -> "possible bug"
+        ProveRefine{} -> "refined precondition"
+        ProveCantRefine (Exhausted{}) -> "resource exhausted"
+        ProveCantRefine (Exit (Just code)) -> "exited with " <> Text.pack (show code)
+        ProveCantRefine (Exit Nothing) -> "exited"
+        ProveCantRefine (MissingFunc (Just nm)) -> "missing function " <> Text.pack nm
+        ProveCantRefine (MissingFunc{}) -> "missing function"
+        ProveCantRefine (MissingSemantics{}) -> "missing semantics"
+        ProveCantRefine (MutableGlobal{}) -> "load from mut global"
+        ProveCantRefine (SolverTimeout{}) -> "solver timeout"
+        ProveCantRefine (SolverUnknown{}) -> "solver unknown"
+        ProveCantRefine (Timeout{}) -> "symex timeout"
+        ProveCantRefine (Unsupported{}) -> "unsupported feature"
+
+    storeResult :: ProveRefineResult sym ext argTys -> IO ()
+    storeResult new = do
+      old <- readIORef resultRef
+      case old of
+        Nothing -> writeIORef resultRef (Just new)
+        Just prev -> writeIORef resultRef (Just (combineResults prev new))
+
+    feature :: CSE.ExecutionFeature p sym ext rtp
+    feature = CSE.ExecutionFeature $ \case
+      CS.ResultState r -> do
+        doLog la (Diag.ExecutionResult memVar r)
+        -- Capture proof obligations, then clean up solver state.
+        obls <- CB.getProofObligations bak
+        CB.clearProofObligations bak
+        CB.resetAssumptionState bak
+        case processExecResult r of
+          Just cantRefine -> do
+            storeResult (ProveCantRefine cantRefine)
+            pure CSE.ExecutionFeatureNoChange
+          Nothing -> do
+            currentErrMapRef <- readIORef errMapRefRef
+            errMap <- readIORef currentErrMapRef
+            currentRefineData <- readIORef refineDataRef
+            proveResult <- proveAndRefine bak r la errMap currentRefineData obls
+            -- Log path completion with result summary
+            loc <- WI.getCurrentProgramLoc (CB.backendGetSym bak)
+            doLog la (Diag.RefinementFinishedPath loc (shortResult proveResult))
+            case proveResult of
+              ProveRefine shp -> do
+                iters <- readIORef iterRef
+                if Maybe.maybe False (iters >=) maxIters
+                  then do
+                    doLog la Diag.RefinementLoopMaximumIterationsExceeded
+                    storeResult (ProveRefine shp)
+                    pure CSE.ExecutionFeatureNoChange
+                  else do
+                    IORef.modifyIORef' iterRef (+ 1)
+                    let addrWidth = MC.addrWidthRepr (Proxy @w)
+                    doLog la (Diag.RefinementUsingPrecondition addrWidth argNames shp)
+                    doLog la Diag.RefinementLoopRetrying
+                    -- Reset result for new iteration
+                    writeIORef resultRef Nothing
+                    (newState, newRefineData) <- mkIterState shp currentErrMapRef
+                    writeIORef refineDataRef newRefineData
+                    let sym = CB.backendGetSym bak
+                    finalState <-
+                      if getRefineReplay refineReplay
+                        then do
+                          trc <- getRecordedTrace bak r
+                          pauseLinearState sym newState trc refineReplay
+                        else pure newState
+                    pure (CSE.ExecutionFeatureNewState finalState)
+              other -> do
+                storeResult other
+                pure CSE.ExecutionFeatureNoChange
+      _ -> pure CSE.ExecutionFeatureNoChange
+
+  let
+    readResult :: IO (RefinementSummary sym ext argTys)
+    readResult = do
+      mr <- readIORef resultRef
+      currentRefineData <- readIORef refineDataRef
+      let currentShapes = refineArgShapes currentRefineData
+      case mr of
+        Nothing -> do
+          -- No result stored means execution completed without any ResultState
+          -- being processed. This shouldn't normally happen.
+          pure (RefinementSuccess currentShapes)
+        Just ProveSuccess -> do
+          doLog la Diag.RefinementLoopAllGoalsPassed
           let addrWidth = MC.addrWidthRepr (Proxy @w)
-          doLog la (Diag.RefinementUsingPrecondition addrWidth argNames argShapes)
-          new <- go argShapes
-          case new of
-            ProveBug b cData -> pure (RefinementBug b cData)
-            ProveCantRefine b -> pure (RefinementCantRefine b)
-            ProveRefine argShapes' -> do
-              doLog la Diag.RefinementLoopRetrying
-              loop (iters + 1) argShapes'
-            ProveSuccess -> do
-              doLog la Diag.RefinementLoopAllGoalsPassed
-              doLog la (Diag.RefinementFinalPrecondition addrWidth argNames argShapes)
-              pure $ RefinementSuccess argShapes
-            ProveNoHeuristic errs -> do
-              doLog la Diag.RefinementLoopNoHeuristic
-              pure $ RefinementNoHeuristic errs
-  loop 0 initArgShapes
+          doLog la (Diag.RefinementFinalPrecondition addrWidth argNames currentShapes)
+          pure (RefinementSuccess currentShapes)
+        Just (ProveBug b cData) ->
+          pure (RefinementBug b cData)
+        Just (ProveCantRefine cr) ->
+          pure (RefinementCantRefine cr)
+        Just (ProveNoHeuristic errs) -> do
+          doLog la Diag.RefinementLoopNoHeuristic
+          pure (RefinementNoHeuristic errs)
+        Just (ProveRefine _) ->
+          -- This only happens when maxIters was hit
+          pure RefinementItersExceeded
+
+  pure (feature, readResult)

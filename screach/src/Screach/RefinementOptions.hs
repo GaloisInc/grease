@@ -1,17 +1,14 @@
--- Note that this is partially copy/pasted from Grease.Refine.
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GADTs #-}
 
 module Screach.RefinementOptions (
   AllSolutions (..),
-  RefineReplay (..),
+  -- Re-export RefineReplay from upstream
+  module Grease.Refine,
 ) where
 
--- | Whether to follow the previously explored trace when refining
-newtype RefineReplay = RefineReplay {getRefineReplay :: Bool}
-  -- See Note [Derive Read/Show instances with the newtype strategy]
-  deriving newtype (Read)
+import Grease.Refine (RefineReplay (..))
 
 -- | Whether to search exhaustively for reachability solutions or stop when the first is found
 newtype AllSolutions = AllSolutions {getAllSolutions :: Bool}

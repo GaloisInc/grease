@@ -60,7 +60,6 @@ import Lang.Crucible.Types qualified as CT
 import Lumberjack qualified as LJ
 import Screach.Diagnostic (ScreachLogAction)
 import Screach.Diagnostic qualified as Diag
-import Screach.Panic qualified as Scrch
 import Screach.RefinementOptions qualified as RftOpt
 import Screach.Run.Diagnostic qualified as RDiag
 import What4.Expr qualified as WE
@@ -129,43 +128,30 @@ type HasScreachPersonality p sym bak t ext tys ret rtp w =
   , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
   )
 
--- | Take a fresh initial state (from a given refinement) and set it up for replay.
+-- | Saved symbolic execution result with backend state.
 --
--- Returning this via 'C.ExecutionFeatureNewState' is not ideal because the
--- simulator will immediately begin exploring this state, without consulting
--- the worklist. But the refined state may be further than some other state on
--- the worklist from the target. Once we hit a branch we will get to visit the
--- scheduler again but until that point we are forced to run the refinement.
--- Ideally we would take the refinement and add it to the worklist. Then let
--- the scheduler pick the best state. This is not possible because we cannot
--- pause this state until all other features have "observed" the initial state.
--- The worklist can only hold running states but many features need to see the
--- non-running state first so we are forced to let this initial state bubble up.
--- There is some potential hack we could do where we could mark an initial state
--- that should be paused right after all features see it or something but it
--- would be really ugly.
---
--- Overall while this situation isn't ideally it is not super problematic because straightline symbolic execution on the refined state until some
--- split is relatively cheap.
-pauseLinearState ::
-  (CR.HasReplayState p p sym ext (CS.RegEntry sym ret)) =>
-  sym ->
-  -- | The new init state
-  C.ExecState p sym ext rtp ->
-  -- | The trace to replay when starting the new state
-  CR.RecordedTrace sym ->
-  -- | Whether to replay the trace after refinement
-  RftOpt.RefineReplay ->
-  IO (C.ExecState p sym ext rtp)
-pauseLinearState sym st trc (RftOpt.RefineReplay shouldReplay) =
-  case st of
-    C.InitialState ctx glb ah tyRepr cont -> do
-      empTrc <- CR.emptyRecordedTrace sym
-      let toUseTrace = if shouldReplay then trc else empTrc
-      let stWithTrace = ctx & C.cruciblePersonality . CR.replayState . CR.initialTrace .~ toUseTrace
-      pure $ C.InitialState stWithTrace glb ah tyRepr cont
-    -- TODO instead of panicking we can just make the callback return a newtype of an init state
-    _ -> Scrch.panic "pauseLinearState" ["Expecting an initial state"]
+-- When a target is reached during SDSE, the result and backend state are
+-- captured so they can be verified later.
+data SavedState p sym ext rtp
+  = SavedState
+  { savedBackendState :: CB.AssumptionState sym
+  , savedExecState :: C.ExecState p sym ext rtp
+  }
+
+-- | Create a 'SavedState' from an 'C.ExecResult' by capturing the current
+-- backend state.
+createSaveItem ::
+  C.ExecResult p sym ext rtp ->
+  IO (SavedState p sym ext rtp)
+createSaveItem st =
+  let simCtx = C.execResultContext st
+   in C.withBackend simCtx $ \bak -> do
+        bakState <- CB.getBackendState bak
+        pure
+          SavedState
+            { savedBackendState = bakState
+            , savedExecState = C.ResultState st
+            }
 
 doLog :: MonadIO m => ScreachLogAction -> RDiag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (Diag.RunDiagnostic diag)
@@ -211,7 +197,7 @@ refineState bak sla gla refineReplay st config = do
     CB.getProofObligations bak'
   errMap <- readIORef errMapRef
   refResult <- GR.proveAndRefine bak st gla errMap rdata obls
-  trc <- getRecordedTrace st
+  trc <- GR.getRecordedTrace bak st
   case refResult of
     GR.ProveSuccess -> do
       doLog sla RDiag.RefinementSuccess
@@ -250,21 +236,11 @@ refineState bak sla gla refineReplay st config = do
           (Just errMapRef)
 
       C.ExecutionFeatureNewState
-        <$> pauseLinearState
+        <$> GR.pauseLinearState
           (CB.backendGetSym bak)
           initSt
           trc
           refineReplay
- where
-  getRecordedTrace result = do
-    -- These panics are impossible. Because we use path splitting, there will
-    -- be no nontrivial predicates that are branched on.
-    let mergeStates _simCtx _loc _pred _globs1 _globs2 =
-          Scrch.panic "executeCfgPath " ["should use path splitting"]
-    globs <- C.execResultGlobals mergeStates result
-    let sym = CB.backendGetSym bak
-    let traceVar = C.execResultContext result Lens.^. C.cruciblePersonality . CR.recordState
-    CR.getRecordedTrace globs traceVar sym
 
 -- | A feature that uses GREASE to refine states where the obligations are not provable and restart the symbolic executor
 -- or annotates the state with bug information (if a potential bug is found.)
