@@ -24,7 +24,7 @@ module Grease.Macaw.ResolveCall (
   discoverFuncAddr,
 ) where
 
-import Control.Lens (to, (%~), (.~), (^.))
+import Control.Lens ((%~), (.~), (^.))
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (MonadIO)
 import Data.BitVector.Sized qualified as BV
@@ -49,7 +49,7 @@ import Data.Text (Text)
 import GHC.Word (Word64)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (Diagnostic (ResolveCallDiagnostic), GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext, archFunctionReturnAddr, archGetIP, archOffsetStackPointerPostCall, archPCFixup, archSyscallCodeMapping, archSyscallNumberRegister, archSyscallReturnRegisters, archVals)
+import Grease.Macaw.Arch (ArchContext, archFunctionReturnAddr, archGetIP, archOffsetStackPointerPostCall, archPCFixup, archRegTypes, archSyscallCodeMapping, archSyscallNumberRegister, archSyscallReturnRegisters, archVals)
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.Overrides (lookupMacawForwardDeclarationOverride)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride, msoPublicFnHandle, msoPublicOverride, msoSomeFunctionOverride))
@@ -96,7 +96,7 @@ doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (ResolveCallDiagnostic diag)
 
 regStructRepr :: ArchContext arch -> C.TypeRepr (Symbolic.ArchRegStruct arch)
-regStructRepr arch = C.StructRepr . Symbolic.crucArchRegTypes $ arch ^. archVals . to Symbolic.archFunctions
+regStructRepr arch = C.StructRepr $ archRegTypes arch
 
 -- | Create a new override that post-composes an 'OverrideSim' action with an existing one.
 useComposedOverride ::

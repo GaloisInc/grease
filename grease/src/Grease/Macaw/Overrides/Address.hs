@@ -33,7 +33,7 @@ import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Void (Void)
 import GHC.Stack (HasCallStack)
 import Grease.Concretize.ToConcretize (HasToConcretize)
-import Grease.Macaw.Arch (ArchContext, archVals)
+import Grease.Macaw.Arch (ArchContext, archRegTypes)
 import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Overrides (CantResolveOverrideCallback, OverrideNameError, partitionCfgs)
@@ -405,6 +405,4 @@ maybeRunAddressOverride archCtx memVar archRegs crucState segOff (AddressOverrid
       tryRunAddressOverride archCtx memVar archRegs crucState cfg
 
 regStructRepr :: ArchContext arch -> C.TypeRepr (Symbolic.ArchRegStruct arch)
-regStructRepr arch =
-  C.StructRepr . Symbolic.crucArchRegTypes $
-    arch Lens.^. archVals . Lens.to Symbolic.archFunctions
+regStructRepr arch = C.StructRepr $ archRegTypes arch

@@ -77,7 +77,7 @@ import Grease.ExecutionFeatures qualified as GEF
 import Grease.Heuristic qualified as GH
 import Grease.Macaw (regStructRepr)
 import Grease.Macaw qualified as GM
-import Grease.Macaw.Arch (ArchContext, ArchReloc, archInfo, archRelocSupported, archVals)
+import Grease.Macaw.Arch (ArchContext, ArchReloc, archArgNames, archInfo, archRegNames, archRegTypes, archRelocSupported, archVals, archValueNames)
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery qualified as GMD
 import Grease.Macaw.Entrypoint qualified as GME
@@ -1480,14 +1480,10 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
     let (_tyCtxErrs, tyCtx) = CLTC.mkTypeContext dataLayout IntMap.empty []
     let ?lc = tyCtx
 
-    let regTypes = MS.crucArchRegTypes archFns
-    let rNames = GMRN.regNames (archCtx ^. archVals)
-        GMRN.RegNames rNamesAssign = rNames
-        argNames = TFC.fmapFC (\(Const (GMRN.RegName n)) -> Const n) rNamesAssign
-        valNames =
-          Ctx.generate
-            (Ctx.size regTypes)
-            (\idx -> GS.ValueName (GMRN.regNameToString (GMRN.getRegName rNames idx)))
+    let regTypes = archRegTypes archCtx
+    let rNames = archRegNames archCtx
+        argNames = archArgNames archCtx
+        valNames = archValueNames archCtx
     let argSpec = ArgArchSpec{regNames = rNames, argNames = argNames, valNames = valNames, argTypes = regTypes}
 
     -- The target address and the target symbol, if they exist. At least one of
