@@ -158,6 +158,7 @@ library
     , lens ^>= 5.3
     , lumberjack ^>= 1.0
     , megaparsec ^>= 9.6
+    , mmap ^>= 0.5.9
     , optparse-applicative ^>= 0.19.0.0
     , panic ^>= 0.4
     , safe-exceptions ^>= 0.1.7.4

@@ -184,6 +184,7 @@ import Prettyprinter.Render.Text qualified as PP
 import System.Directory (Permissions, getPermissions)
 import System.Exit qualified as Exit
 import System.IO (Handle, IOMode (WriteMode), withFile)
+import System.IO.MMap qualified as MMap
 import Text.LLVM qualified as L
 import Text.Read (readMaybe)
 import What4.Expr qualified as WE
@@ -254,7 +255,8 @@ readElfHeaderInfo ::
 readElfHeaderInfo la _proxy path =
   do
     perms <- liftIO $ getPermissions path
-    bs <- liftIO $ BS.readFile path
+    -- Use mmap to keep file data outside GC heap
+    bs <- liftIO $ MMap.mmapFileByteString path Nothing
     case Elf.decodeElfHeaderInfo bs of
       Right (Elf.SomeElf hdr) ->
         case ( Elf.headerClass (Elf.header hdr)
