@@ -1579,9 +1579,14 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
     let opts = GO.simInitPrecondOpts simOpts
      in getLlvmInitArgShapes la opts llvmMod argNames cfg
 
+  let sym = CB.backendGetSym bak
   let dbgOpts = GO.simDebugOpts simOpts
   let dbgCmdExt = LDebug.llvmCommandExt
   dbgCtx <- initDebugger la dbgOpts dbgCmdExt (C.cfgReturnType cfg)
+
+  recState <- CR.mkRecordState halloc
+  empTrace <- CR.emptyRecordedTrace sym
+  repState <- CR.mkReplayState halloc empTrace
 
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   let bounds = GO.simBoundsOpts simOpts
@@ -1612,11 +1617,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
         execFeats
         $ \toConc setupMem initFs args -> do
           let p =
-                GLP.GreaseLLVMPersonality
-                  { GLP._dbgContext = dbgCtx
-                  , GLP._toConcretize = toConc
-                  , GLP._serverSocketFds = Map.empty
-                  }
+                GLP.mkGreaseLLVMPersonality dbgCtx toConc recState repState
           LLVM.initState
             bak
             la
