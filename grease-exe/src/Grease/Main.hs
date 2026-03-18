@@ -130,7 +130,8 @@ import Grease.Macaw.RegName (getRegName, mkRegName, regNameToString, regNames)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
 import Grease.Macaw.Shapes qualified as GMS
 import Grease.Macaw.SimulatorHooks (ExecutingAddressAction (ExecutingAddressAction))
-import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, emptyGreaseSimulatorState)
+import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, mkGreaseSimulatorState)
+import Grease.Macaw.SimulatorState qualified as GMSS
 import Grease.Main.Diagnostic qualified as Diag
 import Grease.MustFail qualified as MustFail
 import Grease.Options qualified as GO
@@ -173,6 +174,7 @@ import Lang.Crucible.LLVM.Syntax (emptyParserHooks, llvmParserHooks)
 import Lang.Crucible.LLVM.Translation qualified as CLT
 import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Lang.Crucible.Simulator qualified as CS
+import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
@@ -674,7 +676,8 @@ macawMemConfig ::
   , MSM.MacawProcessAssertion sym
   , ?memOpts :: CLM.MemOptions
   , ?lc :: CLTC.TypeContext
-  , p ~ GreaseSimulatorState cExt sym arch
+  , GMSS.HasGreaseSimulatorState p cExt sym arch ret
+  , ToConc.HasToConcretize p
   ) =>
   GDiag.GreaseLogAction ->
   C.GlobalVar CLM.Mem ->
@@ -760,7 +763,8 @@ macawInitState ::
   , wptr ~ MC.ArchAddrWidth arch
   , ext ~ Symbolic.MacawExt arch
   , ret ~ Symbolic.ArchRegStruct arch
-  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch
+  , argTys ~ Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)
+  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch ret
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   , ?lc :: CLTC.TypeContext
@@ -810,8 +814,12 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
   let dbgCmdExt = MDebug.macawCommandExt (archCtx ^. GMA.archVals)
   dbgCtx <- initDebugger la dbgOpts dbgCmdExt (GM.regStructRepr archCtx)
 
+  recState <- CR.mkRecordState halloc
+  empTrace <- CR.emptyRecordedTrace sym
+  repState <- CR.mkReplayState halloc empTrace
+
   let personality =
-        emptyGreaseSimulatorState toConcVar dbgCtx
+        mkGreaseSimulatorState toConcVar dbgCtx recState repState
           & discoveredFnHandles .~ discoveredHdls
 
   let globals = GSIO.initFsGlobals initFs
@@ -830,7 +838,7 @@ macawRefineOnce ::
   , wptr ~ MC.ArchAddrWidth arch
   , ext ~ Symbolic.MacawExt arch
   , ret ~ Symbolic.ArchRegStruct arch
-  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch
+  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch ret
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   , ?lc :: CLTC.TypeContext
@@ -1028,7 +1036,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
 
 -- | See @doc/requirements.md@.
 simulateRewrittenCfg ::
-  forall sym bak arch solver scope st fm.
+  forall sym bak arch solver scope st fm argTys ret wptr.
   ( CB.IsSymBackend sym bak
   , sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)
   , bak ~ CB.OnlineBackend solver scope st (WEB.Flags fm)
@@ -1040,6 +1048,9 @@ simulateRewrittenCfg ::
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , Show (GMA.ArchReloc arch)
   , CLM.HasLLVMAnn sym
+  , argTys ~ Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)
+  , ret ~ Symbolic.ArchRegStruct arch
+  , wptr ~ MC.ArchAddrWidth arch
   , ?memOpts :: CLM.MemOptions
   , ?lc :: CLTC.TypeContext
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
@@ -1053,11 +1064,11 @@ simulateRewrittenCfg ::
   GO.SimOpts ->
   Macaw.SetupHook sym arch ->
   AddressOverrides arch ->
-  Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
+  Symbolic.MemPtrTable sym wptr ->
   H.InitialMem sym ->
-  ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
-  GRef.RefinementSummary sym (Symbolic.MacawExt arch) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
-  [CS.ExecutionFeature (GreaseSimulatorState MDebug.MacawCommand sym arch) sym (Symbolic.MacawExt arch) (CS.RegEntry sym (Symbolic.ArchRegStruct arch))] ->
+  ArgShapes (Symbolic.MacawExt arch) NoTag argTys ->
+  GRef.RefinementSummary sym (Symbolic.MacawExt arch) argTys ->
+  [CS.ExecutionFeature (GreaseSimulatorState MDebug.MacawCommand sym arch ret) sym (Symbolic.MacawExt arch) (CS.RegEntry sym ret)] ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->

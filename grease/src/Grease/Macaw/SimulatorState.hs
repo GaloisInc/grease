@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -8,13 +9,15 @@
 module Grease.Macaw.SimulatorState (
   -- * @GreaseSimulatorState@
   GreaseSimulatorState (..),
-  emptyGreaseSimulatorState,
+  mkGreaseSimulatorState,
   HasGreaseSimulatorState (..),
 
   -- * Lenses for @GreaseSimulatorState@
   discoveredFnHandles,
   syscallHandles,
   macawLazySimulatorState,
+  gssRecordState,
+  gssReplayState,
   stateDiscoveredFnHandles,
   stateSyscallHandles,
   stateMacawLazySimulatorState,
@@ -40,11 +43,22 @@ import Grease.SimulatorState.Networking qualified as GSN
 import Lang.Crucible.Debug qualified as Dbg
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Simulator qualified as CS
+import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
+import Lang.Crucible.Types qualified as CT
 import Stubs.Syscall qualified as Stubs
 
 -- | The Crucible state extension for holding @grease@-specific state.
-type GreaseSimulatorState :: Type -> Type -> Type -> Type
-data GreaseSimulatorState cExt sym arch = GreaseSimulatorState
+type GreaseSimulatorState ::
+  -- @cExt@: debugger command extension type
+  Type ->
+  -- @sym@: the symbolic backend expression type
+  Type ->
+  -- @arch@: the machine code architecture
+  Type ->
+  -- @ret@: the Crucible return type (usually @'Symbolic.ArchRegStruct' arch@)
+  CT.CrucibleType ->
+  Type
+data GreaseSimulatorState cExt sym arch ret = GreaseSimulatorState
   { _discoveredFnHandles :: Map.Map (MC.ArchSegmentOff arch) (MacawFnHandle arch)
   -- ^ A map of discovered function addresses to their handles. Any time a new
   -- function is discovered (see @Note [Incremental code discovery]@), it will
@@ -83,15 +97,31 @@ data GreaseSimulatorState cExt sym arch = GreaseSimulatorState
   -- ^ A map from registered socket file descriptors to their corresponding
   -- metadata. See @Note [The networking story]@ in
   -- "Grease.Overrides.Networking".
-  , _dbgContext :: Dbg.Context cExt sym (Symbolic.MacawExt arch) (Symbolic.ArchRegStruct arch)
+  , _dbgContext :: Dbg.Context cExt sym (Symbolic.MacawExt arch) ret
+  , _gssRecordState ::
+      CR.RecordState
+        (GreaseSimulatorState cExt sym arch ret)
+        sym
+        (Symbolic.MacawExt arch)
+        (CS.RegEntry sym ret)
+  , _gssReplayState ::
+      CR.ReplayState
+        (GreaseSimulatorState cExt sym arch ret)
+        sym
+        (Symbolic.MacawExt arch)
+        (CS.RegEntry sym ret)
   }
 
--- | An initial value for 'GreaseSimulatorState'.
-emptyGreaseSimulatorState ::
+-- | Create a 'GreaseSimulatorState' with the given configuration.
+mkGreaseSimulatorState ::
+  forall cExt sym arch ret p.
+  (p ~ GreaseSimulatorState cExt sym arch ret) =>
   CS.GlobalVar ToConc.ToConcretizeType ->
-  Dbg.Context cExt sym (Symbolic.MacawExt arch) (Symbolic.ArchRegStruct arch) ->
-  GreaseSimulatorState cExt sym arch
-emptyGreaseSimulatorState toConcVar dbgCtx =
+  Dbg.Context cExt sym (Symbolic.MacawExt arch) ret ->
+  CR.RecordState p sym (Symbolic.MacawExt arch) (CS.RegEntry sym ret) ->
+  CR.ReplayState p sym (Symbolic.MacawExt arch) (CS.RegEntry sym ret) ->
+  p
+mkGreaseSimulatorState toConcVar dbgCtx recState repState =
   GreaseSimulatorState
     { _discoveredFnHandles = Map.empty
     , _toConcretize = toConcVar
@@ -99,6 +129,8 @@ emptyGreaseSimulatorState toConcVar dbgCtx =
     , _macawLazySimulatorState = Symbolic.emptyMacawLazySimulatorState
     , _serverSocketFds = Map.empty
     , _dbgContext = dbgCtx
+    , _gssRecordState = recState
+    , _gssReplayState = repState
     }
 
 -- | A class for Crucible personality types @p@ which contain a
@@ -110,10 +142,10 @@ class
   ( Symbolic.HasMacawLazySimulatorState p sym (MC.ArchAddrWidth arch)
   , GSN.HasServerSocketFds p
   ) =>
-  HasGreaseSimulatorState p cExt sym arch
-    | p -> cExt sym arch
+  HasGreaseSimulatorState p cExt sym arch ret
+    | p -> cExt sym arch ret
   where
-  greaseSimulatorState :: Lens' p (GreaseSimulatorState cExt sym arch)
+  greaseSimulatorState :: Lens' p (GreaseSimulatorState cExt sym arch ret)
 
 -----
 -- These types should probably be defined in Grease.Macaw.FunctionOverride, but
@@ -143,32 +175,61 @@ type MacawOverride p sym arch =
 makeLenses ''GreaseSimulatorState
 
 instance
-  (t ~ Symbolic.ArchRegStruct arch) =>
-  Dbg.HasContext (GreaseSimulatorState cExt sym arch) cExt sym (Symbolic.MacawExt arch) t
+  (ret ~ Symbolic.ArchRegStruct arch) =>
+  Dbg.HasContext (GreaseSimulatorState cExt sym arch ret) cExt sym (Symbolic.MacawExt arch) ret
   where
   context = dbgContext
   {-# INLINE context #-}
 
-instance ToConc.HasToConcretize (GreaseSimulatorState cExt sym arch) where
+instance ToConc.HasToConcretize (GreaseSimulatorState cExt sym arch ret) where
   toConcretize = Lens.view toConcretize
 
 instance
-  (MC.ArchAddrWidth arch ~ w) =>
+  (MC.ArchAddrWidth arch ~ ww) =>
   Symbolic.HasMacawLazySimulatorState
-    (GreaseSimulatorState cExt sym arch)
+    (GreaseSimulatorState cExt sym arch ret)
     sym
-    w
+    ww
   where
   macawLazySimulatorState = macawLazySimulatorState
 
-instance HasGreaseSimulatorState (GreaseSimulatorState cExt sym arch) cExt sym arch where
+instance
+  HasGreaseSimulatorState
+    (GreaseSimulatorState cExt sym arch ret)
+    cExt
+    sym
+    arch
+    ret
+  where
   greaseSimulatorState = id
 
-instance GSN.HasServerSocketFds (GreaseSimulatorState cExt sym arch) where
+instance GSN.HasServerSocketFds (GreaseSimulatorState cExt sym arch ret) where
   serverSocketFdsL = serverSocketFds
 
+instance
+  CR.HasRecordState
+    (GreaseSimulatorState cExt sym arch ret)
+    (GreaseSimulatorState cExt sym arch ret)
+    sym
+    (Symbolic.MacawExt arch)
+    (CS.RegEntry sym ret)
+  where
+  recordState = gssRecordState
+  {-# INLINE recordState #-}
+
+instance
+  CR.HasReplayState
+    (GreaseSimulatorState cExt sym arch ret)
+    (GreaseSimulatorState cExt sym arch ret)
+    sym
+    (Symbolic.MacawExt arch)
+    (CS.RegEntry sym ret)
+  where
+  replayState = gssReplayState
+  {-# INLINE replayState #-}
+
 stateDiscoveredFnHandles ::
-  HasGreaseSimulatorState p cExt sym arch =>
+  HasGreaseSimulatorState p cExt sym arch ret =>
   Lens'
     (CS.SimState p sym ext r f a)
     (Map.Map (MC.ArchSegmentOff arch) (MacawFnHandle arch))
@@ -179,7 +240,7 @@ stateDiscoveredFnHandles =
     . discoveredFnHandles
 
 stateSyscallHandles ::
-  HasGreaseSimulatorState p cExt sym arch =>
+  HasGreaseSimulatorState p cExt sym arch ret =>
   Lens'
     (CS.SimState p sym ext r f a)
     (MapF.MapF Stubs.SyscallNumRepr Stubs.SyscallFnHandle)
@@ -190,7 +251,7 @@ stateSyscallHandles =
     . syscallHandles
 
 stateMacawLazySimulatorState ::
-  HasGreaseSimulatorState p cExt sym arch =>
+  HasGreaseSimulatorState p cExt sym arch ret =>
   Lens'
     (CS.SimState p sym ext r f a)
     (Symbolic.MacawLazySimulatorState sym (MC.ArchAddrWidth arch))

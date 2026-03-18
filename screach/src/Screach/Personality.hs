@@ -1,5 +1,7 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Screach.Personality (
@@ -26,6 +28,7 @@ import Grease.Macaw.SimulatorState qualified as GMSS
 import Grease.SimulatorState.Networking qualified as GSN
 import Lang.Crucible.Debug qualified as Dbg
 import Lang.Crucible.FunctionHandle (HandleAllocator)
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.RecordAndReplay qualified as CSR
 import Lang.Crucible.Types qualified as CT
 import Screach.Distance qualified as Dist
@@ -35,89 +38,91 @@ import Screach.ShortestDistanceScheduler qualified as ShortDistSched
 -- | The Screach \"personality\".
 --
 -- See 'Lang.Crucible.Simulator.cruciblePersonality'.
--- The simulator state holds on to the aty and rtp for the function under analysis.
+-- The simulator state holds on to the aty and ret for the function under analysis.
 -- These parameters encode the type of the crucible function that is being summarized so that the personality itself
 -- can hold the 'RefinementData' (summary) for GREASE.
 -- * @aty@: Crucible argument types for the target function
 -- * @t@ the scope for annotation nonces
--- * @rtp@: Crucible simulator return type
+-- * @ret@: Crucible return type (the simulator rtp is @CS.RegEntry sym ret@)
 -- * @w@: pointer width (Natural)
 type ScreachSimulatorState ::
-  Type -> Type -> Type -> Type -> Type -> Type -> Type -> C.Ctx CT.CrucibleType -> Natural -> Type
-data ScreachSimulatorState p sym bak ext rtp arch t aty w = ScreachSimulatorState
-  { _greaseSimulatorState :: GMSS.GreaseSimulatorState MDebug.MacawCommand sym arch
+  Type -> Type -> Type -> Type -> Type -> Type -> CT.CrucibleType -> C.Ctx CT.CrucibleType -> Natural -> Type
+data ScreachSimulatorState p sym bak ext arch t ret aty w = ScreachSimulatorState
+  { _greaseSimulatorState :: GMSS.GreaseSimulatorState MDebug.MacawCommand sym arch ret
   , _distState :: IORef Dist.DijkstraCaches
   , _recordState ::
-      CSR.RecordState (ScreachSimulatorState p sym bak ext rtp arch t aty w) sym ext rtp
+      CSR.RecordState (ScreachSimulatorState p sym bak ext arch t ret aty w) sym ext (CS.RegEntry sym ret)
   , _replayState ::
-      CSR.ReplayState (ScreachSimulatorState p sym bak ext rtp arch t aty w) sym ext rtp
+      CSR.ReplayState (ScreachSimulatorState p sym bak ext arch t ret aty w) sym ext (CS.RegEntry sym ret)
   , _refineState :: RFT.SrchRefineData sym bak t ext aty w
   }
 
 makeLenses ''ScreachSimulatorState
 
-instance ShortDistSched.HasDistancesState (ScreachSimulatorState p sym bak ext rtp arch t aty w) where
+instance ShortDistSched.HasDistancesState (ScreachSimulatorState p sym bak ext arch t ret aty w) where
   distancesRef = _distState
 
 instance
   ( ext ~ MS.MacawExt arch
+  , ret' ~ MS.ArchRegStruct arch
   , ret ~ MS.ArchRegStruct arch
   ) =>
-  Dbg.HasContext (ScreachSimulatorState p sym bak ext rtp arch t aty w) MDebug.MacawCommand sym ext ret
+  Dbg.HasContext (ScreachSimulatorState p sym bak ext arch t ret aty w) MDebug.MacawCommand sym ext ret'
   where
   context = greaseSimulatorState . Dbg.context
   {-# INLINE context #-}
 
 instance
   CSR.HasRecordState
-    (ScreachSimulatorState p sym bak ext rtp arch t aty w)
-    (ScreachSimulatorState p sym bak ext rtp arch t aty w)
+    (ScreachSimulatorState p sym bak ext arch t ret aty w)
+    (ScreachSimulatorState p sym bak ext arch t ret aty w)
     sym
     ext
-    rtp
+    (CS.RegEntry sym ret)
   where
   recordState = recordState
   {-# INLINE recordState #-}
 
 instance
   CSR.HasReplayState
-    (ScreachSimulatorState p sym bak ext rtp arch t aty w)
-    (ScreachSimulatorState p sym bak ext rtp arch t aty w)
+    (ScreachSimulatorState p sym bak ext arch t ret aty w)
+    (ScreachSimulatorState p sym bak ext arch t ret aty w)
     sym
     ext
-    rtp
+    (CS.RegEntry sym ret)
   where
   replayState = replayState
   {-# INLINE replayState #-}
 
 instance
   (MC.ArchAddrWidth arch ~ w) =>
-  MS.HasMacawLazySimulatorState (ScreachSimulatorState p sym bak ext rtp arch t aty w) sym w
+  MS.HasMacawLazySimulatorState (ScreachSimulatorState p sym bak ext arch t ret aty w) sym w
   where
   macawLazySimulatorState = greaseSimulatorState . GMSS.macawLazySimulatorState
   {-# INLINEABLE macawLazySimulatorState #-}
 
-instance GSN.HasServerSocketFds (ScreachSimulatorState p sym bak ext rtp arch t aty w) where
+instance GSN.HasServerSocketFds (ScreachSimulatorState p sym bak ext arch t ret aty w) where
   serverSocketFdsL = greaseSimulatorState . GSN.serverSocketFdsL
   {-# INLINE serverSocketFdsL #-}
 
 instance
   (MC.ArchAddrWidth arch ~ w) =>
   GMSS.HasGreaseSimulatorState
-    (ScreachSimulatorState p sym bak ext rtp arch t aty w)
+    (ScreachSimulatorState p sym bak ext arch t ret aty w)
     MDebug.MacawCommand
     sym
     arch
+    ret
   where
   greaseSimulatorState = greaseSimulatorState
   {-# INLINE greaseSimulatorState #-}
 
-instance ToConc.HasToConcretize (ScreachSimulatorState p sym bak ext rtp arch t aty w) where
+instance ToConc.HasToConcretize (ScreachSimulatorState p sym bak ext arch t ret aty w) where
   toConcretize = Lens.view (greaseSimulatorState . Lens.to ToConc.toConcretize)
 
 instance
   RFT.HasRefinmentState
-    (ScreachSimulatorState p sym bak ext rtp arch t aty w)
+    (ScreachSimulatorState p sym bak ext arch t ret aty w)
     sym
     bak
     t
@@ -128,12 +133,12 @@ instance
   refinementState = refineState
 
 mkScreachSimulatorState ::
-  forall sym bak t ext aty arch p rtp w.
+  forall sym bak t ext aty arch p ret w.
   sym ->
   HandleAllocator ->
-  GMSS.GreaseSimulatorState MDebug.MacawCommand sym arch ->
+  GMSS.GreaseSimulatorState MDebug.MacawCommand sym arch ret ->
   RFT.SrchRefineData sym bak t ext aty w ->
-  IO (ScreachSimulatorState p sym bak ext rtp arch t aty w)
+  IO (ScreachSimulatorState p sym bak ext arch t ret aty w)
 mkScreachSimulatorState sym halloc gss schrRefineData = do
   recState <- CSR.mkRecordState halloc
   empTrace <- CSR.emptyRecordedTrace sym

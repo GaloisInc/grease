@@ -214,7 +214,7 @@ mkMacawOverrideMapWithBuiltins ::
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
-  , HasGreaseSimulatorState p cExt sym arch
+  , HasGreaseSimulatorState p cExt sym arch ret
   ) =>
   bak ->
   -- | The paths of each user-supplied override file.

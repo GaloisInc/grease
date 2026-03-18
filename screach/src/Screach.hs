@@ -999,7 +999,7 @@ initCFG ::
     aty ->
   Maybe (IORef.IORef (Map.Map (Nonce.Nonce t CCC.BaseBoolType) (GH.ErrorDescription sym))) ->
   IO
-    (CS.ExecState (SP.ScreachSimulatorState p sym bak ext rtp arch t aty 64) sym ext (CS.RegEntry sym ret))
+    (CS.ExecState (SP.ScreachSimulatorState p sym bak ext arch t ret aty 64) sym ext (CS.RegEntry sym ret))
 initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
   let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` CCC.cfgHandle entryRegSsaCfg) mbEntryAddr
    in \bak gla sla macawCfgConfig halloc conf archCtx archRegSpec mbTargetAddr mbStartupOvSomeSsaCfg rtLoc memVar setupHook execAction addrOvs argShapes mbErrMaps -> do
@@ -1189,8 +1189,11 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
         let dbgOpts = Conf.debugOpts conf
         let dbgCmdExt = MDebug.macawCommandExt (archCtx ^. archVals)
         dbgCtx <- initDebugger sla dbgOpts dbgCmdExt (regStructRepr archCtx)
+        gssRecState <- RR.mkRecordState halloc
+        gssEmpTrace <- RR.emptyRecordedTrace sym
+        gssRepState <- RR.mkReplayState halloc gssEmpTrace
         let greaseSimState =
-              GMSS.emptyGreaseSimulatorState toConcVar dbgCtx
+              GMSS.mkGreaseSimulatorState toConcVar dbgCtx gssRecState gssRepState
                 & GMSS.discoveredFnHandles .~ discoveredHdls
         personality <-
           SP.mkScreachSimulatorState
@@ -1350,9 +1353,9 @@ analyzeElf conf sla gla halloc archCtx = do
           pFunc
 
 handleTarget ::
-  forall p' p sym ext bak rtp arch t aty wptr tag.
+  forall p' p sym ext bak arch t ret aty wptr tag.
   ( p
-      ~ SP.ScreachSimulatorState p' sym bak ext rtp arch t aty wptr
+      ~ SP.ScreachSimulatorState p' sym bak ext arch t ret aty wptr
   , ext ~ MS.MacawExt arch
   , CLM.HasPtrWidth
       wptr
@@ -1364,7 +1367,7 @@ handleTarget ::
   Ctx.Assignment (Const String) aty ->
   -- | Default/initial/minimal shapes
   Ctx.Assignment (Shape.Shape ext 'Shape.Precond tag) aty ->
-  CS.ExecResult p sym ext rtp ->
+  CS.ExecResult p sym ext (CS.RegEntry sym ret) ->
   IO
     Bool
 handleTarget archCtx _ sla argNames initArgs st =
@@ -1612,7 +1615,7 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
       _else -> panic "setupAssertThenAssume" (List.map show warns)
 
 verifyReachable ::
-  ( p ~ SP.ScreachSimulatorState p0 sym bak ext (CS.RegEntry sym ret) arch t tys w
+  ( p ~ SP.ScreachSimulatorState p0 sym bak ext arch t ret tys w
   , TFC.TraversableFC (Shape.ExtShape ext 'Shape.Precond)
   , CCE.IsSyntaxExtension ext
   , GU.OnlineSolverAndBackend solver sym bak t st fm

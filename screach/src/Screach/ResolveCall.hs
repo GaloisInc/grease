@@ -23,7 +23,7 @@ import What4.FunctionName qualified as WFN
 -- dynamic loader by the time the ECFS file is created.
 ecfsLookupFunctionHandleDispatch ::
   ( Symbolic.SymArchConstraints arch
-  , HasGreaseSimulatorState p cExt sym arch
+  , HasGreaseSimulatorState p cExt sym arch ret
   ) =>
   GreaseLogAction ->
   CFH.HandleAllocator ->

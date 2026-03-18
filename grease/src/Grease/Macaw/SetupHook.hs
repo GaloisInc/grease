@@ -56,13 +56,13 @@ doLog la diag = LJ.writeLog la (MacawSetupHookDiagnostic diag)
 -- c.f. 'Grease.LLVM.SetupHook.SetupHook'
 newtype SetupHook sym arch
   = SetupHook
-      ( forall bak rtp a r solver scope st fs p cExt.
+      ( forall bak rtp a r solver scope st fs p cExt ret.
         ( CB.IsSymBackend sym bak
         , sym ~ WEB.ExprBuilder scope st fs
         , bak ~ LCB.OnlineBackend solver scope st fs
         , WPO.OnlineSolver solver
         , CLM.HasLLVMAnn sym
-        , HasGreaseSimulatorState p cExt sym arch
+        , HasGreaseSimulatorState p cExt sym arch ret
         , HasToConcretize p
         ) =>
         bak ->
