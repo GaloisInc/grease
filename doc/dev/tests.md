@@ -6,6 +6,18 @@ To run the tests:
 $ cabal test pkg:grease-exe
 ```
 
+For faster local testing, you can enable fast mode which skips binary tests when
+equivalent S-expression variants exist:
+
+```sh
+$ GREASE_FAST_TESTS=1 cabal test pkg:grease-exe
+```
+
+This is useful during development as S-expression tests (`.cbl` files) run much
+faster (milliseconds) than binary tests (1-2 seconds each). When fast mode is
+enabled, the test harness will skip `.elf` tests if corresponding `.x64.cbl` or
+`.llvm.cbl` files exist in the same directory.
+
 The tests reside in the `grease-exe/tests/` directory. They are automatically
 discovered by the test harness based on their file name. They are written using
 [Oughta][oughta].
@@ -57,6 +69,32 @@ To add a new test, add a new directory under the appropriate directory above. It
 - A 32-bit ARM ELF executable named `test.armv7l.elf`
 - A 32-bit PowerPC ELF executable named `test.ppc32.elf`. (At the moment, we don't include 64-bit PowerPC executables, but we could if the need arose.)
 - An x86_64 executable named `test.x64.elf`.
+
+### S-expression variants for binary tests
+
+Binary tests may optionally include S-expression (`.cbl`) variants that test the
+same functionality without requiring binary disassembly. These variants provide:
+
+1. **Faster test execution**: S-expression tests complete in milliseconds vs 1-2 seconds for binaries
+2. **Backend coverage**: Architecture-specific (`.x64.cbl`) and LLVM backend (`.llvm.cbl`) variants
+3. **Simplified debugging**: Direct inspection of the CFG structure
+
+To add a `.cbl` variant for a binary test, create one or both of:
+- `test.x64.cbl` - Uses x64-specific Macaw backend
+- `test.llvm.cbl` - Uses LLVM backend (architecture-agnostic)
+
+The `.cbl` file should be placed in the same directory as the corresponding `.elf`
+file. Test assertions should be specified using S-expression line comments (`;; `)
+rather than C-style comments. For example:
+
+```scheme
+;; flags {"--symbol", "test"}
+;; go(prog)
+;; ok()
+```
+
+When fast mode is enabled (`GREASE_FAST_TESTS=1`), the test harness will
+automatically skip `.elf` tests if a corresponding `.cbl` variant exists.
 
 ## LLVM bitcode and S-expression test cases
 

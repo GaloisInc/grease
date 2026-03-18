@@ -38,6 +38,7 @@ import Oughta qualified
 import Prettyprinter qualified as PP
 import Shape (shapeTests)
 import System.Directory qualified as Dir
+import System.Environment qualified as Env
 import System.Exit qualified as Exit
 import System.FilePath ((</>))
 import System.FilePath qualified as FilePath
@@ -47,6 +48,12 @@ import What4.Internal qualified as WInt (assertionsEnabled)
 
 prelude :: Text.Text
 prelude = Text.decodeUtf8 $(embedFileRelative "tests/test.lua")
+
+-- | Tests to skip in fast mode (too slow, no .cbl variant available)
+fastModeSkipTests :: [String]
+fastModeSkipTests =
+  [ "libpng-cve-2018-13785"
+  ]
 
 data Arch = Armv7 | PPC32 | X64
   deriving Eq
@@ -281,18 +288,43 @@ oughtaLua dir fileName =
         oughta (dir </> fileName) prog
 
 -- | Create a test from a file, depending on the extension
-fileTest :: FilePath -> FilePath -> [T.TestTree]
-fileTest d f =
-  case FilePath.takeExtension f of
-    ".bc" -> [oughtaBc d f]
-    ".cbl" -> [oughtaSexp d f]
-    ".elf" -> [oughtaBin d f]
-    ".lua" -> [oughtaLua d f]
-    _ -> []
+fileTest :: Bool -> FilePath -> FilePath -> IO [T.TestTree]
+fileTest fastMode d f = do
+  -- In fast mode, skip slow tests that don't have .cbl variants
+  let shouldSkip = fastMode && any (`List.isInfixOf` d) fastModeSkipTests
+  if shouldSkip
+    then pure []
+    else case FilePath.takeExtension f of
+      ".bc" -> pure [oughtaBc d f]
+      ".cbl" -> pure [oughtaSexp d f]
+      ".elf" ->
+        if fastMode
+          then skipIfCblVariantExists d f
+          else pure [oughtaBin d f]
+      ".lua" -> pure [oughtaLua d f]
+      _ -> pure []
+
+-- | Skip binary test if a corresponding .cbl variant exists
+skipIfCblVariantExists :: FilePath -> FilePath -> IO [T.TestTree]
+skipIfCblVariantExists dir fileName = do
+  -- Extract: "test.x64.elf" -> base="test", arch="x64"
+  let withoutFirstExt = FilePath.dropExtension fileName -- "test.x64"
+      base = FilePath.dropExtension withoutFirstExt -- "test"
+      arch = FilePath.takeExtension withoutFirstExt -- ".x64"
+
+  -- Check for test.x64.cbl or test.llvm.cbl
+  let x64Cbl = dir </> base <> arch <> ".cbl"
+      llvmCbl = dir </> base <> ".llvm.cbl"
+  x64Exists <- Dir.doesFileExist x64Cbl
+  llvmExists <- Dir.doesFileExist llvmCbl
+
+  if x64Exists || llvmExists
+    then pure [] -- Skip this .elf test
+    else pure [oughtaBin dir fileName] -- Run it
 
 -- | Recursively walk a directory tree, discovering tests
-discoverTests :: FilePath -> IO T.TestTree
-discoverTests d = do
+discoverTests :: Bool -> FilePath -> IO T.TestTree
+discoverTests fastMode d = do
   entries <- Dir.listDirectory d
   fmap (T.testGroup (FilePath.takeBaseName d) . List.concat) $
     for entries $ \ent -> do
@@ -304,9 +336,9 @@ discoverTests d = do
           isDir <- Dir.doesDirectoryExist path
           if isDir
             then do
-              tests <- discoverTests path
+              tests <- discoverTests fastMode path
               pure [tests]
-            else pure (fileTest d ent)
+            else fileTest fastMode d ent
 
 assertTests :: T.TestTree
 assertTests =
@@ -328,6 +360,10 @@ assertTests =
 
 main :: IO ()
 main = do
+  -- Check for fast mode via environment variable
+  fastModeEnv <- Env.lookupEnv "GREASE_FAST_TESTS"
+  let fastMode = fastModeEnv == Just "1"
+
   -- Each entry in this list should be documented in doc/dev.md
   let dirs =
         [ "arm"
@@ -341,5 +377,6 @@ main = do
         , "ux"
         , "x86"
         ]
-  tests <- mapM discoverTests (map ("tests" </>) dirs)
+  tests <- mapM (discoverTests fastMode) (map ("tests" </>) dirs)
+
   T.defaultMain $ T.testGroup "Tests" (assertTests : shapeTests : tests)
