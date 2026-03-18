@@ -39,7 +39,7 @@ install_system_deps() {
   cp $BIN/yices_smt2$EXT $BIN/yices-smt2$EXT
   export PATH=$BIN:$PATH
   echo "$BIN" >> "$GITHUB_PATH"
-  is_exe "$BIN" z3 && is_exe "$BIN" cvc4 && is_exe "$BIN" cvc5 && is_exe "$BIN" yices
+  is_exe "$BIN" z3 && is_exe "$BIN" cvc4 && is_exe "$BIN" cvc5 && is_exe "$BIN" yices && is_exe "$BIN" bitwuzla
 }
 
 COMMAND="$1"
