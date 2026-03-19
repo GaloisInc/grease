@@ -76,7 +76,8 @@ import Grease.Entrypoint qualified as GE
 import Grease.ExecutionFeatures qualified as GEF
 import Grease.Heuristic qualified as GH
 import Grease.Macaw qualified as GM
-import Grease.Macaw.Arch (ArchContext, ArchReloc, archInfo, archRegNames, archRegStructType, archRegTypes, archRelocSupported, archVals, archValueNames)
+import Grease.Macaw.Arch (ArchContext, ArchReloc)
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery qualified as GMD
 import Grease.Macaw.Entrypoint qualified as GME
@@ -426,7 +427,7 @@ macawDataLayout :: ArchContext arch -> CLD.DataLayout
 macawDataLayout archCtx =
   CLD.defaultDataLayout
     & CLD.intLayout
-      .~ (archCtx ^. archInfo . to (MSML.toCrucibleEndian . MAI.archEndianness))
+      .~ (archCtx ^. Arch.archInfo . to (MSML.toCrucibleEndian . MAI.archEndianness))
 
 loadInitialPreconditions ::
   Shape.ExtShape ext ~ Shape.PtrShape ext w =>
@@ -641,7 +642,7 @@ analyzeSyntax conf sla gla halloc archCtx = do
           , mcPltStubs = Map.empty
           , mcDynFunMap = Map.empty
           , mcRelocs = Map.empty
-          , mcMemory = MC.emptyMemory (archCtx ^. archInfo . to MAI.archAddrWidth)
+          , mcMemory = MC.emptyMemory (archCtx ^. Arch.archInfo . to MAI.archAddrWidth)
           , mcEntryAddr = Nothing
           , mcIsEcfs = False
           }
@@ -737,7 +738,7 @@ loadElfFromConfig conf sla gla archCtx = do
         let symbolRelocs =
               Map.mapMaybe
                 ( \(reloc, symb) ->
-                    if (archCtx ^. archRelocSupported) reloc == Just SymbolReloc
+                    if (archCtx ^. Arch.archRelocSupported) reloc == Just SymbolReloc
                       then Just $ GU.functionNameFromByteString symb
                       else Nothing
                 )
@@ -915,7 +916,7 @@ loadAddrOvs ::
   ResolvedTargetLoc 64 ->
   IO (GMOA.AddressOverrides arch)
 loadAddrOvs archCtx conf halloc loadOpts mem rtLoc = do
-  let regTys = archCtx ^. archRegStructType
+  let regTys = archCtx ^. Arch.archRegStructType
   let word64ToInteger = fromIntegral @Word64 @Integer -- safe
   let loadOffset = word64ToInteger (fromMaybe 0 (LC.loadOffset loadOpts))
   let addrOvs_ =
@@ -996,9 +997,9 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
   let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` CCC.cfgHandle entryRegSsaCfg) mbEntryAddr
    in \bak gla sla macawCfgConfig halloc conf archCtx mbTargetAddr mbStartupOvSomeSsaCfg rtLoc memVar setupHook execAction addrOvs argShapes mbErrMaps -> do
         let dataLayout = macawDataLayout archCtx
-        let rNames = archCtx ^. archRegNames
-            argNames = archCtx ^. archValueNames
-            regTypes = archCtx ^. archRegTypes
+        let rNames = archCtx ^. Arch.archRegNames
+            argNames = archCtx ^. Arch.archValueNames
+            regTypes = archCtx ^. Arch.archRegTypes
         let MacawCfgConfig
               { mcLoadOptions = loadOpts
               , mcSymMap = symMap
@@ -1138,7 +1139,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                       skipInvalidCallAddrs
                       lfhd
                 }
-        evalFn <- MS.withArchEval @MS.LLVMMemory @MX86.X86_64 (archCtx ^. archVals) sym pure
+        evalFn <- MS.withArchEval @MS.LLVMMemory @MX86.X86_64 (archCtx ^. Arch.archVals) sym pure
         let macawExtImpl = MS.macawExtensions evalFn memVar memCfg
         let extImpl =
               -- We omit the goal evaluator in the case that we have a target
@@ -1181,8 +1182,8 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                 , GR.refineSolverTimeout = GO.simSolverTimeout boundsOpts
                 }
         let dbgOpts = Conf.debugOpts conf
-        let dbgCmdExt = MDebug.macawCommandExt (archCtx ^. archVals)
-        dbgCtx <- initDebugger sla dbgOpts dbgCmdExt (archCtx ^. archRegStructType)
+        let dbgCmdExt = MDebug.macawCommandExt (archCtx ^. Arch.archVals)
+        dbgCtx <- initDebugger sla dbgOpts dbgCmdExt (archCtx ^. Arch.archRegStructType)
         gssRecState <- RR.mkRecordState halloc
         gssEmpTrace <- RR.emptyRecordedTrace sym
         gssRepState <- RR.mkReplayState halloc gssEmpTrace
@@ -1365,14 +1366,14 @@ handleTarget ::
   IO
     Bool
 handleTarget archCtx _ sla initArgs st =
-  let argNames = archCtx ^. archValueNames
+  let argNames = archCtx ^. Arch.archValueNames
       rst =
         ( CS.execResultContext st ^. CS.cruciblePersonality . RFT.refinementState ::
             RFT.SrchRefineData sym bak t ext aty wptr
         )
    in case RFT._refineResult rst of
         Just (RFT.RefineResult bid cData _trace) | isReachedBug bid -> do
-          let addrWidth = archCtx ^. archInfo . to MAI.archAddrWidth
+          let addrWidth = archCtx ^. Arch.archInfo . to MAI.archAddrWidth
           let interestingShapes = interestingConcretizedShapes argNames initArgs (Conc.concArgs cData)
           let prettyData = Conc.printConcData addrWidth argNames interestingShapes cData
           doLog sla $ Diag.RefinementReach prettyData
@@ -1552,7 +1553,7 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
             ]
     let mbElf = snd . Elf.getElf <$> mbEhi
     let macawDbgExtImpl =
-          MDebug.macawExtImpl prettyPtrFnMap memVar (archCtx ^. archVals) mbElf
+          MDebug.macawExtImpl prettyPtrFnMap memVar (archCtx ^. Arch.archVals) mbElf
     -- We want to apply path splitting before we apply record replay, so that replay
     -- aborts the state that was path split that is not on
     -- the replayed path. The logging feature should be last so it observes items right before

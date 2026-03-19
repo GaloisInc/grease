@@ -206,4 +206,5 @@
     - { name: Data.Parameterized.TraversableFC, as: TFC }
 
     # grease
+    - { name: Grease.Macaw.Arch, as: Arch }
     - { name: Grease.Scheduler, as: Sched }

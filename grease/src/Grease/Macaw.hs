@@ -49,7 +49,8 @@ import Data.Word (Word64, Word8)
 import GHC.Stack (HasCallStack, callStack)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext, ArchRegs, ArchReloc, archInfo, archInitGlobals, archRegStructType, archRelocSupported, archStackPtrShape, archVals)
+import Grease.Macaw.Arch (ArchContext, ArchRegs, ArchReloc)
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Load.Relocation (RelocType (RelativeReloc, SymbolReloc))
 import Grease.Macaw.Overrides.Address (AddressOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
@@ -109,7 +110,7 @@ emptyMacawMem bak arch macawMem mutGlobs relocs = do
       (globalMemoryHooks arch relocs)
       (Proxy @arch)
       bak
-      (arch ^. archInfo . to (Symbolic.toCrucibleEndian . MI.archEndianness))
+      (arch ^. Arch.archInfo . to (Symbolic.toCrucibleEndian . MI.archEndianness))
       mutGlobs
       macawMem
   pure (InitialMem initMem, ptrTable)
@@ -140,7 +141,7 @@ globalMemoryHooks arch relocs =
         case Map.lookup relocAbsBaseAddr relocs of
           Just relocType
             | Just supportedRelocType <-
-                (arch ^. archRelocSupported) relocType ->
+                (arch ^. Arch.archRelocSupported) relocType ->
                 case supportedRelocType of
                   RelativeReloc ->
                     relativeRelocHook sym reloc relocAbsBaseAddr
@@ -265,7 +266,7 @@ globalMemoryHooks arch relocs =
       -- appropriate size and endianness.
       relocAbsBaseAddrBs :: BSL.ByteString
       relocAbsBaseAddrBs =
-        case arch ^. archInfo . to MI.archEndianness of
+        case arch ^. Arch.archInfo . to MI.archEndianness of
           MM.LittleEndian ->
             BSL.take relocSizeInt64 $
               Builder.toLazyByteString $
@@ -302,7 +303,7 @@ minimalArgShapes _bak arch mbEntryAddr = do
   regShapes <- Symbolic.macawAssignToCrucM mkRegShape $ Symbolic.crucGenRegAssignment symFns
   pure $ ArgShapes regShapes
  where
-  symFns = arch ^. archVals . to Symbolic.archFunctions
+  symFns = arch ^. Arch.archVals . to Symbolic.archFunctions
 
   mkRegShape ::
     forall tp.
@@ -314,7 +315,7 @@ minimalArgShapes _bak arch mbEntryAddr = do
           case MT.typeRepr r of
             MT.BVTypeRepr w ->
               case testEquality w $ MT.knownNat @(MC.ArchAddrWidth arch) of
-                Just C.Refl -> pure (ShapeExt (arch ^. archStackPtrShape))
+                Just C.Refl -> pure (ShapeExt (arch ^. Arch.archStackPtrShape))
                 Nothing -> panic "minimalArgShapes" ["Bad stack pointer width"]
       | Just Refl <- testEquality r MC.ip_reg
       , Just ipVal <- mbEntryAddr ->
@@ -480,7 +481,7 @@ assertRelocSupported arch loc (CLM.LLVMPointer _base offset) relocs =
       let addr = MM.memWord (fromInteger (BV.asUnsigned bv))
       case Map.lookup addr relocs of
         Just relocType
-          | Nothing <- (arch ^. archRelocSupported) relocType -> do
+          | Nothing <- (arch ^. Arch.archRelocSupported) relocType -> do
               let msg =
                     unlines
                       [ "Attempted to read from an unsupported relocation type ("
@@ -542,8 +543,8 @@ initState ::
   IO (CS.ExecState p sym (Symbolic.MacawExt arch) (CS.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch))))
 initState bak la macawExtImpl execCallback halloc mvar mem0 globs0 (CLSIO.SomeOverrideSim initFsOv) arch setupHook tgtOvs initialPersonality initialRegs funOvs mbStartupOvCfg (C.SomeCFG cfg) = do
   let sym = CB.backendGetSym bak
-  archStruct <- C.freshGlobalVar halloc "grease:archRegs" (Symbolic.crucGenRegStructType $ Symbolic.archFunctions (arch ^. archVals))
-  (mem1, globs1) <- liftIO $ (arch ^. archInitGlobals) (Stubs.Sym sym bak) (getSetupMem mem0) globs0
+  archStruct <- C.freshGlobalVar halloc "grease:archRegs" (Symbolic.crucGenRegStructType $ Symbolic.archFunctions (arch ^. Arch.archVals))
+  (mem1, globs1) <- liftIO $ (arch ^. Arch.archInitGlobals) (Stubs.Sym sym bak) (getSetupMem mem0) globs0
   let globs2 = CS.insertGlobal mvar mem1 globs1
   let globs3 = CS.insertGlobal archStruct initialRegs globs2
   let extImpl = greaseMacawExtImpl arch bak la execCallback tgtOvs mvar archStruct macawExtImpl
@@ -560,7 +561,7 @@ initState bak la macawExtImpl execCallback halloc mvar mem0 globs0 (CLSIO.SomeOv
           bindings
           extImpl
           initialPersonality
-  let sRepr = arch ^. archRegStructType
+  let sRepr = arch ^. Arch.archRegStructType
   pure
     $ CS.InitialState
       ctx
@@ -568,7 +569,7 @@ initState bak la macawExtImpl execCallback halloc mvar mem0 globs0 (CLSIO.SomeOv
       CS.defaultAbortHandler
       sRepr
     $ CS.runOverrideSim sRepr
-    $ Symbolic.crucGenArchConstraints (arch ^. archVals . to Symbolic.archFunctions)
+    $ Symbolic.crucGenArchConstraints (arch ^. Arch.archVals . to Symbolic.archFunctions)
     $ do
       let SetupHook hook = setupHook
       hook bak mvar funOvs

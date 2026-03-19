@@ -7,7 +7,7 @@ import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict qualified as Map
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.Macaw.Arch
+import Grease.Macaw.Arch (ArchContext)
 import Grease.Macaw.ResolveCall qualified as ResolveCall
 import Grease.Macaw.SimulatorState
 import Grease.Macaw.SkippedCall qualified as SkippedCall

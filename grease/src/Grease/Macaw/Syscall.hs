@@ -14,7 +14,8 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC)
-import Grease.Macaw.Arch (ArchContext, archSyscallArgumentRegisters, archSyscallReturnRegisters)
+import Grease.Macaw.Arch (ArchContext)
+import Grease.Macaw.Arch qualified as Arch
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
@@ -61,7 +62,7 @@ macawSyscallOverride bak archCtx regArgTps regRetTps syscallOv =
     let argReg = massageRegAssignment $ CS.regMap argMap
     args <-
       liftIO $
-        (archCtx ^. archSyscallArgumentRegisters)
+        (archCtx ^. Arch.archSyscallArgumentRegisters)
           bak
           regArgTps
           argReg
@@ -69,7 +70,7 @@ macawSyscallOverride bak archCtx regArgTps regRetTps syscallOv =
 
     -- Invoke the override and put the return value(s) into the appropriate
     -- register(s)
-    (archCtx ^. archSyscallReturnRegisters)
+    (archCtx ^. Arch.archSyscallReturnRegisters)
       (Stubs.syscallReturnType syscallOv)
       (Stubs.syscallOverride syscallOv bak args)
       regArgTps
@@ -77,7 +78,7 @@ macawSyscallOverride bak archCtx regArgTps regRetTps syscallOv =
       regRetTps
 
 -- | Massage the 'C.RegEntry' 'Ctx.Assignment' that 'C.getOverrideArgs'
--- provides into the form that 'archSyscallArgumentRegisters' expects.
+-- provides into the form that 'Arch.archSyscallArgumentRegisters' expects.
 massageRegAssignment ::
   Ctx.Assignment (CS.RegEntry sym) ctx ->
   CS.RegEntry sym (C.StructType ctx)

@@ -17,7 +17,8 @@ import Data.Macaw.Utils.IncComp qualified as IncComp
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Some (Some (Some))
 import Grease.Diagnostic (Diagnostic (LoadDiagnostic))
-import Grease.Macaw.Arch (ArchContext, ArchRegCFG, archInfo, archVals)
+import Grease.Macaw.Arch (ArchContext, ArchRegCFG)
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Utility (functionNameFromByteString, tshow)
 import Lang.Crucible.FunctionHandle qualified as C
@@ -67,7 +68,7 @@ discoverFunction ::
   MC.ArchSegmentOff arch ->
   m (ArchRegCFG arch)
 discoverFunction logAction halloc arch mem symMap pltStubs addr = do
-  let archInf = arch ^. archInfo
+  let archInf = arch ^. Arch.archInfo
   -- Mark the PLT stubs as trusted function entry points.
   -- See Note [Mark PLT stubs as trusted function entry points].
   let pltEntryPoints = Discovery.MayReturnFun <$ pltStubs
@@ -86,7 +87,7 @@ discoverFunction logAction halloc arch mem symMap pltStubs addr = do
         pure res
     liftIO $
       Symbolic.mkFunRegCFG
-        (arch ^. archVals . to Symbolic.archFunctions)
+        (arch ^. Arch.archVals . to Symbolic.archFunctions)
         halloc
         (functionNameFromByteString $ Discovery.discoveredFunName funInfo)
         (WPL.OtherPos . tshow) -- simply use addresses as source positions for now

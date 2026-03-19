@@ -38,7 +38,7 @@ import Data.Vector qualified as Vec
 import Data.Void (Void)
 import Data.Word (Word8)
 import GHC.Stack (HasCallStack, callStack)
-import Grease.Macaw.Arch qualified as GMA
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Memory qualified as GMM
 import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
@@ -67,7 +67,7 @@ sscanfFamilyOverrides ::
   ) =>
   CS.GlobalVar CLM.Mem ->
   MS.MemModelConfig p sym arch CLM.Mem ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   Seq.Seq (StubsF.SomeFunctionOverride p sym arch)
 sscanfFamilyOverrides memVar mmConf archCtx =
   Seq.fromList
@@ -76,7 +76,7 @@ sscanfFamilyOverrides memVar mmConf archCtx =
     ]
  where
   endian :: MC.Endianness
-  endian = archCtx ^. GMA.archInfo . to MAI.archEndianness
+  endian = archCtx ^. Arch.archInfo . to MAI.archEndianness
 
 -- | Build an override for the @sscanf@ function.
 buildSscanfOverride ::

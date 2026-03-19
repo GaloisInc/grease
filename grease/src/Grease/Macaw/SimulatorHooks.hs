@@ -23,7 +23,8 @@ import Data.Macaw.Symbolic.Backend qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
 import Grease.Diagnostic (Diagnostic (SimulatorHooksDiagnostic), GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext, archVals)
+import Grease.Macaw.Arch (ArchContext)
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Overrides.Address (AddressOverrides, maybeRunAddressOverride)
 import Grease.Macaw.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Panic (panic)
@@ -211,7 +212,7 @@ extensionExec archCtx bak la insnAct tgtOvs memVar archStruct baseExt stmt crucS
     Symbolic.MacawArchStateUpdate _ updates ->
       let updateRegsInGlobals globs =
             let regs = CS.lookupGlobal archStruct globs
-                regAssign = Symbolic.crucGenRegAssignment $ Symbolic.archFunctions (archCtx ^. archVals)
+                regAssign = Symbolic.crucGenRegAssignment $ Symbolic.archFunctions (archCtx ^. Arch.archVals)
              in CS.insertGlobal
                   archStruct
                   ( case regs of

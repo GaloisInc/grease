@@ -24,7 +24,7 @@ import Data.Maybe qualified as Maybe
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Some qualified as Some
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.Macaw.Arch qualified as GRS
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Scheduler qualified as Sched
 import Lang.Crucible.CFG.Core qualified as CCC
 import Lang.Crucible.FunctionHandle qualified as CFH
@@ -180,7 +180,7 @@ sdsePrioritizationFunction ::
   MM.MemWord 64 ->
   -- | Target containing function
   MM.MemWord 64 ->
-  GRS.ArchContext MA.X86_64 ->
+  Arch.ArchContext MA.X86_64 ->
   CG.CallGraph 64 ->
   CG.CFGCache 64 ->
   Dist.DistanceConfig ->

@@ -12,7 +12,7 @@ import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as MS
 import Data.Parameterized.Context qualified as Ctx
 import Data.Sequence qualified as Seq
-import Grease.Macaw.Arch qualified as GMA
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Utility qualified as GU
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as CLSIO
@@ -40,7 +40,7 @@ customScreachOverrides ::
   CLSIO.LLVMFileSystem w ->
   CS.GlobalVar CLM.Mem ->
   MS.MemModelConfig p' sym arch CLM.Mem ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   Seq.Seq (StubsF.SomeFunctionOverride p' sym arch)
 customScreachOverrides la _fs memVar mmConf archCtx =
   SFS.sscanfFamilyOverrides memVar mmConf archCtx
