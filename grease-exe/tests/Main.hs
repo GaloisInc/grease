@@ -38,6 +38,7 @@ import Oughta qualified
 import Prettyprinter qualified as PP
 import Shape (shapeTests)
 import System.Directory qualified as Dir
+import System.Environment qualified as Env
 import System.Exit qualified as Exit
 import System.FilePath ((</>))
 import System.FilePath qualified as FilePath
@@ -101,10 +102,15 @@ go logRef flagsRef prog = do
   Lua.newtable
   Lua.setglobal argsGlobal
 
-  let cliOpts = strOpts List.++ ["--", prog]
+  -- Check for GREASE_SOLVER environment variable
+  maybeSolver <- liftIO $ Env.lookupEnv "GREASE_SOLVER"
+  let solverOpts = case maybeSolver of
+        Just solver -> ["--solver", solver]
+        Nothing -> []
+  let cliOpts = solverOpts List.++ strOpts List.++ ["--", prog]
   liftIO (IORef.writeIORef flagsRef cliOpts)
 
-  opts <- liftIO (optsSimOpts <$> optsFromList (prog : strOpts))
+  opts <- liftIO (optsSimOpts <$> optsFromList (prog : solverOpts List.++ strOpts))
   logTxt <-
     liftIO $
       withCapturedLogs $ \la' -> do
