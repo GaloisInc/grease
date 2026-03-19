@@ -49,6 +49,7 @@ import Grease.Shape (ExtShape, Shape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.Pointer (BlockId (BlockId), PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
+import Grease.ValueName (ValueName)
 import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Numeric (showHex)
 import Prettyprinter qualified as PP
@@ -148,17 +149,16 @@ printAllocs aw as =
 --
 -- Note: Only works with shapes in 'Precond mode.
 printNamedShapesFiltered ::
-  PP.Pretty nm =>
   ExtShape ext 'PtrShape.Precond tag ~ PtrShape ext w 'PtrShape.Precond tag =>
   -- | Names
-  Ctx.Assignment (Const.Const nm) tys ->
+  Ctx.Assignment ValueName tys ->
   -- | Only print those 'Shape's with 'True' in the corresponding entry here
   Ctx.Assignment (Const.Const Bool) tys ->
   Ctx.Assignment (Shape ext 'PtrShape.Precond tag) tys ->
   Printer w tag (PP.Doc ann)
 printNamedShapesFiltered names filt shapes =
   TFC.foldlMFC'
-    ( \doc (Product.Pair (Product.Pair (Const.Const nm) s) (Const.Const b)) ->
+    ( \doc (Product.Pair (Product.Pair nm s) (Const.Const b)) ->
         if b
           then ((doc PP.<> PP.line) PP.<>) Functor.<$> printNamed nm s
           else pure doc
@@ -170,10 +170,9 @@ printNamedShapesFiltered names filt shapes =
 --
 -- Note: Only works with shapes in 'Precond mode.
 printNamedShapes ::
-  PP.Pretty nm =>
   ExtShape ext 'PtrShape.Precond tag ~ PtrShape ext w 'PtrShape.Precond tag =>
   -- | Names
-  Ctx.Assignment (Const.Const nm) tys ->
+  Ctx.Assignment ValueName tys ->
   Ctx.Assignment (Shape ext 'PtrShape.Precond tag) tys ->
   Printer w tag (PP.Doc ann)
 printNamedShapes names =

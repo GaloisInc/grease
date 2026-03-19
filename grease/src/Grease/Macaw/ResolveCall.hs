@@ -49,7 +49,7 @@ import Data.Text (Text)
 import GHC.Word (Word64)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (Diagnostic (ResolveCallDiagnostic), GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext, archFunctionReturnAddr, archGetIP, archOffsetStackPointerPostCall, archPCFixup, archRegTypes, archSyscallCodeMapping, archSyscallNumberRegister, archSyscallReturnRegisters, archVals)
+import Grease.Macaw.Arch (ArchContext, archFunctionReturnAddr, archGetIP, archOffsetStackPointerPostCall, archPCFixup, archRegStructType, archSyscallCodeMapping, archSyscallNumberRegister, archSyscallReturnRegisters, archVals)
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.Overrides (lookupMacawForwardDeclarationOverride)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride, msoPublicFnHandle, msoPublicOverride, msoSomeFunctionOverride))
@@ -95,9 +95,6 @@ import What4.Protocol.Online qualified as WPO
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (ResolveCallDiagnostic diag)
 
-regStructRepr :: ArchContext arch -> C.TypeRepr (Symbolic.ArchRegStruct arch)
-regStructRepr arch = C.StructRepr $ archRegTypes arch
-
 -- | Create a new override that post-composes an 'OverrideSim' action with an existing one.
 useComposedOverride ::
   C.HandleAllocator ->
@@ -120,8 +117,8 @@ useComposedOverride ::
     , CS.SimState p sym (Symbolic.MacawExt arch) r f a
     )
 useComposedOverride halloc arch handle0 override0 st funcName f = do
-  handle <- C.mkHandle' halloc funcName (Ctx.Empty Ctx.:> regStructRepr arch) (regStructRepr arch)
-  let override = CS.mkOverride' funcName (regStructRepr arch) $ do
+  handle <- C.mkHandle' halloc funcName (Ctx.Empty Ctx.:> (arch ^. archRegStructType)) (arch ^. archRegStructType)
+  let override = CS.mkOverride' funcName (arch ^. archRegStructType) $ do
         args <- CS.getOverrideArgs
         regs <- CS.callOverride handle0 override0 args
         f (CS.regValue regs)
@@ -190,8 +187,8 @@ defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs errCb =
       SkippedFunctionCall reason -> do
         doLog la $ Diag.SkippedFunctionCall reason
         let funcName = WFN.functionNameFromText "_grease_external"
-        handle <- C.mkHandle' halloc funcName (Ctx.Empty Ctx.:> regStructRepr arch) (regStructRepr arch)
-        let override = CS.mkOverride' funcName (regStructRepr arch) $ do
+        handle <- C.mkHandle' halloc funcName (Ctx.Empty Ctx.:> (arch ^. archRegStructType)) (arch ^. archRegStructType)
+        let override = CS.mkOverride' funcName (arch ^. archRegStructType) $ do
               args <- CS.getOverrideArgs
               let regs' = Ctx.last $ CS.regMap args
               (arch ^. archOffsetStackPointerPostCall) (CS.regValue regs')

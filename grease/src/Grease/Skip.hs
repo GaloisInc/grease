@@ -26,6 +26,7 @@ import Grease.Shape.Pointer qualified as PtrShape
 import Grease.Shape.Pointer qualified as ShapePtr
 import Grease.Shape.Selector qualified as Selector
 import Grease.Skip.Diagnostic qualified as Diag
+import Grease.ValueName (ValueName (ValueName))
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
@@ -68,7 +69,7 @@ skipOverride la dl memVar funcName valTy shape = do
     -- TODO(#15): Preserve LLVM memory and annotations from setup monad state
     liftIO $ Setup.runSetup (Setup.InitialMem mem) $ do
       let funcNameStr = Text.unpack (WFN.functionName funcName)
-      let valName = Setup.ValueName (funcNameStr ++ "Return")
+      let valName = ValueName (funcNameStr ++ "Return")
       let sel = Selector.SelectRet (Selector.RetSelector funcName (Cursor.Here valTy))
       shape' <- Setup.setupShape la bak dl valName valTy sel shape
       pure (CS.unRV (Shape.getTag PtrShape.getPtrTag shape'))

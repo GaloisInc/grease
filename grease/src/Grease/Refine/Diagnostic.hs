@@ -11,7 +11,7 @@ module Grease.Refine.Diagnostic (
   severity,
 ) where
 
-import Control.Lens (Const, (^.))
+import Control.Lens ((^.))
 import Data.Macaw.Memory qualified as MM
 import Data.Parameterized.Context qualified as Ctx
 import Data.Text (Text)
@@ -21,6 +21,7 @@ import Grease.Heuristic.Result qualified as Heuristic
 import Grease.Shape (ArgShapes (ArgShapes), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Grease.Shape.Print qualified as ShapePP
+import Grease.ValueName (ValueName)
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.ExecutionTree qualified as ET
@@ -57,7 +58,7 @@ data Diagnostic where
     ) =>
     MM.AddrWidthRepr w ->
     -- | Argument names
-    Ctx.Assignment (Const String) tys ->
+    Ctx.Assignment ValueName tys ->
     ArgShapes ext tag tys ->
     Diagnostic
   RefinementLoopMaximumIterationsExceeded ::
@@ -75,7 +76,7 @@ data Diagnostic where
     ) =>
     MM.AddrWidthRepr w ->
     -- | Argument names
-    Ctx.Assignment (Const String) tys ->
+    Ctx.Assignment ValueName tys ->
     ArgShapes ext tag tys ->
     Diagnostic
   ResumingFromBranch ::

@@ -12,7 +12,6 @@ module Grease.Macaw (
   SetupHook (..),
   emptyMacawMem,
   minimalArgShapes,
-  regStructRepr,
   memConfigInitial,
   memConfigWithHandles,
   initState,
@@ -50,7 +49,7 @@ import Data.Word (Word64, Word8)
 import GHC.Stack (HasCallStack, callStack)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext, ArchRegs, ArchReloc, archInfo, archInitGlobals, archRegTypes, archRelocSupported, archStackPtrShape, archVals)
+import Grease.Macaw.Arch (ArchContext, ArchRegs, ArchReloc, archInfo, archInitGlobals, archRegStructType, archRelocSupported, archStackPtrShape, archVals)
 import Grease.Macaw.Load.Relocation (RelocType (RelativeReloc, SymbolReloc))
 import Grease.Macaw.Overrides.Address (AddressOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
@@ -342,9 +341,6 @@ minimalArgShapes _bak arch mbEntryAddr = do
                 ]
           pure shape
 
-regStructRepr :: ArchContext arch -> C.TypeRepr (Symbolic.ArchRegStruct arch)
-regStructRepr arch = C.StructRepr $ archRegTypes arch
-
 -- | Produce an initial 'Symbolic.MemModelConfig' value that can do everything
 -- @grease@'s Macaw backend needs, with the exception of looking up function or
 -- syscall handles. ('memConfigWithHandles' does that part—see its Haddocks for
@@ -564,7 +560,7 @@ initState bak la macawExtImpl execCallback halloc mvar mem0 globs0 (CLSIO.SomeOv
           bindings
           extImpl
           initialPersonality
-  let sRepr = regStructRepr arch
+  let sRepr = arch ^. archRegStructType
   pure
     $ CS.InitialState
       ctx

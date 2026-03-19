@@ -4,22 +4,13 @@
 module Grease.Macaw.RegName (
   RegName (..),
   mkRegName,
-  regNames,
-  RegNames (..),
-  getRegName,
   regNameToString,
-  regNamesToList,
 ) where
 
-import Control.Lens (to, (^.))
-import Data.Functor.Const (Const (Const), getConst)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Maybe qualified as Maybe
-import Data.Parameterized.Classes (IxedF' (ixF'))
-import Data.Parameterized.Context qualified as Ctx
-import Data.Parameterized.TraversableFC (toListFC)
 
 newtype RegName = RegName String
   deriving (Eq, Ord, Show)
@@ -30,28 +21,5 @@ mkRegName r = RegName (strip "_" (show (MC.prettyF r)))
  where
   strip pfx s = Maybe.fromMaybe s (List.stripPrefix pfx s)
 
--- | A list of human-readable names for each register in the architecture
-newtype RegNames arch = RegNames (Ctx.Assignment (Const RegName) (Symbolic.MacawCrucibleRegTypes arch))
-  deriving Show
-
-regNames ::
-  forall arch mem.
-  Symbolic.SymArchConstraints arch =>
-  Symbolic.GenArchVals mem arch ->
-  RegNames arch
-regNames archVals =
-  RegNames $
-    Symbolic.macawAssignToCruc (Const . mkRegName) $
-      Symbolic.crucGenRegAssignment (Symbolic.archFunctions archVals)
-
-getRegName ::
-  RegNames arch ->
-  Ctx.Index (Symbolic.MacawCrucibleRegTypes arch) t ->
-  RegName
-getRegName (RegNames rNames) idx = rNames ^. ixF' idx . to getConst
-
 regNameToString :: RegName -> String
 regNameToString (RegName nm) = nm
-
-regNamesToList :: RegNames arch -> [RegName]
-regNamesToList (RegNames rNames) = toListFC getConst rNames

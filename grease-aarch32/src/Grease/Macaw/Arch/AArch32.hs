@@ -68,6 +68,7 @@ armCtx halloc mbReturnAddr stackArgSlots = do
       -- `genArchVals` is total: https://github.com/GaloisInc/macaw/issues/231
       panic "armCtx" ["Failed to generate architecture-specific values"]
     Just avals -> pure avals
+  let (regStructTy, regTys, rNames, vNames) = Arch.mkArchRegInfo avals
   let regOverrides =
         case mbReturnAddr of
           Just returnAddr ->
@@ -99,6 +100,10 @@ armCtx halloc mbReturnAddr stackArgSlots = do
       , -- assumes AAPCS32 https://github.com/ARM-software/abi-aa/blob/main/aapcs32/aapcs32.rst#parameter-passing
         Arch._archABIParams = Some.Some <$> [ARM.r0, ARM.r1, ARM.r2, ARM.r3]
       , Arch._archPCFixup = armArchPCFixup
+      , Arch._archRegStructType = regStructTy
+      , Arch._archRegTypes = regTys
+      , Arch._archRegNames = rNames
+      , Arch._archValueNames = vNames
       }
 
 -- | This PC fixup fixes call addresses to set the low bit of the address

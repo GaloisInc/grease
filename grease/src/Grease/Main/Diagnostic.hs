@@ -11,7 +11,6 @@ module Grease.Main.Diagnostic (
   severity,
 ) where
 
-import Data.Functor.Const (Const)
 import Data.LLVM.BitCode (ParseWarning, ppParseWarnings)
 import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
@@ -27,6 +26,7 @@ import Grease.Shape (ArgShapes (ArgShapes), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Grease.Shape.Print qualified as ShapePP
 import Grease.Time (Nanoseconds, nanosToMillis)
+import Grease.ValueName (ValueName)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
@@ -56,7 +56,7 @@ data Diagnostic where
     FilePath ->
     MM.AddrWidthRepr w ->
     -- | Argument names
-    Ctx.Assignment (Const String) tys ->
+    Ctx.Assignment ValueName tys ->
     ArgShapes ext tag tys ->
     Diagnostic
   FinishedAnalyzingEntrypoint ::

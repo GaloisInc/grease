@@ -6,7 +6,6 @@ module Grease.Macaw.Shapes (
 
 import Control.Monad.Trans.Maybe qualified as MaybeT
 import Data.ElfEdit qualified as Elf
-import Data.Functor.Const (Const)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
@@ -22,6 +21,7 @@ import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Simple qualified as Simple
 import Grease.Utility (segoffToAbsoluteAddr)
+import Grease.ValueName (ValueName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
@@ -54,7 +54,7 @@ macawInitArgShapes ::
   Maybe (Shape.ParsedShapes (Symbolic.MacawExt arch)) ->
   Maybe (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch)) ->
   MM.Memory (MC.ArchAddrWidth arch) ->
-  Ctx.Assignment (Const String) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
+  Ctx.Assignment ValueName (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->

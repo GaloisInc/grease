@@ -39,7 +39,7 @@ import Data.ElfEdit qualified as Elf
 import Data.Foldable (traverse_)
 import Data.Function ((&))
 import Data.Functor ((<&>))
-import Data.Functor.Const (Const (Const))
+import Data.Functor.Const (Const (Const), getConst)
 import Data.IntMap qualified as IntMap
 import Data.LLVM.BitCode (formatError, parseBitCodeFromFileWithWarnings)
 import Data.List qualified as List
@@ -126,7 +126,7 @@ import Grease.Macaw.Overrides.Address qualified as AddrOv
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Macaw.Overrides.SExp qualified as GMOS
 import Grease.Macaw.PLT qualified as GMPLT
-import Grease.Macaw.RegName (getRegName, mkRegName)
+import Grease.Macaw.RegName (mkRegName)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
 import Grease.Macaw.Shapes qualified as GMS
 import Grease.Macaw.SimulatorHooks (ExecutingAddressAction (ExecutingAddressAction))
@@ -154,6 +154,7 @@ import Grease.Syntax qualified as GSyn
 import Grease.Syscall (builtinGenericSyscalls)
 import Grease.Time (time)
 import Grease.Utility qualified as GUtil
+import Grease.ValueName (ValueName (ValueName), getValueName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
@@ -344,7 +345,7 @@ toBatchBug ::
   (ExtShape ext ~ PtrShape ext wptr) =>
   WE.FloatModeRepr fm ->
   MC.AddrWidthRepr wptr ->
-  Ctx.Assignment (Const String) args ->
+  Ctx.Assignment ValueName args ->
   Ctx.Assignment C.TypeRepr args ->
   Shape.ArgShapes ext NoTag args ->
   Bug.BugInstance ->
@@ -367,7 +368,7 @@ toFailedPredicate ::
   (ExtShape ext ~ PtrShape ext wptr) =>
   WE.FloatModeRepr fm ->
   MC.AddrWidthRepr wptr ->
-  Ctx.Assignment (Const String) args ->
+  Ctx.Assignment ValueName args ->
   Ctx.Assignment C.TypeRepr args ->
   Shape.ArgShapes ext NoTag args ->
   GRef.NoHeuristic sym ext args ->
@@ -506,7 +507,7 @@ interestingConcretizedShapes ::
   CLM.HasPtrWidth wptr =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
+  Ctx.Assignment ValueName argTys ->
   -- | Default/initial/minimal shapes
   Ctx.Assignment (Shape.Shape ext 'Precond tag) argTys ->
   Conc.ConcArgs sym ext argTys ->
@@ -516,8 +517,9 @@ interestingConcretizedShapes names initArgs cArgs =
       cShapes = fmapFC Shape.tagWithType (Conc.concArgsShapes cArgs)
       isLlvmArg name = "%" `List.isPrefixOf` name
    in Ctx.zipWith
-        ( \(Const name) (Const isDefault) ->
-            Const ((name `List.elem` interestingRegs || isLlvmArg name) && not isDefault)
+        ( \vn (Const isDefault) ->
+            let name = getValueName vn
+             in Const ((name `List.elem` interestingRegs || isLlvmArg name) && not isDefault)
         )
         names
         -- Check if the shape has changed during concretization. When we concretize, we transform the shape
@@ -543,7 +545,7 @@ getMacawInitArgShapes ::
   GMA.ArchContext arch ->
   GO.InitialPreconditionOpts ->
   MacawCfgConfig arch ->
-  Ctx.Assignment (Const String) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
+  Ctx.Assignment ValueName (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
@@ -573,11 +575,11 @@ overrideRegs ::
   Ctx.Assignment (CS.RegValue' sym) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
   IO (Ctx.Assignment (CS.RegValue' sym) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)))
 overrideRegs archCtx sym =
-  let rNames = GMA.archRegNames archCtx
-      regTypes = GMA.archRegTypes archCtx
+  let rNames = archCtx ^. GMA.archRegNames
+      regTypes = archCtx ^. GMA.archRegTypes
    in Ctx.traverseWithIndex
         ( \idx reg -> do
-            let regName = getRegName rNames idx
+            let regName = getConst (rNames Ctx.! idx)
             let isStackPointer = regName == mkRegName @arch MC.sp_reg
             case Map.lookup regName (archCtx ^. GMA.archRegOverrides) of
               Just i
@@ -812,7 +814,7 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
 
   let dbgOpts = GO.simDebugOpts simOpts
   let dbgCmdExt = MDebug.macawCommandExt (archCtx ^. GMA.archVals)
-  dbgCtx <- initDebugger la dbgOpts dbgCmdExt (GM.regStructRepr archCtx)
+  dbgCtx <- initDebugger la dbgOpts dbgCmdExt (archCtx ^. GMA.archRegStructType)
 
   recState <- CR.mkRecordState halloc
   empTrace <- CR.emptyRecordedTrace sym
@@ -865,9 +867,9 @@ macawRefineOnce ::
   EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
   IO (GRef.ProveRefineResult sym ext argTys)
 macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
-  let rNameAssign = GMA.archValueNames archCtx
-      regTypes = GMA.archRegTypes archCtx
-      argNames = GMA.archArgNames archCtx
+  let rNameAssign = archCtx ^. GMA.archValueNames
+      regTypes = archCtx ^. GMA.archRegTypes
+      argNames = archCtx ^. GMA.archValueNames
   GRef.refineOnce
     la
     simOpts
@@ -957,8 +959,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
 
   memVar <- CLM.mkMemVar "grease:memmodel" halloc
   (execFeats, profLogTask) <- macawExecFeats la bak memVar archCtx macawCfgConfig simOpts
-  let argNames = GMA.archArgNames archCtx
-  let rNames = GMA.archRegNames archCtx
+  let argNames = archCtx ^. GMA.archValueNames
+  let rNames = archCtx ^. GMA.archRegNames
 
   initArgShapes <-
     let opts = GO.simInitPrecondOpts simOpts
@@ -1070,9 +1072,9 @@ simulateRewrittenCfg ::
   EP.EntrypointCfgs (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   IO GOut.BatchStatus
 simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs memPtrTable initMem initArgShapes result execFeats mbCfgAddr entrypointCfgs entrypointCfgsSsa = do
-  let regTypes = GMA.archRegTypes archCtx
-      argNames = GMA.archArgNames archCtx
-  let rNames = GMA.archRegNames archCtx
+  let regTypes = archCtx ^. GMA.archRegTypes
+      argNames = archCtx ^. GMA.archValueNames
+  let rNames = archCtx ^. GMA.archRegNames
 
   res <- case result of
     GRef.RefinementBug b cData ->
@@ -1302,7 +1304,7 @@ loadAddrOvs ::
   GO.SimOpts ->
   IO (AddressOverrides arch)
 loadAddrOvs la archCtx halloc memory simOpts = do
-  mbAddrOvs <- loadAddressOverrides (GM.regStructRepr archCtx) halloc memory (GO.simAddressOverrides simOpts)
+  mbAddrOvs <- loadAddressOverrides (archCtx ^. GMA.archRegStructType) halloc memory (GO.simAddressOverrides simOpts)
   let usrErr = userErr la . PP.pretty
   case mbAddrOvs of
     -- See Note [Explicitly listed errors]
@@ -1509,7 +1511,7 @@ getLlvmInitArgShapes ::
   GDiag.GreaseLogAction ->
   GO.InitialPreconditionOpts ->
   Maybe L.Module ->
-  Ctx.Assignment (Const String) argTys ->
+  Ctx.Assignment ValueName argTys ->
   -- | The CFG of the user-requested entrypoint function.
   C.CFG CLLVM.LLVM blocks argTys ret ->
   IO (ArgShapes CLLVM.LLVM NoTag argTys)
@@ -1563,7 +1565,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
 
   let argTys = C.cfgArgTypes cfg
       -- Display the arguments as though they are unnamed LLVM virtual registers.
-      argNames = imapFC (\i _ -> Const ('%' : show i)) argTys
+      argNames = imapFC (\i _ -> ValueName ('%' : show i)) argTys
   initArgShapes <-
     let opts = GO.simInitPrecondOpts simOpts
      in getLlvmInitArgShapes la opts llvmMod argNames cfg
@@ -1580,7 +1582,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   let bounds = GO.simBoundsOpts simOpts
   result <- withMemOptions simOpts $ do
-    let valueNames = Ctx.generate (Ctx.size argTys) (\i -> GSetup.ValueName ("arg" <> show i))
+    let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
     let typeCtx = llvmCtx ^. CLT.llvmTypeCtx
     let dl = CLTC.llvmDataLayout typeCtx
     -- See comment above on heuristics in 'simulateMacawCfg'
