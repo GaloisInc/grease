@@ -31,6 +31,7 @@ import Data.Graph.Inductive.NodeMap qualified as GNM
 import Data.Graph.Inductive.PatriciaTree qualified as GPT
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Discovery qualified as MD
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map qualified as Map
@@ -168,6 +169,7 @@ getCFG ::
   , Symbolic.SymArchConstraints arch
   ) =>
   CFGCache w ->
+  IORef.IORef (MD.DiscoveryState arch) ->
   BinMd arch ->
   MM.Memory w ->
   MM.MemWord w ->
@@ -176,14 +178,16 @@ getCFG ::
   CFH.HandleAllocator ->
   Arch.ArchContext arch ->
   IO (Maybe (Some.Some CCC.AnyCFG))
-getCFG (CFGCache cfgCache) binMd mem addr sla gla halloc archCtx =
+getCFG (CFGCache cfgCache) discoveryStateRef binMd mem addr sla gla halloc archCtx =
+  let symMap = binSymMap binMd
+  in
   case MM.resolveAbsoluteAddr mem addr of
     Just segOff -> do
       cache <- IORef.readIORef cfgCache
       case Map.lookup segOff cache of
         Just cfg -> pure $ Just cfg
         Nothing -> do
-          CCR.SomeCFG cfgReg <- GMD.discoverFunction gla halloc archCtx binMd mem segOff
+          CCR.SomeCFG cfgReg <- GMD.discoverFunctionIncremental gla halloc archCtx discoveryStateRef symMap segOff
           LJ.writeLog sla (ScrchDiag.DistanceDiagnostic $ Diagnositc.DiscoveredCFG addr (CCR.SomeCFG cfgReg))
           let cfg' = case CCS.toSSA cfgReg of
                 CCC.SomeCFG cfg -> Some.Some $ CCC.AnyCFG cfg
@@ -234,6 +238,7 @@ resolveCall ::
   ) =>
   CallGraph w ->
   CFGCache w ->
+  IORef.IORef (MD.DiscoveryState arch) ->
   ScreachLogAction ->
   GreaseLogAction ->
   BinMd arch ->
@@ -243,7 +248,7 @@ resolveCall ::
   WPL.ProgramLoc ->
   WPL.ProgramLoc ->
   IO [Some.Some CCC.AnyCFG]
-resolveCall callGraph cfgCaches sla gla binMd mem hLoc archContext callerLoc callsiteLoc = do
+resolveCall callGraph cfgCaches discoveryStateRef sla gla binMd mem hLoc archContext callerLoc callsiteLoc = do
   let mbCaller = locToAddressMaybe callerLoc
   let mbCallsite = locToAddressMaybe callsiteLoc
   case (mbCaller, mbCallsite) of
@@ -271,4 +276,4 @@ resolveCall callGraph cfgCaches sla gla binMd mem hLoc archContext callerLoc cal
       pure []
  where
   getCFGFromAddr :: MM.MemWord w -> IO (Maybe (Some.Some CCC.AnyCFG))
-  getCFGFromAddr addr = getCFG cfgCaches binMd mem addr sla gla hLoc archContext
+  getCFGFromAddr addr = getCFG cfgCaches discoveryStateRef binMd mem addr sla gla hLoc archContext

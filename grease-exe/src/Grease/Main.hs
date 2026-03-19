@@ -52,8 +52,10 @@ import Data.Macaw.BinaryLoader (BinaryLoader)
 import Data.Macaw.BinaryLoader qualified as Loader
 import Data.Macaw.BinaryLoader.AArch32 ()
 import Data.Macaw.BinaryLoader.Raw ()
+import Data.IORef qualified as IORef
 import Data.Macaw.BinaryLoader.X86 ()
 import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
 import Data.Macaw.Memory.LoadCommon qualified as MML
@@ -113,7 +115,7 @@ import Grease.Macaw.Arch.AArch32 (armCtx, armRelocSupported)
 import Grease.Macaw.Arch.PPC32 (ppc32Ctx, ppc32RelocSupported)
 import Grease.Macaw.Arch.PPC64 (ppc64Ctx, ppc64RelocSupported)
 import Grease.Macaw.Arch.X86 (x64RelocSupported, x86Ctx)
-import Grease.Macaw.Discovery (discoverFunction)
+import Grease.Macaw.Discovery (discoverFunction, mkInitialDiscoveryState)
 import Grease.Macaw.Entrypoint (checkMacawEntrypointCfgsSignatures)
 import Grease.Macaw.Entrypoint qualified as GME
 import Grease.Macaw.Load qualified as Load
@@ -785,9 +787,15 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
   empTrace <- CR.emptyRecordedTrace sym
   repState <- CR.mkReplayState halloc empTrace
 
+  let binMd = mcBinMd macawCfgConfig
+  let discState0 = mkInitialDiscoveryState archCtx
+                      (mcMemory macawCfgConfig)
+                      (Load.binSymMap binMd)
+                      (Load.binPltStubs binMd)
+  discStateRef <- IORef.newIORef discState0
   let pers = GP.mkPersonality memVar dbgCtx toConcVar refineData
   let personality =
-        mkGreaseSimulatorState pers recState repState
+        mkGreaseSimulatorState pers discStateRef recState repState
           & discoveredFnHandles .~ discoveredHdls
 
   let globals = GSIO.initFsGlobals initFs
@@ -1216,6 +1224,38 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
   addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
   simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs'
 
+-- | Discover a single entrypoint function, resolve its startup override (if
+-- any), and return the updated discovery state alongside the entrypoint CFGs.
+discoverEntrypoint ::
+  ( Symbolic.SymArchConstraints arch
+  , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
+  ) =>
+  GDiag.GreaseLogAction ->
+  C.HandleAllocator ->
+  Arch.ArchContext arch ->
+  Discovery.DiscoveryState arch ->
+  Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
+  EP.Entrypoint ->
+  MC.ArchSegmentOff arch ->
+  IO (EP.MacawEntrypointCfgs arch, Discovery.DiscoveryState arch)
+discoverEntrypoint la halloc archCtx discState symMap entry entryAddr = do
+  (C.Reg.SomeCFG cfg, discState') <-
+    discoverFunction la halloc archCtx discState symMap entryAddr
+  mbStartupOv <-
+    case EP.entrypointStartupOvPath entry of
+      Nothing -> pure Nothing
+      Just startupOvPath -> do
+        result <- EP.parseEntrypointStartupOv halloc startupOvPath
+        case result of
+          Left err -> userErr la (PP.pretty err)
+          Right startupOv -> pure $ Just startupOv
+  let entrypointCfgs =
+        EP.EntrypointCfgs
+          { EP.entrypointStartupOv = mbStartupOv
+          , EP.entrypointCfg = C.Reg.AnyCFG cfg
+          }
+  pure (EP.MacawEntrypointCfgs entrypointCfgs (Just entryAddr), discState')
+
 simulateMacaw ::
   forall arch.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
@@ -1254,25 +1294,16 @@ simulateMacaw la halloc elf loadedProg archCtx simOpts parserHooks = do
           Nothing -> panic "simulateMacaw" ["Entrypoint not in map"]
           Just a -> pure (entry, a)
 
-  cfgs <-
-    fmap Map.fromList $
-      forM entries $ \(entry, entryAddr) -> do
-        C.Reg.SomeCFG cfg <-
-          discoverFunction la halloc archCtx binMd memory entryAddr
-        mbStartupOv <-
-          case EP.entrypointStartupOvPath entry of
-            Nothing -> pure Nothing
-            Just startupOvPath -> do
-              result <- EP.parseEntrypointStartupOv halloc startupOvPath
-              case result of
-                Left err -> userErr la (PP.pretty err)
-                Right startupOv -> pure $ Just startupOv
-        let entrypointCfgs =
-              EP.EntrypointCfgs
-                { EP.entrypointStartupOv = mbStartupOv
-                , EP.entrypointCfg = C.Reg.AnyCFG cfg
-                }
-        pure (entry, EP.MacawEntrypointCfgs entrypointCfgs (Just entryAddr))
+  let discoveryState0 = mkInitialDiscoveryState archCtx memory (Load.binSymMap binMd) (Load.binPltStubs binMd)
+  (cfgs, _discState) <-
+    Monad.foldM
+      (\(acc, discState) (entry, entryAddr) -> do
+        (macawCfgs, discState') <-
+          discoverEntrypoint la halloc archCtx discState (Load.binSymMap binMd) entry entryAddr
+        pure (Map.insert entry macawCfgs acc, discState')
+      )
+      (Map.empty, discoveryState0)
+      entries
 
   addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
   let setupHook :: forall sym. Macaw.SetupHook sym arch
@@ -1693,29 +1724,17 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
 
     entryAddrs :: [(Maybe FilePath, Text.Text, MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)))] <- forM entries getAddressEntrypoint
     let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
-    let emptyBinMd = Load.emptyBinMd
-    cfgs <-
-      fmap Map.fromList $ forM entryAddrs $ \(mbOverride, entText, entAddr) -> do
-        C.Reg.SomeCFG cfg <- discoverFunction la halloc archCtx emptyBinMd memory entAddr
-        mbStartupOv <-
-          case mbOverride of
-            Nothing -> pure Nothing
-            Just startupOvPath -> do
-              result <- EP.parseEntrypointStartupOv halloc startupOvPath
-              case result of
-                -- See Note [Explicitly listed errors]
-                Left err@EP.StartupOvParseError{} -> userErr la (PP.pretty err)
-                Left err@EP.StartupOvCFGNotFound{} -> userErr la (PP.pretty err)
-                Right startupOv -> pure $ Just startupOv
-        let entrypointCfgs =
-              EP.EntrypointCfgs
-                { EP.entrypointStartupOv = mbStartupOv
-                , EP.entrypointCfg = C.Reg.AnyCFG cfg
-                }
-        pure
-          ( EP.Entrypoint{EP.entrypointLocation = EP.EntrypointAddress entText, EP.entrypointStartupOvPath = mbOverride}
-          , EP.MacawEntrypointCfgs entrypointCfgs (Just entAddr)
-          )
+    let discoveryState0 = mkInitialDiscoveryState archCtx memory Map.empty Map.empty
+    (cfgs, _discState) <-
+      Monad.foldM
+        (\(acc, discState) (mbOverride, entText, entAddr) -> do
+          let entry = EP.Entrypoint{EP.entrypointLocation = EP.EntrypointAddress entText, EP.entrypointStartupOvPath = mbOverride}
+          (macawCfgs, discState') <-
+            discoverEntrypoint la halloc archCtx discState Map.empty entry entAddr
+          pure (Map.insert entry macawCfgs acc, discState')
+        )
+        (Map.empty, discoveryState0)
+        entryAddrs
     addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
     let setupHook :: forall sym. Macaw.SetupHook sym arch
         setupHook =
@@ -1723,7 +1742,7 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
            in Macaw.binSetupHook errCb addrOvs cfgs
     let macawCfgConfig =
           MacawCfgConfig
-            { mcBinMd = emptyBinMd
+            { mcBinMd = Load.emptyBinMd
             , mcMemory = memory
             , mcElf = Nothing
             }
