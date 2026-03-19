@@ -49,7 +49,7 @@ import Data.Text (Text)
 import GHC.Word (Word64)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (Diagnostic (ResolveCallDiagnostic), GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext, archFunctionReturnAddr, archGetIP, archOffsetStackPointerPostCall, archPCFixup, archRegStructType, archSyscallCodeMapping, archSyscallNumberRegister, archSyscallReturnRegisters, archVals)
+import Grease.Macaw.Arch (ArchContext, archFunctionReturnAddr, archGetIP, archOffsetStackPointerPostCall, archPCFixup, archRegArgCtx, archRegStructType, archSyscallCodeMapping, archSyscallNumberRegister, archSyscallReturnRegisters, archVals)
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.Overrides (lookupMacawForwardDeclarationOverride)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride, msoPublicFnHandle, msoPublicOverride, msoSomeFunctionOverride))
@@ -117,7 +117,7 @@ useComposedOverride ::
     , CS.SimState p sym (Symbolic.MacawExt arch) r f a
     )
 useComposedOverride halloc arch handle0 override0 st funcName f = do
-  handle <- C.mkHandle' halloc funcName (Ctx.Empty Ctx.:> (arch ^. archRegStructType)) (arch ^. archRegStructType)
+  handle <- C.mkHandle' halloc funcName (arch ^. archRegArgCtx) (arch ^. archRegStructType)
   let override = CS.mkOverride' funcName (arch ^. archRegStructType) $ do
         args <- CS.getOverrideArgs
         regs <- CS.callOverride handle0 override0 args
@@ -187,7 +187,7 @@ defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs errCb =
       SkippedFunctionCall reason -> do
         doLog la $ Diag.SkippedFunctionCall reason
         let funcName = WFN.functionNameFromText "_grease_external"
-        handle <- C.mkHandle' halloc funcName (Ctx.Empty Ctx.:> (arch ^. archRegStructType)) (arch ^. archRegStructType)
+        handle <- C.mkHandle' halloc funcName (arch ^. archRegArgCtx) (arch ^. archRegStructType)
         let override = CS.mkOverride' funcName (arch ^. archRegStructType) $ do
               args <- CS.getOverrideArgs
               let regs' = Ctx.last $ CS.regMap args

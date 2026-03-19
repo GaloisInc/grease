@@ -60,7 +60,7 @@ ppc32Ctx mbReturnAddr stackArgSlots = do
       -- `genArchVals` is total: https://github.com/GaloisInc/macaw/issues/231
       panic "ppc32Ctx" ["Failed to generate architecture-specific values"]
     Just avals -> pure avals
-  let (regStructTy, regTys, rNames, vNames) = Arch.mkArchRegInfo avals
+  let (regStructTy, regTys, rNames, vNames, regArgCtx) = Arch.mkArchRegInfo avals
   let regOverrides =
         case mbReturnAddr of
           Just returnAddr ->
@@ -99,6 +99,7 @@ ppc32Ctx mbReturnAddr stackArgSlots = do
       , Arch._archRegTypes = regTys
       , Arch._archRegNames = rNames
       , Arch._archValueNames = vNames
+      , Arch._archRegArgCtx = regArgCtx
       }
 
 ppc32RelocSupported :: EE.PPC32_RelocationType -> Maybe RelocType

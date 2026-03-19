@@ -37,6 +37,7 @@ module Grease.Macaw.Arch (
   archRegTypes,
   archRegNames,
   archValueNames,
+  archRegArgCtx,
 ) where
 
 import Control.Lens.TH (makeLenses)
@@ -289,6 +290,10 @@ data ArchContext arch = ArchContext
   -- ^ Human-readable 'RegName's for each register in the architecture.
   , _archValueNames :: Ctx.Assignment ValueName (Symbolic.MacawCrucibleRegTypes arch)
   -- ^ Register names as 'ValueName's, suitable for passing to setup functions.
+  , _archRegArgCtx :: C.CtxRepr (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
+  -- ^ Single-element context containing the register struct type.
+  --
+  -- Precomputed to enforce sharing.
   }
 
 makeLenses ''ArchContext
@@ -313,6 +318,7 @@ mkArchRegInfo ::
   , Ctx.Assignment C.TypeRepr (Symbolic.MacawCrucibleRegTypes arch)
   , Ctx.Assignment (Const RegName) (Symbolic.MacawCrucibleRegTypes arch)
   , Ctx.Assignment ValueName (Symbolic.MacawCrucibleRegTypes arch)
+  , C.CtxRepr (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch)
   )
 mkArchRegInfo avals =
   let archFns = Symbolic.archFunctions avals
@@ -322,7 +328,8 @@ mkArchRegInfo avals =
         Symbolic.macawAssignToCruc (Const . mkRegName) $
           Symbolic.crucGenRegAssignment archFns
       valueNames = fmapFC (\(Const (RegName n)) -> ValueName n) regNames
-   in (regStructType, regTypes, regNames, valueNames)
+      regArgCtx = Ctx.Empty Ctx.:> regStructType
+   in (regStructType, regTypes, regNames, valueNames, regArgCtx)
 
 {-
 Note [Coping with stack protection]
