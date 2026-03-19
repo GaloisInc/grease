@@ -19,13 +19,9 @@ module Screach.RefineFeature (
   refineErrMap,
   HasScreachPersonality,
   sdseExecFeatures,
-
-  -- * Saved target results
-  SavedState (..),
-  createSaveItem,
 ) where
 
-import Control.Lens ((&), (.~), (?~))
+import Control.Lens ((&), (.~), (?~), (^.))
 import Control.Lens qualified as Lens
 import Control.Monad.IO.Class (MonadIO)
 import Data.Data (Proxy (Proxy))
@@ -132,31 +128,6 @@ type HasScreachPersonality p sym bak t ext tys ret rtp w =
   , CR.HasReplayState p p sym ext (CS.RegEntry sym ret)
   , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
   )
-
--- | Saved symbolic execution result with backend state.
---
--- When a target is reached during SDSE, the result and backend state are
--- captured so they can be verified later.
-data SavedState p sym ext rtp
-  = SavedState
-  { savedBackendState :: CB.AssumptionState sym
-  , savedExecState :: C.ExecState p sym ext rtp
-  }
-
--- | Create a 'SavedState' from an 'C.ExecResult' by capturing the current
--- backend state.
-createSaveItem ::
-  C.ExecResult p sym ext rtp ->
-  IO (SavedState p sym ext rtp)
-createSaveItem st =
-  let simCtx = C.execResultContext st
-   in C.withBackend simCtx $ \bak -> do
-        bakState <- CB.getBackendState bak
-        pure
-          SavedState
-            { savedBackendState = bakState
-            , savedExecState = C.ResultState st
-            }
 
 -- | Take a fresh initial state (from a given refinement) and set it up for replay.
 --
@@ -365,13 +336,11 @@ sdseExecFeatures ::
   -- | Determines if a given state is the target state for SDSE
   (HasRefinmentState p sym bak scope ext tys w => C.ExecResult p sym ext rtp -> IO Bool) ->
   RftOpt.AllSolutions ->
-  -- | Returns the features and an IORef to retrieve saved target results after execution
-  IO ([C.ExecutionFeature p sym ext (CS.RegEntry sym ret)], IORef [SavedState p sym ext rtp])
+  -- | Returns the features and an IORef to retrieve 'RefineResult's after execution
+  IO ([C.ExecutionFeature p sym ext (CS.RegEntry sym ret)], IORef [RefineResult sym ext tys])
 sdseExecFeatures bak sla gla refineReplay initCFG priorityFunc isTargetPred (RftOpt.AllSolutions exploreMore) = do
-  -- Create IORef for collecting target results
-  savedRef <- newIORef []
+  refineResultsRef <- newIORef []
 
-  -- Create the scheduler features using Grease.Scheduler
   let satPolicy =
         Sched.withSatisfiabilityCheck (CBO.considerSatisfiability bak) $
           Sched.priorityPolicy priorityFunc
@@ -379,8 +348,11 @@ sdseExecFeatures bak sla gla refineReplay initCFG priorityFunc isTargetPred (Rft
         t <- isTargetPred r
         if t
           then do
-            saved <- createSaveItem r
-            modifyIORef' savedRef (saved :)
+            let rst :: SrchRefineData sym bak scope ext tys w
+                rst = C.execResultContext r ^. C.cruciblePersonality . refinementState
+            case rst ^. refineResult of
+              Just rr -> modifyIORef' refineResultsRef (rr :)
+              _ -> pure ()
             if exploreMore
               then pure Sched.ContinueExploring
               else pure Sched.StopExploring
@@ -394,4 +366,4 @@ sdseExecFeatures bak sla gla refineReplay initCFG priorityFunc isTargetPred (Rft
         , rf
         , bf
         ]
-  pure (feats, savedRef)
+  pure (feats, refineResultsRef)

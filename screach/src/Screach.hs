@@ -1582,9 +1582,9 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
     setupAssertThenAssume bak
     firstState <- initShape initArgs Nothing
     _result <- CS.executeCrucible startFeats firstState
-    saved <- IORef.readIORef savedRef
-    doLog sla $ Diag.RefinementResultCount $ length saved
-    verifyReachable sla gla bak initShape genericExecFeats saved
+    refineResults <- IORef.readIORef savedRef
+    doLog sla $ Diag.RefinementResultCount $ length refineResults
+    verifyReachable sla gla bak initShape genericExecFeats refineResults
  where
   setupAssertThenAssume bak = do
     let sym = CB.backendGetSym bak
@@ -1616,32 +1616,18 @@ verifyReachable ::
     IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
   ) ->
   [CS.GenericExecutionFeature sym] ->
-  [RFT.SavedState p sym ext (CS.RegEntry sym ret)] ->
+  [RFT.RefineResult sym ext tys] ->
   IO ()
-verifyReachable la gla bak initShape genericExecFeats saved = do
-  let refineResults =
-        flip Maybe.mapMaybe saved $ \save ->
-          let ctx = CSE.execStateContext (RFT.savedExecState save)
-              p = ctx ^. CS.cruciblePersonality
-              rst = SP._refineState p
-           in case rst ^. RFT.refineResult of
-                Just refineResult -> Just refineResult
-                _ ->
-                  panic
-                    "verifyReachable"
-                    [ "Impossible: no `refineResult` on `SavedState`!"
-                    , "`handleTarget` should only return `True`"
-                    , "when this data is present."
-                    ]
-  Monad.forM_ (zip [1 ..] refineResults) $ \(no, refineResult) -> do
+verifyReachable la gla bak initShape genericExecFeats refineResults = do
+  Monad.forM_ (zip [1 ..] refineResults) $ \(no, rr) -> do
     doLog la (Diag.VerifyReachable (length refineResults) no)
-    let cData = RFT.refineResultConcData refineResult
-    let concArgShapes = Conc.concArgsShapes (Conc.concArgs cData)
-    let untagArgs = TFC.fmapFC (TFC.fmapFC (const Shape.NoTag)) concArgShapes
+    let cData = RFT.refineResultConcData rr
+        concArgShapes = Conc.concArgsShapes (Conc.concArgs cData)
+        untagArgs = TFC.fmapFC (TFC.fmapFC (const Shape.NoTag)) concArgShapes
     -- TODO(internal#144): Incorporate the concretized filesystem.
     st <- initShape (Shape.ArgShapes untagArgs) Nothing
 
-    let trace = RFT.refineResultTrace refineResult
+    let trace = RFT.refineResultTrace rr
     let st' =
           st
             & Sched.execStateContextLens
