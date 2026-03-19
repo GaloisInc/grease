@@ -43,7 +43,7 @@ import Data.Word (Word64)
 import GHC.IORef qualified as IORef
 import GHC.TypeNats (type (<=))
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.Macaw.Arch qualified as GRS
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Discovery qualified as GMD
 import Lang.Crucible.CFG.Core qualified as CCC
 import Lang.Crucible.CFG.Reg qualified as CCR
@@ -173,7 +173,7 @@ getCFG ::
   ScreachLogAction ->
   GreaseLogAction ->
   CFH.HandleAllocator ->
-  GRS.ArchContext arch ->
+  Arch.ArchContext arch ->
   MD.AddrSymMap (MC.ArchAddrWidth arch) ->
   Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
   IO (Maybe (Some.Some CCC.AnyCFG))
@@ -239,7 +239,7 @@ resolveCall ::
   GreaseLogAction ->
   MM.Memory w ->
   CFH.HandleAllocator ->
-  GRS.ArchContext arch ->
+  Arch.ArchContext arch ->
   MD.AddrSymMap (MC.ArchAddrWidth arch) ->
   Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
   WPL.ProgramLoc ->

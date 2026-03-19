@@ -35,7 +35,8 @@ import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Sequence qualified as Seq
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext, archIntegerArguments, archIntegerReturnRegisters, archRegStructType, archVals)
+import Grease.Macaw.Arch (ArchContext)
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride), MacawSExpOverrideError, loadOverrides)
 import Grease.Macaw.Overrides.SExp qualified as GMOS
@@ -83,10 +84,10 @@ macawOverride bak mvar archCtx fnOv =
   CS.mkOverride' (Stubs.functionName fnOv) regsRepr ov
  where
   genArchVals :: Symbolic.GenArchVals Symbolic.LLVMMemory arch
-  genArchVals = archCtx ^. archVals
+  genArchVals = archCtx ^. Arch.archVals
 
   regsRepr :: C.TypeRepr (Symbolic.ArchRegStruct arch)
-  regsRepr = archCtx ^. archRegStructType
+  regsRepr = archCtx ^. Arch.archRegStructType
 
   ov ::
     forall r.
@@ -106,7 +107,7 @@ macawOverride bak mvar archCtx fnOv =
     let argReg = massageRegAssignment $ CS.regMap argMap
     (args, getVarArg) <-
       liftIO $
-        (archCtx ^. archIntegerArguments)
+        (archCtx ^. Arch.archIntegerArguments)
           bak
           (Stubs.functionArgTypes fnOv)
           argReg
@@ -122,7 +123,7 @@ macawOverride bak mvar archCtx fnOv =
         [] -- We don't currently make use of parent overrides
 
     -- Put the return value(s) into the appropriate register(s)
-    (archCtx ^. archIntegerReturnRegisters)
+    (archCtx ^. Arch.archIntegerReturnRegisters)
       bak
       genArchVals
       (Stubs.functionReturnType fnOv)
@@ -130,7 +131,7 @@ macawOverride bak mvar archCtx fnOv =
       argReg
 
 -- | Massage the 'C.RegEntry' 'Ctx.Assignment' that 'C.getOverrideArgs'
--- provides into the form that 'archIntegerArguments' expects.
+-- provides into the form that 'Arch.archIntegerArguments' expects.
 massageRegAssignment ::
   Ctx.Assignment (CS.RegEntry sym) (Ctx.EmptyCtx Ctx.::> C.StructType ctx) ->
   Ctx.Assignment (CS.RegValue' sym) ctx
@@ -197,7 +198,7 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
             allOvs
  where
   regsRepr :: C.TypeRepr (Symbolic.ArchRegStruct arch)
-  regsRepr = archCtx ^. archRegStructType
+  regsRepr = archCtx ^. Arch.archRegStructType
 
 -- | Like 'mkMacawOverrideMap', with 'builtinStubsOverrides'.
 mkMacawOverrideMapWithBuiltins ::

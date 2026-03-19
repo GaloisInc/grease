@@ -49,7 +49,8 @@ import Data.Text (Text)
 import GHC.Word (Word64)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (Diagnostic (ResolveCallDiagnostic), GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext, archFunctionReturnAddr, archGetIP, archOffsetStackPointerPostCall, archPCFixup, archRegArgCtx, archRegStructType, archSyscallCodeMapping, archSyscallNumberRegister, archSyscallReturnRegisters, archVals)
+import Grease.Macaw.Arch (ArchContext)
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.Overrides (lookupMacawForwardDeclarationOverride)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride, msoPublicFnHandle, msoPublicOverride, msoSomeFunctionOverride))
@@ -117,8 +118,8 @@ useComposedOverride ::
     , CS.SimState p sym (Symbolic.MacawExt arch) r f a
     )
 useComposedOverride halloc arch handle0 override0 st funcName f = do
-  handle <- C.mkHandle' halloc funcName (arch ^. archRegArgCtx) (arch ^. archRegStructType)
-  let override = CS.mkOverride' funcName (arch ^. archRegStructType) $ do
+  handle <- C.mkHandle' halloc funcName (arch ^. Arch.archRegArgCtx) (arch ^. Arch.archRegStructType)
+  let override = CS.mkOverride' funcName (arch ^. Arch.archRegStructType) $ do
         args <- CS.getOverrideArgs
         regs <- CS.callOverride handle0 override0 args
         f (CS.regValue regs)
@@ -179,7 +180,7 @@ defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs errCb =
       -- Log that we have performed a function call.
       logFunctionCall fnName fnAddrOff = do
         mbReturnAddr <-
-          (arch ^. archFunctionReturnAddr) bak (arch ^. archVals) regs mem
+          (arch ^. Arch.archFunctionReturnAddr) bak (arch ^. Arch.archVals) regs mem
         let fnAbsAddr = segoffToAbsoluteAddr memory fnAddrOff
         doLog la $ Diag.FunctionCall fnName fnAbsAddr mbReturnAddr
 
@@ -187,11 +188,11 @@ defaultLookupFunctionHandleDispatch bak la halloc arch memory funOvs errCb =
       SkippedFunctionCall reason -> do
         doLog la $ Diag.SkippedFunctionCall reason
         let funcName = WFN.functionNameFromText "_grease_external"
-        handle <- C.mkHandle' halloc funcName (arch ^. archRegArgCtx) (arch ^. archRegStructType)
-        let override = CS.mkOverride' funcName (arch ^. archRegStructType) $ do
+        handle <- C.mkHandle' halloc funcName (arch ^. Arch.archRegArgCtx) (arch ^. Arch.archRegStructType)
+        let override = CS.mkOverride' funcName (arch ^. Arch.archRegStructType) $ do
               args <- CS.getOverrideArgs
               let regs' = Ctx.last $ CS.regMap args
-              (arch ^. archOffsetStackPointerPostCall) (CS.regValue regs')
+              (arch ^. Arch.archOffsetStackPointerPostCall) (CS.regValue regs')
         pure $ useFnHandleAndState handle (CS.UseOverride override) st
       CachedFnHandle fnAddrOff hdl mbOv -> do
         logFunctionCall (C.handleName hdl) fnAddrOff
@@ -273,7 +274,7 @@ lookupFunctionHandleResult ::
     )
 lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns errorSymbolicFunCalls skipInvalidCallAddrs st regs = do
   -- First, obtain the address contained in the instruction pointer.
-  symAddr0 <- (arch ^. archGetIP) regs
+  symAddr0 <- (arch ^. Arch.archGetIP) regs
   -- Next, attempt to concretize the address. We must do this because it is
   -- possible that the address was obtained from a memory read, and due to the
   -- way macaw-symbolic's memory model works, such an address would be a fresh
@@ -402,7 +403,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
     -- that fail the `in-text` requirement), as Macaw will simply crash
     -- when simulating them.
     | Discovery.isExecutableSegOff funcAddrOff = do
-        fixedAddr <- (arch ^. archPCFixup) bak regs funcAddrOff
+        fixedAddr <- (arch ^. Arch.archPCFixup) bak regs funcAddrOff
         (hdl, st') <-
           discoverFuncAddr la halloc arch memory symMap pltStubs fixedAddr st
         let nm = C.handleName hdl
@@ -487,7 +488,7 @@ defaultLookupSyscallDispatch bak la halloc arch =
               CS.mkOverride'
                 funcName
                 (C.StructRepr rtps)
-                ( (arch ^. archSyscallReturnRegisters)
+                ( (arch ^. Arch.archSyscallReturnRegisters)
                     C.UnitRepr
                     (pure ())
                     atps
@@ -547,7 +548,7 @@ lookupSyscallResult ::
   CS.RegEntry sym (C.StructType atps) ->
   IO (LookupSyscallResult p sym arch atps rtps)
 lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs = do
-  symSyscallBV <- (arch ^. archSyscallNumberRegister) bak atps regs
+  symSyscallBV <- (arch ^. Arch.archSyscallNumberRegister) bak atps regs
   case WI.asBV (CS.regValue symSyscallBV) of
     Nothing ->
       if getErrorSymbolicSyscalls errorSymbolicSyscalls
@@ -559,7 +560,7 @@ lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs 
         else pure $ SkippedSyscall SymbolicSyscallNumber
     Just syscallBV ->
       let syscallNum = fromIntegral @Integer @Int $ BV.asUnsigned syscallBV
-       in case IntMap.lookup syscallNum (arch ^. archSyscallCodeMapping) of
+       in case IntMap.lookup syscallNum (arch ^. Arch.archSyscallCodeMapping) of
             Nothing ->
               pure $ SkippedSyscall $ UnknownSyscallNumber syscallNum
             Just syscallName ->
@@ -667,7 +668,7 @@ useMacawSExpOverride bak la halloc arch allOvs errCb mOv st0 =
             & CS.stateContext . CS.functionBindings
               .~ CS.FnBindings fnHdlMap1
         funcName = WFN.functionNameFromText "_grease_fix_stack_ptr"
-    useComposedOverride halloc arch publicOvHdl publicOv st1 funcName (arch ^. archOffsetStackPointerPostCall)
+    useComposedOverride halloc arch publicOvHdl publicOv st1 funcName (arch ^. Arch.archOffsetStackPointerPostCall)
 
 -- | Register the 'C.FnHandle's of any Macaw functions that this override may
 -- invoke, be it through auxiliary functions or forward declarations. Note that

@@ -13,7 +13,8 @@ import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Maybe qualified as Maybe
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw (minimalArgShapes)
-import Grease.Macaw.Arch (ArchContext, ArchReloc, archValueNames)
+import Grease.Macaw.Arch (ArchContext, ArchReloc)
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Dwarf (loadDwarfPreconditions)
 import Grease.Macaw.Dwarf qualified as Dwarf
 import Grease.Options qualified as GO
@@ -58,7 +59,7 @@ macawInitArgShapes ::
   Maybe (MC.ArchSegmentOff arch) ->
   IO (Either Shape.TypeMismatch (Shape.ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch))))
 macawInitArgShapes la bak archCtx opts parsed elf memory mbCfgAddr = do
-  let argNames = archCtx ^. archValueNames
+  let argNames = archCtx ^. Arch.archValueNames
   let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
   initArgs0 <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let shouldUseDwarf = GO.initPrecondUseDebugInfo opts

@@ -110,7 +110,7 @@ import Grease.LLVM.SetupHook qualified as LLVM (SetupHook, moduleSetupHook, synt
 import Grease.LLVM.SetupHook.Diagnostic qualified as LDiag (Diagnostic (LLVMTranslationWarning))
 import Grease.LLVM.Shapes qualified as GLS
 import Grease.Macaw qualified as GM
-import Grease.Macaw.Arch qualified as GMA
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Arch.AArch32 (armCtx)
 import Grease.Macaw.Arch.PPC32 (ppc32Ctx)
 import Grease.Macaw.Arch.PPC64 (ppc64Ctx)
@@ -448,7 +448,7 @@ data MacawCfgConfig arch = MacawCfgConfig
   -- ^ Map of addresses to PLT stub names.
   , mcDynFunMap :: Map.Map WFN.FunctionName (MC.ArchSegmentOff arch)
   -- ^ Map of dynamic function names to their addresses.
-  , mcRelocs :: Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (GMA.ArchReloc arch)
+  , mcRelocs :: Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (Arch.ArchReloc arch)
   -- ^ Map of relocation addresses and types.
   , mcMemory :: MC.Memory (MC.RegAddrWidth (MC.ArchReg arch))
   -- ^ The memory layout of the binary.
@@ -461,11 +461,11 @@ data MacawCfgConfig arch = MacawCfgConfig
 -- | Create a 'DataLayout' suitable for @macaw-symbolic@'s needs. Currently,
 -- this simply overrides the 'DataLayout.defaultDataLayout' with a reasonable
 -- endianness value based on the architecture.
-macawDataLayout :: GMA.ArchContext arch -> DataLayout
+macawDataLayout :: Arch.ArchContext arch -> DataLayout
 macawDataLayout archCtx =
   DataLayout.defaultDataLayout
     & DataLayout.intLayout
-      .~ (archCtx ^. GMA.archInfo . to (Symbolic.toCrucibleEndian . MI.archEndianness))
+      .~ (archCtx ^. Arch.archInfo . to (Symbolic.toCrucibleEndian . MI.archEndianness))
 
 -- | Integer argument registers
 interestingRegs :: Set String
@@ -536,13 +536,13 @@ getMacawInitArgShapes ::
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
-  , Show (GMA.ArchReloc arch)
+  , Show (Arch.ArchReloc arch)
   , ?memOpts :: CLM.MemOptions
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
   ) =>
   GDiag.GreaseLogAction ->
   bak ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   GO.InitialPreconditionOpts ->
   MacawCfgConfig arch ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
@@ -561,7 +561,7 @@ getMacawInitArgShapes la bak archCtx opts macawCfgConfig mbCfgAddr = do
       Left err -> userErr la (PP.pretty err)
       Right shapes -> pure shapes
 
--- | Implement 'GMA.archRegOverrides'
+-- | Implement 'Arch.archRegOverrides'
 overrideRegs ::
   forall sym arch.
   ( CB.IsSymInterface sym
@@ -569,18 +569,18 @@ overrideRegs ::
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
   ) =>
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   sym ->
   Ctx.Assignment (CS.RegValue' sym) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
   IO (Ctx.Assignment (CS.RegValue' sym) (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)))
 overrideRegs archCtx sym =
-  let rNames = archCtx ^. GMA.archRegNames
-      regTypes = archCtx ^. GMA.archRegTypes
+  let rNames = archCtx ^. Arch.archRegNames
+      regTypes = archCtx ^. Arch.archRegTypes
    in Ctx.traverseWithIndex
         ( \idx reg -> do
             let regName = getConst (rNames Ctx.! idx)
             let isStackPointer = regName == mkRegName @arch MC.sp_reg
-            case Map.lookup regName (archCtx ^. GMA.archRegOverrides) of
+            case Map.lookup regName (archCtx ^. Arch.archRegOverrides) of
               Just i
                 | isStackPointer ->
                     panic "overrideRegs" ["Can't override stack pointer"]
@@ -606,7 +606,7 @@ macawExecFeats ::
   GDiag.GreaseLogAction ->
   bak ->
   C.GlobalVar CLM.Mem ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   MacawCfgConfig arch ->
   GO.SimOpts ->
   IO ([CS.ExecutionFeature p sym (Symbolic.MacawExt arch) (CS.RegEntry sym (Symbolic.ArchRegStruct arch))], Maybe (Async ()))
@@ -616,7 +616,7 @@ macawExecFeats la bak memVar archCtx macawCfgConfig simOpts = do
         if GO.debug (GO.simDebugOpts simOpts)
           then
             let mbElf = snd . Elf.getElf <$> mcElf macawCfgConfig
-                extImpl = MDebug.macawExtImpl prettyPtrFnMap memVar (archCtx ^. GMA.archVals) mbElf
+                extImpl = MDebug.macawExtImpl prettyPtrFnMap memVar (archCtx ^. Arch.archVals) mbElf
              in Just extImpl
           else Nothing
   feats <- greaseExecFeats la bak dbgOpts
@@ -672,7 +672,7 @@ macawMemConfig ::
   , sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)
   , bak ~ CB.OnlineBackend solver scope st (WEB.Flags fm)
   , WPO.OnlineSolver solver
-  , Show (GMA.ArchReloc arch)
+  , Show (Arch.ArchReloc arch)
   , CLM.HasLLVMAnn sym
   , MSM.MacawProcessAssertion sym
   , ?memOpts :: CLM.MemOptions
@@ -686,7 +686,7 @@ macawMemConfig ::
   bak ->
   C.HandleAllocator ->
   MacawCfgConfig arch ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   GO.SimOpts ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
   IO
@@ -759,7 +759,7 @@ macawInitState ::
   , Symbolic.SymArchConstraints arch
   , MSM.MacawProcessAssertion sym
   , GUtil.OnlineSolverAndBackend solver sym bak scope st (WEB.Flags fm)
-  , Show (GMA.ArchReloc arch)
+  , Show (Arch.ArchReloc arch)
   , MSM.MacawProcessAssertion sym
   , wptr ~ MC.ArchAddrWidth arch
   , ext ~ Symbolic.MacawExt arch
@@ -771,7 +771,7 @@ macawInitState ::
   , ?lc :: CLTC.TypeContext
   ) =>
   GDiag.GreaseLogAction ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   C.HandleAllocator ->
   MacawCfgConfig arch ->
   GO.SimOpts ->
@@ -801,7 +801,7 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
   let mbStartupOvSsaCfg = EP.startupOvCfg <$> mbStartupOvSsa
   let fs = GSIO.initFs initFs
   (memCfg, fnOvsMap) <- macawMemConfig la memVar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable
-  evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @_ (archCtx ^. GMA.archVals) sym pure
+  evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @_ (archCtx ^. Arch.archVals) sym pure
   let macawExtImpl = Symbolic.macawExtensions evalFn memVar memCfg
   let ssaCfgHdl = C.cfgHandle ssaCfg
   -- At this point, the only function we have discovered is the user-requested
@@ -812,8 +812,8 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
   let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` ssaCfgHdl) mbCfgAddr
 
   let dbgOpts = GO.simDebugOpts simOpts
-  let dbgCmdExt = MDebug.macawCommandExt (archCtx ^. GMA.archVals)
-  dbgCtx <- initDebugger la dbgOpts dbgCmdExt (archCtx ^. GMA.archRegStructType)
+  let dbgCmdExt = MDebug.macawCommandExt (archCtx ^. Arch.archVals)
+  dbgCtx <- initDebugger la dbgOpts dbgCmdExt (archCtx ^. Arch.archRegStructType)
 
   recState <- CR.mkRecordState halloc
   empTrace <- CR.emptyRecordedTrace sym
@@ -834,7 +834,7 @@ macawRefineOnce ::
   , MM.MemWidth wptr
   , Symbolic.SymArchConstraints arch
   , GUtil.OnlineSolverAndBackend solver sym bak scope st (WEB.Flags fm)
-  , Show (GMA.ArchReloc arch)
+  , Show (Arch.ArchReloc arch)
   , argTys ~ Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)
   , wptr ~ MC.ArchAddrWidth arch
   , ext ~ Symbolic.MacawExt arch
@@ -845,7 +845,7 @@ macawRefineOnce ::
   , ?lc :: CLTC.TypeContext
   ) =>
   GDiag.GreaseLogAction ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   GO.SimOpts ->
   C.HandleAllocator ->
   MacawCfgConfig arch ->
@@ -866,8 +866,8 @@ macawRefineOnce ::
   EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
   IO (GRef.ProveRefineResult sym ext argTys)
 macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
-  let argNames = archCtx ^. GMA.archValueNames
-      regTypes = archCtx ^. GMA.archRegTypes
+  let argNames = archCtx ^. Arch.archValueNames
+      regTypes = archCtx ^. Arch.archRegTypes
   GRef.refineOnce
     la
     simOpts
@@ -921,7 +921,7 @@ simulateMacawCfg ::
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
-  , Show (GMA.ArchReloc arch)
+  , Show (Arch.ArchReloc arch)
   , ?memOpts :: CLM.MemOptions
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
   ) =>
@@ -930,7 +930,7 @@ simulateMacawCfg ::
   WE.FloatModeRepr fm ->
   C.HandleAllocator ->
   MacawCfgConfig arch ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   GO.SimOpts ->
   ExecutingAddressAction arch ->
   Macaw.SetupHook sym arch ->
@@ -957,8 +957,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
 
   memVar <- CLM.mkMemVar "grease:memmodel" halloc
   (execFeats, profLogTask) <- macawExecFeats la bak memVar archCtx macawCfgConfig simOpts
-  let argNames = archCtx ^. GMA.archValueNames
-  let rNames = archCtx ^. GMA.archRegNames
+  let argNames = archCtx ^. Arch.archValueNames
+  let rNames = archCtx ^. Arch.archRegNames
 
   initArgShapes <-
     let opts = GO.simInitPrecondOpts simOpts
@@ -1038,7 +1038,7 @@ simulateRewrittenCfg ::
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
-  , Show (GMA.ArchReloc arch)
+  , Show (Arch.ArchReloc arch)
   , CLM.HasLLVMAnn sym
   , argTys ~ Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)
   , ret ~ Symbolic.ArchRegStruct arch
@@ -1052,7 +1052,7 @@ simulateRewrittenCfg ::
   WE.FloatModeRepr fm ->
   C.HandleAllocator ->
   MacawCfgConfig arch ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   GO.SimOpts ->
   Macaw.SetupHook sym arch ->
   AddressOverrides arch ->
@@ -1070,13 +1070,13 @@ simulateRewrittenCfg ::
   EP.EntrypointCfgs (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
   IO GOut.BatchStatus
 simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs memPtrTable initMem initArgShapes result execFeats mbCfgAddr entrypointCfgs entrypointCfgsSsa = do
-  let regTypes = archCtx ^. GMA.archRegTypes
-      argNames = archCtx ^. GMA.archValueNames
-  let rNames = archCtx ^. GMA.archRegNames
+  let regTypes = archCtx ^. Arch.archRegTypes
+      argNames = archCtx ^. Arch.archValueNames
+  let rNames = archCtx ^. Arch.archRegNames
 
   res <- case result of
     GRef.RefinementBug b cData ->
-      let addrWidth = archCtx ^. GMA.archInfo . to MI.archAddrWidth
+      let addrWidth = archCtx ^. Arch.archInfo . to MI.archAddrWidth
        in pure (GOut.BatchBug (toBatchBug fm addrWidth argNames regTypes initArgShapes b cData))
     GRef.RefinementCantRefine b ->
       pure (GOut.BatchCantRefine b)
@@ -1090,10 +1090,10 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
           pure $
             GOut.BatchCouldNotInfer $
               errs <&> \noHeuristic ->
-                let addrWidth = archCtx ^. GMA.archInfo . to MI.archAddrWidth
+                let addrWidth = archCtx ^. Arch.archInfo . to MI.archAddrWidth
                  in toFailedPredicate fm addrWidth argNames regTypes initArgShapes noHeuristic
     GRef.RefinementSuccess argShapes -> do
-      let pcReg = archCtx ^. GMA.archPcReg
+      let pcReg = archCtx ^. Arch.archPcReg
       let assertInText = addPCBoundAssertion knownNat pcReg memory (MC.memWord $ fromIntegral starttext) (MC.memWord $ fromIntegral endtext) pltStubs
       let assertNoMprotect = case mprotectAddr of
             Just badAddr -> addNoDynJumpAssertion knownNat pcReg memory badAddr
@@ -1142,7 +1142,7 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
             pure $
               GOut.CheckAssertionFailure $
                 NE.toList errs <&> \noHeuristic ->
-                  let addrWidth = archCtx ^. GMA.archInfo . to MI.archAddrWidth
+                  let addrWidth = archCtx ^. Arch.archInfo . to MI.archAddrWidth
                    in toFailedPredicate fm addrWidth argNames regTypes initArgShapes noHeuristic
           GRef.ProveRefine _ -> do
             doLog la Diag.SimulationGoalsFailed
@@ -1162,14 +1162,14 @@ simulateMacawCfgs ::
   , Symbolic.SymArchConstraints arch
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
-  , Show (GMA.ArchReloc arch)
+  , Show (Arch.ArchReloc arch)
   , ?memOpts :: CLM.MemOptions
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
   ) =>
   GDiag.GreaseLogAction ->
   C.HandleAllocator ->
   MacawCfgConfig arch ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   GO.SimOpts ->
   (forall sym. Macaw.SetupHook sym arch) ->
   AddressOverrides arch ->
@@ -1296,13 +1296,13 @@ loadAddrOvs ::
   , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
   ) =>
   GDiag.GreaseLogAction ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   C.HandleAllocator ->
   MM.Memory (MC.ArchAddrWidth arch) ->
   GO.SimOpts ->
   IO (AddressOverrides arch)
 loadAddrOvs la archCtx halloc memory simOpts = do
-  mbAddrOvs <- loadAddressOverrides (archCtx ^. GMA.archRegStructType) halloc memory (GO.simAddressOverrides simOpts)
+  mbAddrOvs <- loadAddressOverrides (archCtx ^. Arch.archRegStructType) halloc memory (GO.simAddressOverrides simOpts)
   let usrErr = userErr la . PP.pretty
   case mbAddrOvs of
     -- See Note [Explicitly listed errors]
@@ -1347,12 +1347,12 @@ simulateMacawSyntax ::
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
-  , Show (GMA.ArchReloc arch)
+  , Show (Arch.ArchReloc arch)
   , ?memOpts :: CLM.MemOptions
   ) =>
   GDiag.GreaseLogAction ->
   C.HandleAllocator ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   GO.SimOpts ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
   IO Results
@@ -1362,7 +1362,7 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
   CSyn.assertNoExterns (CSyn.parsedProgExterns prog)
   cfgs <- entrypointCfgMap la halloc prog (GO.simEntryPoints simOpts)
   let cfgs' = Map.map (\cfg -> EP.MacawEntrypointCfgs cfg Nothing) cfgs
-  let memory = MC.emptyMemory (archCtx ^. GMA.archInfo . to MI.archAddrWidth)
+  let memory = MC.emptyMemory (archCtx ^. Arch.archInfo . to MI.archAddrWidth)
   let dl = macawDataLayout archCtx
   let setupHook :: forall sym. Macaw.SetupHook sym arch
       setupHook =
@@ -1389,8 +1389,8 @@ simulateMacaw ::
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , Symbolic.SymArchConstraints arch
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
-  , Elf.IsRelocationType (GMA.ArchReloc arch)
-  , Elf.RelocationWidth (GMA.ArchReloc arch) ~ MC.ArchAddrWidth arch
+  , Elf.IsRelocationType (Arch.ArchReloc arch)
+  , Elf.RelocationWidth (Arch.ArchReloc arch) ~ MC.ArchAddrWidth arch
   , BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
   , ?memOpts :: CLM.MemOptions
@@ -1399,8 +1399,8 @@ simulateMacaw ::
   C.HandleAllocator ->
   Elf.ElfHeaderInfo (MC.ArchAddrWidth arch) ->
   Load.LoadedProgram arch ->
-  Maybe (PLT.PLTStubInfo (GMA.ArchReloc arch)) ->
-  GMA.ArchContext arch ->
+  Maybe (PLT.PLTStubInfo (Arch.ArchReloc arch)) ->
+  Arch.ArchContext arch ->
   (Elf.ElfWordType (MC.ArchAddrWidth arch), Elf.ElfWordType (MC.ArchAddrWidth arch)) ->
   GO.SimOpts ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
@@ -1414,13 +1414,13 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
   let dynFunMap = Load.progDynFunMap loadedProg
 
   relocs <-
-    case elfRelocationMap (Proxy @(GMA.ArchReloc arch)) loadOpts elf of
+    case elfRelocationMap (Proxy @(Arch.ArchReloc arch)) loadOpts elf of
       Left err@RelocationSymbolNotFound{} -> malformedElf la (PP.pretty err)
       Right rs -> pure rs
   let symbolRelocs =
         Map.mapMaybe
           ( \(reloc, symb) ->
-              if (archCtx ^. GMA.archRelocSupported) reloc == Just SymbolReloc
+              if (archCtx ^. Arch.archRelocSupported) reloc == Just SymbolReloc
                 then Just $ GUtil.functionNameFromByteString symb
                 else Nothing
           )
@@ -1859,13 +1859,13 @@ simulateMacawRaw ::
   , Symbolic.SymArchConstraints arch
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
-  , Show (GMA.ArchReloc arch)
+  , Show (Arch.ArchReloc arch)
   , ?memOpts :: CLM.MemOptions
   ) =>
   GDiag.GreaseLogAction ->
   MM.Memory (MC.ArchAddrWidth arch) ->
   C.HandleAllocator ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   GO.SimOpts ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
   IO Results
@@ -1969,14 +1969,14 @@ simulateRawArch ::
   , Symbolic.SymArchConstraints arch
   , Integral
       (Elf.ElfWordType (MC.RegAddrWidth (MC.ArchReg arch)))
-  , Show (GMA.ArchReloc arch)
+  , Show (Arch.ArchReloc arch)
   , ?memOpts :: CLM.MemOptions
   ) =>
   GO.SimOpts ->
   GDiag.GreaseLogAction ->
   C.HandleAllocator ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
-  GMA.ArchContext arch ->
+  Arch.ArchContext arch ->
   MM.Endianness ->
   IO Results
 simulateRawArch simOpts la halloc hooks archCtx end = do

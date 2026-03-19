@@ -20,7 +20,8 @@ import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Text qualified as Text
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Grease.Entrypoint qualified as GE
-import Grease.Macaw.Arch (ArchContext, archRegStructType)
+import Grease.Macaw.Arch (ArchContext)
+import Grease.Macaw.Arch qualified as Arch
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Types qualified as CT
@@ -118,8 +119,8 @@ checkMacawCfgSignature ::
         (Symbolic.ArchRegStruct arch)
     )
 checkMacawCfgSignature archCtx name regCfg = do
-  let expectedArgTys = Ctx.singleton (archCtx ^. archRegStructType)
-  let expectedRet = archCtx ^. archRegStructType
+  let expectedArgTys = Ctx.singleton (archCtx ^. Arch.archRegStructType)
+  let expectedRet = archCtx ^. Arch.archRegStructType
   let argTys = C.Reg.cfgArgTypes regCfg
   Refl <-
     case testEquality argTys expectedArgTys of

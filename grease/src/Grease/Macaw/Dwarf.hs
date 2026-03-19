@@ -42,7 +42,8 @@ import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Data.Word (Word64)
 import Grease.Diagnostic (Diagnostic (DwarfShapesDiagnostic), GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext, archABIParams, archValueNames)
+import Grease.Macaw.Arch (ArchContext)
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Dwarf.Diagnostic qualified as DwarfDiagnostic
 import Grease.Macaw.RegName (RegName (RegName), mkRegName)
 import Grease.Options (TypeUnrollingBound (TypeUnrollingBound))
@@ -118,7 +119,7 @@ loadDwarfPreconditions ::
   UseConservativeDebugShapes ->
   IO (Maybe (Shape.ArgShapes ext NoTag tys))
 loadDwarfPreconditions gla targetAddr memory tyUnrollBound initShapes elfHdr archContext shouldBeConservative =
-  let argNames = Lens.view archValueNames archContext
+  let argNames = Lens.view Arch.archValueNames archContext
    in runMaybeT
         ( do
             let elf = snd $ Elf.getElf elfHdr
@@ -363,7 +364,7 @@ shapeFromDwarf ::
   IO (Shape.ParsedShapes ext)
 shapeFromDwarf gla aContext tyUnrollBound sub shouldBeConservative =
   let
-    abiRegs = aContext Lens.^. archABIParams
+    abiRegs = aContext Lens.^. Arch.archABIParams
     args = (zip abiRegs $ snd <$> (toAscList $ subParamMap sub))
     regAssignmentFromDwarfVar :: C.Some (MC.ArchReg arch) -> MDwarf.Variable -> ShapeParsingM (Text.Text, C.Some (Shape.Shape ext 'ShapePtr.Precond NoTag))
     regAssignmentFromDwarfVar reg var =

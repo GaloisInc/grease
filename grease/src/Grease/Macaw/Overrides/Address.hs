@@ -33,7 +33,8 @@ import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Void (Void)
 import GHC.Stack (HasCallStack)
 import Grease.Concretize.ToConcretize (HasToConcretize)
-import Grease.Macaw.Arch (ArchContext, archRegStructType)
+import Grease.Macaw.Arch (ArchContext)
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
 import Grease.Overrides (CantResolveOverrideCallback, OverrideNameError, partitionCfgs)
@@ -380,7 +381,7 @@ tryRunAddressOverride archCtx memVar archRegs crucState cfg = do
   case mbRegs of
     Nothing -> pure ()
     Just regs ->
-      let regsEntry = CS.RegEntry (Lens.view archRegStructType archCtx) regs
+      let regsEntry = CS.RegEntry (Lens.view Arch.archRegStructType archCtx) regs
        in runAddressOverride memVar crucState cfg regsEntry
 
 -- | See if there is an address override corresponding to the current
