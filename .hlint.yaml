@@ -37,6 +37,16 @@
     lhs: "Prettyprinter.pretty (show x)"
     rhs: 'Prettyprinter.viaShow x'
 
+# Enforce use of precomputed ArchContext fields
+- error:
+    name: Use archRegStructType
+    lhs: "Lang.Crucible.CFG.Core.StructRepr (x ^. Grease.Macaw.Arch.archRegTypes)"
+    rhs: "x ^. Grease.Macaw.Arch.archRegStructType"
+- error:
+    name: Use archRegArgCtx
+    lhs: "Data.Parameterized.Context.Empty Data.Parameterized.Context.:> (x ^. Grease.Macaw.Arch.archRegStructType)"
+    rhs: "x ^. Grease.Macaw.Arch.archRegArgCtx"
+
 # Enforce naming conventions, e.g., if you import Control.Applicative qualified,
 # it must be as 'Applicative'.
 - error: { name: "Avoid restricted alias" }
