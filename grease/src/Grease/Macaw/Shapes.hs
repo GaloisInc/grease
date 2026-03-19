@@ -4,16 +4,16 @@ module Grease.Macaw.Shapes (
   macawInitArgShapes,
 ) where
 
+import Control.Lens ((^.))
 import Control.Monad.Trans.Maybe qualified as MaybeT
 import Data.ElfEdit qualified as Elf
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Maybe qualified as Maybe
-import Data.Parameterized.Context qualified as Ctx
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw (minimalArgShapes)
-import Grease.Macaw.Arch (ArchContext, ArchReloc)
+import Grease.Macaw.Arch (ArchContext, ArchReloc, archValueNames)
 import Grease.Macaw.Dwarf (loadDwarfPreconditions)
 import Grease.Macaw.Dwarf qualified as Dwarf
 import Grease.Options qualified as GO
@@ -21,7 +21,6 @@ import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Simple qualified as Simple
 import Grease.Utility (segoffToAbsoluteAddr)
-import Grease.ValueName (ValueName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
@@ -54,12 +53,12 @@ macawInitArgShapes ::
   Maybe (Shape.ParsedShapes (Symbolic.MacawExt arch)) ->
   Maybe (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch)) ->
   MM.Memory (MC.ArchAddrWidth arch) ->
-  Ctx.Assignment ValueName (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   IO (Either Shape.TypeMismatch (Shape.ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch))))
-macawInitArgShapes la bak archCtx opts parsed elf memory argNames mbCfgAddr = do
+macawInitArgShapes la bak archCtx opts parsed elf memory mbCfgAddr = do
+  let argNames = archCtx ^. archValueNames
   let mdEntryAbsAddr = fmap (segoffToAbsoluteAddr memory) mbCfgAddr
   initArgs0 <- minimalArgShapes bak archCtx mdEntryAbsAddr
   let shouldUseDwarf = GO.initPrecondUseDebugInfo opts
@@ -73,7 +72,6 @@ macawInitArgShapes la bak archCtx opts parsed elf memory argNames mbCfgAddr = do
             addr
             memory
             (GO.initPrecondTypeUnrollingBound opts)
-            argNames
             initArgs0
             elfHdr
             archCtx

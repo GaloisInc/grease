@@ -36,14 +36,13 @@ import Data.Map (toAscList)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Maybe qualified as Maybe
-import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Proxy (Proxy (Proxy))
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Data.Word (Word64)
 import Grease.Diagnostic (Diagnostic (DwarfShapesDiagnostic), GreaseLogAction)
-import Grease.Macaw.Arch (ArchContext, archABIParams)
+import Grease.Macaw.Arch (ArchContext, archABIParams, archValueNames)
 import Grease.Macaw.Dwarf.Diagnostic qualified as DwarfDiagnostic
 import Grease.Macaw.RegName (RegName (RegName), mkRegName)
 import Grease.Options (TypeUnrollingBound (TypeUnrollingBound))
@@ -52,7 +51,6 @@ import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (MemShape (Exactly, Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget, TaggedByte (TaggedByte), memShapeSize, ptrTarget, taggedByteTag, taggedByteValue)
 import Grease.Shape.Pointer qualified as ShapePtr
-import Grease.ValueName (ValueName)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (toBytes)
 import Lang.Crucible.LLVM.MemModel qualified as CLM
@@ -99,6 +97,7 @@ loadDwarfPreconditions ::
   , MM.MemWidth (MC.ArchAddrWidth arch)
   , ExtShape ext
       ~ PtrShape ext (MC.RegAddrWidth (MC.ArchReg arch))
+  , tys ~ Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)
   ) =>
   -- | Log action
   GreaseLogAction ->
@@ -108,8 +107,6 @@ loadDwarfPreconditions ::
   MM.Memory (MC.RegAddrWidth (MC.ArchReg arch)) ->
   -- | How much to unroll recursive types
   TypeUnrollingBound ->
-  -- | Argument names
-  Ctx.Assignment ValueName tys ->
   -- | Initial arguments
   Shape.ArgShapes ext NoTag tys ->
   -- | Elf Object
@@ -120,16 +117,17 @@ loadDwarfPreconditions ::
   -- or from the precise type when possible.
   UseConservativeDebugShapes ->
   IO (Maybe (Shape.ArgShapes ext NoTag tys))
-loadDwarfPreconditions gla targetAddr memory tyUnrollBound argNames initShapes elfHdr archContext shouldBeConservative =
-  runMaybeT
-    ( do
-        let elf = snd $ Elf.getElf elfHdr
-        adjustedAddr <- hoistMaybe $ addressToELFAddress elfHdr targetAddr memory (Proxy @arch)
-        let (_, cus) = dwarfInfoFromElf elf
-        shps <- MaybeT $ fromDwarfInfo gla archContext tyUnrollBound adjustedAddr cus shouldBeConservative
-        let repl = Shape.replaceShapes argNames initShapes shps
-        hoistMaybe $ either (const Nothing) Just repl
-    )
+loadDwarfPreconditions gla targetAddr memory tyUnrollBound initShapes elfHdr archContext shouldBeConservative =
+  let argNames = Lens.view archValueNames archContext
+   in runMaybeT
+        ( do
+            let elf = snd $ Elf.getElf elfHdr
+            adjustedAddr <- hoistMaybe $ addressToELFAddress elfHdr targetAddr memory (Proxy @arch)
+            let (_, cus) = dwarfInfoFromElf elf
+            shps <- MaybeT $ fromDwarfInfo gla archContext tyUnrollBound adjustedAddr cus shouldBeConservative
+            let repl = Shape.replaceShapes argNames initShapes shps
+            hoistMaybe $ either (const Nothing) Just repl
+        )
 
 type ShapeParsingM a = ExceptT DwarfDiagnostic.DwarfShapeParsingError IO a
 
