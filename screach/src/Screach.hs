@@ -841,6 +841,7 @@ withPrioritizationFunction ::
   ResolvedTargetLoc 64 ->
   ( ( forall p sym rtp.
       ( SDSE.HasDistancesState p
+      , GMSS.HasDiscoveryState p MX86.X86_64
       , RR.HasRecordState p p sym ext rtp
       , RR.HasReplayState p p sym ext rtp
       , WI.IsExprBuilder sym
@@ -868,6 +869,7 @@ withPrioritizationFunction conf avoidList archCtx cfgCache sla gla elf halloc re
           MM.MemWord 64 ->
           forall p sym ext rtp.
           ( SDSE.HasDistancesState p
+          , GMSS.HasDiscoveryState p MX86.X86_64
           , RR.HasRecordState p p sym ext rtp
           , RR.HasReplayState p p sym ext rtp
           , WI.IsExprBuilder sym
@@ -893,6 +895,7 @@ withPrioritizationFunction conf avoidList archCtx cfgCache sla gla elf halloc re
         cgPfunc ::
           forall p sym ext rtp.
           ( SDSE.HasDistancesState p
+          , GMSS.HasDiscoveryState p MX86.X86_64
           , RR.HasRecordState p p sym ext rtp
           , RR.HasReplayState p p sym ext rtp
           , WI.IsExprBuilder sym
@@ -1099,7 +1102,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                 (overrideError sla)
         let lfhd
               | isEcfs =
-                  ecfsLookupFunctionHandleDispatch gla halloc archCtx mem symMap pltStubs defaultLfhd
+                  ecfsLookupFunctionHandleDispatch gla halloc archCtx symMap defaultLfhd
               | otherwise =
                   defaultLfhd
         let memCfg =
@@ -1187,8 +1190,10 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
         gssRecState <- RR.mkRecordState halloc
         gssEmpTrace <- RR.emptyRecordedTrace sym
         gssRepState <- RR.mkReplayState halloc gssEmpTrace
+        let discState0 = GMD.mkInitialDiscoveryState archCtx mem symMap pltStubs
+        discStateRef <- IORef.newIORef discState0
         let greaseSimState =
-              GMSS.mkGreaseSimulatorState toConcVar dbgCtx gssRecState gssRepState
+              GMSS.mkGreaseSimulatorState discStateRef toConcVar dbgCtx gssRecState gssRepState
                 & GMSS.discoveredFnHandles .~ discoveredHdls
         personality <-
           SP.mkScreachSimulatorState
@@ -1439,6 +1444,7 @@ analyzeCfg ::
   GE.EntrypointCfgs (CCR.SomeCFG ext args ret) ->
   ( forall p sym rtp.
     ( SDSE.HasDistancesState p
+    , GMSS.HasDiscoveryState p MX86.X86_64
     , RR.HasRecordState p p sym ext rtp
     , RR.HasReplayState p p sym ext rtp
     , WI.IsExprBuilder sym

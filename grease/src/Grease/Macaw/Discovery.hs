@@ -3,11 +3,15 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Discovery (
   discoverFunction,
+  discoverFunctionWith,
+  discoverFunctionIncremental,
+  mkInitialDiscoveryState,
 ) where
 
 import Control.Lens (to, (.~), (^.))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Function ((&))
+import Data.IORef qualified as IORef
 import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
@@ -17,7 +21,7 @@ import Data.Macaw.Utils.IncComp qualified as IncComp
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Some (Some (Some))
 import Grease.Diagnostic (Diagnostic (LoadDiagnostic))
-import Grease.Macaw.Arch (ArchContext, ArchRegCFG)
+import Grease.Macaw.Arch (ArchContext, ArchRegCFG, archInfo, archVals)
 import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Utility (functionNameFromByteString, tshow)
@@ -92,6 +96,74 @@ discoverFunction logAction halloc arch mem symMap pltStubs addr = do
         (functionNameFromByteString $ Discovery.discoveredFunName funInfo)
         (WPL.OtherPos . tshow) -- simply use addresses as source positions for now
         funInfo
+
+-- | Create the initial 'Discovery.DiscoveryState' for a binary, with PLT
+-- stubs marked as trusted function entry points. This state can be stored in
+-- an 'IORef' and shared across incremental discoveries via
+-- 'discoverFunctionIncremental'.
+mkInitialDiscoveryState ::
+  ArchContext arch ->
+  EL.Memory (MC.ArchAddrWidth arch) ->
+  Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
+  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
+  Discovery.DiscoveryState arch
+mkInitialDiscoveryState arch mem symMap pltStubs =
+  let archInf = arch ^. archInfo
+      pltEntryPoints = Discovery.MayReturnFun <$ pltStubs
+  in Discovery.emptyDiscoveryState mem symMap archInf
+       & Discovery.trustedFunctionEntryPoints .~ pltEntryPoints
+
+-- | Discover a single function, returning the updated 'Discovery.DiscoveryState'.
+-- Each call benefits from knowledge accumulated by previous discoveries
+-- (e.g., known function boundaries). This maintains lazy, on-demand discovery
+-- while allowing the caller to thread state however it sees fit.
+discoverFunctionWith ::
+  MonadIO m =>
+  LJ.LogAction IO Diagnostic ->
+  C.HandleAllocator ->
+  ArchContext arch ->
+  Discovery.DiscoveryState arch ->
+  Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
+  MC.ArchSegmentOff arch ->
+  m (ArchRegCFG arch, Discovery.DiscoveryState arch)
+discoverFunctionWith logAction halloc arch s0 symMap addr = do
+  let archInf = arch ^. archInfo
+  MI.withArchConstraints archInf $ do
+    (s', Some funInfo) <-
+      IncComp.processIncCompLogs (logDiscoveryEvent logAction symMap) $ IncComp.runIncCompM $ do
+        IncComp.incCompLog $ Discovery.ReportAnalyzeFunction addr
+        let discoveryOpts = Discovery.defaultDiscoveryOptions
+        res@(_, Some funInfo) <-
+          IncComp.liftIncComp id $
+            Discovery.discoverFunction discoveryOpts addr Discovery.UserRequest s0 []
+        IncComp.incCompLog $ Discovery.ReportAnalyzeFunctionDone funInfo
+        pure res
+    cfg <- liftIO $
+      Symbolic.mkFunRegCFG
+        (arch ^. archVals . to Symbolic.archFunctions)
+        halloc
+        (functionNameFromByteString $ Discovery.discoveredFunName funInfo)
+        (WPL.OtherPos . tshow)
+        funInfo
+    pure (cfg, s')
+
+-- | Convenience wrapper around 'discoverFunctionWith' that reads and writes
+-- a shared 'Discovery.DiscoveryState' via an 'IORef'. Useful for IO callbacks
+-- (e.g., in distance computation) that cannot easily thread state.
+discoverFunctionIncremental ::
+  MonadIO m =>
+  LJ.LogAction IO Diagnostic ->
+  C.HandleAllocator ->
+  ArchContext arch ->
+  IORef.IORef (Discovery.DiscoveryState arch) ->
+  Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
+  MC.ArchSegmentOff arch ->
+  m (ArchRegCFG arch)
+discoverFunctionIncremental logAction halloc arch stateRef symMap addr = do
+  s <- liftIO $ IORef.readIORef stateRef
+  (cfg, s') <- discoverFunctionWith logAction halloc arch s symMap addr
+  liftIO $ IORef.writeIORef stateRef s'
+  pure cfg
 
 {-
 Note [Mark PLT stubs as trusted function entry points]

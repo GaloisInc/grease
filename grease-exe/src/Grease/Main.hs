@@ -52,6 +52,7 @@ import Data.Macaw.BinaryLoader (BinaryLoader)
 import Data.Macaw.BinaryLoader qualified as Loader
 import Data.Macaw.BinaryLoader.AArch32 ()
 import Data.Macaw.BinaryLoader.Raw ()
+import Data.IORef qualified as IORef
 import Data.Macaw.BinaryLoader.X86 ()
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
@@ -115,7 +116,7 @@ import Grease.Macaw.Arch.AArch32 (armCtx)
 import Grease.Macaw.Arch.PPC32 (ppc32Ctx)
 import Grease.Macaw.Arch.PPC64 (ppc64Ctx)
 import Grease.Macaw.Arch.X86 (x86Ctx)
-import Grease.Macaw.Discovery (discoverFunction)
+import Grease.Macaw.Discovery (discoverFunction, mkInitialDiscoveryState)
 import Grease.Macaw.Entrypoint (checkMacawEntrypointCfgsSignatures)
 import Grease.Macaw.Entrypoint qualified as GME
 import Grease.Macaw.Load qualified as Load
@@ -819,8 +820,13 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
   empTrace <- CR.emptyRecordedTrace sym
   repState <- CR.mkReplayState halloc empTrace
 
+  let discState0 = mkInitialDiscoveryState archCtx
+                      (mcMemory macawCfgConfig)
+                      (mcSymMap macawCfgConfig)
+                      (mcPltStubs macawCfgConfig)
+  discStateRef <- IORef.newIORef discState0
   let personality =
-        mkGreaseSimulatorState toConcVar dbgCtx recState repState
+        mkGreaseSimulatorState discStateRef toConcVar dbgCtx recState repState
           & discoveredFnHandles .~ discoveredHdls
 
   let globals = GSIO.initFsGlobals initFs

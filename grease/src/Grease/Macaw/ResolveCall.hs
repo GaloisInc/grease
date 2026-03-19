@@ -51,11 +51,11 @@ import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (Diagnostic (ResolveCallDiagnostic), GreaseLogAction)
 import Grease.Macaw.Arch (ArchContext)
 import Grease.Macaw.Arch qualified as Arch
-import Grease.Macaw.Discovery (discoverFunction)
+import Grease.Macaw.Discovery (discoverFunctionIncremental)
 import Grease.Macaw.Overrides (lookupMacawForwardDeclarationOverride)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride, msoPublicFnHandle, msoPublicOverride, msoSomeFunctionOverride))
 import Grease.Macaw.ResolveCall.Diagnostic qualified as Diag
-import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, MacawOverride, stateDiscoveredFnHandles, stateSyscallHandles)
+import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, MacawOverride, discoveryStateRef, greaseSimulatorState, stateDiscoveredFnHandles, stateSyscallHandles)
 import Grease.Macaw.SkippedCall (
   SkippedFunctionCall (
     InvalidAddress,
@@ -405,7 +405,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
     | Discovery.isExecutableSegOff funcAddrOff = do
         fixedAddr <- (arch ^. Arch.archPCFixup) bak regs funcAddrOff
         (hdl, st') <-
-          discoverFuncAddr la halloc arch memory symMap pltStubs fixedAddr st
+          discoverFuncAddr la halloc arch symMap fixedAddr st
         let nm = C.handleName hdl
         maybeUserSkip nm $
           pure
@@ -600,7 +600,9 @@ lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd =
 
 -- | Perform code discovery on the function address (see @Note [Incremental
 -- code discovery]@ in "Grease.Macaw.SimulatorState") and bind the function
--- handle to its CFG.
+-- handle to its CFG. Uses the shared 'Discovery.DiscoveryState' stored in the
+-- 'GreaseSimulatorState' so that each successive discovery benefits from
+-- knowledge accumulated by previous ones.
 discoverFuncAddr ::
   ( Symbolic.SymArchConstraints arch
   , HasGreaseSimulatorState p cExt sym arch ret
@@ -608,11 +610,8 @@ discoverFuncAddr ::
   LJ.LogAction IO Diagnostic ->
   C.HandleAllocator ->
   ArchContext arch ->
-  EL.Memory (MC.ArchAddrWidth arch) ->
   -- | Map of entrypoint addresses to their names
   Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
-  -- | Map of addresses to PLT stub names
-  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
   -- | The function address
   MC.ArchSegmentOff arch ->
   -- | The current Crucible state
@@ -621,9 +620,10 @@ discoverFuncAddr ::
     ( MacawFnHandle arch
     , CS.SimState p sym (Symbolic.MacawExt arch) r f a
     )
-discoverFuncAddr logAction halloc arch memory symMap pltStubs addr st0 = do
+discoverFuncAddr logAction halloc arch symMap addr st0 = do
+  let stateRef = st0 ^. CS.stateContext . CS.cruciblePersonality . greaseSimulatorState . discoveryStateRef
   C.Reg.SomeCFG regCFG <-
-    discoverFunction logAction halloc arch memory symMap pltStubs addr
+    discoverFunctionIncremental logAction halloc arch stateRef symMap addr
   C.SomeCFG funcCFG <- pure (C.toSSA regCFG)
   let cfgHdl = C.cfgHandle funcCFG
   let st1 = st0 & stateDiscoveredFnHandles %~ Map.insert addr cfgHdl

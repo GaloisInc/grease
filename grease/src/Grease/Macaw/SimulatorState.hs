@@ -11,9 +11,11 @@ module Grease.Macaw.SimulatorState (
   GreaseSimulatorState (..),
   mkGreaseSimulatorState,
   HasGreaseSimulatorState (..),
+  HasDiscoveryState (..),
 
   -- * Lenses for @GreaseSimulatorState@
   discoveredFnHandles,
+  discoveryStateRef,
   syscallHandles,
   macawLazySimulatorState,
   gssRecordState,
@@ -31,8 +33,10 @@ module Grease.Macaw.SimulatorState (
 import Control.Lens (Lens')
 import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
+import Data.IORef (IORef)
 import Data.Kind (Type)
 import Data.Macaw.CFG qualified as MC
+import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
@@ -59,7 +63,12 @@ type GreaseSimulatorState ::
   CT.CrucibleType ->
   Type
 data GreaseSimulatorState cExt sym arch ret = GreaseSimulatorState
-  { _discoveredFnHandles :: Map.Map (MC.ArchSegmentOff arch) (MacawFnHandle arch)
+  { _discoveryStateRef :: IORef (Discovery.DiscoveryState arch)
+  -- ^ A shared, mutable 'Discovery.DiscoveryState' used for incremental code
+  -- discovery. Each call to 'Grease.Macaw.Discovery.discoverFunctionIncremental'
+  -- reads and updates this state, so successive discoveries benefit from
+  -- knowledge accumulated by previous ones (e.g., known function boundaries).
+  , _discoveredFnHandles :: Map.Map (MC.ArchSegmentOff arch) (MacawFnHandle arch)
   -- ^ A map of discovered function addresses to their handles. Any time a new
   -- function is discovered (see @Note [Incremental code discovery]@), it will
   -- be added to this map so that it can be looked up in future invocations of
@@ -116,14 +125,16 @@ data GreaseSimulatorState cExt sym arch ret = GreaseSimulatorState
 mkGreaseSimulatorState ::
   forall cExt sym arch ret p.
   (p ~ GreaseSimulatorState cExt sym arch ret) =>
+  IORef (Discovery.DiscoveryState arch) ->
   CS.GlobalVar ToConc.ToConcretizeType ->
   Dbg.Context cExt sym (Symbolic.MacawExt arch) ret ->
   CR.RecordState p sym (Symbolic.MacawExt arch) (CS.RegEntry sym ret) ->
   CR.ReplayState p sym (Symbolic.MacawExt arch) (CS.RegEntry sym ret) ->
   p
-mkGreaseSimulatorState toConcVar dbgCtx recState repState =
+mkGreaseSimulatorState discStateRef toConcVar dbgCtx recState repState =
   GreaseSimulatorState
-    { _discoveredFnHandles = Map.empty
+    { _discoveryStateRef = discStateRef
+    , _discoveredFnHandles = Map.empty
     , _toConcretize = toConcVar
     , _syscallHandles = MapF.empty
     , _macawLazySimulatorState = Symbolic.emptyMacawLazySimulatorState
@@ -146,6 +157,17 @@ class
     | p -> cExt sym arch ret
   where
   greaseSimulatorState :: Lens' p (GreaseSimulatorState cExt sym arch ret)
+
+-- | A class for personality types that provide access to a shared, mutable
+-- 'Discovery.DiscoveryState'. This enables incremental code discovery where
+-- each successive function discovery benefits from knowledge accumulated by
+-- previous ones.
+--
+-- The 'IORef' is intentional: when the scheduler snapshots a 'SimState' into
+-- a 'WorkItem', the 'IORef' ensures that all suspended paths share the same
+-- discovery knowledge, avoiding redundant rediscovery.
+class HasDiscoveryState p arch | p -> arch where
+  getDiscoveryStateRef :: p -> IORef (Discovery.DiscoveryState arch)
 
 -----
 -- These types should probably be defined in Grease.Macaw.FunctionOverride, but
@@ -202,6 +224,9 @@ instance
     ret
   where
   greaseSimulatorState = id
+
+instance HasDiscoveryState (GreaseSimulatorState cExt sym arch ret) arch where
+  getDiscoveryStateRef = Lens.view discoveryStateRef
 
 instance GSN.HasServerSocketFds (GreaseSimulatorState cExt sym arch ret) where
   serverSocketFdsL = serverSocketFds
