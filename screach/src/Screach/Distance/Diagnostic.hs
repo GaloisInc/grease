@@ -26,7 +26,7 @@ severity :: Diagnostic -> Severity
 severity =
   \case
     MinTarget{} -> Info
-    DiscoveredCFG{} -> Info
+    DiscoveredCFG{} -> Debug
     GenericDebugOutput{} -> Debug
     NoCalleesForFunction{} -> Warn
     NoCalleesForCallsite{} -> Warn
