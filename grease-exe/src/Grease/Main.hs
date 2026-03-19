@@ -545,19 +545,18 @@ getMacawInitArgShapes ::
   GMA.ArchContext arch ->
   GO.InitialPreconditionOpts ->
   MacawCfgConfig arch ->
-  Ctx.Assignment ValueName (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)) ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   IO (ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)))
-getMacawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr = do
+getMacawInitArgShapes la bak archCtx opts macawCfgConfig mbCfgAddr = do
   parsed <-
     case GO.initPrecondPath opts of
       Nothing -> pure Nothing
       Just path -> Just <$> loadInitialPreconditions la path
   let elf = mcElf macawCfgConfig
   let memory = mcMemory macawCfgConfig
-  GMS.macawInitArgShapes la bak archCtx opts parsed elf memory argNames mbCfgAddr
+  GMS.macawInitArgShapes la bak archCtx opts parsed elf memory mbCfgAddr
     >>= \case
       Left err -> userErr la (PP.pretty err)
       Right shapes -> pure shapes
@@ -867,9 +866,8 @@ macawRefineOnce ::
   EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
   IO (GRef.ProveRefineResult sym ext argTys)
 macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
-  let rNameAssign = archCtx ^. GMA.archValueNames
+  let argNames = archCtx ^. GMA.archValueNames
       regTypes = archCtx ^. GMA.archRegTypes
-      argNames = archCtx ^. GMA.archValueNames
   GRef.refineOnce
     la
     simOpts
@@ -877,7 +875,7 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallbac
     bak
     fm
     (mcDataLayout macawCfgConfig)
-    rNameAssign
+    argNames
     argNames
     regTypes
     argShapes
@@ -964,7 +962,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
 
   initArgShapes <-
     let opts = GO.simInitPrecondOpts simOpts
-     in getMacawInitArgShapes la bak archCtx opts macawCfgConfig argNames mbCfgAddr
+     in getMacawInitArgShapes la bak archCtx opts macawCfgConfig mbCfgAddr
 
   entrypointCfgsSsa@EP.EntrypointCfgs{EP.entrypointCfg = C.SomeCFG ssaCfg} <-
     pure (EP.entrypointCfgsToSsa entrypointCfgs)

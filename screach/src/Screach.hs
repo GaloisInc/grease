@@ -998,7 +998,6 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
         let dataLayout = macawDataLayout archCtx
         let rNames = archCtx ^. archRegNames
             argNames = archCtx ^. archValueNames
-            valNames = archCtx ^. archValueNames
             regTypes = archCtx ^. archRegTypes
         let MacawCfgConfig
               { mcLoadOptions = loadOpts
@@ -1041,7 +1040,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
           let skipRelocs = GO.SkipUnsupportedRelocs False
           let memCfg = GM.memConfigInitial bak archCtx ptrTable skipRelocs relocs
           pure (mem0, memCfg)
-        (args, setupMem, setupAnns) <- GS.setup gla bak dataLayout valNames regTypes argShapes initMem
+        (args, setupMem, setupAnns) <- GS.setup gla bak dataLayout argNames regTypes argShapes initMem
         -- TODO: When adding support for AArch32 and PPC, override the link
         -- registers like GREASE does, probably should refactor that in GREASE
         -- to make it easier to use here - part of ArchCtx?
@@ -1352,6 +1351,7 @@ handleTarget ::
   ( p
       ~ SP.ScreachSimulatorState p' sym bak ext arch t ret aty wptr
   , ext ~ MS.MacawExt arch
+  , aty ~ MS.CtxToCrucibleType (MS.ArchRegContext arch)
   , CLM.HasPtrWidth
       wptr
   , (Shape.ExtShape ext ~ Shape.PtrShape ext wptr)
@@ -1359,14 +1359,14 @@ handleTarget ::
   ArchContext arch ->
   Proxy (bak, t, p') ->
   ScreachLogAction ->
-  Ctx.Assignment ValueName aty ->
   -- | Default/initial/minimal shapes
   Ctx.Assignment (Shape.Shape ext 'Shape.Precond tag) aty ->
   CS.ExecResult p sym ext (CS.RegEntry sym ret) ->
   IO
     Bool
-handleTarget archCtx _ sla argNames initArgs st =
-  let rst =
+handleTarget archCtx _ sla initArgs st =
+  let argNames = archCtx ^. archValueNames
+      rst =
         ( CS.execResultContext st ^. CS.cruciblePersonality . RFT.refinementState ::
             RFT.SrchRefineData sym bak t ext aty wptr
         )
@@ -1400,16 +1400,15 @@ initialArgs ::
   bak ->
   ArchContext arch ->
   Maybe (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch)) ->
-  Ctx.Assignment ValueName args ->
   IO (Shape.ArgShapes (MS.MacawExt arch) Shape.NoTag (MS.CtxToCrucibleType (MS.ArchRegContext arch)))
-initialArgs sla gla conf mem mbTargetAddr bak archCtx mbEhi argNames = do
+initialArgs sla gla conf mem mbTargetAddr bak archCtx mbEhi = do
   let opts = Conf.initPrecondOpts conf
   parsed <-
     case GO.initPrecondPath opts of
       Nothing -> pure Nothing
       Just path -> Just <$> loadInitialPreconditions sla path
   let mbAddr = MM.resolveAbsoluteAddr mem . GE.getTargetAddress =<< mbTargetAddr
-  r <- GMShp.macawInitArgShapes gla bak archCtx opts parsed mbEhi mem argNames mbAddr
+  r <- GMShp.macawInitArgShapes gla bak archCtx opts parsed mbEhi mem mbAddr
   case r of
     Left err -> userError sla (PP.pretty err)
     Right shapes -> pure shapes
@@ -1474,8 +1473,6 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
     let (_tyCtxErrs, tyCtx) = CLTC.mkTypeContext dataLayout IntMap.empty []
     let ?lc = tyCtx
 
-    let argNames = archCtx ^. archValueNames
-
     -- The target address and the target symbol, if they exist. At least one of
     -- these will be 'Just' no matter what, as the user must specify the target
     -- location as an address or as a symbol. Furthermore, note that:
@@ -1513,7 +1510,7 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
               , Just $ GE.TargetFunctionName name
               )
     initArgs <-
-      initialArgs sla gla conf mem mbTargetAddr bak archCtx mbEhi argNames
+      initialArgs sla gla conf mem mbTargetAddr bak archCtx mbEhi
 
     let mbGoalEvaluatorExecFeature =
           -- We omit the goal evaluator in the case that we have a target
@@ -1568,7 +1565,7 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
         (Conf.refineReplay conf)
         initShape
         pFunc
-        (handleTarget archCtx Proxy sla argNames (initArgs ^. Shape.argShapes))
+        (handleTarget archCtx Proxy sla (initArgs ^. Shape.argShapes))
         (Conf.allSolutions conf)
     let startFeats =
           List.concat
