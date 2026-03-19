@@ -71,7 +71,7 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
       -- `genArchVals` is total: https://github.com/GaloisInc/macaw/issues/231
       panic "armCtx" ["Failed to generate architecture-specific values"]
     Just avals -> pure avals
-  let (regStructTy, regTys, rNames, vNames) = Arch.mkArchRegInfo avals
+  let (regStructTy, regTys, rNames, vNames, regArgCtx) = Arch.mkArchRegInfo avals
   return
     Arch.ArchContext
       { Arch._archInfo = X86.x86_64_linux_info
@@ -101,6 +101,7 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
       , Arch._archRegTypes = regTys
       , Arch._archRegNames = rNames
       , Arch._archValueNames = vNames
+      , Arch._archRegArgCtx = regArgCtx
       }
 
 x64RelocSupported :: EE.X86_64_RelocationType -> Maybe RelocType
