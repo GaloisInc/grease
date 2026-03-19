@@ -27,7 +27,6 @@ import Control.Monad qualified as Monad
 import Data.BitVector.Sized (BV)
 import Data.BitVector.Sized qualified as BV
 import Data.ByteString qualified as BS
-import Data.Functor.Const qualified as Const
 import Data.Map.Strict (Map)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr (knownNat)
@@ -44,6 +43,7 @@ import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrShape)
 import Grease.Shape.Pointer qualified as PtrShape
+import Grease.ValueName (ValueName)
 import Lang.Crucible.LLVM.Bytes (Bytes)
 import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
@@ -154,7 +154,7 @@ useSimpleShapes ::
   Shape.ExtShape ext 'PtrShape.Precond NoTag ~ PtrShape ext w 'PtrShape.Precond NoTag =>
   CLM.HasPtrWidth w =>
   -- | Argument names
-  Ctx.Assignment (Const.Const String) tys ->
+  Ctx.Assignment ValueName tys ->
   -- | Initial arguments
   Shape.ArgShapes ext NoTag tys ->
   Map Text.Text SimpleShape ->

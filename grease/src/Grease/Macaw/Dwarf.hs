@@ -24,7 +24,6 @@ import Data.Coerce (coerce)
 import Data.ElfEdit qualified as Elf
 import Data.Foldable (find, for_)
 import Data.Foldable qualified as Foldable
-import Data.Functor.Const qualified as Const
 import Data.List qualified as List
 import Data.Macaw.CFG (ArchSegmentOff)
 import Data.Macaw.CFG qualified as MC
@@ -53,6 +52,7 @@ import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (MemShape (Exactly, Initialized, Pointer, Uninitialized), Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget, TaggedByte (TaggedByte), memShapeSize, ptrTarget, taggedByteTag, taggedByteValue)
 import Grease.Shape.Pointer qualified as ShapePtr
+import Grease.ValueName (ValueName)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (toBytes)
 import Lang.Crucible.LLVM.MemModel qualified as CLM
@@ -109,7 +109,7 @@ loadDwarfPreconditions ::
   -- | How much to unroll recursive types
   TypeUnrollingBound ->
   -- | Argument names
-  Ctx.Assignment (Const.Const String) tys ->
+  Ctx.Assignment ValueName tys ->
   -- | Initial arguments
   Shape.ArgShapes ext NoTag tys ->
   -- | Elf Object

@@ -29,7 +29,7 @@ import Control.Lens (Lens', (.~), (^.))
 import Data.BitVector.Sized qualified as BV
 import Data.Bool qualified as Bool
 import Data.Function ((&))
-import Data.Functor.Const (Const (Const))
+import Data.Functor.Const (Const, getConst)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Memory (MacawError (UnmappedGlobalMemoryAccess))
@@ -50,7 +50,7 @@ import Grease.Diagnostic (Diagnostic (HeuristicDiagnostic), GreaseLogAction)
 import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
 import Grease.Heuristic.Diagnostic qualified as Diag
 import Grease.Heuristic.Result (CantRefine (Exhausted, Exit, MissingFunc, MissingSemantics, MutableGlobal, SolverTimeout, SolverUnknown, Timeout, Unsupported), HeuristicResult (CantRefine, PossibleBug, RefinedPrecondition, Unknown), mergeResultsOptimistic)
-import Grease.Macaw.RegName (RegNames, getRegName, mkRegName)
+import Grease.Macaw.RegName (RegName, mkRegName)
 import Grease.MustFail qualified as MustFail
 import Grease.Panic (panic)
 import Grease.Setup (InitialMem (InitialMem))
@@ -61,6 +61,7 @@ import Grease.Shape.Pointer (MemShape (Uninitialized), ModifyPtrError, Offset (O
 import Grease.Shape.Pointer qualified as ShapePtr
 import Grease.Shape.Selector (ArgSelector, Selector (SelectArg, SelectRet), argSelectorIndex, argSelectorPath)
 import Grease.Utility (OnlineSolverAndBackend, ppProgramLoc, tshow)
+import Grease.ValueName (ValueName, getValueName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
@@ -105,7 +106,7 @@ type RefineHeuristic sym bak ext tys =
   CB.ProofObligation sym ->
   Maybe (ErrorDescription sym) ->
   -- Argument names
-  Ctx.Assignment (Const String) tys ->
+  Ctx.Assignment ValueName tys ->
   ArgShapes ext NoTag tys ->
   IO (HeuristicResult ext tys)
 
@@ -121,7 +122,7 @@ newtype MemoryErrorHeuristic sym ext w argTys
         sym ->
         WPL.ProgramLoc ->
         -- Argument names
-        Ctx.Assignment (Const String) argTys ->
+        Ctx.Assignment ValueName argTys ->
         ArgShapes ext NoTag argTys ->
         AnyMemError sym ->
         ArgSelector ext argTys ts t ->
@@ -180,12 +181,12 @@ newPointer ::
   ) =>
   GreaseLogAction ->
   -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
+  Ctx.Assignment ValueName argTys ->
   ArgShapes ext NoTag argTys ->
   ArgSelector ext argTys ts regTy ->
   IO (HeuristicResult ext argTys)
 newPointer la argNames args sel = do
-  let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
+  let argName = getValueName (argNames Ctx.! (sel ^. argSelectorIndex))
   doLog la $ Diag.DefaultHeuristicsBytesToPtr argName sel
   let path = sel ^. argSelectorPath
   refinePtrArg la args (bytesToPointers ?ptrWidth NoTag path) Nothing sel
@@ -202,7 +203,7 @@ handleMemErr ::
   GreaseLogAction ->
   sym ->
   -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
+  Ctx.Assignment ValueName argTys ->
   ArgShapes ext NoTag argTys ->
   AnyMemError sym ->
   ArgSelector ext argTys ts regTy ->
@@ -222,7 +223,7 @@ handleMemErr la sym argNames args err sel =
       , fle /= Mem.RawBitvector ->
           pure Unknown
       | otherwise -> do
-          let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
+          let argName = getValueName (argNames Ctx.! (sel ^. argSelectorIndex))
           let accessSize = memOpAccessSize op
           let ptrs = memOpPtrs op
           case ptrs of
@@ -278,7 +279,7 @@ handleMemErr la sym argNames args err sel =
                 Nothing -> growIncrementally la argName args sel
             _ -> growIncrementally la argName args sel
     _ -> do
-      let Const argName = argNames Ctx.! (sel ^. argSelectorIndex)
+      let argName = getValueName (argNames Ctx.! (sel ^. argSelectorIndex))
       growIncrementally la argName args sel
  where
   growIncrementally ::
@@ -495,7 +496,7 @@ applyMemoryHeuristics ::
   InitialMem sym ->
   AnyMemError sym ->
   -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
+  Ctx.Assignment ValueName argTys ->
   ArgShapes ext NoTag argTys ->
   CLMP.LLVMPtr sym w ->
   IO (HeuristicResult ext argTys)
@@ -724,7 +725,7 @@ macawHeuristics ::
   , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
-  RegNames arch ->
+  Ctx.Assignment (Const RegName) (Symbolic.MacawCrucibleRegTypes arch) ->
   [RefineHeuristic sym bak (Symbolic.MacawExt arch) (Symbolic.MacawCrucibleRegTypes arch)]
 macawHeuristics la rNames =
   let ptrHeuristic = MemoryErrorHeuristic (\sym -> handleMemErr' sym)
@@ -738,13 +739,13 @@ macawHeuristics la rNames =
     Cursor.Last ts ~ CLMP.LLVMPointerType (MC.ArchAddrWidth arch) =>
     WPL.ProgramLoc ->
     -- Argument names
-    Ctx.Assignment (Const String) (Symbolic.MacawCrucibleRegTypes arch) ->
+    Ctx.Assignment ValueName (Symbolic.MacawCrucibleRegTypes arch) ->
     ArgShapes (Symbolic.MacawExt arch) NoTag (Symbolic.MacawCrucibleRegTypes arch) ->
     AnyMemError sym ->
     ArgSelector (Symbolic.MacawExt arch) (Symbolic.MacawCrucibleRegTypes arch) ts regTy ->
     IO (HeuristicResult (Symbolic.MacawExt arch) (Symbolic.MacawCrucibleRegTypes arch))
   handleMemErr' sym loc argNames args e@(AnyMemErrorLLVM (Mem.MemoryError op reason)) sel =
-    if getRegName rNames (sel ^. argSelectorIndex) == mkRegName @arch MC.sp_reg
+    if getConst (rNames Ctx.! (sel ^. argSelectorIndex)) == mkRegName @arch MC.sp_reg
       then case reason of
         Mem.NoSatisfyingWrite _ ->
           let bug =

@@ -75,9 +75,8 @@ import Grease.Diagnostic.Severity qualified as GD
 import Grease.Entrypoint qualified as GE
 import Grease.ExecutionFeatures qualified as GEF
 import Grease.Heuristic qualified as GH
-import Grease.Macaw (regStructRepr)
 import Grease.Macaw qualified as GM
-import Grease.Macaw.Arch (ArchContext, ArchReloc, archArgNames, archInfo, archRegNames, archRegTypes, archRelocSupported, archVals, archValueNames)
+import Grease.Macaw.Arch (ArchContext, ArchReloc, archInfo, archRegNames, archRegStructType, archRegTypes, archRelocSupported, archVals, archValueNames)
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery qualified as GMD
 import Grease.Macaw.Entrypoint qualified as GME
@@ -89,7 +88,6 @@ import Grease.Macaw.Overrides.Address qualified as GMOA
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
 import Grease.Macaw.Overrides.SExp qualified as GMOS
 import Grease.Macaw.PLT qualified as GMP
-import Grease.Macaw.RegName qualified as GMRN
 import Grease.Macaw.ResolveCall qualified as ResolveCall
 import Grease.Macaw.SetupHook qualified as GMS
 import Grease.Macaw.Shapes qualified as GMShp
@@ -112,6 +110,7 @@ import Grease.SymIO qualified as GSIO
 import Grease.Syntax qualified as Syntax
 import Grease.Syscall (builtinGenericSyscalls)
 import Grease.Utility qualified as GU
+import Grease.ValueName (ValueName, getValueName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as CBO
 import Lang.Crucible.CFG.Core qualified as CCC
@@ -388,7 +387,7 @@ interestingConcretizedShapes ::
   CLM.HasPtrWidth wptr =>
   (Shape.ExtShape ext ~ Shape.PtrShape ext wptr) =>
   -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
+  Ctx.Assignment ValueName argTys ->
   -- | Default/initial/minimal shapes
   Ctx.Assignment (Shape.Shape ext 'Shape.Precond tag) argTys ->
   ConcArgs sym ext argTys ->
@@ -397,8 +396,9 @@ interestingConcretizedShapes names initArgs cArgs =
   let initArgsWithType = TFC.fmapFC Shape.tagWithType initArgs
       cShapes = TFC.fmapFC Shape.tagWithType (Conc.concArgsShapes cArgs)
    in Ctx.zipWith
-        ( \(Const name) (Const isDefault) ->
-            Const (name `List.elem` interestingRegs && not isDefault)
+        ( \vn (Const isDefault) ->
+            let name = getValueName vn
+             in Const (name `List.elem` interestingRegs && not isDefault)
         )
         names
         (Ctx.zipWith (\s s' -> Const (Maybe.isJust (testEquality s s'))) cShapes initArgsWithType)
@@ -915,7 +915,7 @@ loadAddrOvs ::
   ResolvedTargetLoc 64 ->
   IO (GMOA.AddressOverrides arch)
 loadAddrOvs archCtx conf halloc loadOpts mem rtLoc = do
-  let regTys = GM.regStructRepr archCtx
+  let regTys = archCtx ^. archRegStructType
   let word64ToInteger = fromIntegral @Word64 @Integer -- safe
   let loadOffset = word64ToInteger (fromMaybe 0 (LC.loadOffset loadOpts))
   let addrOvs_ =
@@ -947,13 +947,6 @@ analysisLocToAddr load mem symMap loc = case resolveAnalysisLoc load mem symMap 
   ResolvedTargetLocSymbol _ (Just addr) -> pure addr
   ResolvedTargetLocSymbol nm Nothing -> throw $ AvoidSymbolDidNotResolve nm
 
-data ArgArchSpec arch argTys = ArgArchSpec
-  { regNames :: GMRN.RegNames arch
-  , argNames :: Ctx.Assignment (Const String) argTys
-  , valNames :: Ctx.Assignment GS.ValueName argTys
-  , argTypes :: Ctx.Assignment CCC.TypeRepr argTys
-  }
-
 -- The code that is invoked in the body of the refinement loop,
 -- regardless of whether path-based exploration is used or not.
 initCFG ::
@@ -981,7 +974,6 @@ initCFG ::
   CFH.HandleAllocator ->
   Conf.Config ->
   ArchContext arch ->
-  ArgArchSpec arch aty ->
   -- | The target address to stop execution at if no
   -- goal override is present
   Maybe (GE.TargetAddress 64) ->
@@ -1002,9 +994,12 @@ initCFG ::
     (CS.ExecState (SP.ScreachSimulatorState p sym bak ext arch t ret aty 64) sym ext (CS.RegEntry sym ret))
 initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
   let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` CCC.cfgHandle entryRegSsaCfg) mbEntryAddr
-   in \bak gla sla macawCfgConfig halloc conf archCtx archRegSpec mbTargetAddr mbStartupOvSomeSsaCfg rtLoc memVar setupHook execAction addrOvs argShapes mbErrMaps -> do
+   in \bak gla sla macawCfgConfig halloc conf archCtx mbTargetAddr mbStartupOvSomeSsaCfg rtLoc memVar setupHook execAction addrOvs argShapes mbErrMaps -> do
         let dataLayout = macawDataLayout archCtx
-        let ArgArchSpec{regNames = rNames, argNames = argNames, valNames = valNames, argTypes = regTypes} = archRegSpec
+        let rNames = archCtx ^. archRegNames
+            argNames = archCtx ^. archValueNames
+            valNames = archCtx ^. archValueNames
+            regTypes = archCtx ^. archRegTypes
         let MacawCfgConfig
               { mcLoadOptions = loadOpts
               , mcSymMap = symMap
@@ -1188,7 +1183,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                 }
         let dbgOpts = Conf.debugOpts conf
         let dbgCmdExt = MDebug.macawCommandExt (archCtx ^. archVals)
-        dbgCtx <- initDebugger sla dbgOpts dbgCmdExt (regStructRepr archCtx)
+        dbgCtx <- initDebugger sla dbgOpts dbgCmdExt (archCtx ^. archRegStructType)
         gssRecState <- RR.mkRecordState halloc
         gssEmpTrace <- RR.emptyRecordedTrace sym
         gssRepState <- RR.mkReplayState halloc gssEmpTrace
@@ -1364,7 +1359,7 @@ handleTarget ::
   ArchContext arch ->
   Proxy (bak, t, p') ->
   ScreachLogAction ->
-  Ctx.Assignment (Const String) aty ->
+  Ctx.Assignment ValueName aty ->
   -- | Default/initial/minimal shapes
   Ctx.Assignment (Shape.Shape ext 'Shape.Precond tag) aty ->
   CS.ExecResult p sym ext (CS.RegEntry sym ret) ->
@@ -1405,7 +1400,7 @@ initialArgs ::
   bak ->
   ArchContext arch ->
   Maybe (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch)) ->
-  Ctx.Assignment (Const String) args ->
+  Ctx.Assignment ValueName args ->
   IO (Shape.ArgShapes (MS.MacawExt arch) Shape.NoTag (MS.CtxToCrucibleType (MS.ArchRegContext arch)))
 initialArgs sla gla conf mem mbTargetAddr bak archCtx mbEhi argNames = do
   let opts = Conf.initPrecondOpts conf
@@ -1465,7 +1460,6 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
         { mcMemory = mem
         , mcEntryAddr = mbEntryAddr
         } = macawCfgConfig
-  let archFns = MS.archFunctions (archCtx ^. archVals)
 
   entryRegSomeSsaCfg <- pure $ toSSA entryRegCfgSome
   let mbStartupOvSomeSsaCfg = fmap toSsaSomeCfg mbStartupOvCfg
@@ -1480,11 +1474,7 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
     let (_tyCtxErrs, tyCtx) = CLTC.mkTypeContext dataLayout IntMap.empty []
     let ?lc = tyCtx
 
-    let regTypes = archRegTypes archCtx
-    let rNames = archRegNames archCtx
-        argNames = archArgNames archCtx
-        valNames = archValueNames archCtx
-    let argSpec = ArgArchSpec{regNames = rNames, argNames = argNames, valNames = valNames, argTypes = regTypes}
+    let argNames = archCtx ^. archValueNames
 
     -- The target address and the target symbol, if they exist. At least one of
     -- these will be 'Just' no matter what, as the user must specify the target
@@ -1548,7 +1538,6 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
             halloc
             conf
             archCtx
-            argSpec
             mbTargetAddr
             mbStartupOvSomeSsaCfg
             rtLoc

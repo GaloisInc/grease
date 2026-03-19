@@ -88,7 +88,6 @@ import Control.Lens ((^.))
 import Control.Monad qualified as Monad
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.Functor.Const (Const)
 import Data.IORef (IORef, modifyIORef, readIORef)
 import Data.IORef qualified as IORef
 import Data.List qualified as List
@@ -129,6 +128,7 @@ import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Grease.Solver (Solver, solverAdapter)
 import Grease.SymIO qualified as GSIO
 import Grease.Utility (tshow)
+import Grease.ValueName (ValueName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Prove qualified as C
 import Lang.Crucible.CFG.Core qualified as C
@@ -419,7 +419,7 @@ execCfg bak execData = do
 data RefinementData sym bak ext argTys wptr
   = RefinementData
   { refineAnns :: Anns.Annotations sym ext argTys
-  , refineArgNames :: Ctx.Assignment (Const String) argTys
+  , refineArgNames :: Ctx.Assignment ValueName argTys
   , refineArgShapes :: ArgShapes ext NoTag argTys
   , refineHeuristics :: [RefineHeuristic sym bak ext argTys]
   , refineInitState :: Conc.InitialState sym ext argTys wptr
@@ -591,8 +591,8 @@ refineOnce ::
   bak ->
   W4FM.FloatModeRepr fm ->
   DataLayout ->
-  Ctx.Assignment Setup.ValueName argTys ->
-  Ctx.Assignment (Const String) argTys ->
+  Ctx.Assignment ValueName argTys ->
+  Ctx.Assignment ValueName argTys ->
   Ctx.Assignment C.TypeRepr argTys ->
   ArgShapes ext NoTag argTys ->
   InitialMem sym ->
@@ -670,7 +670,7 @@ refinementLoop ::
   ) =>
   GreaseLogAction ->
   BoundsOpts ->
-  Ctx.Assignment (Const String) argTys ->
+  Ctx.Assignment ValueName argTys ->
   ArgShapes ext NoTag argTys ->
   -- | This callback is usually 'refineOnce'
   (ArgShapes ext NoTag argTys -> IO (ProveRefineResult sym ext argTys)) ->

@@ -51,6 +51,7 @@ import Grease.Shape.Pointer qualified as PtrShape
 import Grease.Shape.Pointer qualified as ShapePtr
 import Grease.Shape.Print qualified as ShapePP
 import Grease.Utility (OnlineSolverAndBackend)
+import Grease.ValueName (ValueName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.Concretize qualified as Conc
@@ -239,7 +240,7 @@ printConcArgs ::
   (ExtShape ext ~ PtrShape ext wptr) =>
   MM.AddrWidthRepr wptr ->
   -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
+  Ctx.Assignment ValueName argTys ->
   -- | Which shapes to print
   Ctx.Assignment (Const Bool) argTys ->
   ConcArgs sym ext argTys ->
@@ -308,7 +309,7 @@ printConcData ::
   (ExtShape ext ~ PtrShape ext wptr) =>
   MM.AddrWidthRepr wptr ->
   -- | Argument names
-  Ctx.Assignment (Const String) argTys ->
+  Ctx.Assignment ValueName argTys ->
   -- | Which shapes to print
   Ctx.Assignment (Const Bool) argTys ->
   ConcretizedData sym ext argTys ->

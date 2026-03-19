@@ -32,13 +32,13 @@ module Grease.Macaw.Arch (
   archABIParams,
   archPCFixup,
   defaultPCFixup,
+  mkArchRegInfo,
+  archRegStructType,
   archRegTypes,
   archRegNames,
   archValueNames,
-  archArgNames,
 ) where
 
-import Control.Lens ((^.), to)
 import Control.Lens.TH (makeLenses)
 import Data.BitVector.Sized qualified as BV
 import Data.Data (Proxy)
@@ -56,11 +56,10 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Text (Text)
 import Grease.Macaw.Load.Relocation (RelocType)
-import Grease.Macaw.RegName (RegName (RegName), RegNames (RegNames))
-import Grease.Macaw.RegName qualified as RegName
-import Grease.Setup (ValueName (ValueName))
+import Grease.Macaw.RegName (RegName (RegName), mkRegName)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
+import Grease.ValueName (ValueName (ValueName))
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.CFG.Core qualified as C
@@ -278,6 +277,18 @@ data ArchContext arch = ArchContext
       MC.ArchSegmentOff arch ->
       IO (MC.ArchSegmentOff arch)
   -- ^ A function that fixes up the address of a function (e.g. for thumb mode based on the current register context)
+  , _archRegStructType :: C.TypeRepr (Symbolic.ArchRegStruct arch)
+  -- ^ The Crucible struct type of the architecture's registers.
+  --
+  -- Precomputed to enforce sharing.
+  , _archRegTypes :: Ctx.Assignment C.TypeRepr (Symbolic.MacawCrucibleRegTypes arch)
+  -- ^ The Crucible types of the architecture's registers
+  --
+  -- Precomputed to enforce sharing.
+  , _archRegNames :: Ctx.Assignment (Const RegName) (Symbolic.MacawCrucibleRegTypes arch)
+  -- ^ Human-readable 'RegName's for each register in the architecture.
+  , _archValueNames :: Ctx.Assignment ValueName (Symbolic.MacawCrucibleRegTypes arch)
+  -- ^ Register names as 'ValueName's, suitable for passing to setup functions.
   }
 
 makeLenses ''ArchContext
@@ -292,37 +303,26 @@ defaultPCFixup ::
   IO (MC.ArchSegmentOff arch)
 defaultPCFixup _ _ _ addr = pure addr
 
--- | The Crucible type representations of the architecture's registers.
-archRegTypes ::
-  ArchContext arch ->
-  Ctx.Assignment C.TypeRepr (Symbolic.MacawCrucibleRegTypes arch)
-archRegTypes ctx =
-  Symbolic.crucArchRegTypes (ctx ^. archVals . to Symbolic.archFunctions)
-
--- | Human-readable names for each register in the architecture.
-archRegNames ::
+-- | Compute the precomputed fields of 'ArchContext' from the architecture
+-- values. Used by architecture-specific modules when constructing an
+-- 'ArchContext'.
+mkArchRegInfo ::
   Symbolic.SymArchConstraints arch =>
-  ArchContext arch ->
-  RegNames arch
-archRegNames ctx = RegName.regNames (ctx ^. archVals)
-
--- | Register names as 'ValueName's, suitable for passing to setup functions.
-archValueNames ::
-  Symbolic.SymArchConstraints arch =>
-  ArchContext arch ->
-  Ctx.Assignment ValueName (Symbolic.MacawCrucibleRegTypes arch)
-archValueNames ctx =
-  let RegNames rNamesAssign = archRegNames ctx
-  in fmapFC (\(Const (RegName n)) -> ValueName n) rNamesAssign
-
--- | Register names as plain strings, suitable for diagnostics and refinement.
-archArgNames ::
-  Symbolic.SymArchConstraints arch =>
-  ArchContext arch ->
-  Ctx.Assignment (Const String) (Symbolic.MacawCrucibleRegTypes arch)
-archArgNames ctx =
-  let RegNames rNamesAssign = archRegNames ctx
-  in fmapFC (\(Const (RegName n)) -> Const n) rNamesAssign
+  Symbolic.GenArchVals Symbolic.LLVMMemory arch ->
+  ( C.TypeRepr (Symbolic.ArchRegStruct arch)
+  , Ctx.Assignment C.TypeRepr (Symbolic.MacawCrucibleRegTypes arch)
+  , Ctx.Assignment (Const RegName) (Symbolic.MacawCrucibleRegTypes arch)
+  , Ctx.Assignment ValueName (Symbolic.MacawCrucibleRegTypes arch)
+  )
+mkArchRegInfo avals =
+  let archFns = Symbolic.archFunctions avals
+      regTypes = Symbolic.crucArchRegTypes archFns
+      regStructType = C.StructRepr regTypes
+      regNames =
+        Symbolic.macawAssignToCruc (Const . mkRegName) $
+          Symbolic.crucGenRegAssignment archFns
+      valueNames = fmapFC (\(Const (RegName n)) -> ValueName n) regNames
+   in (regStructType, regTypes, regNames, valueNames)
 
 {-
 Note [Coping with stack protection]

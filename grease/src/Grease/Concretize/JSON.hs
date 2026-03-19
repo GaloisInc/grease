@@ -17,7 +17,6 @@ module Grease.Concretize.JSON (
 
 import Data.Aeson qualified as Aeson
 import Data.BitVector.Sized qualified as BV
-import Data.Functor.Const (Const (getConst))
 import Data.Functor.Product (Product (Pair))
 import Data.Kind (Type)
 import Data.List qualified as List
@@ -31,6 +30,7 @@ import Grease.Concretize (ConcArgs (ConcArgs))
 import Grease.Panic (panic)
 import Grease.Shape (ExtShape, getTag)
 import Grease.Shape.Pointer (PtrShape, getPtrTag)
+import Grease.ValueName (ValueName, getValueName)
 import Lang.Crucible.Concretize (ConcRV')
 import Lang.Crucible.Concretize qualified as Conc
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
@@ -198,12 +198,12 @@ concArgsToJson ::
   (sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)) =>
   (ExtShape ext ~ PtrShape ext wptr) =>
   FloatModeRepr fm ->
-  Ctx.Assignment (Const String) args ->
+  Ctx.Assignment ValueName args ->
   ConcArgs sym ext args ->
   Ctx.Assignment C.TypeRepr args ->
   [Aeson.Value]
 concArgsToJson fm argNames (ConcArgs cArgs) argTys =
   let argsWithTypes = Ctx.zipWith (\argTy cArg -> Pair argTy (getTag getPtrTag cArg)) argTys cArgs
    in let argBlobs = TFC.toListFC (\(Pair ty cVal) -> concRegValueToJson jsonPtrFnMap fm ty cVal) argsWithTypes
-       in let argNames' = TFC.toListFC getConst argNames
+       in let argNames' = TFC.toListFC getValueName argNames
            in List.zipWith (\name mval -> Aeson.object ["arg" Aeson..= name, "value" Aeson..= mval]) argNames' argBlobs

@@ -49,7 +49,6 @@ import Data.Aeson.Key qualified as Aeson
 import Data.Aeson.KeyMap qualified as Aeson
 import Data.Aeson.Types qualified as Aeson
 import Data.ByteString qualified as BS
-import Data.Functor.Const qualified as Const
 import Data.Functor.Identity (Identity (Identity, runIdentity))
 import Data.Kind (Type)
 import Data.List qualified as List
@@ -70,6 +69,7 @@ import Data.Type.Equality (TestEquality (testEquality), (:~:) (Refl))
 import GHC.Show qualified as GShow
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (KnownPtrMode (knownPtrMode), PtrDataMode (Precond), PtrModeRepr, PtrShape, minimalPtrShape, parseJsonPtrShape, ptrShapeType, traversePtrShapeWithType)
+import Grease.ValueName (ValueName, getValueName)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel (HasPtrWidth)
@@ -380,7 +380,7 @@ replaceShapes ::
   ExtShape ext 'Precond NoTag ~ PtrShape ext w 'Precond NoTag =>
   HasPtrWidth w =>
   -- | Argument names
-  Ctx.Assignment (Const.Const String) tys ->
+  Ctx.Assignment ValueName tys ->
   -- | Initial arguments
   ArgShapes ext NoTag tys ->
   -- | Replacement arguments
@@ -389,7 +389,7 @@ replaceShapes ::
 replaceShapes names (ArgShapes args) (ParsedShapes replacements) =
   -- TODO: Check that all the map keys are expected
   ArgShapes
-    <$> Ctx.zipWithM (\(Const.Const nm) s -> replaceOne nm s) names args
+    <$> Ctx.zipWithM (\nm s -> replaceOne (getValueName nm) s) names args
  where
   replaceOne :: String -> Shape ext 'Precond NoTag t -> Either TypeMismatch (Shape ext 'Precond NoTag t)
   replaceOne nm s =

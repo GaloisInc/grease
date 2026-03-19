@@ -5,7 +5,6 @@ module Grease.LLVM.Shapes (
   llvmInitArgShapes,
 ) where
 
-import Data.Functor.Const (Const)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (traverseFC)
 import Data.Void (Void)
@@ -14,6 +13,7 @@ import Grease.Options qualified as GO
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Simple qualified as Simple
+import Grease.ValueName (ValueName)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.FunctionHandle qualified as CFH
 import Lang.Crucible.LLVM qualified as CLLVM
@@ -41,7 +41,7 @@ llvmInitArgShapes ::
   CLM.HasPtrWidth 64 =>
   GO.InitialPreconditionOpts ->
   Maybe L.Module ->
-  Ctx.Assignment (Const String) argTys ->
+  Ctx.Assignment ValueName argTys ->
   Maybe (Shape.ParsedShapes CLLVM.LLVM) ->
   -- | The CFG of the user-requested entrypoint function.
   C.CFG CLLVM.LLVM blocks argTys ret ->

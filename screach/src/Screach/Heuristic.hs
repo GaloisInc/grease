@@ -6,7 +6,6 @@ module Screach.Heuristic (
 ) where
 
 import Control.Lens (to, (^.))
-import Data.Functor.Const (Const)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Text qualified as Text
 import Grease.Bug qualified as Bug
@@ -15,6 +14,7 @@ import Grease.Setup qualified as GS
 import Grease.Setup.Annotations qualified as GSA
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag qualified as Shape
+import Grease.ValueName (ValueName)
 import Lang.Crucible.Backend qualified as CB
 import Screach.GoalEvaluator qualified as SGE
 import What4.LabeledPred as WLP
@@ -28,7 +28,7 @@ reachedHeuristic ::
   CB.ProofObligation sym ->
   Maybe (GH.ErrorDescription sym) ->
   -- | Argument names
-  Ctx.Assignment (Const String) tys ->
+  Ctx.Assignment ValueName tys ->
   Shape.ArgShapes ext Shape.NoTag tys ->
   IO (GH.HeuristicResult ext tys)
 reachedHeuristic _bak _anns _initMem goal _errDesc _argNames _argShapes = do

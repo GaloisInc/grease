@@ -283,6 +283,7 @@ library
     Grease.Syscall
     Grease.Time
     Grease.Utility
+    Grease.ValueName
     Grease.Version
 
   autogen-modules:

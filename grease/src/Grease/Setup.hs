@@ -19,7 +19,6 @@ module Grease.Setup (
   setupShape,
   runSetup,
   setup,
-  ValueName (..),
 ) where
 
 import Control.Exception.Safe (MonadCatch)
@@ -76,6 +75,7 @@ import Grease.Shape.Selector (
   ppSelector,
   selectorPath,
  )
+import Grease.ValueName (ValueName (ValueName), getValueName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.LLVM.Bytes (Bytes)
@@ -88,10 +88,7 @@ import Lang.Crucible.Types qualified as C
 import Lumberjack qualified as LJ
 import What4.Interface qualified as WI
 
--- | Name for fresh symbolic values, passed to 'WI.safeSymbol'. The phantom
--- type parameter prevents making recursive calls without changing the name.
-newtype ValueName (t :: C.CrucibleType) = ValueName {getValueName :: String}
-
+-- | Add a suffix to a value name.
 addSuffix :: ValueName t -> String -> ValueName t'
 addSuffix (ValueName nm) suf = ValueName (nm <> suf)
 
