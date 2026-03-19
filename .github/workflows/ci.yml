@@ -8,6 +8,18 @@ on:
   # documentation-only changes), as this workflow is required for merge.
   pull_request:
   workflow_dispatch:
+    inputs:
+      solver:
+        description: 'SMT solver to use for tests'
+        required: false
+        default: 'yices'
+        type: choice
+        options:
+          - yices
+          - z3
+          - cvc4
+          - cvc5
+          - bitwuzla
 
 env:
   # The CACHE_VERSION can be updated to force the use of a new cache if the
@@ -16,6 +28,7 @@ env:
   # cached, which can have various effects (e.g. cabal complains it can't find
   # a valid version of the "happy" tool).
   CACHE_VERSION: 0
+  GREASE_SOLVER: ${{ github.event.inputs.solver || 'yices' }}
 
 defaults:
   run:
@@ -117,6 +130,10 @@ jobs:
         # also update it in the Dockerfile. Also make sure to update the version
         # of Yices mentioned in the installation instructions.
         SOLVER_PKG_VERSION: "snapshot-20251112"
+
+    - name: Report solver
+      run: |
+        printf "Solver: %s\n" "${GREASE_SOLVER}"
 
     - name: Test grease-exe
       run: cabal test pkg:grease-exe
