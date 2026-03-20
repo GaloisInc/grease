@@ -159,3 +159,6 @@ queries about terms.
 
 - [GitHub](https://github.com/GaloisInc/what4)
 - [API documentation on Hackage](https://hackage.haskell.org/package/what4)
+- Recently added API docs (not yet on Hackage):
+  - [What4.Expr.App](https://github.com/GaloisInc/what4/blob/b5aeb45846fee25870b6f8ba58af210aab328aaf/what4/src/What4/Expr/App.hs)
+  - [What4.Expr.Builder](https://github.com/GaloisInc/what4/blob/b5aeb45846fee25870b6f8ba58af210aab328aaf/what4/src/What4/Expr/Builder.hs)
