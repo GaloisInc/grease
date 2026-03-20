@@ -141,6 +141,19 @@ jobs:
     - name: Test screach
       run: cabal test pkg:screach
 
+    - name: Collect performance metrics
+      if: ${{ strategy.job-index == 0 }}
+      run: |
+        python3 scripts/perf.py \
+          --package exe:grease \
+          -- grease-exe/tests/refine/neg/libpng-cve-2018-13785/test.x64.elf --symbol test \
+          >> "${GITHUB_STEP_SUMMARY}"
+
+        python3 scripts/perf.py \
+          --package exe:screach \
+          -- screach/test-data/fig2-sdse.elf --entry-symbol go --target-symbol vuln \
+          >> "${GITHUB_STEP_SUMMARY}"
+
     # This step will produce a Github-flavored Markdown report on the "job
     # summary" page. The report will first contain the output of `hpc report`
     # in a code block, followed by a collapsible "spoiler" containing the more
