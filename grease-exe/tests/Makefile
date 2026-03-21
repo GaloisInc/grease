@@ -106,6 +106,15 @@ STANDALONE_SHARED_LIBRARY_PPC32_SOS  = $(addsuffix /test.ppc32.elf,$(STANDALONE_
 
 
 
+# These test cases require shared libraries from feat/dyn/.
+DYN_TEST_DIRS = feat/dyn/call-shared-lib feat/dyn/transitive-dep feat/dyn/symbol-resolution-order
+DYN_ARM_SOS   = feat/dyn/libfoo.armv7l.so feat/dyn/libbar.armv7l.so feat/dyn/libbaz.armv7l.so
+DYN_X64_SOS   = feat/dyn/libfoo.x64.so feat/dyn/libbar.x64.so feat/dyn/libbaz.x64.so
+DYN_PPC32_SOS = feat/dyn/libfoo.ppc32.so feat/dyn/libbar.ppc32.so feat/dyn/libbaz.ppc32.so
+DYN_ARM_EXES   = $(addsuffix /test.armv7l.elf,$(DYN_TEST_DIRS))
+DYN_X64_EXES   = $(addsuffix /test.x64.elf,$(DYN_TEST_DIRS))
+DYN_PPC32_EXES = $(addsuffix /test.ppc32.elf,$(DYN_TEST_DIRS))
+
 ASSEMBLY_ARM_DIRS = sanity/pass/push-pop
 ASSEMBLY_ARM_EXES = $(addsuffix /extra/test.armv7l.elf,$(ASSEMBLY_ARM_DIRS))
 
@@ -134,7 +143,8 @@ NON_STATIC_DIRS = $(DYNAMIC_DIRS) \
                   $(STANDALONE_SHARED_LIBRARY_DIRS) \
                   $(SHARED_LIBARY_DWARFV4_DIRS) \
                   $(SHARED_LIBARY_DWARFV5_DIRS) \
-                  $(RAW_BINARY_DIRS)
+                  $(RAW_BINARY_DIRS) \
+                  $(DYN_TEST_DIRS)
 STATIC_DIRS = $(filter-out $(NON_STATIC_DIRS), $(DIRS))
 STATIC_ARM_EXES   = $(addsuffix /test.armv7l.elf,$(STATIC_DIRS))
 # See discussion on !288 for why libpng-cve-2018-13785 appears here.
@@ -150,9 +160,11 @@ EXES = $(DYNAMIC_ARM_EXES) $(DYNAMIC_PPC32_EXES) \
 	   $(SHARED_LIBRARY_ARM_EXES) $(SHARED_LIBRARY_X64_EXES) $(SHARED_LIBRARY_PPC32_EXES) \
 	   $(STANDALONE_SHARED_LIBRARY_ARM_SOS) $(STANDALONE_SHARED_LIBRARY_X64_SOS) $(STANDALONE_SHARED_LIBRARY_PPC32_SOS) $(SHARED_LIBARY_DWARFV4_X64_SOS) $(SHARED_LIBARY_DWARFV5_X64_SOS) \
 	   $(ASSEMBLY_ARM_DIRS) $(ASSEMBLY_SHARED_LIBRARY_X64_SOS) \
-	   $(RAW_BINARY_EXES)
+	   $(RAW_BINARY_EXES) \
+	   $(DYN_ARM_EXES) $(DYN_X64_EXES) $(DYN_PPC32_EXES)
 
-SOS = $(SHARED_LIBRARY_ARM_SOS) $(SHARED_LIBRARY_X64_SOS) $(SHARED_LIBRARY_PPC32_EXES)
+SOS = $(SHARED_LIBRARY_ARM_SOS) $(SHARED_LIBRARY_X64_SOS) $(SHARED_LIBRARY_PPC32_EXES) \
+      $(DYN_ARM_SOS) $(DYN_X64_SOS) $(DYN_PPC32_SOS)
 
 BC_DIRS = $(shell find llvm-bc/ -mindepth 1 -maxdepth 1 -type d)
 BCS = $(addsuffix /test.bc,$(BC_DIRS))
@@ -262,6 +274,55 @@ feat/%.bc: feat/%.c
 
 llvm-bc/%.bc: llvm-bc/%.c
 	$(X64CC) $(shell ./extract-cflags.py $<) -c -o $@ $<
+
+# Shared libraries for feat/dyn/ tests (simple: no inter-library deps)
+feat/dyn/lib%.armv7l.so: feat/dyn/lib%.c
+	$(ARMCC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -o $@
+
+feat/dyn/lib%.x64.so: feat/dyn/lib%.c
+	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -o $@
+
+feat/dyn/lib%.ppc32.so: feat/dyn/lib%.c
+	$(PPC32CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -o $@
+
+feat/dyn/libbar.armv7l.so: feat/dyn/libbar.c feat/dyn/libfoo.armv7l.so
+	$(ARMCC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -Lfeat/dyn -lfoo.armv7l -o $@
+
+feat/dyn/libbar.x64.so: feat/dyn/libbar.c feat/dyn/libfoo.x64.so
+	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -Lfeat/dyn -lfoo.x64 -o $@
+
+feat/dyn/libbar.ppc32.so: feat/dyn/libbar.c feat/dyn/libfoo.ppc32.so
+	$(PPC32CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -Lfeat/dyn -lfoo.ppc32 -o $@
+
+# feat/dyn/ test executables: call-shared-lib links libfoo
+feat/dyn/call-shared-lib/test.armv7l.elf: feat/dyn/call-shared-lib/test.c feat/dyn/libfoo.armv7l.so
+	$(ARMCC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic $< -Lfeat/dyn -lfoo.armv7l -o $@
+
+feat/dyn/call-shared-lib/test.x64.elf: feat/dyn/call-shared-lib/test.c feat/dyn/libfoo.x64.so
+	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic $< -Lfeat/dyn -lfoo.x64 -o $@
+
+feat/dyn/call-shared-lib/test.ppc32.elf: feat/dyn/call-shared-lib/test.c feat/dyn/libfoo.ppc32.so
+	$(PPC32CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic $< -Lfeat/dyn -lfoo.ppc32 -o $@
+
+# feat/dyn/ test executables: transitive-dep links libbar
+feat/dyn/transitive-dep/test.armv7l.elf: feat/dyn/transitive-dep/test.c feat/dyn/libbar.armv7l.so
+	$(ARMCC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic $< -Lfeat/dyn -lbar.armv7l -o $@
+
+feat/dyn/transitive-dep/test.x64.elf: feat/dyn/transitive-dep/test.c feat/dyn/libbar.x64.so
+	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic $< -Lfeat/dyn -lbar.x64 -o $@
+
+feat/dyn/transitive-dep/test.ppc32.elf: feat/dyn/transitive-dep/test.c feat/dyn/libbar.ppc32.so
+	$(PPC32CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic $< -Lfeat/dyn -lbar.ppc32 -o $@
+
+# feat/dyn/ test executables: symbol-resolution-order links libfoo THEN libbaz
+feat/dyn/symbol-resolution-order/test.armv7l.elf: feat/dyn/symbol-resolution-order/test.c feat/dyn/libfoo.armv7l.so feat/dyn/libbaz.armv7l.so
+	$(ARMCC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic $< -Lfeat/dyn -lfoo.armv7l -lbaz.armv7l -o $@
+
+feat/dyn/symbol-resolution-order/test.x64.elf: feat/dyn/symbol-resolution-order/test.c feat/dyn/libfoo.x64.so feat/dyn/libbaz.x64.so
+	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic $< -Lfeat/dyn -lfoo.x64 -lbaz.x64 -o $@
+
+feat/dyn/symbol-resolution-order/test.ppc32.elf: feat/dyn/symbol-resolution-order/test.c feat/dyn/libfoo.ppc32.so feat/dyn/libbaz.ppc32.so
+	$(PPC32CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic $< -Lfeat/dyn -lfoo.ppc32 -lbaz.ppc32 -o $@
 
 clean:
 	rm -f $(EXES)
