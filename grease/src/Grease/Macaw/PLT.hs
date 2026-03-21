@@ -257,9 +257,12 @@ resolvePltStubs path mbPltStubInfo loadOptions ehi symbolRelocs userPltStubs mem
           <> symbolRelocAddrToNameList
       )
 
-  case sequence pltStubSegOffToNameList of
-    Left err -> pure $ Left err
-    Right segOffToNameList -> pure $ Right $ Map.fromList $ Foldable.toList segOffToNameList
+  -- Collect successfully resolved stubs, silently dropping any that
+  -- couldn't be resolved. This lenient behavior is important for shared
+  -- libraries where some PLT stubs may reference addresses that aren't
+  -- mapped yet.
+  let resolvedStubs = [x | Right x <- Foldable.toList pltStubSegOffToNameList]
+  pure $ Right $ Map.fromList resolvedStubs
 
 {-
 Note [Subtleties of resolving PLT stubs]

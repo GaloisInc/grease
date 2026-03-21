@@ -15,6 +15,7 @@ import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as MD
 import Data.Macaw.Memory qualified as MM
 import Data.Map qualified as Map
+import Data.Word (Word64)
 import Grease.Diagnostic.Severity (Severity (Debug, Info))
 import Prettyprinter qualified as PP
 import What4.FunctionName qualified as WFN
@@ -35,6 +36,18 @@ data Diagnostic where
     WFN.FunctionName ->
     -- | The address where the core was dumped.
     MM.MemWord w ->
+    Diagnostic
+  LoadedSharedLibrary ::
+    -- | Path to the shared library.
+    FilePath ->
+    -- | Index of the shared library (1-based).
+    Word64 ->
+    Diagnostic
+  SharedLibraryNotFound ::
+    -- | Name of the shared library that was not found.
+    FilePath ->
+    Diagnostic
+  SharedLibraryLoadingDisabled ::
     Diagnostic
 
 instance PP.Pretty Diagnostic where
@@ -65,6 +78,16 @@ instance PP.Pretty Diagnostic where
               PP.<+> PP.pretty coreDumpAddr
               <> ", where the core was dumped"
           ]
+      LoadedSharedLibrary path idx ->
+        "Loaded shared library"
+          PP.<+> PP.pretty path
+          PP.<+> "at index"
+          PP.<+> PP.pretty idx
+      SharedLibraryNotFound name ->
+        "Shared library not found:"
+          PP.<+> PP.pretty name
+      SharedLibraryLoadingDisabled ->
+        "Shared library loading disabled"
    where
     ppSymbol :: MM.MemWidth w => Maybe BSC.ByteString -> MM.MemSegmentOff w -> String
     ppSymbol (Just fnName) addr = show addr ++ " (" ++ BSC.unpack fnName ++ ")"
@@ -75,3 +98,6 @@ severity =
   \case
     DiscoveryEvent{} -> Debug
     DiscoveredCoreDumpEntrypoint{} -> Info
+    LoadedSharedLibrary{} -> Info
+    SharedLibraryNotFound{} -> Info
+    SharedLibraryLoadingDisabled{} -> Info

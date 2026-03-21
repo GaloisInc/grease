@@ -27,6 +27,7 @@ module Grease.Cli (
   symStdinParser,
   simDumpCoverageParser,
   simSkipFunsParser,
+  sharedLibOptsParser,
 
   -- * High-level entrypoints
   optsInfo,
@@ -396,6 +397,31 @@ simSkipFunsParser =
             <> Opt.help "Skip these functions during execution"
         )
 
+sharedLibOptsParser :: Opt.Parser GO.SharedLibOpts
+sharedLibOptsParser = Opt.parserOptionGroup "Shared library options" $ do
+  sharedLibDirs <-
+    Opt.many $
+      Opt.strOption
+        ( Opt.long "shared-lib-dir"
+            <> Opt.metavar "DIR"
+            <> Opt.help "Directory to search for shared libraries (repeatable, defaults to current working directory)"
+        )
+  sharedLibs <-
+    Opt.many $
+      Opt.strOption
+        ( Opt.long "shared-lib"
+            <> Opt.metavar "PATH"
+            <> Opt.help "Path to a shared library to load (repeatable, works for both binaries and S-expression programs)"
+        )
+  simulateSharedLibs <-
+    Opt.flag
+      True
+      False
+      ( Opt.long "no-shared-libs"
+          <> Opt.help "Disable loading and simulating shared libraries"
+      )
+  pure GO.SharedLibOpts{..}
+
 simOpts :: Opt.Parser GO.SimOpts
 simOpts = do
   simProgPath <- Opt.strArgument (Opt.help "filename of binary" <> Opt.metavar "FILENAME")
@@ -505,6 +531,7 @@ simOpts = do
   simBoundsOpts <- boundsOptsParser
   simDumpCoverage <- simDumpCoverageParser
   simSkipFuns <- simSkipFunsParser
+  simSharedLibOpts <- sharedLibOptsParser
   pure GO.SimOpts{..}
  where
   callOptionsGroup = "Call options"

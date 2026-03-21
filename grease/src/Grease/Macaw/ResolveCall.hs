@@ -24,6 +24,7 @@ module Grease.Macaw.ResolveCall (
   discoverFuncAddr,
 ) where
 
+import Control.Applicative ((<|>))
 import Control.Lens ((%~), (.~), (^.))
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (MonadIO)
@@ -32,10 +33,12 @@ import Data.Function ((&))
 import Data.IntMap qualified as IntMap
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
+import Data.Macaw.BinaryLoader qualified as Loader
 import Data.Macaw.BinaryLoader.ELF qualified as Loader
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Discovery.Classifier qualified as Discovery
+import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader qualified as EL
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Concretize qualified as Symbolic
@@ -46,7 +49,11 @@ import Data.Parameterized.NatRepr (knownNat)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
+import Data.Vector qualified as Vec
 import GHC.Word (Word64)
+import Data.Maybe (fromMaybe)
+import Data.Macaw.Memory.LoadCommon qualified as LC
+import Grease.Macaw.Load (LoadedBinaryInfo (lbiLoadedBinary, lbiLoadOptions, lbiPath, lbiPltStubs, lbiSymMap), addressToIndex, loadOffset)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (Diagnostic (ResolveCallDiagnostic), GreaseLogAction)
 import Grease.Macaw.Arch (ArchContext)
@@ -264,6 +271,8 @@ lookupFunctionHandleResult ::
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
   -- | Functions that should be skipped even if they are defined
   Set WFN.FunctionName ->
+  -- | Shared library binaries for per-binary code discovery
+  Vec.Vector (LoadedBinaryInfo arch) ->
   ErrorSymbolicFunCalls ->
   SkipInvalidCallAddrs ->
   CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
@@ -272,7 +281,7 @@ lookupFunctionHandleResult ::
     ( LookupFunctionHandleResult p sym arch
     , CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
     )
-lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns errorSymbolicFunCalls skipInvalidCallAddrs st regs = do
+lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns soInfos errorSymbolicFunCalls skipInvalidCallAddrs st regs = do
   -- First, obtain the address contained in the instruction pointer.
   symAddr0 <- (arch ^. Arch.archGetIP) regs
   -- Next, attempt to concretize the address. We must do this because it is
@@ -310,7 +319,19 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
         bvWord64 = fromIntegral @Integer @Word64 (BV.asUnsigned bv)
         bvMemWord = EL.memWord bvWord64
        in
-        case Loader.resolveAbsoluteAddress memory bvMemWord of
+        -- Try resolving the address against the main binary first, then
+        -- fall back to shared library memories. See
+        -- Note [Address offsets for shared libraries] in Grease.Macaw.Load.
+        let resolveInSOs =
+              Vec.foldl'
+                (\acc soInfo ->
+                  case acc of
+                    Just _ -> acc
+                    Nothing -> Loader.resolveAbsoluteAddress (Loader.memoryImage (lbiLoadedBinary soInfo)) bvMemWord
+                )
+                Nothing
+                soInfos
+         in case Loader.resolveAbsoluteAddress memory bvMemWord <|> resolveInSOs of
           Nothing ->
             let addrString = BV.ppHex knownNat bv
              in if getSkipInvalidCallAddrs skipInvalidCallAddrs
@@ -368,30 +389,45 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
     -- Next, check if this is a PLT stub.
     | Just pltStubName <- Map.lookup funcAddrOff pltStubs =
         maybeUserSkip pltStubName $
-          if
-            | -- If a PLT stub jumps to an address within the same binary
-              -- or shared library, resolve it...
-              Just pltCallAddr <- Map.lookup pltStubName dynFunMap ->
-                do
-                  doLog la $ Diag.PltCall pltStubName funcAddrOff pltCallAddr
-                  go pltCallAddr
-            | otherwise ->
-                case lookupOv pltStubName funcAddrOff of
-                  -- ...otherwise, if there is an override for the PLT stub,
-                  -- use it...
-                  Just macawFnOv ->
-                    pure
-                      ( PltStubOverride funcAddrOff pltStubName macawFnOv
-                      , st
-                      )
-                  -- ...otherwise, skip the PLT call entirely.
-                  Nothing ->
-                    -- TODO(#182): Option to make this an error
-                    pure
-                      ( SkippedFunctionCall $
-                          PltNoOverride funcAddrOff pltStubName
-                      , st
-                      )
+          -- Check overrides FIRST, before following PLT stubs to SO code.
+          -- This ensures that built-in overrides (e.g., malloc) take precedence
+          -- over shared library implementations. See ambient-verifier's
+          -- lookupFunction step 2a before 2b.
+          case lookupOv pltStubName funcAddrOff of
+            Just macawFnOv ->
+              pure
+                ( PltStubOverride funcAddrOff pltStubName macawFnOv
+                , st
+                )
+            Nothing
+              -- If no override, check if the PLT stub jumps to an address
+              -- within the same binary or a shared library...
+              | Just pltCallAddr <- Map.lookup pltStubName dynFunMap ->
+                  do
+                    doLog la $ Diag.PltCall pltStubName funcAddrOff pltCallAddr
+                    -- If the target is in a shared library, emit a diagnostic
+                    -- so users can see SO function resolution.
+                    let targetIdx = fromInteger (addressToIndex (MM.addrOffset (MM.segoffAddr pltCallAddr))) :: Word64
+                    let soStartIdx' = case soInfos Vec.!? 0 of
+                          Just firstSo ->
+                            fromMaybe 1 (LC.loadOffset (lbiLoadOptions firstSo)) `div` loadOffset
+                          Nothing -> 1
+                    let mbSoPath = case soInfos Vec.!? fromIntegral (targetIdx - soStartIdx') of
+                          Just soInfo -> Just (lbiPath soInfo)
+                          Nothing -> Nothing
+                    case mbSoPath of
+                      Just soPath ->
+                        doLog la $ Diag.SharedLibraryFunctionCall pltStubName soPath funcAddrOff pltCallAddr
+                      Nothing -> pure ()
+                    go pltCallAddr
+              -- ...otherwise, skip the PLT call entirely.
+              | otherwise ->
+                  -- TODO(#182): Option to make this an error
+                  pure
+                    ( SkippedFunctionCall $
+                        PltNoOverride funcAddrOff pltStubName
+                    , st
+                    )
     -- Finally, check if this is a function that we should explore, and if
     -- so, use Macaw's code discovery to do so. See Note [Incremental code
     -- discovery] in Grease.Macaw.SimulatorState.
@@ -404,8 +440,30 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
     -- when simulating them.
     | Discovery.isExecutableSegOff funcAddrOff = do
         fixedAddr <- (arch ^. Arch.archPCFixup) bak regs funcAddrOff
+        -- Determine which binary this address belongs to and use its
+        -- per-binary Memory for code discovery. See
+        -- Note [Address offsets for shared libraries] in Grease.Macaw.Load.
+        let addrWord = MM.segoffAddr funcAddrOff
+        let binIdx = fromInteger (addressToIndex (MM.addrOffset addrWord)) :: Word64
+        -- Compute the starting address-space index for SOs from the first
+        -- SO's load options. The vector index is binIdx - soStartIdx.
+        let soStartIdx = case soInfos Vec.!? 0 of
+              Just firstSo ->
+                fromMaybe 1 (LC.loadOffset (lbiLoadOptions firstSo)) `div` loadOffset
+              Nothing -> 1
+        let (discMem, discSymMap, discPltStubs) =
+              if binIdx < soStartIdx || Vec.null soInfos
+                then (memory, symMap, pltStubs)
+                else
+                  case soInfos Vec.!? fromIntegral (binIdx - soStartIdx) of
+                    Just soInfo ->
+                      ( Loader.memoryImage (lbiLoadedBinary soInfo)
+                      , lbiSymMap soInfo
+                      , lbiPltStubs soInfo
+                      )
+                    Nothing -> (memory, symMap, pltStubs)
         (hdl, st') <-
-          discoverFuncAddr la halloc arch memory symMap pltStubs fixedAddr st
+          discoverFuncAddr la halloc arch discMem discSymMap discPltStubs fixedAddr st
         let nm = C.handleName hdl
         maybeUserSkip nm $
           pure
@@ -437,13 +495,15 @@ lookupFunctionHandle ::
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
   -- | Functions that should be skipped even if they are defined
   Set WFN.FunctionName ->
+  -- | Shared library binaries for per-binary code discovery
+  Vec.Vector (LoadedBinaryInfo arch) ->
   ErrorSymbolicFunCalls ->
   SkipInvalidCallAddrs ->
   LookupFunctionHandleDispatch p sym arch ->
   Symbolic.LookupFunctionHandle p sym arch
-lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns errorSymbolicFunCalls skipInvalidCallAddrs lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
+lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns soInfos errorSymbolicFunCalls skipInvalidCallAddrs lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
   let LookupFunctionHandleDispatch dispatch = lfhd
-  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns errorSymbolicFunCalls skipInvalidCallAddrs st regs
+  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns soInfos errorSymbolicFunCalls skipInvalidCallAddrs st regs
   dispatch st' mem regs res
 
 -- | Dispatch on the result of looking up a syscall override. The

@@ -50,6 +50,7 @@ import Data.Macaw.ARM qualified as ARM
 import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.BinaryLoader (BinaryLoader)
 import Data.Macaw.BinaryLoader qualified as Loader
+import Data.Macaw.BinaryLoader.ELF qualified as MBL
 import Data.Macaw.BinaryLoader.AArch32 ()
 import Data.Macaw.BinaryLoader.Raw ()
 import Data.Macaw.BinaryLoader.X86 ()
@@ -452,6 +453,8 @@ data MacawCfgConfig arch = MacawCfgConfig
   -- ^ Map of relocation addresses and types.
   , mcMemory :: MC.Memory (MC.RegAddrWidth (MC.ArchReg arch))
   -- ^ The memory layout of the binary.
+  , mcSharedLibInfos :: Vec.Vector (Load.LoadedBinaryInfo arch)
+  -- ^ Loaded shared library binaries. Empty if shared lib simulation is off.
   , mcTxtBounds :: (Elf.ElfWordType (MC.ArchAddrWidth arch), Elf.ElfWordType (MC.ArchAddrWidth arch))
   -- ^ Bounds on the @.text@ segment's addresses.
   , mcElf :: Maybe (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
@@ -730,6 +733,7 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
   let errorSymbolicFunCalls = GO.simErrorSymbolicFunCalls simOpts
   let errorSymbolicSyscalls = GO.simErrorSymbolicSyscalls simOpts
   let skipInvalidCallAddrs = GO.simSkipInvalidCallAddrs simOpts
+  let soInfos = mcSharedLibInfos macawCfgConfig
   let memCfg =
         GM.memConfigWithHandles
           bak
@@ -744,6 +748,7 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
           fnAddrOvs
           builtinGenericSyscalls
           (GO.simSkipFuns simOpts)
+          soInfos
           errorSymbolicFunCalls
           errorSymbolicSyscalls
           skipInvalidCallAddrs
@@ -949,7 +954,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
       GO.Symbolic -> pure Symbolic.SymbolicMutable
       GO.Uninitialized ->
         unsupported la "Macaw does not support uninitialized globals (macaw#372)"
-  (initMem, memPtrTable) <- GM.emptyMacawMem bak archCtx memory globs relocs
+  let soMems = map (Loader.memoryImage . Load.lbiLoadedBinary) (Vec.toList (mcSharedLibInfos macawCfgConfig))
+  (initMem, memPtrTable) <- GM.emptyMacawMem bak archCtx memory soMems globs relocs
 
   let (tyCtxErrs, tyCtx) = CLTC.mkTypeContext dl IntMap.empty []
   let ?lc = tyCtx
@@ -1378,6 +1384,7 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
           , mcDynFunMap = Map.empty
           , mcRelocs = Map.empty
           , mcMemory = memory
+          , mcSharedLibInfos = Vec.empty
           , mcTxtBounds = (0, 0)
           , mcElf = Nothing
           }
@@ -1486,16 +1493,61 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
         let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
          in Macaw.binSetupHook errCb addrOvs cfgs
 
+  -- Compute PLT stubs for each shared library and merge them.
+  -- PLT stubs from all binaries can safely be merged because address spaces
+  -- are disjoint. See Note [Address offsets for shared libraries] in
+  -- Grease.Macaw.Load.
+  let soInfos0 = Load.progSharedLibraries loadedProg
+  soInfos <- Vec.forM soInfos0 $ \soInfo -> do
+    let soEhi = Loader.originalBinary (Load.lbiLoadedBinary soInfo)
+    let soLoadOpts = Load.lbiLoadOptions soInfo
+    let soMem = Loader.memoryImage (Load.lbiLoadedBinary soInfo)
+    soPltStubs <-
+      case mbPltStubInfo of
+        Just pltStubInfo -> do
+          let rawStubs = GMPLT.pltStubSymbols pltStubInfo soLoadOpts soEhi
+          -- Resolve MemWord addresses to MemSegmentOff using the SO's memory.
+          -- We try resolveAbsoluteAddress first, then fall back to resolving
+          -- in region 1 (which is where macaw loads ELF segments with offsets).
+          let soOffset = fromMaybe 0 (MML.loadOffset soLoadOpts)
+          let resolveAddr addr = MBL.resolveAbsoluteAddress soMem addr
+          let resolvedStubs = Map.mapMaybeWithKey
+                (\addr (entry, _) ->
+                  case resolveAddr addr of
+                    Just segOff -> Just (segOff, GUtil.functionNameFromByteString (Elf.steName entry))
+                    Nothing -> Nothing
+                )
+                rawStubs
+          pure $ Map.fromList $ map snd $ Map.toList resolvedStubs
+        Nothing -> pure Map.empty
+    pure soInfo { Load.lbiPltStubs = soPltStubs }
+  let mergedPltStubs =
+        Vec.foldl'
+          (\acc soInfo -> Map.union acc (Load.lbiPltStubs soInfo))
+          pltStubSegOffToNameMap
+          soInfos
+
+  -- Merge relocation maps from shared libraries
+  soRelocs <- do
+    let addSoRelocs accRelocs soInfo = do
+          let soEhi = Loader.originalBinary (Load.lbiLoadedBinary soInfo)
+          let soLoadOpts = Load.lbiLoadOptions soInfo
+          case elfRelocationMap (Proxy @(Arch.ArchReloc arch)) soLoadOpts soEhi of
+            Left _err -> pure accRelocs  -- Silently skip SOs with reloc errors
+            Right soRs -> pure (Map.union accRelocs soRs)
+    Vec.foldM' addSoRelocs relocs soInfos
+
   let macawCfgConfig =
         MacawCfgConfig
           { mcDataLayout = dl
           , mcMprotectAddr = mprotectAddr
           , mcLoadOptions = loadOpts
           , mcSymMap = symMap
-          , mcPltStubs = pltStubSegOffToNameMap
+          , mcPltStubs = mergedPltStubs
           , mcDynFunMap = dynFunMap
-          , mcRelocs = fst <$> relocs
+          , mcRelocs = fst <$> soRelocs
           , mcMemory = memory
+          , mcSharedLibInfos = soInfos
           , mcTxtBounds = txtBounds
           , mcElf = Just elf
           }
@@ -1943,6 +1995,7 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
             , mcDynFunMap = Map.empty
             , mcRelocs = Map.empty
             , mcMemory = memory
+            , mcSharedLibInfos = Vec.empty
             , mcTxtBounds = (0, 0)
             , mcElf = Nothing
             }
@@ -2019,14 +2072,19 @@ doLoad ::
   ) =>
   GDiag.GreaseLogAction ->
   proxy arch ->
-  [EP.Entrypoint] ->
+  GO.SimOpts ->
   Permissions ->
   Elf.ElfHeaderInfo (MC.ArchAddrWidth arch) ->
   IO (Load.LoadedProgram arch)
-doLoad la _proxy entries perms elf = do
+doLoad la _proxy simOpts perms elf = do
   let usrErr = userErr la . PP.pretty
   let badElf = malformedElf la . PP.pretty
-  Load.load la entries perms elf
+  let slOpts = GO.simSharedLibOpts simOpts
+  -- Default shared lib search dirs to current working directory if none specified
+  let slDirs = case GO.sharedLibDirs slOpts of
+        [] -> ["."]
+        ds -> ds
+  Load.load la (GO.simEntryPoints simOpts) perms (GO.simProgPath simOpts) (GO.simulateSharedLibs slOpts) slDirs (GO.sharedLibs slOpts) elf
     >>= \case
       Right ok -> pure ok
       -- See Note [Explicitly listed errors]
@@ -2050,7 +2108,7 @@ simulateARM simOpts la = do
   (perms, elf) <- readElfHeaderInfo la proxy (GO.simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- doLoad la proxy (GO.simEntryPoints simOpts) perms elf
+    loadedProg <- doLoad la proxy simOpts perms elf
     txtBounds@(starttext, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- armCtx halloc (Just starttext) (GO.simStackArgumentSlots simOpts)
@@ -2087,7 +2145,7 @@ simulatePPC32 simOpts la = do
   (perms, elf) <- readElfHeaderInfo la proxy (GO.simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- doLoad la proxy (GO.simEntryPoints simOpts) perms elf
+    loadedProg <- doLoad la proxy simOpts perms elf
     txtBounds@(starttext, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- ppc32Ctx (Just starttext) (GO.simStackArgumentSlots simOpts)
@@ -2103,7 +2161,7 @@ simulatePPC64 simOpts la = do
   (perms, elf) <- readElfHeaderInfo la proxy (GO.simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- doLoad la proxy (GO.simEntryPoints simOpts) perms elf
+    loadedProg <- doLoad la proxy simOpts perms elf
     txtBounds@(starttext, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- ppc64Ctx (Just starttext) (GO.simStackArgumentSlots simOpts) (Load.progLoadedBinary loadedProg)
@@ -2132,7 +2190,7 @@ simulateX86 simOpts la = do
   (perms, elf) <- readElfHeaderInfo la proxy (GO.simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- doLoad la proxy (GO.simEntryPoints simOpts) perms elf
+    loadedProg <- doLoad la proxy simOpts perms elf
     txtBounds@(startText, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
     -- Return address must be in .text to satisfy the `in-text` requirement.
     archCtx <- x86Ctx halloc (Just startText) (GO.simStackArgumentSlots simOpts)

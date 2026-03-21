@@ -3,22 +3,25 @@
 // calls bar() which internally calls foo(). Verifies that grease correctly
 // loads transitive DT_NEEDED dependencies.
 
-// TODO(#21): flags {"--shared-lib-dir", "tests/feat/dyn"}
-// all: flags {"--symbol", "test"}
-// all: go(prog)
-// Currently: PLT stub to bar() is skipped (no shared lib support yet).
-// x64: check("Skipped call to a PLT stub")
-// x64: check("bar")
+// x64: flags {"--shared-lib-dir", "tests/feat/dyn"}
+// x64: flags {"--symbol", "test"}
+// x64: go(prog)
+// x64: check("Loaded shared library")
+// x64: check("from shared library libbar")
+// x64: check_not "Skipped call to a PLT stub"
 // x64: ok()
-// arm: check("Skipped call to a PLT stub")
-// arm: check("bar")
+// arm: flags {"--shared-lib-dir", "tests/feat/dyn"}
+// arm: flags {"--symbol", "test"}
+// arm: go(prog)
+// arm: check("Loaded shared library")
+// arm: check("from shared library libbar")
+// arm: check_not "Skipped call to a PLT stub"
 // arm: ok()
+// ppc32: flags {"--shared-lib-dir", "tests/feat/dyn"}
+// ppc32: flags {"--symbol", "test"}
+// ppc32: go(prog)
 // ppc32: check("Pattern match failure")
 // ppc32: check("Possible bug")
-// TODO(#21): check("Loaded shared library tests/feat/dyn/libbar")
-// TODO(#21): check("Loaded shared library tests/feat/dyn/libfoo")
-// TODO(#21): check("Calling `bar` from libbar")
-// TODO(#21): check_not "Skipped call to a PLT stub"
 
 extern int *bar(void);
 int test(void) {

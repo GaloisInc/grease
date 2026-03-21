@@ -21,13 +21,11 @@ module Grease.Utility (
 import Data.ByteString qualified as BS
 import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as BSL
-import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Word (Word32, Word64, Word8)
-import Grease.Panic (panic)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as C
 import Lang.Crucible.LLVM.Intrinsics qualified as CLI
@@ -81,18 +79,19 @@ printHandle = stderr
 -- | Convert a 'MC.MemSegmentOff' value to an absolute address.
 --
 -- Precondition: the 'MC.MemSegmentOff' must be a valid address within the
--- supplied 'MC.Memory'. If this is not the case, this function will panic.
+-- supplied 'MC.Memory'. If this is not the case, the address is computed
+-- directly from the segment offset (which handles shared library addresses).
 segoffToAbsoluteAddr ::
   MC.MemWidth w => MC.Memory w -> MC.MemSegmentOff w -> MC.MemWord w
 segoffToAbsoluteAddr mem segoff =
   case MC.resolveRegionOff mem (MC.addrBase addr) (MC.addrOffset addr) of
     Just addrOff -> MC.segmentOffset seg + MC.segoffOffset addrOff
     Nothing ->
-      panic
-        "segoffToAbsoluteAddr"
-        [ "Failed to resolve absolute address"
-        , "Address: " List.++ show addr
-        ]
+      -- Fall back to computing the absolute address directly from the
+      -- segment offset. This handles addresses from shared libraries
+      -- whose MemSegmentOff values come from a different Memory than
+      -- the main binary's.
+      MC.segmentOffset seg + MC.segoffOffset segoff
  where
   seg = MC.segoffSegment segoff
   addr = MC.segoffAddr segoff

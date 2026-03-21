@@ -45,12 +45,14 @@ import Data.Parameterized.Map qualified as MapF
 import Data.Proxy (Proxy (Proxy))
 import Data.Set (Set)
 import Data.Type.Equality ((:~:) (Refl))
+import Data.Vector qualified as Vec
 import Data.Word (Word64, Word8)
 import GHC.Stack (HasCallStack, callStack)
 import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch (ArchContext, ArchRegs, ArchReloc)
 import Grease.Macaw.Arch qualified as Arch
+import Grease.Macaw.Load (LoadedBinaryInfo)
 import Grease.Macaw.Load.Relocation (RelocType (RelativeReloc, SymbolReloc))
 import Grease.Macaw.Overrides.Address (AddressOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
@@ -100,19 +102,22 @@ emptyMacawMem ::
   bak ->
   ArchContext arch ->
   EL.Memory (MC.ArchAddrWidth arch) ->
+  -- | Shared library memories (may be empty)
+  [EL.Memory (MC.ArchAddrWidth arch)] ->
   Symbolic.MemoryModelContents ->
   -- | Map of relocation addresses and types
   Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (ArchReloc arch) ->
   m (InitialMem sym, Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch))
-emptyMacawMem bak arch macawMem mutGlobs relocs = do
+emptyMacawMem bak arch macawMem soMems mutGlobs relocs = do
+  let allMems = macawMem : soMems
   (initMem, ptrTable) <-
-    Symbolic.newGlobalMemoryWith
+    Symbolic.newMergedGlobalMemoryWith
       (globalMemoryHooks arch relocs)
       (Proxy @arch)
       bak
       (arch ^. Arch.archInfo . to (Symbolic.toCrucibleEndian . MI.archEndianness))
       mutGlobs
-      macawMem
+      allMems
   pure (InitialMem initMem, ptrTable)
 
 globalMemoryHooks ::
@@ -440,6 +445,8 @@ memConfigWithHandles ::
   Map.Map WFN.FunctionName (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
   -- | Functions that should be skipped even if they are defined
   Set WFN.FunctionName ->
+  -- | Shared library binaries for per-binary code discovery
+  Vec.Vector (LoadedBinaryInfo arch) ->
   Opts.ErrorSymbolicFunCalls ->
   Opts.ErrorSymbolicSyscalls ->
   Opts.SkipInvalidCallAddrs ->
@@ -447,9 +454,9 @@ memConfigWithHandles ::
   (WFN.FunctionName -> IO ()) ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
   Symbolic.MemModelConfig p sym arch CLM.Mem
-memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs skipFuns errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddress errCb' memCfg =
+memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs skipFuns soInfos errorSymbolicFunCalls errorSymbolicSyscalls skipInvalidCallAddress errCb' memCfg =
   memCfg
-    { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns errorSymbolicFunCalls skipInvalidCallAddress lfhd
+    { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns soInfos errorSymbolicFunCalls skipInvalidCallAddress lfhd
     , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd
     }
  where

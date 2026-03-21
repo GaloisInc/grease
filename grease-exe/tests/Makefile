@@ -86,8 +86,8 @@ STACK_PROTECTOR_DIRS = refine/pos/stack_protector
 STACK_PROTECTOR_ARM_EXES = $(addsuffix /test.armv7l.elf,$(STACK_PROTECTOR_DIRS))
 STACK_PROTECTOR_X64_EXES = $(addsuffix /test.x64.elf,$(STACK_PROTECTOR_DIRS))
 
-# This test case requires a shared library dependency.
-SHARED_LIBRARY_DIRS = sanity/pass/tricky_plt_stub
+# These test cases require a shared library dependency.
+SHARED_LIBRARY_DIRS = sanity/pass/tricky_plt_stub feat/simulate-shared-libs/shared-lib-call
 SHARED_LIBRARY_ARM_SOS    = $(addsuffix /libaux.armv7l.so,$(SHARED_LIBRARY_DIRS))
 SHARED_LIBRARY_ARM_EXES   = $(addsuffix /test.armv7l.elf,$(SHARED_LIBRARY_DIRS))
 SHARED_LIBRARY_X64_SOS    = $(addsuffix /libaux.x64.so,$(SHARED_LIBRARY_DIRS))

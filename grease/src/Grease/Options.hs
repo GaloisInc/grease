@@ -22,6 +22,7 @@ module Grease.Options (
   FsOpts (..),
   InitialPreconditionOpts (..),
   SimOpts (..),
+  SharedLibOpts (..),
   Opts (..),
   UseDebugInfoShapes (..),
 ) where
@@ -229,6 +230,23 @@ data SimOpts
   , simInitPrecondOpts :: InitialPreconditionOpts
   , simDumpCoverage :: Maybe FilePath
   , simSkipFuns :: Set FunctionName
+  , simSharedLibOpts :: SharedLibOpts
+  }
+  deriving Show
+
+-- | Options for shared library simulation
+data SharedLibOpts
+  = SharedLibOpts
+  { sharedLibDirs :: [FilePath]
+  -- ^ Directories to search for shared libraries.
+  -- Defaults to the current working directory if empty.
+  , sharedLibs :: [FilePath]
+  -- ^ Explicit paths to shared libraries to load. These are loaded in
+  -- addition to any libraries discovered via DT_NEEDED entries. Works
+  -- for both ELF binaries and S-expression programs.
+  , simulateSharedLibs :: Bool
+  -- ^ If 'True', load and simulate shared libraries that the binary
+  -- depends on. Default: 'True'.
   }
   deriving Show
 

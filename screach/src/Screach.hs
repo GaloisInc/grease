@@ -112,6 +112,7 @@ import Grease.Syntax qualified as Syntax
 import Grease.Syscall (builtinGenericSyscalls)
 import Grease.Utility qualified as GU
 import Grease.ValueName (ValueName, getValueName)
+import Data.Vector qualified as Vec
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as CBO
 import Lang.Crucible.CFG.Core qualified as CCC
@@ -698,7 +699,8 @@ loadElfFromConfig conf sla gla archCtx = do
   let entrypointList = [entryLocToGreaseEntrypoint entryLoc]
   (perms, elfBinary) <- readElfBinary conf
   let elf = elfBinaryHeaderInfo elfBinary
-  loadedProgResult <- GL.load @MX86.X86_64 gla entrypointList perms elf
+  let progPath = Conf.confProgram conf
+  loadedProgResult <- GL.load @MX86.X86_64 gla entrypointList perms progPath False [] [] elf
   let usrErr = userError sla . PP.pretty
   let badElf = malformedElf sla . PP.pretty
   loadedProg <-
@@ -1036,6 +1038,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
               bak
               archCtx
               mem
+              []  -- No shared library memories
               memModelContents
               relocs
           let skipRelocs = GO.SkipUnsupportedRelocs False
@@ -1116,6 +1119,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                   fnAddrOvs
                   builtinGenericSyscalls
                   Set.empty -- TODO(internal#152): functions to skip
+                  Vec.empty -- No shared libraries
                   errorSymbolicFunCalls
                   errorSymbolicSyscalls
                   skipInvalidCallAddrs
@@ -1135,6 +1139,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                       fnOvsMap
                       fnAddrOvs
                       Set.empty -- TODO(internal#152): functions to skip
+                      Vec.empty -- No shared libraries
                       errorSymbolicFunCalls
                       skipInvalidCallAddrs
                       lfhd

@@ -14,6 +14,7 @@ import Data.Text (Text)
 import Grease.Diagnostic.Severity (Severity (Debug, Info))
 import Grease.Macaw.SkippedCall qualified as Skip
 import Prettyprinter qualified as PP
+import System.FilePath qualified as SF
 import What4.FunctionName qualified as WFN
 
 data Diagnostic where
@@ -47,6 +48,17 @@ data Diagnostic where
     Diagnostic
   SkippedFunctionCall ::
     Skip.SkippedFunctionCall arch -> Diagnostic
+  SharedLibraryFunctionCall ::
+    MM.MemWidth w =>
+    -- | The function name
+    WFN.FunctionName ->
+    -- | The path to the shared library
+    FilePath ->
+    -- | The PLT stub address (in the calling binary)
+    MM.MemSegmentOff w ->
+    -- | The resolved address in the shared library
+    MM.MemSegmentOff w ->
+    Diagnostic
   SkippedSyscall ::
     Skip.SkippedSyscall -> Diagnostic
 
@@ -77,6 +89,17 @@ instance PP.Pretty Diagnostic where
           PP.<+> PP.pretty name
           PP.<+> PP.parens (PP.pretty num)
           PP.<+> "syscall"
+      SharedLibraryFunctionCall fnName soPath pltAddr soAddr ->
+        "Calling"
+          PP.<+> PP.squotes (PP.pretty fnName)
+          PP.<+> "from shared library"
+          PP.<+> PP.pretty (SF.takeFileName soPath)
+          PP.<+> PP.parens
+            ( "PLT stub at"
+                PP.<+> PP.pretty pltAddr
+                PP.<> ", resolved to"
+                PP.<+> PP.pretty soAddr
+            )
       SkippedFunctionCall call -> PP.pretty call
       SkippedSyscall call -> PP.pretty call
 
@@ -86,6 +109,7 @@ severity =
     PltCall{} -> Debug
     FunctionCall{} -> Debug
     FunctionOverride{} -> Debug
+    SharedLibraryFunctionCall{} -> Info
     SyscallOverride{} -> Debug
     SkippedFunctionCall{} -> Info
     SkippedSyscall{} -> Info
