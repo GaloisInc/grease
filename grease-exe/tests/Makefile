@@ -34,7 +34,7 @@ CFLAGS_STATIC = -static -no-pie
 DIRS = \
   $(shell find feat/ -mindepth 1 -maxdepth 1 -type d) \
   $(shell find prop/ -mindepth 3 -maxdepth 3 -type d) \
-  $(shell feat/ refine/ sanity/ -mindepth 2 -maxdepth 2 -type d)
+  $(shell find feat/ refine/ sanity/ -mindepth 2 -maxdepth 2 -type d)
 
 # These test cases must dynamically link against libc, so we avoid passing
 # CFLAGS_NO_LIBS when compiling them. Sadly, clang will not compile something with
@@ -43,7 +43,7 @@ DIRS = \
 DYNAMIC_DIRS = \
   prop/no-mprotect/pos/mprotect \
   refine/bug/assert_false \
-  refine/bug/networking \
+  refine/neg/networking \
   refine/pos/excluded_overrides \
   refine/pos/malloc \
   refine/pos/malloc-free-external \
@@ -149,10 +149,10 @@ EXES = $(DYNAMIC_ARM_EXES) $(DYNAMIC_PPC32_EXES) \
 	   $(STACK_PROTECTOR_ARM_EXES) $(STACK_PROTECTOR_X64_EXES) \
 	   $(SHARED_LIBRARY_ARM_EXES) $(SHARED_LIBRARY_X64_EXES) $(SHARED_LIBRARY_PPC32_EXES) \
 	   $(STANDALONE_SHARED_LIBRARY_ARM_SOS) $(STANDALONE_SHARED_LIBRARY_X64_SOS) $(STANDALONE_SHARED_LIBRARY_PPC32_SOS) $(SHARED_LIBARY_DWARFV4_X64_SOS) $(SHARED_LIBARY_DWARFV5_X64_SOS) \
-	   $(ASSEMBLY_ARM_DIRS) $(ASSEMBLY_SHARED_LIBRARY_X64_SOS) \
+	   $(ASSEMBLY_ARM_EXES) $(ASSEMBLY_SHARED_LIBRARY_X64_SOS) \
 	   $(RAW_BINARY_EXES)
 
-SOS = $(SHARED_LIBRARY_ARM_SOS) $(SHARED_LIBRARY_X64_SOS) $(SHARED_LIBRARY_PPC32_EXES)
+SOS = $(SHARED_LIBRARY_ARM_SOS) $(SHARED_LIBRARY_X64_SOS) $(SHARED_LIBRARY_PPC32_SOS)
 
 BC_DIRS = $(shell find llvm-bc/ -mindepth 1 -maxdepth 1 -type d)
 BCS = $(addsuffix /test.bc,$(BC_DIRS))
