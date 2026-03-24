@@ -21,7 +21,7 @@ module Screach.RefineFeature (
   sdseExecFeatures,
 ) where
 
-import Control.Lens ((&), (.~), (?~), (^.))
+import Control.Lens ((&), (?~), (^.))
 import Control.Lens qualified as Lens
 import Control.Monad.IO.Class (MonadIO)
 import Data.Data (Proxy (Proxy))
@@ -127,31 +127,6 @@ type HasScreachPersonality p sym bak t ext tys ret rtp w =
   , CR.HasReplayState p p sym ext (CS.RegEntry sym ret)
   , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
   )
-
--- | Saved symbolic execution result with backend state.
---
--- When a target is reached during SDSE, the result and backend state are
--- captured so they can be verified later.
-data SavedState p sym ext rtp
-  = SavedState
-  { savedBackendState :: CB.AssumptionState sym
-  , savedExecState :: C.ExecState p sym ext rtp
-  }
-
--- | Create a 'SavedState' from an 'C.ExecResult' by capturing the current
--- backend state.
-createSaveItem ::
-  C.ExecResult p sym ext rtp ->
-  IO (SavedState p sym ext rtp)
-createSaveItem st =
-  let simCtx = C.execResultContext st
-   in C.withBackend simCtx $ \bak -> do
-        bakState <- CB.getBackendState bak
-        pure
-          SavedState
-            { savedBackendState = bakState
-            , savedExecState = C.ResultState st
-            }
 
 doLog :: MonadIO m => ScreachLogAction -> RDiag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (Diag.RunDiagnostic diag)
