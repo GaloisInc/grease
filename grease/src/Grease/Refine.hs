@@ -117,6 +117,7 @@ import Grease.Heuristic (HeuristicResult (CantRefine, PossibleBug, RefinedPrecon
 import Grease.Heuristic.Result (CantRefine (Exhausted, Exit, MissingFunc, MissingSemantics, MutableGlobal, SolverTimeout, SolverUnknown, Timeout, Unsupported))
 import Grease.Options (BoundsOpts)
 import Grease.Options qualified as Opts
+import Grease.Personality qualified as GP
 import Grease.Refine.Diagnostic qualified as Diag
 import Grease.Scheduler qualified as Sched
 import Grease.Setup (InitialMem)
@@ -491,18 +492,19 @@ execAndRefine ::
   , 16 C.<= w
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
   W4FM.FloatModeRepr fm ->
   GreaseLogAction ->
-  C.GlobalVar CLM.Mem ->
   RefinementData sym bak ext argTys w ->
   IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
   ExecData p sym ext ret ->
   m (ProveRefineResult sym ext argTys)
-execAndRefine bak _fm la memVar refineData bbMapRef execData = do
+execAndRefine bak _fm la refineData bbMapRef execData = do
+  let memVar = GP.execStateMemVar (execInitState execData)
   let refineOne initSt = do
         let execData' = execData{execInitState = initSt}
         (execResult, goals, remaining) <- execCfg bak execData'
@@ -581,6 +583,7 @@ refineOnce ::
   , C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext wptr
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext wptr
@@ -596,7 +599,6 @@ refineOnce ::
   Ctx.Assignment C.TypeRepr argTys ->
   ArgShapes ext NoTag argTys ->
   InitialMem sym ->
-  C.GlobalVar CLM.Mem ->
   [RefineHeuristic sym bak ext argTys] ->
   [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
   ( ( MSM.MacawProcessAssertion sym
@@ -609,7 +611,7 @@ refineOnce ::
     IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
   ) ->
   IO (ProveRefineResult sym ext argTys)
-refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem memVar heuristics execFeats mkInitState = do
+refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem heuristics execFeats mkInitState = do
   let sym = CB.backendGetSym bak
   ErrorCallbacks
     { errorMap = bbMapRef
@@ -650,7 +652,7 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
           , refineSolver = Opts.simSolver simOpts
           , refineSolverTimeout = Opts.simSolverTimeout boundsOpts
           }
-  execAndRefine bak fm la memVar refineData bbMapRef execData
+  execAndRefine bak fm la refineData bbMapRef execData
 
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)

@@ -673,6 +673,7 @@ macawMemConfig ::
   , ?lc :: CLTC.TypeContext
   , GMSS.HasGreaseSimulatorState p cExt sym arch ret
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   ) =>
   GDiag.GreaseLogAction ->
   C.GlobalVar CLM.Mem ->
@@ -875,7 +876,6 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallbac
     regTypes
     argShapes
     initMem
-    memVar
     heuristics
     execFeats
     (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
@@ -1448,7 +1448,6 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
         argTys
         argShapes
         initMem
-        memVar
         heuristics
         execFeats
         $ \toConc setupMem initFs args -> do

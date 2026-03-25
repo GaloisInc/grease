@@ -32,6 +32,7 @@ import Grease.LLVM.Overrides.Diagnostic as Diag (Diagnostic (CantSkip, FoundDecl
 import Grease.LLVM.Overrides.SExp (LLVMSExpOverride (lsoAuxiliaryOverrides, lsoForwardDeclarations, lsoPublicOverride), acfgToAnyLLVMOverride)
 import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.Overrides (CantResolveOverrideCallback (CantResolveOverrideCallback))
+import Grease.Personality qualified as GP
 import Grease.Skip (declSkipOverride, registerSkipOverride)
 import Grease.Syntax.Overrides (freshBytesOverride, tryBindTypedOverride)
 import Grease.Syntax.Overrides.Concretize qualified as Conc
@@ -142,6 +143,7 @@ registerLLVMOverrides ::
   ( CLM.HasPtrWidth 64
   , CLM.HasLLVMAnn sym
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
   , OnlineSolverAndBackend solver sym bak scope st fs
@@ -305,6 +307,7 @@ registerLLVMSexpOverrides ::
   ( CLM.HasPtrWidth 64
   , CLM.HasLLVMAnn sym
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
   , OnlineSolverAndBackend solver sym bak scope st fs
@@ -343,6 +346,7 @@ registerLLVMModuleOverrides ::
   ( CLM.HasPtrWidth 64
   , CLM.HasLLVMAnn sym
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
   , OnlineSolverAndBackend solver sym bak scope st fs
@@ -379,6 +383,7 @@ registerLLVMSexpProgForwardDeclarations ::
   ( CLM.HasPtrWidth 64
   , CLM.HasLLVMAnn sym
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
@@ -396,7 +401,7 @@ registerLLVMSexpProgForwardDeclarations ::
 registerLLVMSexpProgForwardDeclarations la bak dl mvar funOvs errCb =
   registerLLVMForwardDeclarations bak mvar funOvs $
     CantResolveOverrideCallback $
-      registerSkipOverride la dl mvar errCb
+      registerSkipOverride la dl errCb
 
 -- | Redirect handles for forward declarations in an S-expression file to
 -- actually call the corresponding LLVM overrides. If a forward declaration
@@ -405,6 +410,7 @@ registerLLVMForwardDeclarations ::
   ( CLM.HasPtrWidth w
   , CLM.HasLLVMAnn sym
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>

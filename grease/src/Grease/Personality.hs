@@ -17,6 +17,8 @@ module Grease.Personality (
 
   -- * @HasMemVar@
   HasMemVar (..),
+  simStateMemVar,
+  execStateMemVar,
 
   -- * Lenses for @Personality@
   pMemVar,
@@ -25,7 +27,7 @@ module Grease.Personality (
   pServerSocketFds,
 ) where
 
-import Control.Lens (Lens')
+import Control.Lens (Lens', (^.))
 import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
 import Data.Kind (Type)
@@ -36,6 +38,7 @@ import Grease.SimulatorState.Networking qualified as GSN
 import Lang.Crucible.Debug qualified as Dbg
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
+import Lang.Crucible.Simulator.ExecutionTree qualified as ET
 import Lang.Crucible.Types (CrucibleType)
 
 -- | The shared personality core for @grease@.
@@ -93,6 +96,20 @@ class HasMemVar p where
 
 instance HasMemVar (Personality cExt sym ext ret) where
   getMemVar = Lens.view pMemVar
+
+-- | Extract the memory model 'CS.GlobalVar' from a 'CS.SimState'.
+simStateMemVar ::
+  HasMemVar p =>
+  CS.SimState p sym ext rtp f a ->
+  CS.GlobalVar CLM.Mem
+simStateMemVar st = getMemVar (st ^. CS.stateContext . CS.cruciblePersonality)
+
+-- | Extract the memory model 'CS.GlobalVar' from an 'ET.ExecState'.
+execStateMemVar ::
+  HasMemVar p =>
+  ET.ExecState p sym ext r ->
+  CS.GlobalVar CLM.Mem
+execStateMemVar st = getMemVar (ET.execStateContext st ^. CS.cruciblePersonality)
 
 -- | A class for personality types that contain a 'Personality' core.
 class HasPersonality p cExt sym ext ret | p -> cExt sym ext ret where

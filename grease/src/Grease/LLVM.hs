@@ -19,6 +19,7 @@ import Grease.Diagnostic (GreaseLogAction)
 import Grease.LLVM.SetupHook (SetupHook (SetupHook))
 import Grease.LLVM.SimulatorHooks (greaseLlvmExtImpl)
 import Grease.Options (ErrorSymbolicFunCalls)
+import Grease.Personality qualified as GP
 import Grease.Setup (SetupMem (getSetupMem))
 import Grease.SimulatorState.Networking qualified as GSN
 import Grease.Utility (OnlineSolverAndBackend, printHandle)
@@ -44,6 +45,7 @@ initState ::
   , CLM.HasPtrWidth (ArchWidth arch)
   , CLM.HasLLVMAnn sym
   , HasToConcretize p
+  , GP.HasMemVar p
   , GSN.HasServerSocketFds p
   , ?memOpts :: CLM.MemOptions
   ) =>

@@ -18,6 +18,7 @@ import Grease.Diagnostic (Diagnostic (LLVMSimulatorHooksDiagnostic), GreaseLogAc
 import Grease.LLVM.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Options (ErrorSymbolicFunCalls, getErrorSymbolicFunCalls)
 import Grease.Panic (panic)
+import Grease.Personality qualified as GP
 import Grease.Skip (createSkipOverride)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.FunctionHandle qualified as C
@@ -40,6 +41,7 @@ doLog la diag = LJ.writeLog la (LLVMSimulatorHooksDiagnostic diag)
 greaseLlvmExtImpl ::
   ( CB.IsSymInterface sym
   , CLM.HasLLVMAnn sym
+  , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
@@ -59,6 +61,7 @@ greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls llvmExtImpl =
 extensionExec ::
   ( CB.IsSymInterface sym
   , CLM.HasLLVMAnn sym
+  , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
@@ -114,7 +117,7 @@ extensionExec la halloc dl errorSymbolicFunCalls baseExt stmt st =
                           ]
                   let funcName = WFN.functionNameFromText "_grease_symbolic_fn"
                   hdl <- C.mkHandle' halloc funcName args ret
-                  case createSkipOverride la dl mvar funcName ret of
+                  case createSkipOverride la dl funcName ret of
                     Right ov -> do
                       doLog la Diag.SkippedSymbolicFnHandleCall
                       pure

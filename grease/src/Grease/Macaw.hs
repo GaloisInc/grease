@@ -58,9 +58,9 @@ import Grease.Macaw.ResolveCall qualified as ResolveCall
 import Grease.Macaw.SetupHook (SetupHook (SetupHook))
 import Grease.Macaw.SimulatorHooks (ExecutingAddressAction, greaseMacawExtImpl)
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
-import Grease.Personality qualified as GP
 import Grease.Options qualified as Opts
 import Grease.Panic (panic)
+import Grease.Personality qualified as GP
 import Grease.Setup (InitialMem (InitialMem), SetupMem, getSetupMem)
 import Grease.Shape (ArgShapes (ArgShapes), Shape (ShapeBool, ShapeExt, ShapeStruct))
 import Grease.Shape.NoTag (NoTag (NoTag))
@@ -549,7 +549,7 @@ initState bak la macawExtImpl execCallback halloc mem0 globs0 (CLSIO.SomeOverrid
   (mem1, globs1) <- liftIO $ (arch ^. Arch.archInitGlobals) (Stubs.Sym sym bak) (getSetupMem mem0) globs0
   let globs2 = CS.insertGlobal mvar mem1 globs1
   let globs3 = CS.insertGlobal archStruct initialRegs globs2
-  let extImpl = greaseMacawExtImpl arch bak la execCallback tgtOvs mvar archStruct macawExtImpl
+  let extImpl = greaseMacawExtImpl arch bak la execCallback tgtOvs archStruct macawExtImpl
   let cfgHdl = C.cfgHandle cfg
   let bindings =
         CS.FnBindings $
@@ -574,7 +574,7 @@ initState bak la macawExtImpl execCallback halloc mem0 globs0 (CLSIO.SomeOverrid
     $ Symbolic.crucGenArchConstraints (arch ^. Arch.archVals . to Symbolic.archFunctions)
     $ do
       let SetupHook hook = setupHook
-      hook bak mvar funOvs
+      hook bak funOvs
       initFsOv
       let args = Ctx.singleton $ CS.RegEntry sRepr initialRegs
       r <-
