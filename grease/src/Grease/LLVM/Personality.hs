@@ -12,9 +12,7 @@ module Grease.LLVM.Personality (
   HasGreaseLLVMPersonality (..),
 
   -- * Lenses for @GreaseLLVMPersonality@
-  llvmDbgContext,
-  llvmToConcretize,
-  llvmServerSocketFds,
+  llvmPersonality,
   llvmRecordState,
   llvmReplayState,
 ) where
@@ -23,9 +21,8 @@ import Control.Lens (Lens')
 import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
 import Data.Kind (Type)
-import Data.Map.Strict qualified as Map
-import Data.Parameterized.Some (Some)
 import Grease.Concretize.ToConcretize qualified as ToConc
+import Grease.Personality qualified as GP
 import Grease.SimulatorState.Networking qualified as GSN
 import Lang.Crucible.Debug qualified as Dbg
 import Lang.Crucible.LLVM (LLVM)
@@ -44,14 +41,8 @@ type GreaseLLVMPersonality ::
   Type
 data GreaseLLVMPersonality cExt sym ret
   = GreaseLLVMPersonality
-  { _llvmDbgContext :: Dbg.Context cExt sym LLVM ret
-  , _llvmToConcretize :: CS.GlobalVar ToConc.ToConcretizeType
-  -- ^ Values created during runtime to be passed to the concretization
-  -- functionality and generally displayed to the user.
-  , _llvmServerSocketFds :: Map.Map Integer (Some GSN.ServerSocketInfo)
-  -- ^ A map from registered socket file descriptors to their corresponding
-  -- metadata. See @Note [The networking story]@ in
-  -- "Grease.Overrides.Networking".
+  { _llvmPersonality :: GP.Personality cExt sym LLVM ret
+  -- ^ The shared personality core. See 'Grease.Personality.Personality'.
   , _llvmRecordState ::
       CR.RecordState
         (GreaseLLVMPersonality cExt sym ret)
@@ -72,16 +63,13 @@ makeLenses ''GreaseLLVMPersonality
 mkGreaseLLVMPersonality ::
   forall cExt sym ret p.
   (p ~ GreaseLLVMPersonality cExt sym ret) =>
-  Dbg.Context cExt sym LLVM ret ->
-  CS.GlobalVar ToConc.ToConcretizeType ->
+  GP.Personality cExt sym LLVM ret ->
   CR.RecordState p sym LLVM (CS.RegEntry sym ret) ->
   CR.ReplayState p sym LLVM (CS.RegEntry sym ret) ->
   p
-mkGreaseLLVMPersonality dbgCtx toConcVar recState repState =
+mkGreaseLLVMPersonality pers recState repState =
   GreaseLLVMPersonality
-    { _llvmDbgContext = dbgCtx
-    , _llvmToConcretize = toConcVar
-    , _llvmServerSocketFds = Map.empty
+    { _llvmPersonality = pers
     , _llvmRecordState = recState
     , _llvmReplayState = repState
     }
@@ -97,14 +85,18 @@ instance HasGreaseLLVMPersonality (GreaseLLVMPersonality cExt sym ret) cExt sym 
   {-# INLINE greaseLlvmPersonality #-}
 
 instance Dbg.HasContext (GreaseLLVMPersonality cExt sym ret) cExt sym LLVM ret where
-  context = llvmDbgContext
+  context = llvmPersonality . GP.pDbgContext
   {-# INLINE context #-}
 
 instance ToConc.HasToConcretize (GreaseLLVMPersonality cExt sym ret) where
-  toConcretize = Lens.view llvmToConcretize
+  toConcretize = Lens.view (llvmPersonality . GP.pToConcretize)
 
 instance GSN.HasServerSocketFds (GreaseLLVMPersonality cExt sym ret) where
-  serverSocketFdsL = llvmServerSocketFds
+  serverSocketFdsL = llvmPersonality . GP.pServerSocketFds
+
+instance GP.HasPersonality (GreaseLLVMPersonality cExt sym ret) cExt sym LLVM ret where
+  personality = llvmPersonality
+  {-# INLINE personality #-}
 
 instance
   CR.HasRecordState

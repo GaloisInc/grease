@@ -136,6 +136,7 @@ import Grease.MustFail qualified as MustFail
 import Grease.Options qualified as GO
 import Grease.Output qualified as GOut
 import Grease.Panic (Grease, panic)
+import Grease.Personality qualified as GP
 import Grease.Pretty (prettyPtrFnMap)
 import Grease.Profiler.Feature (greaseProfilerFeature)
 import Grease.Refine qualified as GRef
@@ -812,8 +813,14 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
   empTrace <- CR.emptyRecordedTrace sym
   repState <- CR.mkReplayState halloc empTrace
 
+  let pers =
+        GP.Personality
+          { GP._pDbgContext = dbgCtx
+          , GP._pToConcretize = toConcVar
+          , GP._pServerSocketFds = Map.empty
+          }
   let personality =
-        mkGreaseSimulatorState toConcVar dbgCtx recState repState
+        mkGreaseSimulatorState pers recState repState
           & discoveredFnHandles .~ discoveredHdls
 
   let globals = GSIO.initFsGlobals initFs
@@ -1450,8 +1457,14 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
         heuristics
         execFeats
         $ \toConc setupMem initFs args -> do
+          let llvmPers =
+                GP.Personality
+                  { GP._pDbgContext = dbgCtx
+                  , GP._pToConcretize = toConc
+                  , GP._pServerSocketFds = Map.empty
+                  }
           let p =
-                GLP.mkGreaseLLVMPersonality dbgCtx toConc recState repState
+                GLP.mkGreaseLLVMPersonality llvmPers recState repState
           LLVM.initState
             bak
             la

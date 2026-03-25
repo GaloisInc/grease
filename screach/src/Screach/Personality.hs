@@ -25,6 +25,7 @@ import Data.Parameterized.Ctx qualified as C
 import GHC.TypeLits (type Natural)
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Macaw.SimulatorState qualified as GMSS
+import Grease.Personality qualified as GP
 import Grease.SimulatorState.Networking qualified as GSN
 import Lang.Crucible.Debug qualified as Dbg
 import Lang.Crucible.FunctionHandle (HandleAllocator)
@@ -116,6 +117,18 @@ instance
   where
   greaseSimulatorState = greaseSimulatorState
   {-# INLINE greaseSimulatorState #-}
+
+instance
+  (ext ~ MS.MacawExt arch, ret ~ MS.ArchRegStruct arch) =>
+  GP.HasPersonality
+    (ScreachSimulatorState p sym bak ext arch t ret aty w)
+    MDebug.MacawCommand
+    sym
+    ext
+    ret
+  where
+  personality = greaseSimulatorState . GMSS.gssPersonality
+  {-# INLINE personality #-}
 
 instance ToConc.HasToConcretize (ScreachSimulatorState p sym bak ext arch t ret aty w) where
   toConcretize = Lens.view (greaseSimulatorState . Lens.to ToConc.toConcretize)

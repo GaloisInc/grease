@@ -13,6 +13,7 @@ module Grease.Macaw.SimulatorState (
   HasGreaseSimulatorState (..),
 
   -- * Lenses for @GreaseSimulatorState@
+  gssPersonality,
   discoveredFnHandles,
   syscallHandles,
   macawLazySimulatorState,
@@ -21,7 +22,6 @@ module Grease.Macaw.SimulatorState (
   stateDiscoveredFnHandles,
   stateSyscallHandles,
   stateMacawLazySimulatorState,
-  serverSocketFds,
 
   -- * Auxiliary definitions
   MacawFnHandle,
@@ -37,8 +37,8 @@ import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
-import Data.Parameterized.Some (Some)
 import Grease.Concretize.ToConcretize qualified as ToConc
+import Grease.Personality qualified as GP
 import Grease.SimulatorState.Networking qualified as GSN
 import Lang.Crucible.Debug qualified as Dbg
 import Lang.Crucible.FunctionHandle qualified as C
@@ -59,14 +59,13 @@ type GreaseSimulatorState ::
   CT.CrucibleType ->
   Type
 data GreaseSimulatorState cExt sym arch ret = GreaseSimulatorState
-  { _discoveredFnHandles :: Map.Map (MC.ArchSegmentOff arch) (MacawFnHandle arch)
+  { _gssPersonality :: GP.Personality cExt sym (Symbolic.MacawExt arch) ret
+  -- ^ The shared personality core. See 'Grease.Personality.Personality'.
+  , _discoveredFnHandles :: Map.Map (MC.ArchSegmentOff arch) (MacawFnHandle arch)
   -- ^ A map of discovered function addresses to their handles. Any time a new
   -- function is discovered (see @Note [Incremental code discovery]@), it will
   -- be added to this map so that it can be looked up in future invocations of
   -- that function.
-  , _toConcretize :: CS.GlobalVar ToConc.ToConcretizeType
-  -- ^ Values created during runtime to be passed to the concretization
-  -- functionality and generally displayed to the user.
   , _syscallHandles :: MapF.MapF Stubs.SyscallNumRepr Stubs.SyscallFnHandle
   -- ^ A map of syscall numbers (that have been invoked thus far during
   -- simulation) to their handles. Any time a new syscall is simulated, it
@@ -93,11 +92,6 @@ data GreaseSimulatorState cExt sym arch ret = GreaseSimulatorState
   , _macawLazySimulatorState :: Symbolic.MacawLazySimulatorState sym (MC.ArchAddrWidth arch)
   -- ^ The state used in the lazy @macaw-symbolic@ memory model, on top of
   -- which @grease@ is built.
-  , _serverSocketFds :: Map.Map Integer (Some GSN.ServerSocketInfo)
-  -- ^ A map from registered socket file descriptors to their corresponding
-  -- metadata. See @Note [The networking story]@ in
-  -- "Grease.Overrides.Networking".
-  , _dbgContext :: Dbg.Context cExt sym (Symbolic.MacawExt arch) ret
   , _gssRecordState ::
       CR.RecordState
         (GreaseSimulatorState cExt sym arch ret)
@@ -116,19 +110,16 @@ data GreaseSimulatorState cExt sym arch ret = GreaseSimulatorState
 mkGreaseSimulatorState ::
   forall cExt sym arch ret p.
   (p ~ GreaseSimulatorState cExt sym arch ret) =>
-  CS.GlobalVar ToConc.ToConcretizeType ->
-  Dbg.Context cExt sym (Symbolic.MacawExt arch) ret ->
+  GP.Personality cExt sym (Symbolic.MacawExt arch) ret ->
   CR.RecordState p sym (Symbolic.MacawExt arch) (CS.RegEntry sym ret) ->
   CR.ReplayState p sym (Symbolic.MacawExt arch) (CS.RegEntry sym ret) ->
   p
-mkGreaseSimulatorState toConcVar dbgCtx recState repState =
+mkGreaseSimulatorState pers recState repState =
   GreaseSimulatorState
-    { _discoveredFnHandles = Map.empty
-    , _toConcretize = toConcVar
+    { _gssPersonality = pers
+    , _discoveredFnHandles = Map.empty
     , _syscallHandles = MapF.empty
     , _macawLazySimulatorState = Symbolic.emptyMacawLazySimulatorState
-    , _serverSocketFds = Map.empty
-    , _dbgContext = dbgCtx
     , _gssRecordState = recState
     , _gssReplayState = repState
     }
@@ -178,11 +169,15 @@ instance
   (ret ~ Symbolic.ArchRegStruct arch) =>
   Dbg.HasContext (GreaseSimulatorState cExt sym arch ret) cExt sym (Symbolic.MacawExt arch) ret
   where
-  context = dbgContext
+  context = gssPersonality . GP.pDbgContext
   {-# INLINE context #-}
 
 instance ToConc.HasToConcretize (GreaseSimulatorState cExt sym arch ret) where
-  toConcretize = Lens.view toConcretize
+  toConcretize = Lens.view (gssPersonality . GP.pToConcretize)
+
+instance GP.HasPersonality (GreaseSimulatorState cExt sym arch ret) cExt sym (Symbolic.MacawExt arch) ret where
+  personality = gssPersonality
+  {-# INLINE personality #-}
 
 instance
   (MC.ArchAddrWidth arch ~ ww) =>
@@ -204,7 +199,7 @@ instance
   greaseSimulatorState = id
 
 instance GSN.HasServerSocketFds (GreaseSimulatorState cExt sym arch ret) where
-  serverSocketFdsL = serverSocketFds
+  serverSocketFdsL = gssPersonality . GP.pServerSocketFds
 
 instance
   CR.HasRecordState
