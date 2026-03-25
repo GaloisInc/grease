@@ -88,6 +88,9 @@ instance Dbg.HasContext (GreaseLLVMPersonality cExt sym ret) cExt sym LLVM ret w
   context = llvmPersonality . GP.pDbgContext
   {-# INLINE context #-}
 
+instance GP.HasMemVar (GreaseLLVMPersonality cExt sym ret) where
+  getMemVar = Lens.view (llvmPersonality . GP.pMemVar)
+
 instance ToConc.HasToConcretize (GreaseLLVMPersonality cExt sym ret) where
   toConcretize = Lens.view (llvmPersonality . GP.pToConcretize)
 

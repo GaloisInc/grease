@@ -58,6 +58,7 @@ import Grease.Macaw.ResolveCall qualified as ResolveCall
 import Grease.Macaw.SetupHook (SetupHook (SetupHook))
 import Grease.Macaw.SimulatorHooks (ExecutingAddressAction, greaseMacawExtImpl)
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
+import Grease.Personality qualified as GP
 import Grease.Options qualified as Opts
 import Grease.Panic (panic)
 import Grease.Setup (InitialMem (InitialMem), SetupMem, getSetupMem)
@@ -516,13 +517,13 @@ initState ::
   , ?memOpts :: CLM.MemOptions
   , HasGreaseSimulatorState p cExt sym arch ret
   , HasToConcretize p
+  , GP.HasMemVar p
   ) =>
   bak ->
   GreaseLogAction ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   ExecutingAddressAction arch ->
   C.HandleAllocator ->
-  CS.GlobalVar CLM.Mem ->
   SetupMem sym ->
   CS.SymGlobalState sym ->
   CLSIO.SomeOverrideSim sym () ->
@@ -541,8 +542,9 @@ initState ::
   -- | The 'C.CFG' of the user-requested entrypoint function.
   C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch) ->
   IO (CS.ExecState p sym (Symbolic.MacawExt arch) (CS.RegEntry sym (C.StructType (Symbolic.MacawCrucibleRegTypes arch))))
-initState bak la macawExtImpl execCallback halloc mvar mem0 globs0 (CLSIO.SomeOverrideSim initFsOv) arch setupHook tgtOvs initialPersonality initialRegs funOvs mbStartupOvCfg (C.SomeCFG cfg) = do
+initState bak la macawExtImpl execCallback halloc mem0 globs0 (CLSIO.SomeOverrideSim initFsOv) arch setupHook tgtOvs initialPersonality initialRegs funOvs mbStartupOvCfg (C.SomeCFG cfg) = do
   let sym = CB.backendGetSym bak
+  let mvar = GP.getMemVar initialPersonality
   archStruct <- C.freshGlobalVar halloc "grease:archRegs" (Symbolic.crucGenRegStructType $ Symbolic.archFunctions (arch ^. Arch.archVals))
   (mem1, globs1) <- liftIO $ (arch ^. Arch.archInitGlobals) (Stubs.Sym sym bak) (getSetupMem mem0) globs0
   let globs2 = CS.insertGlobal mvar mem1 globs1
