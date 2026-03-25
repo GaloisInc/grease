@@ -813,13 +813,7 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
   empTrace <- CR.emptyRecordedTrace sym
   repState <- CR.mkReplayState halloc empTrace
 
-  let pers =
-        GP.Personality
-          { GP._pMemVar = memVar
-          , GP._pDbgContext = dbgCtx
-          , GP._pToConcretize = toConcVar
-          , GP._pServerSocketFds = Map.empty
-          }
+  let pers = GP.mkPersonality memVar dbgCtx toConcVar
   let personality =
         mkGreaseSimulatorState pers recState repState
           & discoveredFnHandles .~ discoveredHdls
@@ -1458,13 +1452,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
         heuristics
         execFeats
         $ \toConc setupMem initFs args -> do
-          let llvmPers =
-                GP.Personality
-                  { GP._pMemVar = memVar
-                  , GP._pDbgContext = dbgCtx
-                  , GP._pToConcretize = toConc
-                  , GP._pServerSocketFds = Map.empty
-                  }
+          let llvmPers = GP.mkPersonality memVar dbgCtx toConc
           let p =
                 GLP.mkGreaseLLVMPersonality llvmPers recState repState
           LLVM.initState

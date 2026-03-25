@@ -1192,13 +1192,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
         gssRecState <- RR.mkRecordState halloc
         gssEmpTrace <- RR.emptyRecordedTrace sym
         gssRepState <- RR.mkReplayState halloc gssEmpTrace
-        let gssPers =
-              GP.Personality
-                { GP._pMemVar = memVar
-                , GP._pDbgContext = dbgCtx
-                , GP._pToConcretize = toConcVar
-                , GP._pServerSocketFds = Map.empty
-                }
+        let gssPers = GP.mkPersonality memVar dbgCtx toConcVar
         let greaseSimState =
               GMSS.mkGreaseSimulatorState gssPers gssRecState gssRepState
                 & GMSS.discoveredFnHandles .~ discoveredHdls
