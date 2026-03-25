@@ -1053,8 +1053,12 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
 
         let userOvPaths = Conf.overrides conf
         let ovs =
-              SF.customScreachOverrides sla fs memVar memCfg0 archCtx
-                <> builtinStubsOverrides memVar memCfg0 fs
+              SF.customScreachOverrides sla
+                <> builtinStubsOverrides
+                  memVar
+                  memCfg0
+                  fs
+                  (archCtx ^. Arch.archInfo . to MAI.archEndianness)
         fnOvsMap <- liftIO $ do
           result <- GMO.mkMacawOverrideMap bak ovs userOvPaths halloc memVar archCtx
           let usrErr = userError sla . PP.pretty

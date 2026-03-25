@@ -131,7 +131,6 @@ library
         Screach.Ecfs
         Screach.Explore
         Screach.FunctionOverride
-        Screach.FunctionOverride.Sscanf
         Screach.GoalEvaluator
         Screach.GoalEvaluator.Diagnostic
         Screach.Heuristic
@@ -145,7 +144,6 @@ library
         Screach.ShortestDistanceScheduler
         Screach.RefineFeature
     build-depends:
-        attoparsec,
         bv-sized,
         bytestring,
         cassava,

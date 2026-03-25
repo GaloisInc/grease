@@ -200,6 +200,8 @@ available:
 
 - `void @__stack_chk_fail()`
 - `void @__stack_chk_fail_local()`
+- `i32 @sscanf( i8*, i8*, ... )`
+- `i32 @__isoc99_sscanf( i8*, i8*, ... )`
 
 ### S-expression-specific overrides
 
@@ -258,6 +260,17 @@ The following overrides merit a bit of discussion:
 - `open`, `close`, `read`, and `write`
 
   See [I/O](io.md).
+
+- `sscanf` and `__isoc99_sscanf`
+
+  Parse formatted input from a string. Both the input string and the format
+  string must be concrete (not symbolic). Supported conversion specifiers
+  include `%d`, `%c`, `%s`, `%x`, `%f`, `%p`, `%n`, and `%[...]` (character
+  sets, e.g., `%[abc]` or `%[^abc]`). Length modifiers `hh`, `h`, `l`, `ll`,
+  `L`, `j`, `t`, and `z` are supported. Maximum width is only respected for
+  string-like conversions (e.g., `%5s`). Character set ranges (e.g., `%[0-9]`)
+  and character sets that include the `]` character (e.g., `%[]]`) are not
+  supported.
 
 ## Crucible types for overrides
 

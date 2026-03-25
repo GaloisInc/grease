@@ -23,10 +23,11 @@ module Grease.Macaw.Overrides (
   lookupMacawForwardDeclarationOverride,
 ) where
 
-import Control.Lens ((^.))
+import Control.Lens (to, (^.))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Foldable qualified as Foldable
 import Data.List.NonEmpty qualified as NE
+import Data.Macaw.Architecture.Info qualified as MAI
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict qualified as Map
@@ -220,7 +221,8 @@ mkMacawOverrideMapWithBuiltins ::
   LLVMFileSystem (MC.ArchAddrWidth arch) ->
   IO (Either MacawSExpOverrideError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
 mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg fs = do
-  let builtinOvs = builtinStubsOverrides mvar memCfg fs
+  let endian = archCtx ^. Arch.archInfo . to MAI.archEndianness
+  let builtinOvs = builtinStubsOverrides mvar memCfg fs endian
   mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
 
 -- | Redirect handles for forward declarations in an S-expression file to
