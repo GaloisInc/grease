@@ -96,6 +96,7 @@ import Grease.Macaw.SimulatorHooks qualified as GMSH
 import Grease.Macaw.SimulatorState qualified as GMSS
 import Grease.Options qualified as GO
 import Grease.Output (renderJSON)
+import Grease.Personality qualified as GP
 import Grease.Pretty (prettyPtrFnMap)
 import Grease.Refine qualified as GR
 import Grease.Refine.Diagnostic qualified as RDiag
@@ -1187,8 +1188,14 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
         gssRecState <- RR.mkRecordState halloc
         gssEmpTrace <- RR.emptyRecordedTrace sym
         gssRepState <- RR.mkReplayState halloc gssEmpTrace
+        let gssPers =
+              GP.Personality
+                { GP._pDbgContext = dbgCtx
+                , GP._pToConcretize = toConcVar
+                , GP._pServerSocketFds = Map.empty
+                }
         let greaseSimState =
-              GMSS.mkGreaseSimulatorState toConcVar dbgCtx gssRecState gssRepState
+              GMSS.mkGreaseSimulatorState gssPers gssRecState gssRepState
                 & GMSS.discoveredFnHandles .~ discoveredHdls
         personality <-
           SP.mkScreachSimulatorState

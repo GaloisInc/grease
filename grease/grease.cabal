@@ -255,6 +255,7 @@ library
     Grease.Output
     Grease.Overrides.Networking
     Grease.Panic
+    Grease.Personality
     Grease.Pretty
     Grease.Refine
     Grease.Refine.Diagnostic
