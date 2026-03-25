@@ -815,7 +815,8 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
 
   let pers =
         GP.Personality
-          { GP._pDbgContext = dbgCtx
+          { GP._pMemVar = memVar
+          , GP._pDbgContext = dbgCtx
           , GP._pToConcretize = toConcVar
           , GP._pServerSocketFds = Map.empty
           }
@@ -825,7 +826,7 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
 
   let globals = GSIO.initFsGlobals initFs
   let initFsOv = GSIO.initFsOverride initFs
-  GM.initState bak la macawExtImpl execCallback halloc memVar setupMem globals initFsOv archCtx setupHook addrOvs personality regs fnOvsMap mbStartupOvSsaCfg ssa
+  GM.initState bak la macawExtImpl execCallback halloc setupMem globals initFsOv archCtx setupHook addrOvs personality regs fnOvsMap mbStartupOvSsaCfg ssa
 
 macawRefineOnce ::
   ( CB.IsSymBackend sym bak
@@ -1459,7 +1460,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
         $ \toConc setupMem initFs args -> do
           let llvmPers =
                 GP.Personality
-                  { GP._pDbgContext = dbgCtx
+                  { GP._pMemVar = memVar
+                  , GP._pDbgContext = dbgCtx
                   , GP._pToConcretize = toConc
                   , GP._pServerSocketFds = Map.empty
                   }

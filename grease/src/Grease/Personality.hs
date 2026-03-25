@@ -14,13 +14,18 @@ module Grease.Personality (
   Personality (..),
   HasPersonality (..),
 
+  -- * @HasMemVar@
+  HasMemVar (..),
+
   -- * Lenses for @Personality@
+  pMemVar,
   pDbgContext,
   pToConcretize,
   pServerSocketFds,
 ) where
 
 import Control.Lens (Lens')
+import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
 import Data.Kind (Type)
 import Data.Map.Strict qualified as Map
@@ -28,6 +33,7 @@ import Data.Parameterized.Some (Some)
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.SimulatorState.Networking qualified as GSN
 import Lang.Crucible.Debug qualified as Dbg
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types (CrucibleType)
 
@@ -49,7 +55,9 @@ type Personality ::
   CrucibleType ->
   Type
 data Personality cExt sym ext ret = Personality
-  { _pDbgContext :: Dbg.Context cExt sym ext ret
+  { _pMemVar :: CS.GlobalVar CLM.Mem
+  -- ^ The global variable holding the LLVM memory model state.
+  , _pDbgContext :: Dbg.Context cExt sym ext ret
   -- ^ The debugger context for interactive debugging.
   , _pToConcretize :: CS.GlobalVar ToConc.ToConcretizeType
   -- ^ Values created during runtime to be passed to the concretization
@@ -61,6 +69,14 @@ data Personality cExt sym ext ret = Personality
   }
 
 makeLenses ''Personality
+
+-- | A class for personality types that contain an LLVM memory model
+-- 'CS.GlobalVar'.
+class HasMemVar p where
+  getMemVar :: p -> CS.GlobalVar CLM.Mem
+
+instance HasMemVar (Personality cExt sym ext ret) where
+  getMemVar = Lens.view pMemVar
 
 -- | A class for personality types that contain a 'Personality' core.
 class HasPersonality p cExt sym ext ret | p -> cExt sym ext ret where

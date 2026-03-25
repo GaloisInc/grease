@@ -130,6 +130,9 @@ instance
   personality = greaseSimulatorState . GMSS.gssPersonality
   {-# INLINE personality #-}
 
+instance GP.HasMemVar (ScreachSimulatorState p sym bak ext arch t ret aty w) where
+  getMemVar = GP.getMemVar . Lens.view greaseSimulatorState
+
 instance ToConc.HasToConcretize (ScreachSimulatorState p sym bak ext arch t ret aty w) where
   toConcretize = Lens.view (greaseSimulatorState . Lens.to ToConc.toConcretize)
 

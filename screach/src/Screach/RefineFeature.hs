@@ -15,7 +15,6 @@ module Screach.RefineFeature (
   RefineResult (..),
   greaseRefineData,
   refineResult,
-  llvmMemVar,
   refineErrMap,
   HasScreachPersonality,
   sdseExecFeatures,
@@ -38,6 +37,7 @@ import Grease.Bug qualified as GR
 import Grease.Concretize qualified as GR
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
+import Grease.Personality qualified as GP
 import Grease.Diagnostic qualified as GrDiag
 import Grease.ErrorDescription (ErrorDescription)
 import Grease.Heuristic qualified as GH
@@ -105,7 +105,6 @@ data SrchRefineData sym bak scope ext aty w = SrchRefineData
   , _refineResult :: Maybe (RefineResult sym ext aty)
   -- ^ At termination if this is a ProveBug we store the CEX
   -- and details about what bug this CEX is for
-  , _llvmMemVar :: CS.GlobalVar CLM.Mem
   }
 
 Lens.makeLenses ''SrchRefineData
@@ -127,6 +126,7 @@ type HasScreachPersonality p sym bak t ext tys ret rtp w =
   , HasRefinmentState p sym bak t ext tys w
   , CR.HasReplayState p p sym ext (CS.RegEntry sym ret)
   , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
+  , GP.HasMemVar p
   )
 
 -- | Take a fresh initial state (from a given refinement) and set it up for replay.
@@ -186,6 +186,7 @@ refineState ::
   , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
   , CB.IsSymInterface sym
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   , 16 CT.<= w
   , CLM.HasPtrWidth w
   , CS.RegEntry sym ret ~ rtp
@@ -205,8 +206,10 @@ refineState ::
   IO
     (C.ExecutionFeatureResult p sym ext rtp)
 refineState bak sla gla refineReplay st config = do
-  let SrchRefineData{_greaseRefineData = rdata, _refineErrMap = errMapRef, _llvmMemVar = memvar} = Lens.view (C.cruciblePersonality . refinementState) (C.execResultContext st)
-  LJ.writeLog gla (GrDiag.RefineDiagnostic (GRDiag.ExecutionResult memvar st))
+  let pers = C.execResultContext st ^. C.cruciblePersonality
+  let SrchRefineData{_greaseRefineData = rdata, _refineErrMap = errMapRef} = Lens.view refinementState pers
+  let memVar = GP.getMemVar pers
+  LJ.writeLog gla (GrDiag.RefineDiagnostic (GRDiag.ExecutionResult memVar st))
   obls <- C.withBackend (C.execResultContext st) $ \bak' ->
     CB.getProofObligations bak'
   errMap <- readIORef errMapRef
@@ -315,6 +318,7 @@ sdseExecFeatures ::
   , C.IsSyntaxExtension ext
   , HasRefinmentState p sym bak scope ext tys w
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   , 16 CT.<= w
   , CLM.HasPtrWidth w
   , MC.MemWidth w

@@ -1194,7 +1194,8 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
         gssRepState <- RR.mkReplayState halloc gssEmpTrace
         let gssPers =
               GP.Personality
-                { GP._pDbgContext = dbgCtx
+                { GP._pMemVar = memVar
+                , GP._pDbgContext = dbgCtx
                 , GP._pToConcretize = toConcVar
                 , GP._pServerSocketFds = Map.empty
                 }
@@ -1210,7 +1211,6 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
               { RFT._greaseRefineData = refineData
               , RFT._refineErrMap = bbMapRef
               , RFT._refineResult = Nothing
-              , RFT._llvmMemVar = memVar
               }
         GM.initState
           bak
@@ -1218,7 +1218,6 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
           extImpl
           execAction
           halloc
-          memVar
           setupMem
           globals1
           initFsOv

@@ -172,6 +172,9 @@ instance
   context = gssPersonality . GP.pDbgContext
   {-# INLINE context #-}
 
+instance GP.HasMemVar (GreaseSimulatorState cExt sym arch ret) where
+  getMemVar = Lens.view (gssPersonality . GP.pMemVar)
+
 instance ToConc.HasToConcretize (GreaseSimulatorState cExt sym arch ret) where
   toConcretize = Lens.view (gssPersonality . GP.pToConcretize)
 
