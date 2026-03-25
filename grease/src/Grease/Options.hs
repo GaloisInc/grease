@@ -15,6 +15,7 @@ module Grease.Options (
   ExtraStackSlots (..),
   ErrorSymbolicFunCalls (..),
   ErrorSymbolicSyscalls (..),
+  PointerConcretization (..),
   SkipInvalidCallAddrs (..),
   SkipUnsupportedRelocs (..),
   BoundsOpts (..),
@@ -109,6 +110,28 @@ newtype ErrorSymbolicSyscalls
   -- See Note [Derive Read/Show instances the with newtype strategy]
   deriving newtype (Enum, Eq, Ord, Read, Show)
 
+-- | Pointer concretization strategy.
+--
+-- * 'PtrConcNone': No concretization (default). Pointers remain fully symbolic.
+--
+-- * 'PtrConcUnsound': Fast concretization (1 solver query). Picks an arbitrary
+--   valid value without checking uniqueness. UNSOUND for verification but useful
+--   for fast exploration and bug finding.
+--
+-- * 'PtrConcUnique': Sound concretization (2 solver queries). Uses Crucible's
+--   @uniquelyConcRegValue@ to check if the pointer has exactly one possible value.
+--   Only concretizes if unique. Sound for verification with constant cost.
+--
+-- * 'PtrConcResolve': Sound concretization with bound narrowing (4-16 solver queries).
+--   Uses macaw's @resolveLLVMPtr@ to process block and offset independently,
+--   performing exponential search to establish tight bounds. Sound for verification.
+data PointerConcretization
+  = PtrConcNone      -- ^ No concretization (default)
+  | PtrConcUnsound   -- ^ Fast concretization, picks arbitrary value (unsound)
+  | PtrConcUnique    -- ^ Sound concretization, checks uniqueness (2 queries)
+  | PtrConcResolve   -- ^ Sound concretization with bound narrowing (4-16 queries)
+  deriving (Bounded, Enum, Eq, Ord, Show)
+
 data UseDebugInfoShapes = NoDebugInfoShapes | ConservativeDebugInfoShapes | PreciseDebugInfoShapes
   deriving (Bounded, Enum, Show)
 
@@ -189,6 +212,8 @@ data SimOpts
   -- ^ Default: 'False'.
   , simErrorSymbolicSyscalls :: ErrorSymbolicSyscalls
   -- ^ Default: 'False'.
+  , simPointerConcretization :: PointerConcretization
+  -- ^ Default: 'PtrConcNone'.
   , simSkipInvalidCallAddrs :: SkipInvalidCallAddrs
   -- ^ Default: 'False'.
   , simSkipUnsupportedRelocs :: SkipUnsupportedRelocs

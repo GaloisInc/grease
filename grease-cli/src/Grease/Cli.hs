@@ -476,6 +476,12 @@ simOpts = do
                     ]
                 )
           )
+  simPointerConcretization <-
+    GCE.enumParserDefault
+      GO.PtrConcNone
+      [ Opt.long "pointer-concretization"
+      , Opt.help "Pointer concretization strategy: ptr-conc-none (default, no concretization), ptr-conc-unsound (fast, 1 query, UNSOUND for verification), ptr-conc-unique (sound, 2 queries), ptr-conc-resolve (sound with bounds, 4-16 queries)"
+      ]
   simSkipInvalidCallAddrs <-
     fmap GO.SkipInvalidCallAddrs $
       Opt.parserOptionGroup callOptionsGroup $

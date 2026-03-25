@@ -15,7 +15,9 @@ import Data.Void (Void)
 import Data.Word (Word64)
 import GHC.Num (Natural)
 import Grease.Cli qualified as GC
+import Grease.Cli.Enum qualified as GCE
 import Grease.Diagnostic.Severity qualified as Sev
+import Grease.Options qualified as Grease.Options
 import Options.Applicative qualified as Opts
 import Screach.AnalysisLoc (
   AnalysisLoc (..),
@@ -206,6 +208,11 @@ conf =
           )
       )
     <*> GC.simDumpCoverageParser
+    <*> GCE.enumParserDefault
+      Grease.Options.PtrConcNone
+      [ Opts.long "pointer-concretization"
+      , Opts.help "Pointer concretization strategy: ptr-conc-none (default, no concretization), ptr-conc-unsound (fast, 1 query, UNSOUND for verification), ptr-conc-unique (sound, 2 queries), ptr-conc-resolve (sound with bounds, 4-16 queries)"
+      ]
 
 -- | Parse a 'Conf.Config'
 cli :: Opts.ParserInfo Conf.Config

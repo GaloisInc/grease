@@ -958,6 +958,7 @@ initCFG ::
   , aty ~ MS.MacawCrucibleRegTypes arch
   , CB.IsSymBackend sym bak
   , sym ~ WEB.ExprBuilder t st fs
+  , fs ~ WEB.Flags fm
   , bak ~ CBO.OnlineBackend solver t st fs
   , WPO.OnlineSolver solver
   , CLM.HasPtrWidth 64
@@ -969,6 +970,7 @@ initCFG ::
   -- | The entrypoint address to start discovery at
   Maybe (MM.MemSegmentOff 64) ->
   bak ->
+  W4.FloatModeRepr fm ->
   GreaseLogAction ->
   ScreachLogAction ->
   MacawCfgConfig arch ->
@@ -995,7 +997,7 @@ initCFG ::
     (CS.ExecState (SP.ScreachSimulatorState p sym bak ext arch t ret aty 64) sym ext (CS.RegEntry sym ret))
 initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
   let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` CCC.cfgHandle entryRegSsaCfg) mbEntryAddr
-   in \bak gla sla macawCfgConfig halloc conf archCtx mbTargetAddr mbStartupOvSomeSsaCfg rtLoc memVar setupHook execAction addrOvs argShapes mbErrMaps -> do
+   in \bak fm gla sla macawCfgConfig halloc conf archCtx mbTargetAddr mbStartupOvSomeSsaCfg rtLoc memVar setupHook execAction addrOvs argShapes mbErrMaps -> do
         let dataLayout = macawDataLayout archCtx
         let rNames = archCtx ^. Arch.archRegNames
             argNames = archCtx ^. Arch.archValueNames
@@ -1038,8 +1040,9 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
               mem
               memModelContents
               relocs
+          let ptrConc = Conf.pointerConcretization conf
           let skipRelocs = GO.SkipUnsupportedRelocs False
-          let memCfg = GM.memConfigInitial bak archCtx ptrTable skipRelocs relocs
+          let memCfg = GM.memConfigInitial bak fm archCtx ptrTable ptrConc skipRelocs relocs
           pure (mem0, memCfg)
         (args, setupMem, setupAnns) <- GS.setup gla bak dataLayout argNames regTypes argShapes initMem
         -- TODO: When adding support for AArch32 and PPC, override the link
@@ -1530,6 +1533,7 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
             entryRegSomeSsaCfg
             mbEntryAddr
             bak
+            fm
             gla
             sla
             macawCfgConfig

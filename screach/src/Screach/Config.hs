@@ -41,4 +41,5 @@ data Config
   , avoidedLocations :: [AnalysisLoc]
   , targetContainingFunction :: Maybe Word64
   , simDumpCoverage :: Maybe FilePath
+  , pointerConcretization :: GO.PointerConcretization
   }

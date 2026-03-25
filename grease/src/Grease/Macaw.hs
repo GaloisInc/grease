@@ -33,6 +33,7 @@ import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader qualified as EL
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Backend qualified as Symbolic
+import Data.Macaw.Symbolic.Concretize qualified as Concretize
 import Data.Macaw.Symbolic.Memory qualified as MSM
 import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
 import Data.Macaw.Types qualified as MT
@@ -71,15 +72,18 @@ import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.Concretize qualified as Conc
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.Intrinsics qualified as CLI
 import Lang.Crucible.LLVM.MemModel qualified as CLM
+import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.LLVM.SymIO qualified as CLSIO
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.GlobalState qualified as CS
 import Stubs.Common qualified as Stubs
 import Stubs.Syscall qualified as Stubs
 import What4.Expr.Builder qualified as WEB
+import What4.FloatMode qualified as W4FM
 import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 import What4.ProgramLoc qualified as WPL
@@ -342,6 +346,66 @@ minimalArgShapes _bak arch mbEntryAddr = do
                 ]
           pure shape
 
+-- | Unsound pointer concretization: get a model and concretize to it (1 query).
+--
+-- Uses Crucible's 'Conc.concRegValue' which makes 1 query to get a model and
+-- concretizes to that value without checking if other values are possible.
+-- This is UNSOUND for verification because it may pick an arbitrary value when
+-- multiple possibilities exist, but is fastest for exploration.
+unsoundConcretizeLLVMPtr ::
+  ( CB.IsSymBackend sym bak
+  , sym ~ WEB.ExprBuilder scope st fs
+  , fs ~ WEB.Flags fm
+  , bak ~ CB.OnlineBackend solver scope st fs
+  , WPO.OnlineSolver solver
+  , 1 C.<= w
+  ) =>
+  bak ->
+  W4FM.FloatModeRepr fm ->
+  CLM.LLVMPtr sym w ->
+  IO (CLM.LLVMPtr sym w)
+unsoundConcretizeLLVMPtr bak fm ptr = do
+  let ptrTy = CLM.LLVMPointerRepr (WI.bvWidth (CLMP.llvmPointerOffset ptr))
+  result <- Conc.concRegValue bak CLMP.concPtrFnMap ptrTy ptr
+  case result of
+    Right concPtr -> do
+      -- For pointers (LLVMPointer = Nat + BV), FloatMode doesn't matter
+      -- since they don't contain floating-point values. We accept any FloatMode
+      -- and pass it through to concToSym.
+      let sym = CB.backendGetSym bak
+      Conc.concToSym sym CLMP.concToSymPtrFnMap fm ptrTy concPtr
+    Left _failure -> pure ptr  -- Fall back to symbolic pointer
+
+-- | Sound unique pointer concretization: check uniqueness atomically (2 queries).
+--
+-- Uses Crucible's 'Conc.uniquelyConcRegValue' which treats the entire (block, offset)
+-- pointer atomically. Makes exactly 2 queries: (1) get a model, (2) add blocking clause
+-- and check if another model exists. If UNSAT, the pointer is unique and gets concretized;
+-- otherwise remains symbolic with original bounds. Sound for verification with constant cost.
+uniquelyConcretizeLLVMPtr ::
+  ( CB.IsSymBackend sym bak
+  , sym ~ WEB.ExprBuilder scope st fs
+  , fs ~ WEB.Flags fm
+  , bak ~ CB.OnlineBackend solver scope st fs
+  , WPO.OnlineSolver solver
+  , 1 C.<= w
+  ) =>
+  bak ->
+  W4FM.FloatModeRepr fm ->
+  CLM.LLVMPtr sym w ->
+  IO (CLM.LLVMPtr sym w)
+uniquelyConcretizeLLVMPtr bak fm ptr = do
+  -- For pointers (LLVMPointer = Nat + BV), FloatMode doesn't matter
+  -- since they don't contain floating-point values. We accept any FloatMode
+  -- and pass it through to concToSym.
+  let ptrTy = CLM.LLVMPointerRepr (WI.bvWidth (CLMP.llvmPointerOffset ptr))
+  result <- Conc.uniquelyConcRegValue bak fm CLMP.concPtrFnMap CLMP.concToSymPtrFnMap ptrTy ptr
+  case result of
+    Right concPtr -> do
+      let sym = CB.backendGetSym bak
+      Conc.concToSym sym CLMP.concToSymPtrFnMap fm ptrTy concPtr
+    Left _failure -> pure ptr  -- Fall back to symbolic pointer
+
 -- | Produce an initial 'Symbolic.MemModelConfig' value that can do everything
 -- @grease@'s Macaw backend needs, with the exception of looking up function or
 -- syscall handles. ('memConfigWithHandles' does that part—see its Haddocks for
@@ -349,12 +413,13 @@ minimalArgShapes _bak arch mbEntryAddr = do
 -- value that this function returns is suitable for overrides that do not need
 -- to look up any handles.
 memConfigInitial ::
-  forall arch sym bak solver scope st fs p.
+  forall arch sym bak solver scope st fs fm p.
   ( C.IsSyntaxExtension (Symbolic.MacawExt arch)
   , CB.IsSymBackend sym bak
   , Symbolic.SymArchConstraints arch
   , WPO.OnlineSolver solver
   , sym ~ WEB.ExprBuilder scope st fs
+  , fs ~ WEB.Flags fm
   , bak ~ CB.OnlineBackend solver scope st fs
   , 16 C.<= MC.ArchAddrWidth arch
   , Show (ArchReloc arch)
@@ -365,18 +430,26 @@ memConfigInitial ::
   , HasCallStack
   ) =>
   bak ->
+  W4FM.FloatModeRepr fm ->
   ArchContext arch ->
   Symbolic.MemPtrTable sym (MC.ArchAddrWidth arch) ->
+  Opts.PointerConcretization ->
   Opts.SkipUnsupportedRelocs ->
   -- | Map of relocation addresses and types
   Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (ArchReloc arch) ->
   Symbolic.MemModelConfig p sym arch CLM.Mem
-memConfigInitial bak arch ptrTable skipUnsupportedRelocs relocs =
+memConfigInitial bak fm arch ptrTable ptrConc skipUnsupportedRelocs relocs =
   lazyMemModelConfig
-    { -- We deviate from the lazy macaw-symbolic memory model's settings and opt
-      -- \*not* to concretize pointers before reads or writes. See gitlab#143 for
-      -- further discussion on this point.
-      Symbolic.resolvePointer = pure
+    { -- By default, we deviate from the lazy macaw-symbolic memory model's settings
+      -- and opt \*not* to concretize pointers before reads or writes. See gitlab#143
+      -- for further discussion on this point. However, this can be enabled with
+      -- the --pointer-concretization flag.
+      Symbolic.resolvePointer =
+        case ptrConc of
+          Opts.PtrConcNone -> pure
+          Opts.PtrConcUnsound -> unsoundConcretizeLLVMPtr bak fm
+          Opts.PtrConcUnique -> uniquelyConcretizeLLVMPtr bak fm
+          Opts.PtrConcResolve -> Concretize.resolveLLVMPtr bak
     , -- Upon each read, we assert that we are not reading from an unsupported
       -- relocation type, throwing a helpful error message otherwise. The
       -- concreteImmutableGlobalRead field of MemModelConfig gives us a convenient

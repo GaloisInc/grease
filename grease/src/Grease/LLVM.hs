@@ -18,7 +18,7 @@ import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.LLVM.SetupHook (SetupHook (SetupHook))
 import Grease.LLVM.SimulatorHooks (greaseLlvmExtImpl)
-import Grease.Options (ErrorSymbolicFunCalls)
+import Grease.Options (ErrorSymbolicFunCalls, PointerConcretization)
 import Grease.Setup (SetupMem (getSetupMem))
 import Grease.SimulatorState.Networking qualified as GSN
 import Grease.Utility (OnlineSolverAndBackend, printHandle)
@@ -55,6 +55,7 @@ initState ::
   p ->
   C.HandleAllocator ->
   ErrorSymbolicFunCalls ->
+  PointerConcretization ->
   SetupMem sym ->
   CLSIO.LLVMFileSystem (ArchWidth arch) ->
   CS.SymGlobalState sym ->
@@ -68,9 +69,9 @@ initState ::
   -- | The CFG of the user-requested entrypoint function.
   C.SomeCFG LLVM argTys retTy ->
   m (CS.ExecState p sym LLVM (CS.RegEntry sym retTy))
-initState bak la llvmExtImpl p halloc errorSymbolicFunCalls mem fs globs (CLSIO.SomeOverrideSim initFsOv) llvmCtx setupHook initArgs mbStartupOvCfg (C.SomeCFG cfg) = do
+initState bak la llvmExtImpl p halloc errorSymbolicFunCalls ptrConc mem fs globs (CLSIO.SomeOverrideSim initFsOv) llvmCtx setupHook initArgs mbStartupOvCfg (C.SomeCFG cfg) = do
   let dl = CLTC.llvmDataLayout (llvmCtx ^. CLT.llvmTypeCtx)
-  let extImpl = greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls llvmExtImpl
+  let extImpl = greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls ptrConc llvmExtImpl
   let bindings =
         CS.FnBindings $
           C.insertHandleMap (C.cfgHandle cfg) (CS.UseCFG cfg $ C.postdomInfo cfg) C.emptyHandleMap

@@ -81,4 +81,17 @@ branching. A strategy can be specified using `--path-strategy`.
 - `dfs` stands for *depth-first search*. In this mode, GREASE never merges
   paths, and explores paths in a depth-first traversal.
 
+## Pointer concretization
+
+GREASE supports different pointer concretization strategies that control how symbolic pointers are handled during memory operations. A strategy can be specified using `--pointer-concretization <mode>`.
+
+Available modes:
+
+- `ptr-conc-none` (default): No concretization. Pointers remain fully symbolic.
+- `ptr-conc-unsound`: Fast concretization (1 solver query). **Warning**: Unsound for verification - may pick arbitrary values. Use only for exploration and bug finding.
+- `ptr-conc-unique`: Sound concretization (2 solver queries). Only concretizes pointers with exactly one possible value.
+- `ptr-conc-resolve`: Sound concretization with bound narrowing (4-16 solver queries). Provides tighter bounds for symbolic pointers.
+
+For more details on pointer concretization and performance characteristics, see the [memory model](./memory-model.md#pointer-concretization) documentation.
+
 <!-- Copyright (c) Galois, Inc. 2024. -->

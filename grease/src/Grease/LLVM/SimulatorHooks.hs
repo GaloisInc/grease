@@ -16,7 +16,7 @@ import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Grease.Diagnostic (Diagnostic (LLVMSimulatorHooksDiagnostic), GreaseLogAction)
 import Grease.LLVM.SimulatorHooks.Diagnostic qualified as Diag
-import Grease.Options (ErrorSymbolicFunCalls, getErrorSymbolicFunCalls)
+import Grease.Options (ErrorSymbolicFunCalls, PointerConcretization, getErrorSymbolicFunCalls)
 import Grease.Panic (panic)
 import Grease.Skip (createSkipOverride)
 import Lang.Crucible.Backend qualified as CB
@@ -30,6 +30,7 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.ExecutionTree (stateGlobals, stateSymInterface)
 import Lang.Crucible.Simulator.GlobalState qualified as CGS
 import Lumberjack qualified as LJ
+import What4.Expr.Builder qualified as WEB
 import What4.FunctionName qualified as WFN
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
@@ -37,8 +38,15 @@ doLog la diag = LJ.writeLog la (LLVMSimulatorHooksDiagnostic diag)
 
 -- | An 'C.ExtensionImpl' with overrides for the semantics of some
 -- @crucible-llvm@ operations.
+--
+-- Note: Pointer concretization is not currently implemented for LLVM mode.
+-- The 'PointerConcretization' parameter is accepted for API compatibility
+-- but is not yet used. LLVM mode will always use the default behavior
+-- (no pointer concretization).
 greaseLlvmExtImpl ::
+  forall sym p scope st fs.
   ( CB.IsSymInterface sym
+  , sym ~ WEB.ExprBuilder scope st fs
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   ) =>
@@ -46,9 +54,10 @@ greaseLlvmExtImpl ::
   C.HandleAllocator ->
   CLLVM.DataLayout ->
   ErrorSymbolicFunCalls ->
+  PointerConcretization ->
   CS.ExtensionImpl p sym LLVM ->
   CS.ExtensionImpl p sym LLVM
-greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls llvmExtImpl =
+greaseLlvmExtImpl la halloc dl errorSymbolicFunCalls _ptrConc llvmExtImpl =
   llvmExtImpl
     { CS.extensionExec =
         extensionExec la halloc dl errorSymbolicFunCalls llvmExtImpl

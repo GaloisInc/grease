@@ -191,6 +191,7 @@ import Text.LLVM qualified as L
 import Text.Read (readMaybe)
 import What4.Expr qualified as WE
 import What4.Expr.Builder qualified as WEB
+import What4.FloatMode qualified as W4FM
 import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
 import What4.ProgramLoc qualified as WPL
@@ -684,6 +685,7 @@ macawMemConfig ::
   C.GlobalVar CLM.Mem ->
   CLSIO.LLVMFileSystem (MC.ArchAddrWidth arch) ->
   bak ->
+  W4FM.FloatModeRepr fm ->
   C.HandleAllocator ->
   MacawCfgConfig arch ->
   Arch.ArchContext arch ->
@@ -693,7 +695,7 @@ macawMemConfig ::
     ( Symbolic.MemModelConfig p sym arch CLM.Mem
     , Map WFN.FunctionName (MacawSExpOverride p sym arch)
     )
-macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable = do
+macawMemConfig la mvar fs bak fm halloc macawCfgConfig archCtx simOpts memPtrTable = do
   let MacawCfgConfig
         { mcLoadOptions = loadOpts
         , mcSymMap = symMap
@@ -702,8 +704,9 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
         , mcRelocs = relocs
         , mcMemory = memory
         } = macawCfgConfig
+  let ptrConc = GO.simPointerConcretization simOpts
   let skipUnsupportedRelocs = GO.simSkipUnsupportedRelocs simOpts
-  let memCfg_ = GM.memConfigInitial bak archCtx memPtrTable skipUnsupportedRelocs relocs
+  let memCfg_ = GM.memConfigInitial bak fm archCtx memPtrTable ptrConc skipUnsupportedRelocs relocs
   let userOvPaths = GO.simOverrides simOpts
   fnOvsMap_ <- mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg_ fs
   fnOvsMap <-
@@ -776,6 +779,7 @@ macawInitState ::
   MacawCfgConfig arch ->
   GO.SimOpts ->
   bak ->
+  W4FM.FloatModeRepr fm ->
   C.GlobalVar CLM.Mem ->
   Symbolic.MemPtrTable sym wptr ->
   ExecutingAddressAction arch ->
@@ -790,7 +794,7 @@ macawInitState ::
   GSIO.InitializedFs sym wptr ->
   GSetup.Args sym ext (Symbolic.MacawCrucibleRegTypes arch) wptr ->
   IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
-macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConcVar setupMem initFs args = do
+macawInitState la archCtx halloc macawCfgConfig simOpts bak fm memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConcVar setupMem initFs args = do
   let sym = CB.backendGetSym bak
   regs <- liftIO (overrideRegs archCtx sym (GSetup.argVals args))
   EP.EntrypointCfgs
@@ -800,7 +804,7 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
     pure entrypointCfgsSsa
   let mbStartupOvSsaCfg = EP.startupOvCfg <$> mbStartupOvSsa
   let fs = GSIO.initFs initFs
-  (memCfg, fnOvsMap) <- macawMemConfig la memVar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable
+  (memCfg, fnOvsMap) <- macawMemConfig la memVar fs bak fm halloc macawCfgConfig archCtx simOpts memPtrTable
   evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @_ (archCtx ^. Arch.archVals) sym pure
   let macawExtImpl = Symbolic.macawExtensions evalFn memVar memCfg
   let ssaCfgHdl = C.cfgHandle ssaCfg
@@ -883,7 +887,7 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallbac
     memVar
     heuristics
     execFeats
-    (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
+    (macawInitState la archCtx halloc macawCfgConfig simOpts bak fm memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
     `X.catches` [ X.Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
                     pure $ GRef.ProveCantRefine $ H.MissingSemantics $ GUtil.pshow ex
                 , X.Handler
@@ -1614,6 +1618,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
             p
             halloc
             (GO.simErrorSymbolicFunCalls simOpts)
+            (GO.simPointerConcretization simOpts)
             setupMem
             -- TODO: just take the whole initFs
             (GSIO.initFs initFs)

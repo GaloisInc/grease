@@ -113,6 +113,38 @@ Be mindful of the following limitations of GREASE's model of the heap:
   allocations, GREASE cannot model events that would arise after certain types
   of heap-related exploits (e.g., buffer overflows).
 
+## Pointer Concretization
+
+By default, GREASE keeps all pointers fully symbolic throughout execution. However, you can enable pointer concretization to potentially improve performance at the cost of soundness (for some modes).
+
+The `--pointer-concretization <mode>` flag controls this behavior:
+
+- **`ptr-conc-none`** (default): No concretization. Pointers remain fully symbolic. This is the most conservative approach and preserves verification soundness.
+
+- **`ptr-conc-unsound`**: Fast concretization using Crucible’s `concRegValue`. Makes 1 query to get a model and concretizes to that value. **Unsound for verification** - may pick arbitrary value when multiple possibilities exist. Useful for fast exploration and bug finding.
+
+- **`ptr-conc-unique`**: Sound concretization using Crucible’s `uniquelyConcRegValue`. Treats the entire pointer (block, offset) atomically. Makes 2 queries: get model, then verify uniqueness with blocking clause. Only concretizes if pointer has exactly one possible value. **Sound for verification** with constant cost.
+
+- **`ptr-conc-resolve`**: Sound concretization with bound narrowing using macaw’s `resolveLLVMPtr`. Processes block ID and offset independently. For each component: checks uniqueness (2 queries), and if symbolic, performs exponential/binary search to narrow bounds (~6 additional queries for 64-bit). Total: 4-16 queries. **Sound for verification** because only concretizes components proven unique, plus provides tighter bounds for symbolic components.
+
+### Performance Implications
+
+Performance varies by mode and pointer characteristics:
+
+| Mode | Solver Queries per Memory Operation | Soundness | Recommended Use Case |
+|------|-------------------------------------|-----------|---------------------|
+| `ptr-conc-none` | 0 | Sound | Default, verification |
+| `ptr-conc-unsound` | 1 | **Unsound** | Fastest exploration, bug finding |
+| `ptr-conc-unique` | 2 | Sound | Lightweight sound concretization |
+| `ptr-conc-resolve` | 4-16 | Sound | Sound concretization + bound narrowing |
+
+Relative performance:
+- `unsound` is fastest but may produce spurious counterexamples (unsound)
+- `unique` is 2× slower than `unsound` but sound
+- `resolve` is 2-8× slower than `unique` depending on how many pointers are symbolic
+- `resolve` provides tighter bounds which can benefit subsequent operations
+- For verification, use `none`, `unique`, or `resolve` (never `unsound`)
+
 [^bv]: Non-pointer bitvectors (e.g. the 5 in `int x = 5;`) are represented the same way as pointers, but with a block identifier that’s concretely 0.
 
 [^spilled]: The number of arguments a function must have in order for it to
