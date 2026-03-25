@@ -24,6 +24,7 @@ import Data.Set qualified as Set
 import Grease.LLVM.Overrides.Builtin (libcOverrides)
 import Grease.Macaw.Overrides.Defs (customStubsOverrides)
 import Grease.Macaw.Overrides.Networking (networkOverrides)
+import Grease.Macaw.Overrides.Sscanf (sscanfFamilyOverrides)
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
 import Grease.Utility (llvmOverrideName)
 import Lang.Crucible.Backend qualified as CB
@@ -56,14 +57,19 @@ builtinStubsOverrides ::
   C.GlobalVar CLM.Mem ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
   CLSIO.LLVMFileSystem (MC.ArchAddrWidth arch) ->
+  MC.Endianness ->
   Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
-builtinStubsOverrides mvar mmConf fs =
-  customOvs <> fromLlvmOvs <> networkingOvs
+builtinStubsOverrides mvar mmConf fs endian =
+  customOvs <> sscanfOvs <> fromLlvmOvs <> networkingOvs
  where
   -- Custom overrides that are only applicable at the machine code level (and
   -- therefore do not belong in crucible-llvm).
   customOvs :: Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
   customOvs = Seq.fromList (customStubsOverrides mvar mmConf)
+
+  -- Overrides for the sscanf family of functions.
+  sscanfOvs :: Seq.Seq (Stubs.SomeFunctionOverride p sym arch)
+  sscanfOvs = sscanfFamilyOverrides mvar mmConf endian
 
   -- Overrides that arise from crucible-llvm.
   fromLlvmOvs :: Seq.Seq (Stubs.SomeFunctionOverride p sym arch)

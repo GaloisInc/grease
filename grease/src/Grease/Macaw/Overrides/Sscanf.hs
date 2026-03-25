@@ -5,16 +5,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
 
--- | @screach@-specific function overrides for the @sscanf@ family of functions.
-module Screach.FunctionOverride.Sscanf (
+-- | Function overrides for the @sscanf@ family of functions.
+module Grease.Macaw.Overrides.Sscanf (
   -- * Overrides
   sscanfFamilyOverrides,
 ) where
 
 import Control.Applicative (Alternative (many))
-import Control.Lens (to, (^.))
 import Control.Monad (MonadPlus)
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State qualified as State
 import Control.Monad.Trans qualified as Trans
 import Data.Attoparsec.ByteString.Char8 qualified as Atto
@@ -23,14 +22,13 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
 import Data.Char (chr, isSpace, ord)
 import Data.Kind (Type)
-import Data.Macaw.Architecture.Info qualified as MAI
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as MS
 import Data.Macaw.Symbolic.MemOps qualified as MSMO
 import Data.Maybe (fromMaybe)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.NatRepr qualified as NatRepr
-import Data.Parameterized.Some (Some (..))
+import Data.Parameterized.Some (Some (Some))
 import Data.Sequence qualified as Seq
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -38,15 +36,14 @@ import Data.Vector qualified as Vec
 import Data.Void (Void)
 import Data.Word (Word8)
 import GHC.Stack (HasCallStack, callStack)
-import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Memory qualified as GMM
+import Grease.Panic (panic)
 import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as CT
 import Numeric.Natural (Natural)
-import Screach.Panic (panic)
 import Stubs.FunctionOverride qualified as StubsF
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Byte qualified as TMB
@@ -67,16 +64,13 @@ sscanfFamilyOverrides ::
   ) =>
   CS.GlobalVar CLM.Mem ->
   MS.MemModelConfig p sym arch CLM.Mem ->
-  Arch.ArchContext arch ->
+  MC.Endianness ->
   Seq.Seq (StubsF.SomeFunctionOverride p sym arch)
-sscanfFamilyOverrides memVar mmConf archCtx =
+sscanfFamilyOverrides memVar mmConf endian =
   Seq.fromList
     [ StubsF.SomeFunctionOverride $ buildSscanfOverride memVar mmConf endian
     , StubsF.SomeFunctionOverride $ buildIsoC99SscanfOverride memVar mmConf endian
     ]
- where
-  endian :: MC.Endianness
-  endian = archCtx ^. Arch.archInfo . to MAI.archEndianness
 
 -- | Build an override for the @sscanf@ function.
 buildSscanfOverride ::
@@ -159,23 +153,8 @@ buildSscanfLikeOverride name memVar mmConf endian =
         args
 
 -- | Override for the @sscanf@ function (or a similar function with the same type
--- signature). This override is quite incomplete, and although it works well
--- enough for certain use cases, it has a variety of limitations:
---
--- * Both the input string and the format string must be concrete.
---
--- * Only a subset of conversion types and length modifiers are supported at
---   present. Basic conversion types like @%d@, @%c@, @%s@, etc. are supported,
---   but more exotic conversion types may not work as expected.
---
--- * The @%[...]@ conversion type is partially supported. It is capable of
---   expressing a set of characters to include (e.g., @%[abc]@) or to exclude
---   (e.g., @[^abc]@). It does not support expressing ranges or characters,
---   however (e.g., @[0-9a-z]@). It also does not support sets that include the
---   @]@ character (e.g., @[]]@).
---
--- * At present, the maximum width is only respected for string-like conversions
---   (e.g., @%5s@ or @%5[^,]@).
+-- signature). See the discussion of @sscanf@ in @doc\/builtins.md@ for a
+-- description of the limitations of this override.
 callSscanf ::
   ( CB.IsSymBackend sym bak
   , OnlineSolverAndBackend solver sym bak scope st fm

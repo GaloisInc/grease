@@ -142,6 +142,7 @@ library
   build-depends:
     -- Hackage dependencies
       aeson ^>= 2.2
+    , attoparsec ^>= 0.14
     , bv-sized ^>= 1.0.6
     , bytestring ^>= { 0.11.5, 0.12.1 }
     , containers ^>= { 0.6.7, 0.7 }
@@ -236,6 +237,7 @@ library
     Grease.Macaw.Overrides.Address
     Grease.Macaw.Overrides.Builtin
     Grease.Macaw.Overrides.Networking
+    Grease.Macaw.Overrides.Sscanf
     Grease.Macaw.Overrides.SExp
     Grease.Macaw.PLT
     Grease.Macaw.RegName
