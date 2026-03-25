@@ -12,6 +12,7 @@
 module Grease.Personality (
   -- * @Personality@
   Personality (..),
+  mkPersonality,
   HasPersonality (..),
 
   -- * @HasMemVar@
@@ -69,6 +70,21 @@ data Personality cExt sym ext ret = Personality
   }
 
 makeLenses ''Personality
+
+-- | Create a 'Personality' with the given configuration. The server socket
+-- file descriptor map is initialized to 'Map.empty'.
+mkPersonality ::
+  CS.GlobalVar CLM.Mem ->
+  Dbg.Context cExt sym ext ret ->
+  CS.GlobalVar ToConc.ToConcretizeType ->
+  Personality cExt sym ext ret
+mkPersonality memVar dbgCtx toConc =
+  Personality
+    { _pMemVar = memVar
+    , _pDbgContext = dbgCtx
+    , _pToConcretize = toConc
+    , _pServerSocketFds = Map.empty
+    }
 
 -- | A class for personality types that contain an LLVM memory model
 -- 'CS.GlobalVar'.
