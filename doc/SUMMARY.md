@@ -21,7 +21,6 @@
 - [Limitations](./limitations.md)
 - [Memory model](./memory-model.md)
 - [Refinement](./refinement.md)
-- [Requirements](./requirements.md)
 - [Rust programs](./rust-programs.md)
 - [S-expression programs](./sexp-progs.md)
 - [Shape DSL](./shape-dsl.md)

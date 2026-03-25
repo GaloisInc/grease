@@ -15,7 +15,6 @@ module Grease.Macaw.Arch (
   ArchContext (..),
   archGetIP,
   archInfo,
-  archPcReg,
   archVals,
   archRelocSupported,
   archIntegerArguments,
@@ -51,7 +50,6 @@ import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as Symbolic
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Memory qualified as SymbolicMemory
-import Data.Macaw.Types (BVType)
 import Data.Map (Map)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.TraversableFC (fmapFC)
@@ -109,7 +107,6 @@ data ArchContext arch = ArchContext
       CB.IsSymInterface sym =>
       ArchRegs sym arch ->
       IO (WI.SymExpr sym (WI.BaseBVType (MC.ArchAddrWidth arch)))
-  , _archPcReg :: MC.ArchReg arch (BVType (MC.ArchAddrWidth arch))
   , _archVals :: Symbolic.GenArchVals Symbolic.LLVMMemory arch
   , -- Check if @grease@ supports a particular relocation type. This should
     -- return 'Nothing' if it is unsupported and 'Just' if it is supported.
@@ -243,8 +240,7 @@ data ArchContext arch = ArchContext
   -- replace them with the 'BV.BV' values corresponding to each register's
   -- 'RegName'. Currently, this is only used to ensure that the initial value
   -- in certain architectures' link register (which stores the return address)
-  -- is a value within the @.text@ section, which helps satisfy @grease@'s
-  -- @in-text@ requirement.
+  -- is a value within the @.text@ section.
   , _archOffsetStackPointerPostCall ::
       forall sym p ext rtp a r.
       CB.IsSymInterface sym =>

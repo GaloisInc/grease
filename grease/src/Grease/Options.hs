@@ -33,7 +33,6 @@ import Data.Word (Word64)
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint (Entrypoint)
 import Grease.Macaw.PLT (PltStub)
-import Grease.Requirement (Requirement)
 import Grease.Shape.Pointer (ExtraStackSlots (ExtraStackSlots))
 import Grease.Shape.Simple (SimpleShape)
 import Grease.Solver (Solver)
@@ -216,8 +215,6 @@ data SimOpts
   -- @grease@ discovers via heuristics.
   , simProfileTo :: Maybe FilePath
   -- ^ Optional directory to write profiler-related files to.
-  , simReqs :: [Requirement]
-  -- ^ Requirements to check
   , simRust :: Bool
   -- ^ Use simulator settings that are more likely to work for Rust programs
   , simStackArgumentSlots :: ExtraStackSlots

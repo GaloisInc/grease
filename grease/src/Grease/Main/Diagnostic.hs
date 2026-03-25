@@ -12,16 +12,13 @@ module Grease.Main.Diagnostic (
 ) where
 
 import Data.LLVM.BitCode (ParseWarning, ppParseWarnings)
-import Data.List qualified as List
 import Data.Macaw.Memory qualified as MM
 import Data.Parameterized.Context qualified as Ctx
 import Data.Sequence (Seq)
-import Data.Text qualified as Text
 import Data.Void (Void, absurd)
 import Grease.Diagnostic.Severity (Severity (Debug, Error, Info, Warn))
 import Grease.Entrypoint (Entrypoint, EntrypointLocation)
 import Grease.Output (BatchStatus)
-import Grease.Requirement (Requirement, displayReq)
 import Grease.Shape (ArgShapes (ArgShapes), ExtShape, PrettyExt)
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Grease.Shape.Print qualified as ShapePP
@@ -69,12 +66,6 @@ data Diagnostic where
     Diagnostic
   NoEntrypoints ::
     Diagnostic
-  SimulationTestingRequirements ::
-    [Requirement] -> Diagnostic
-  SimulationAllGoalsPassed ::
-    Diagnostic
-  SimulationGoalsFailed ::
-    Diagnostic
   TargetCFG ::
     C.PrettyExt ext => C.CFG ext blocks args ret -> Diagnostic
   TypeContextError ::
@@ -121,16 +112,6 @@ instance PP.Pretty Diagnostic where
         "Malformed LLVM module: " <> fmap absurd err
       NoEntrypoints ->
         "No entry points specified, analyzing all known functions."
-      SimulationTestingRequirements rs ->
-        if List.null rs
-          then "Not testing any requirements beyond memory safety"
-          else
-            PP.pretty $
-              "Testing requirements: " <> Text.intercalate ", " (List.map displayReq rs)
-      SimulationAllGoalsPassed ->
-        "All goals passed (with assertions added)!"
-      SimulationGoalsFailed ->
-        "Failed to prove goals (with assertions added)"
       TargetCFG cfg ->
         PP.nest 2 $
           PP.vcat
@@ -161,9 +142,6 @@ severity =
     MalformedElf{} -> Error
     MalformedLlvm{} -> Error
     NoEntrypoints -> Warn
-    SimulationTestingRequirements{} -> Debug
-    SimulationAllGoalsPassed{} -> Info
-    SimulationGoalsFailed{} -> Info
     TargetCFG{} -> Debug
     TypeContextError{} -> Warn
     Unsupported{} -> Error

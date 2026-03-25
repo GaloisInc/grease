@@ -1,8 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
-// A variant of the tests/prop/in-text/pos/func_ptr/test.c test case where
-// grease is invoked with --error-symbolic-fun-calls, which causes grease to
-// interpret the call to the symbolif function pointer as a bug.
+// A test case where grease is invoked with --error-symbolic-fun-calls, which
+// causes grease to interpret the call to the symbolic function pointer as a bug.
 
 // all: flags {"--symbol", "test"}
 // all: flags {"--error-symbolic-fun-calls"}

@@ -341,7 +341,6 @@ main = do
         , "llvm"
         , "llvm-bc"
         , "ppc32"
-        , "prop"
         , "refine"
         , "sanity"
         , "ux"

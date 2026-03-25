@@ -1,7 +1,7 @@
 ## ###
 # Galois, Inc.
 ##
-# GREASE Requirements Analysis
+# GREASE Analysis
 #
 # This script invokes the `grease` program analysis tool.
 # - You may optionally specify the path to your `grease` binary by setting the GHIDRA_GREASE_BIN environment variable. If not set, this script will prompt for the path to your `grease` binary.
@@ -61,14 +61,6 @@ from ghidra.app.util.opinion import ElfLoader
 
 
 ### CONSTANTS ###
-
-# List of optional requirements a user may selectively enable.
-# If this list is empty, the optional-requirement dialog will be skipped.
-#
-# Format: list of tuples, each tuple contains two elements:
-# 1. a string that is matched by Grease.Requirement reqParser
-# 2. a string description for the requirement to be displayed to the Ghidra user
-OPTIONAL_REQUIREMENTS = []
 
 LOOP_BOUND = 512
 MAX_ITERS = 512
@@ -187,8 +179,7 @@ class GreaseResult(object):
 
     A GreaseResult is some specific piece of information that is associated with
     a specific point in the target program. Running Grease on a single function
-    may produce multiple GreaseResult items (e.g. multiple requirement
-    violations).
+    may produce multiple GreaseResult items (e.g. multiple violations).
 
     The purpose of this class is to encapsulate the relevant data, and
     descendent classes should provide their own renderInGhidra functionality to
@@ -298,8 +289,8 @@ class GreaseIncompleteFunction(GreaseResult):
 
     GREASE may still have some other results to report on instructions in this
     function, but we mark this function as incomplete because there may be e.g.
-    other requirement violations present that GREASE doesn't find or report
-    because it couldn't fully symbolically execute this function.
+    other violations present that GREASE doesn't find or report because it
+    couldn't fully symbolically execute this function.
     """
 
     def __init__(self, location, msg, details):
@@ -541,34 +532,6 @@ def parseBatchCouldNotInfer(fnEntryPoint, greaseLoadOffset, failedPredicateJSONs
     return results
 
 
-def parseBatchChecks(fnEntryPoint, greaseLoadOffset, mapReqStatusJSON):
-    results = [GreaseCompleteFunction(fn.getEntryPoint())]
-    for [req, reqResult] in mapReqStatusJSON:
-        if reqResult["tag"] == "CheckAssertionFailure":
-            for failedPredicate in reqResult["contents"]:
-                msg = "Requirement {} violated: {}".format(
-                    req, failedPredicate["_failedPredicateMessage"].partition("\n")[-1]
-                )
-                details = failedPredicate["_failedPredicateMessage"].split("\n")
-                try:
-                    location = greaseOffsetToGhidraAddress(
-                        greaseLoadOffset,
-                        parseGreaseLocation(
-                            failedPredicate["_failedPredicateLocation"]
-                        ),
-                    )
-                except ValueError:
-                    # if we don't have a location, just report at start of function
-                    location = fnEntryPoint
-                    details = [
-                        "In this function, at {}:".format(
-                            failedPredicate["_failedPredicateLocation"]
-                        )
-                    ] + details
-                results.append(GreaseInstructionResult(req, location, msg, details))
-    return results
-
-
 def parseBatchCantRefine(fnEntryPoint, greaseLoadOffset, cantRefineJSON):
     assert cantRefineJSON["tag"] in ["MissingFunc", "MissingSemantics", "MutableGlobal"]
     return [
@@ -601,10 +564,8 @@ def parseGreaseResults(fnEntryPoint, greaseLoadOffset, batchStatusJSON):
                 batchStatusJSON["contents"][1].split("\n"),
             )
         ]
-    elif tag == "BatchChecks":
-        return parseBatchChecks(
-            fnEntryPoint, greaseLoadOffset, batchStatusJSON["contents"]
-        )
+    elif tag == "BatchSuccess":
+        return [GreaseCompleteFunction(fnEntryPoint)]
     elif tag == "BatchCantRefine":
         return parseBatchCantRefine(
             fnEntryPoint, greaseLoadOffset, batchStatusJSON["contents"]
@@ -733,7 +694,6 @@ def getGhidraInitialPrecondition(fn):
 
 def executeGrease(
     greaseBin,
-    requirements,
     greaseOverrides,
     filename,
     isRust,
@@ -754,8 +714,6 @@ def executeGrease(
         "--timeout",
         str(TIMEOUT_MS),
     ]
-    for r in requirements:
-        args.extend(["--req", r])
     for override in greaseOverrides:
         args.extend(["--overrides", override])
     if isRust:
@@ -772,13 +730,12 @@ def executeGrease(
     return (p.returncode, stdout, stderr)
 
 
-def runGrease(greaseBin, requirements, greaseOverrides, filename, isRust, fn):
+def runGrease(greaseBin, greaseOverrides, filename, isRust, fn):
     """Invoke GREASE on the binary+function, return list of GreaseResults."""
     greaseFunctionStart = getGreaseFunctionStart(fn)
     initialPreconditionFile = getGhidraInitialPrecondition(fn)
     (returncode, stdout, stderr) = executeGrease(
         greaseBin,
-        requirements,
         greaseOverrides,
         filename,
         isRust,
@@ -887,23 +844,12 @@ try:
                 greaseOverrides.append(os.path.join(root, filename))
     print("==> GREASE Override Files: {}".format(greaseOverrides))
 
-    requirements = []
-    if OPTIONAL_REQUIREMENTS:
-        requirements = askChoices(
-            "Select Optional Requirements",
-            "Select Optional Requirements to check. (NOTE: memory safety checks are always performed)",
-            [req for (req, _) in OPTIONAL_REQUIREMENTS],
-            ["{}: {}".format(req, desc) for (req, desc) in OPTIONAL_REQUIREMENTS],
-        )
-        print("==> GREASE Optional Requirements Selected: {}".format(requirements))
-
     isRust = isRustProgram(currentProgram)
 
     for fn in userSelectedFunctions():
         print("==> GREASE analyzing function '{}'...".format(fn))
         results = runGrease(
             greaseBin,
-            requirements,
             greaseOverrides,
             currentProgram.getExecutablePath(),
             isRust,

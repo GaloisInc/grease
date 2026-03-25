@@ -399,8 +399,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
     -- As a simple heuristic for whether a function is worthy of
     -- exploration, we check if the segment that the address inhabits is
     -- executable. This check is important to prevent simulating functions
-    -- that, say, inhabit the .data section (which is common for binaries
-    -- that fail the `in-text` requirement), as Macaw will simply crash
+    -- that, say, inhabit the .data section, as Macaw will simply crash
     -- when simulating them.
     | Discovery.isExecutableSegOff funcAddrOff = do
         fixedAddr <- (arch ^. Arch.archPCFixup) bak regs funcAddrOff

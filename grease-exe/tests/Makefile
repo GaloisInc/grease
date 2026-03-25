@@ -33,7 +33,6 @@ CFLAGS_STATIC = -static -no-pie
 
 DIRS = \
   $(shell find feat/ -mindepth 1 -maxdepth 1 -type d) \
-  $(shell find prop/ -mindepth 3 -maxdepth 3 -type d) \
   $(shell feat/ refine/ sanity/ -mindepth 2 -maxdepth 2 -type d)
 
 # These test cases must dynamically link against libc, so we avoid passing
@@ -41,7 +40,6 @@ DIRS = \
 # -nostartfiles unless CFLAGS_NO_LIBS is also given, so we cannot provide
 # x86-64 versions of these test cases just yet.
 DYNAMIC_DIRS = \
-  prop/no-mprotect/pos/mprotect \
   refine/bug/assert_false \
   refine/bug/networking \
   refine/pos/excluded_overrides \
