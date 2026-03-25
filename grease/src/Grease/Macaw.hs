@@ -379,14 +379,14 @@ memConfigInitial bak arch ptrTable skipUnsupportedRelocs relocs =
       Symbolic.resolvePointer = pure
     , -- Upon each read, we assert that we are not reading from an unsupported
       -- relocation type, throwing a helpful error message otherwise. The
-      -- concreteImmutableGlobalRead field of MemModelConfig gives us a convenient
+      -- concreteUnmutatedGlobalRead field of MemModelConfig gives us a convenient
       -- way to hook each read without needing to re-implement all of the logic
       -- for MacawReadMem/MacawCondReadMem, which is quite involved.
-      Symbolic.concreteImmutableGlobalRead = \memRep ptr -> do
+      Symbolic.concreteUnmutatedGlobalRead = \p memRep ptr -> do
         Monad.unless (Opts.getSkipUnsupportedRelocs skipUnsupportedRelocs) $ do
           loc <- WI.getCurrentProgramLoc (CB.backendGetSym bak)
           assertRelocSupported arch loc ptr relocs
-        Symbolic.concreteImmutableGlobalRead lazyMemModelConfig memRep ptr
+        Symbolic.concreteUnmutatedGlobalRead lazyMemModelConfig p memRep ptr
     }
  where
   lazyMemModelConfig = Symbolic.memModelConfig bak ptrTable
