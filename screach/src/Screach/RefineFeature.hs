@@ -37,10 +37,10 @@ import Grease.Bug qualified as GR
 import Grease.Concretize qualified as GR
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
-import Grease.Personality qualified as GP
 import Grease.Diagnostic qualified as GrDiag
 import Grease.ErrorDescription (ErrorDescription)
 import Grease.Heuristic qualified as GH
+import Grease.Personality qualified as GP
 import Grease.Refine qualified as GR
 import Grease.Refine.Diagnostic qualified as GRDiag
 import Grease.Scheduler qualified as Sched

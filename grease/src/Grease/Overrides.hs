@@ -15,6 +15,7 @@ module Grease.Overrides (
 ) where
 
 import Data.List qualified as List
+import Grease.Personality qualified as GP
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Simulator qualified as CS
@@ -27,6 +28,7 @@ newtype CantResolveOverrideCallback sym arch
   = CantResolveOverrideCallback
   { runCantResolveOverrideCallback ::
       forall p args ret rtp as r.
+      GP.HasMemVar p =>
       WFN.FunctionName ->
       C.FnHandle args ret ->
       CS.OverrideSim p sym arch rtp as r ()

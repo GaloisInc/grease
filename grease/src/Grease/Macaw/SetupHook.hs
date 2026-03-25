@@ -28,6 +28,7 @@ import Grease.Macaw.Overrides.Address qualified as GMOA
 import Grease.Macaw.SetupHook.Diagnostic qualified as Diag
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
 import Grease.Overrides (CantResolveOverrideCallback)
+import Grease.Personality qualified as GP
 import Grease.Skip (createSkipOverride)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as LCB
@@ -64,9 +65,9 @@ newtype SetupHook sym arch
         , CLM.HasLLVMAnn sym
         , HasGreaseSimulatorState p cExt sym arch ret
         , HasToConcretize p
+        , GP.HasMemVar p
         ) =>
         bak ->
-        CS.GlobalVar CLM.Mem ->
         -- Map of names of overridden functions to their implementations
         Map.Map WFN.FunctionName (GMO.MacawSExpOverride p sym arch) ->
         CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
@@ -95,6 +96,7 @@ registerOverrideForwardDeclarations ::
   , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ LCB.OnlineBackend solver scope st fs
   , HasToConcretize p
+  , GP.HasMemVar p
   ) =>
   bak ->
   -- | What to do when a forward declaration cannot be resolved.
@@ -121,6 +123,7 @@ registerOverrideHandles ::
   , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ LCB.OnlineBackend solver scope st fs
   , HasToConcretize p
+  , GP.HasMemVar p
   ) =>
   bak ->
   -- | What to do when a forward declaration cannot be resolved.
@@ -153,6 +156,7 @@ registerSyntaxForwardDeclarations ::
   , CB.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , HasToConcretize p
+  , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
@@ -160,13 +164,12 @@ registerSyntaxForwardDeclarations ::
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   DataLayout ->
-  CS.GlobalVar CLM.Mem ->
   -- | Map of names of overridden functions to their implementations
   Map.Map WFN.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
-registerSyntaxForwardDeclarations bak la errCb dl mvar funOvs prog =
-  GMO.registerMacawSexpProgForwardDeclarations bak la dl mvar errCb funOvs (CSyn.parsedProgForwardDecs prog)
+registerSyntaxForwardDeclarations bak la errCb dl funOvs prog =
+  GMO.registerMacawSexpProgForwardDeclarations bak la dl errCb funOvs (CSyn.parsedProgForwardDecs prog)
 
 -- | Register all handles from a an S-expression program ('CSyn.ParsedProgram').
 --
@@ -180,6 +183,7 @@ registerSyntaxHandles ::
   , CB.IsSymBackend sym bak
   , WPO.OnlineSolver solver
   , HasToConcretize p
+  , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
@@ -187,14 +191,13 @@ registerSyntaxHandles ::
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (DMS.MacawExt arch) ->
   DataLayout ->
-  CS.GlobalVar CLM.Mem ->
   -- | Map of names of overridden functions to their implementations
   Map.Map WFN.FunctionName (GMO.MacawSExpOverride p sym arch) ->
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   CS.OverrideSim p sym (DMS.MacawExt arch) rtp a r ()
-registerSyntaxHandles bak la errCb dl mvar funOvs prog = do
+registerSyntaxHandles bak la errCb dl funOvs prog = do
   registerSyntaxCfgs prog
-  registerSyntaxForwardDeclarations bak la errCb dl mvar funOvs prog
+  registerSyntaxForwardDeclarations bak la errCb dl funOvs prog
 
 -- | A 'SetupHook' for Macaw CFGs from S-expression programs.
 syntaxSetupHook ::
@@ -212,9 +215,9 @@ syntaxSetupHook ::
   CSyn.ParsedProgram (DMS.MacawExt arch) ->
   SetupHook sym arch
 syntaxSetupHook la errCb dl skipFuns cfgs prog =
-  SetupHook $ \bak mvar funOvs -> do
+  SetupHook $ \bak funOvs -> do
     registerOverrideHandles bak errCb funOvs
-    registerSyntaxHandles bak la errCb dl mvar funOvs prog
+    registerSyntaxHandles bak la errCb dl funOvs prog
 
     -- Redirect function handles resulting from parsing forward declarations
     -- (`declare`s) to their implementations.
@@ -222,13 +225,13 @@ syntaxSetupHook la errCb dl skipFuns cfgs prog =
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
         GMO.registerMacawOvForwardDeclarations bak funOvs errCb startupOvFwdDecs
 
-    registerSkipOverrides mvar funOvs
+    registerSkipOverrides funOvs
  where
-  registerSkipOverrides mvar funOvs = do
+  registerSkipOverrides funOvs = do
     let maybeSkipHandle nm hdl =
           Monad.when (Set.member nm skipFuns) $ do
             let ret = CFH.handleReturnType hdl
-            case createSkipOverride la dl mvar nm ret of
+            case createSkipOverride la dl nm ret of
               Left{} -> doLog la (Diag.CantSkip nm)
               Right ov -> CS.bindFnHandle hdl (CS.UseOverride ov)
 
@@ -273,7 +276,7 @@ binSetupHook ::
   Map.Map GE.Entrypoint (GE.MacawEntrypointCfgs arch) ->
   SetupHook sym arch
 binSetupHook errCb addrOvs cfgs =
-  SetupHook $ \bak _mvar funOvs -> do
+  SetupHook $ \bak funOvs -> do
     GMOA.registerAddressOverrideHandles bak errCb funOvs addrOvs
     Monad.forM_ (Map.elems cfgs) $ \(GE.MacawEntrypointCfgs entrypointCfgs _) ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->

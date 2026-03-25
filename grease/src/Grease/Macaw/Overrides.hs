@@ -43,6 +43,7 @@ import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride), Macaw
 import Grease.Macaw.Overrides.SExp qualified as GMOS
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, MacawOverride)
 import Grease.Overrides (CantResolveOverrideCallback (CantResolveOverrideCallback))
+import Grease.Personality qualified as GP
 import Grease.Skip (registerSkipOverride)
 import Grease.Syntax.Overrides qualified as SExp
 import Grease.Syntax.Overrides.Concretize qualified as Conc
@@ -75,13 +76,13 @@ macawOverride ::
     WPO.OnlineSolver solver
   , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
+  , GP.HasMemVar p
   ) =>
   bak ->
-  C.GlobalVar CLM.Mem ->
   ArchContext arch ->
   Stubs.FunctionOverride p sym args arch ret ->
   MacawOverride p sym arch
-macawOverride bak mvar archCtx fnOv =
+macawOverride bak archCtx fnOv =
   CS.mkOverride' (Stubs.functionName fnOv) regsRepr ov
  where
   genArchVals :: Symbolic.GenArchVals Symbolic.LLVMMemory arch
@@ -101,6 +102,8 @@ macawOverride bak mvar archCtx fnOv =
       (Symbolic.ArchRegStruct arch)
       (CS.RegValue sym (Symbolic.ArchRegStruct arch))
   ov = do
+    ctx <- CS.getContext
+    let mvar = GP.getMemVar (ctx ^. CS.cruciblePersonality)
     mem <- CS.readGlobal mvar
 
     -- Construct the arguments
@@ -156,6 +159,7 @@ mkMacawOverrideMap ::
   , Symbolic.SymArchConstraints arch
   , sym ~ WEB.ExprBuilder scope st fs
   , bak ~ C.OnlineBackend solver scope st fs
+  , GP.HasMemVar p
   ) =>
   bak ->
   -- | The built-in overrides.
@@ -163,10 +167,9 @@ mkMacawOverrideMap ::
   -- | The paths of each user-supplied override file.
   [FilePath] ->
   C.HandleAllocator ->
-  C.GlobalVar CLM.Mem ->
   ArchContext arch ->
   IO (Either MacawSExpOverrideError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
-mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
+mkMacawOverrideMap bak builtinOvs userOvPaths halloc archCtx = do
   userOvsResult <- loadOverrides userOvPaths halloc
   case userOvsResult of
     Left err -> pure $ Left err
@@ -180,7 +183,7 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx = do
         Map.fromList . Foldable.toList
           <$> traverse
             ( \someFnOv@(Stubs.SomeFunctionOverride fnOv) -> do
-                let macawPublicOv = macawOverride bak mvar archCtx fnOv
+                let macawPublicOv = macawOverride bak archCtx fnOv
                 macawPublicHdl <-
                   liftIO $
                     C.mkHandle'
@@ -210,6 +213,7 @@ mkMacawOverrideMapWithBuiltins ::
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
   , HasGreaseSimulatorState p cExt sym arch ret
+  , GP.HasMemVar p
   ) =>
   bak ->
   -- | The paths of each user-supplied override file.
@@ -223,7 +227,7 @@ mkMacawOverrideMapWithBuiltins ::
 mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg fs = do
   let endian = archCtx ^. Arch.archInfo . to MAI.archEndianness
   let builtinOvs = builtinStubsOverrides mvar memCfg fs endian
-  mkMacawOverrideMap bak builtinOvs userOvPaths halloc mvar archCtx
+  mkMacawOverrideMap bak builtinOvs userOvPaths halloc archCtx
 
 -- | Redirect handles for forward declarations in an S-expression file to
 -- actually call the corresponding Macaw overrides. Treat any calls to unresolved
@@ -234,12 +238,12 @@ registerMacawSexpProgForwardDeclarations ::
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   GreaseLogAction ->
   CLLVM.DataLayout ->
-  C.GlobalVar CLM.Mem ->
   -- | What to do when a forward declaration cannot be resolved.
   CantResolveOverrideCallback sym (Symbolic.MacawExt arch) ->
   -- | The map of public function names to their overrides.
@@ -247,10 +251,10 @@ registerMacawSexpProgForwardDeclarations ::
   -- | The map of forward declaration names to their handles.
   Map.Map WFN.FunctionName C.SomeHandle ->
   CS.OverrideSim p sym (Symbolic.MacawExt arch) rtp a r ()
-registerMacawSexpProgForwardDeclarations bak la dl mvar errCb funOvs =
+registerMacawSexpProgForwardDeclarations bak la dl errCb funOvs =
   registerMacawForwardDeclarations bak funOvs $
     CantResolveOverrideCallback $
-      registerSkipOverride la dl mvar errCb
+      registerSkipOverride la dl errCb
 
 -- | Redirect handles for forward declarations in an S-expression file to
 -- actually call the corresponding Macaw overrides. Attempting to call an
@@ -259,6 +263,7 @@ registerMacawOvForwardDeclarations ::
   ( OnlineSolverAndBackend solver sym bak scope st fs
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   ) =>
   bak ->
   -- | The map of public function names to their overrides.
@@ -278,6 +283,7 @@ registerMacawForwardDeclarations ::
   ( OnlineSolverAndBackend solver sym bak scope st fs
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   ) =>
   bak ->
   -- | The map of public function names to their overrides.

@@ -560,6 +560,7 @@ setupHookCommon ::
   , WPO.OnlineSolver solver
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
   ) =>
   ScreachLogAction ->
   bak ->
@@ -651,11 +652,11 @@ analyzeSyntax conf sla gla halloc archCtx = do
   let mem = mcMemory macawCfgConfig
   addrOvs <- loadAddrOvs archCtx conf halloc loadOpts mem resolvedTargetLoc
   let setupHook :: forall sym. GM.SetupHook sym arch
-      setupHook = GM.SetupHook $ \bak mvar funOvs -> do
+      setupHook = GM.SetupHook $ \bak funOvs -> do
         setupHookCommon sla bak addrOvs funOvs mbEntryStartupOv
         let dl = macawDataLayout archCtx
         let errCb = overrideErrorCallback sla
-        GMS.registerSyntaxHandles bak gla errCb dl mvar funOvs prog
+        GMS.registerSyntaxHandles bak gla errCb dl funOvs prog
   analyzeCfg
     conf
     sla
@@ -1060,7 +1061,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                   fs
                   (archCtx ^. Arch.archInfo . to MAI.archEndianness)
         fnOvsMap <- liftIO $ do
-          result <- GMO.mkMacawOverrideMap bak ovs userOvPaths halloc memVar archCtx
+          result <- GMO.mkMacawOverrideMap bak ovs userOvPaths halloc archCtx
           let usrErr = userError sla . PP.pretty
           case result of
             -- See Note [Explicitly listed errors]
@@ -1287,7 +1288,7 @@ analyzeElf conf sla gla halloc archCtx = do
           resolveAnalysisLoc loadOpts mem symMap (targetAnalysisLoc $ Conf.targetLoc conf)
     addrOvs <- loadAddrOvs archCtx conf halloc loadOpts mem resolvedTargetLoc
     let setupHook :: forall sym. GM.SetupHook sym arch
-        setupHook = GM.SetupHook $ \bak _mvar funOvs ->
+        setupHook = GM.SetupHook $ \bak funOvs ->
           setupHookCommon sla bak addrOvs funOvs mbEntryStartupOv
 
     CCR.SomeCFG entryRegCfg <-

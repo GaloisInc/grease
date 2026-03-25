@@ -28,6 +28,7 @@ import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Overrides.Address (AddressOverrides, maybeRunAddressOverride)
 import Grease.Macaw.SimulatorHooks.Diagnostic qualified as Diag
 import Grease.Panic (panic)
+import Grease.Personality qualified as GP
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
@@ -69,20 +70,20 @@ greaseMacawExtImpl ::
   , sym ~ WEB.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
   , 16 C.<= MC.ArchAddrWidth arch
+  , GP.HasMemVar p
   ) =>
   ArchContext arch ->
   bak ->
   GreaseLogAction ->
   ExecutingAddressAction arch ->
   AddressOverrides arch ->
-  CS.GlobalVar CLM.Mem ->
   CS.GlobalVar (MC.ArchRegStruct arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch)
-greaseMacawExtImpl archCtx bak la execCallback tgtOvs memVar archStruct macawExtImpl =
+greaseMacawExtImpl archCtx bak la execCallback tgtOvs archStruct macawExtImpl =
   macawExtImpl
     { CS.extensionEval = extensionEval macawExtImpl
-    , CS.extensionExec = extensionExec archCtx bak la execCallback tgtOvs memVar archStruct macawExtImpl
+    , CS.extensionExec = extensionExec archCtx bak la execCallback tgtOvs archStruct macawExtImpl
     }
 
 -- | This evaluates a Macaw statement extension in the simulator.
@@ -159,6 +160,7 @@ extensionExec ::
   , sym ~ WEB.ExprBuilder t st fs
   , Symbolic.SymArchConstraints arch
   , 16 C.<= MC.ArchAddrWidth arch
+  , GP.HasMemVar p
   ) =>
   ArchContext arch ->
   bak ->
@@ -166,11 +168,10 @@ extensionExec ::
   -- | Action for logging executed instructions
   ExecutingAddressAction arch ->
   AddressOverrides arch ->
-  CS.GlobalVar CLM.Mem ->
   CS.GlobalVar (MC.ArchRegStruct arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   Symbolic.MacawEvalStmtFunc (C.StmtExtension (Symbolic.MacawExt arch)) p sym (Symbolic.MacawExt arch)
-extensionExec archCtx bak la insnAct tgtOvs memVar archStruct baseExt stmt crucState = do
+extensionExec archCtx bak la insnAct tgtOvs archStruct baseExt stmt crucState = do
   let ExecutingAddressAction executeInsnAct = insnAct
   let sym = CB.backendGetSym bak
   case stmt of
@@ -200,7 +201,7 @@ extensionExec archCtx bak la insnAct tgtOvs memVar archStruct baseExt stmt crucS
         Just segOff -> do
           doLog la (Diag.ExecutingInstruction (PP.pretty segOff) dis)
           executeInsnAct segOff
-          maybeRunAddressOverride archCtx memVar archStruct crucState segOff tgtOvs
+          maybeRunAddressOverride archCtx archStruct crucState segOff tgtOvs
           pure ((), crucState)
         Nothing ->
           panic

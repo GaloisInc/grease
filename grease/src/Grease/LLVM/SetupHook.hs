@@ -26,6 +26,7 @@ import Grease.LLVM.Overrides.Networking (networkLLVMOverrides)
 import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.LLVM.SetupHook.Diagnostic qualified as Diag
 import Grease.Overrides (CantResolveOverrideCallback)
+import Grease.Personality qualified as GP
 import Grease.SimulatorState.Networking qualified as GSN
 import Grease.Utility (OnlineSolverAndBackend)
 import Lang.Crucible.Backend qualified as CB
@@ -81,6 +82,7 @@ newtype SetupHook sym arch
         , CLM.HasPtrWidth (ArchWidth arch)
         , CLM.HasLLVMAnn sym
         , HasToConcretize p
+        , GP.HasMemVar p
         , GSN.HasServerSocketFds p
         , ?lc :: CLTC.TypeContext
         , ?memOpts :: CLM.MemOptions
