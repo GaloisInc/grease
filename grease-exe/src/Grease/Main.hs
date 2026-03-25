@@ -91,7 +91,6 @@ import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Vector qualified as Vec
 import Data.Void (Void)
 import GHC.TypeNats (KnownNat)
-import Grease.AssertProperty (addNoDynJumpAssertion, addPCBoundAssertion)
 import Grease.Bug qualified as Bug
 import Grease.Cli (optsFromArgs)
 import Grease.Concretize qualified as Conc
@@ -140,7 +139,6 @@ import Grease.Panic (Grease, panic)
 import Grease.Pretty (prettyPtrFnMap)
 import Grease.Profiler.Feature (greaseProfilerFeature)
 import Grease.Refine qualified as GRef
-import Grease.Requirement qualified as GReq
 import Grease.Setup qualified as GSetup
 import Grease.Shape (ArgShapes, ExtShape)
 import Grease.Shape qualified as Shape
@@ -279,13 +277,13 @@ nonSymbolEntrypoint :: GDiag.GreaseLogAction -> IO a
 nonSymbolEntrypoint la =
   userErr la "Must provide entrypoint name"
 
-textBounds ::
+textStart ::
   Num (Elf.ElfWordType w) =>
   GDiag.GreaseLogAction ->
   MML.LoadOptions ->
   Elf.ElfHeaderInfo w ->
-  IO (Elf.ElfWordType w, Elf.ElfWordType w)
-textBounds la loadOpts elf =
+  IO (Elf.ElfWordType w)
+textStart la loadOpts elf =
   case Elf.headerNamedShdrs elf of
     Left (si, err) ->
       malformedElf la $
@@ -300,8 +298,7 @@ textBounds la loadOpts elf =
         Nothing -> malformedElf la "Could not find .text segment"
         Just s ->
           let loadOffset = fromIntegral $ fromMaybe 0 (MML.loadOffset loadOpts)
-           in let sWithOffset = Elf.shdrAddr s + loadOffset
-               in pure (sWithOffset, sWithOffset + Elf.shdrSize s)
+           in pure (Elf.shdrAddr s + loadOffset)
 
 -- | Define @?memOpts@ in a continuation, setting the 'CLM.laxLoadsAndStores'
 -- option according to whether the user set the @--rust@ flag.
@@ -438,8 +435,6 @@ checkMustFail bak errs = do
 data MacawCfgConfig arch = MacawCfgConfig
   { mcDataLayout :: DataLayout
   -- ^ The data layout to use in the underlying memory model.
-  , mcMprotectAddr :: Maybe (MC.ArchSegmentOff arch)
-  -- ^ 'Just' the address of @mprotect@ if it exists, and 'Nothing' otherwise.
   , mcLoadOptions :: MML.LoadOptions
   -- ^ The load options used to load addresses in the binary.
   , mcSymMap :: Discovery.AddrSymMap (MC.ArchAddrWidth arch)
@@ -452,8 +447,6 @@ data MacawCfgConfig arch = MacawCfgConfig
   -- ^ Map of relocation addresses and types.
   , mcMemory :: MC.Memory (MC.RegAddrWidth (MC.ArchReg arch))
   -- ^ The memory layout of the binary.
-  , mcTxtBounds :: (Elf.ElfWordType (MC.ArchAddrWidth arch), Elf.ElfWordType (MC.ArchAddrWidth arch))
-  -- ^ Bounds on the @.text@ segment's addresses.
   , mcElf :: Maybe (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
   -- ^ 'Just' the ELF of the target binary if it exists, and 'Nothing' otherwise
   }
@@ -958,6 +951,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
   memVar <- CLM.mkMemVar "grease:memmodel" halloc
   (execFeats, profLogTask) <- macawExecFeats la bak memVar archCtx macawCfgConfig simOpts
   let argNames = archCtx ^. Arch.archValueNames
+  let regTypes = archCtx ^. Arch.archRegTypes
   let rNames = archCtx ^. Arch.archRegNames
 
   initArgShapes <-
@@ -998,83 +992,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
       execFeats
       mbCfgAddr
       entrypointCfgsSsa
-  finalResult <-
-    simulateRewrittenCfg
-      la
-      bak
-      fm
-      halloc
-      macawCfgConfig
-      archCtx
-      simOpts
-      setupHook
-      addrOvs
-      memPtrTable
-      initMem
-      initArgShapes
-      result
-      execFeats
-      mbCfgAddr
-      entrypointCfgs
-      entrypointCfgsSsa
-  traverse_ cancel profLogTask
-  pure finalResult
- where
-  MacawCfgConfig
-    { mcDataLayout = dl
-    , mcRelocs = relocs
-    , mcMemory = memory
-    } = macawCfgConfig
-
--- | See @doc/requirements.md@.
-simulateRewrittenCfg ::
-  forall sym bak arch solver scope st fm argTys ret wptr.
-  ( CB.IsSymBackend sym bak
-  , sym ~ WEB.ExprBuilder scope st (WEB.Flags fm)
-  , bak ~ CB.OnlineBackend solver scope st (WEB.Flags fm)
-  , WPO.OnlineSolver solver
-  , C.IsSyntaxExtension (Symbolic.MacawExt arch)
-  , Symbolic.SymArchConstraints arch
-  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
-  , MM.MemWidth (MC.ArchAddrWidth arch)
-  , Integral (Elf.ElfWordType (MC.ArchAddrWidth arch))
-  , Show (Arch.ArchReloc arch)
-  , CLM.HasLLVMAnn sym
-  , argTys ~ Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)
-  , ret ~ Symbolic.ArchRegStruct arch
-  , wptr ~ MC.ArchAddrWidth arch
-  , ?memOpts :: CLM.MemOptions
-  , ?lc :: CLTC.TypeContext
-  , ?parserHooks :: CSyn.ParserHooks (Symbolic.MacawExt arch)
-  ) =>
-  GDiag.GreaseLogAction ->
-  bak ->
-  WE.FloatModeRepr fm ->
-  C.HandleAllocator ->
-  MacawCfgConfig arch ->
-  Arch.ArchContext arch ->
-  GO.SimOpts ->
-  Macaw.SetupHook sym arch ->
-  AddressOverrides arch ->
-  Symbolic.MemPtrTable sym wptr ->
-  H.InitialMem sym ->
-  ArgShapes (Symbolic.MacawExt arch) NoTag argTys ->
-  GRef.RefinementSummary sym (Symbolic.MacawExt arch) argTys ->
-  [CS.ExecutionFeature (GreaseSimulatorState MDebug.MacawCommand sym arch ret) sym (Symbolic.MacawExt arch) (CS.RegEntry sym ret)] ->
-  -- | If simulating a binary, this is 'Just' the address of the user-requested
-  -- entrypoint function. Otherwise, this is 'Nothing'.
-  Maybe (MC.ArchSegmentOff arch) ->
-  -- | The registerized entrypoint-related CFGs.
-  EP.EntrypointCfgs (C.Reg.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
-  -- | The SSA entrypoint-related CFGs.
-  EP.EntrypointCfgs (C.SomeCFG (Symbolic.MacawExt arch) (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) (Symbolic.ArchRegStruct arch)) ->
-  IO GOut.BatchStatus
-simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook addrOvs memPtrTable initMem initArgShapes result execFeats mbCfgAddr entrypointCfgs entrypointCfgsSsa = do
-  let regTypes = archCtx ^. Arch.archRegTypes
-      argNames = archCtx ^. Arch.archValueNames
-  let rNames = archCtx ^. Arch.archRegNames
-
-  res <- case result of
+  finalResult <- case result of
     GRef.RefinementBug b cData ->
       let addrWidth = archCtx ^. Arch.archInfo . to MI.archAddrWidth
        in pure (GOut.BatchBug (toBatchBug fm addrWidth argNames regTypes initArgShapes b cData))
@@ -1092,68 +1010,15 @@ simulateRewrittenCfg la bak fm halloc macawCfgConfig archCtx simOpts setupHook a
               errs <&> \noHeuristic ->
                 let addrWidth = archCtx ^. Arch.archInfo . to MI.archAddrWidth
                  in toFailedPredicate fm addrWidth argNames regTypes initArgShapes noHeuristic
-    GRef.RefinementSuccess argShapes -> do
-      let pcReg = archCtx ^. Arch.archPcReg
-      let assertInText = addPCBoundAssertion knownNat pcReg memory (MC.memWord $ fromIntegral starttext) (MC.memWord $ fromIntegral endtext) pltStubs
-      let assertNoMprotect = case mprotectAddr of
-            Just badAddr -> addNoDynJumpAssertion knownNat pcReg memory badAddr
-            _ -> id
-      let rs = GO.simReqs simOpts
-      asserts <- fmap (Map.fromList . List.zip rs) . forM rs $ \case
-        GReq.InText -> pure assertInText
-        GReq.NoMprotect -> pure assertNoMprotect
-      doLog la $ Diag.SimulationTestingRequirements rs
-      fmap GOut.BatchChecks . forM asserts $ \assert -> do
-        assertingCfg <- pure $ assert $ EP.entrypointCfg entrypointCfgs
-        let entrypointCfgsSsa' = entrypointCfgsSsa{EP.entrypointCfg = EP.toSsaSomeCfg assertingCfg}
-        CB.resetAssumptionState bak
-        memVar <- CLM.mkMemVar "grease:memmodel" halloc
-        let heuristics = H.macawHeuristics la rNames
-        new <-
-          macawRefineOnce
-            la
-            archCtx
-            simOpts
-            halloc
-            macawCfgConfig
-            memPtrTable
-            (ExecutingAddressAction $ \_ -> pure ())
-            setupHook
-            addrOvs
-            bak
-            fm
-            argShapes
-            initMem
-            memVar
-            heuristics
-            execFeats
-            mbCfgAddr
-            entrypointCfgsSsa'
-        case new of
-          GRef.ProveBug{} ->
-            panic "simulateRewrittenCfg" ["CFG rewriting introduced a bug!"]
-          GRef.ProveCantRefine{} ->
-            panic "simulateRewrittenCfg" ["CFG rewriting prevented refinement!"]
-          GRef.ProveSuccess -> do
-            doLog la Diag.SimulationAllGoalsPassed
-            pure GOut.CheckSuccess
-          GRef.ProveNoHeuristic errs -> do
-            doLog la Diag.SimulationGoalsFailed
-            pure $
-              GOut.CheckAssertionFailure $
-                NE.toList errs <&> \noHeuristic ->
-                  let addrWidth = archCtx ^. Arch.archInfo . to MI.archAddrWidth
-                   in toFailedPredicate fm addrWidth argNames regTypes initArgShapes noHeuristic
-          GRef.ProveRefine _ -> do
-            doLog la Diag.SimulationGoalsFailed
-            pure $ GOut.CheckAssertionFailure []
-  pure res
+    GRef.RefinementSuccess _argShapes ->
+      pure GOut.BatchSuccess
+  traverse_ cancel profLogTask
+  pure finalResult
  where
   MacawCfgConfig
-    { mcMprotectAddr = mprotectAddr
-    , mcPltStubs = pltStubs
+    { mcDataLayout = dl
+    , mcRelocs = relocs
     , mcMemory = memory
-    , mcTxtBounds = (starttext, endtext)
     } = macawCfgConfig
 
 simulateMacawCfgs ::
@@ -1371,14 +1236,12 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
   let macawCfgConfig =
         MacawCfgConfig
           { mcDataLayout = dl
-          , mcMprotectAddr = Nothing
           , mcLoadOptions = MML.defaultLoadOptions
           , mcSymMap = Map.empty
           , mcPltStubs = Map.empty
           , mcDynFunMap = Map.empty
           , mcRelocs = Map.empty
           , mcMemory = memory
-          , mcTxtBounds = (0, 0)
           , mcElf = Nothing
           }
   addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
@@ -1401,11 +1264,10 @@ simulateMacaw ::
   Load.LoadedProgram arch ->
   Maybe (PLT.PLTStubInfo (Arch.ArchReloc arch)) ->
   Arch.ArchContext arch ->
-  (Elf.ElfWordType (MC.ArchAddrWidth arch), Elf.ElfWordType (MC.ArchAddrWidth arch)) ->
   GO.SimOpts ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
   IO Results
-simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts parserHooks = do
+simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx simOpts parserHooks = do
   let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
   let dl = macawDataLayout archCtx
   let memory = Loader.memoryImage $ Load.progLoadedBinary loadedProg
@@ -1426,26 +1288,11 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
           )
           relocs
 
-  -- A map of each PLT stub address to its symbol name, which we consult
-  -- later to check for the presence of `mprotect` (i.e., the `no-mprotect`
-  -- requirement). This check only applies to dynamically linked binaries, and
-  -- for statically linked binaries, this map will be empty.
   pltStubSegOffToNameMap <-
     GMPLT.resolvePltStubs (GO.simProgPath simOpts) mbPltStubInfo loadOpts elf symbolRelocs (GO.simPltStubs simOpts) memory
       >>= \case
         Left err@GMPLT.CouldNotResolvePltStub{} -> malformedElf la (PP.pretty err)
         Right pltStubs -> pure pltStubs
-
-  let
-    -- The inverse of `pltStubSegOffToNameMap`.
-    pltStubNameToSegOffMap :: Map.Map WFN.FunctionName (MC.ArchSegmentOff arch)
-    pltStubNameToSegOffMap =
-      Map.foldrWithKey
-        (\addr name -> Map.insert name addr)
-        Map.empty
-        pltStubSegOffToNameMap
-
-  let mprotectAddr = Map.lookup "mprotect" pltStubNameToSegOffMap
   entries <-
     if List.null (GO.simEntryPoints simOpts)
       then do
@@ -1489,14 +1336,12 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx txtBounds simOpts p
   let macawCfgConfig =
         MacawCfgConfig
           { mcDataLayout = dl
-          , mcMprotectAddr = mprotectAddr
           , mcLoadOptions = loadOpts
           , mcSymMap = symMap
           , mcPltStubs = pltStubSegOffToNameMap
           , mcDynFunMap = dynFunMap
           , mcRelocs = fst <$> relocs
           , mcMemory = memory
-          , mcTxtBounds = txtBounds
           , mcElf = Just elf
           }
   simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs
@@ -1641,7 +1486,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
             GOut.BatchCouldNotInfer $
               errs <&> \noHeuristic ->
                 toFailedPredicate fm MM.Addr64 argNames argTys initArgShapes noHeuristic
-    GRef.RefinementSuccess _argShapes -> pure (GOut.BatchChecks Map.empty)
+    GRef.RefinementSuccess _argShapes -> pure GOut.BatchSuccess
   traverse_ cancel profLogTask
   pure res
 
@@ -1936,14 +1781,12 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
     let macawCfgConfig =
           MacawCfgConfig
             { mcDataLayout = dl
-            , mcMprotectAddr = Nothing
             , mcLoadOptions = MML.defaultLoadOptions
             , mcSymMap = Map.empty
             , mcPltStubs = Map.empty
             , mcDynFunMap = Map.empty
             , mcRelocs = Map.empty
             , mcMemory = memory
-            , mcTxtBounds = (0, 0)
             , mcElf = Nothing
             }
     simulateMacawCfgs
@@ -2051,10 +1894,10 @@ simulateARM simOpts la = do
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
     loadedProg <- doLoad la proxy (GO.simEntryPoints simOpts) perms elf
-    txtBounds@(starttext, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
-    -- Return address must be in .text to satisfy the `in-text` requirement.
+    -- Use the start of .text as the return address on the stack.
+    starttext <- textStart la (Load.progLoadOptions loadedProg) elf
     archCtx <- armCtx halloc (Just starttext) (GO.simStackArgumentSlots simOpts)
-    simulateMacaw la halloc elf loadedProg (Just ARM.armPLTStubInfo) archCtx txtBounds simOpts AArch32Syn.aarch32ParserHooks
+    simulateMacaw la halloc elf loadedProg (Just ARM.armPLTStubInfo) archCtx simOpts AArch32Syn.aarch32ParserHooks
 
 simulatePPC32Syntax ::
   GO.SimOpts ->
@@ -2088,13 +1931,13 @@ simulatePPC32 simOpts la = do
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
     loadedProg <- doLoad la proxy (GO.simEntryPoints simOpts) perms elf
-    txtBounds@(starttext, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
-    -- Return address must be in .text to satisfy the `in-text` requirement.
+    -- Use the start of .text as the return address on the stack.
+    starttext <- textStart la (Load.progLoadOptions loadedProg) elf
     archCtx <- ppc32Ctx (Just starttext) (GO.simStackArgumentSlots simOpts)
     -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
     -- Grease.Macaw.PLT for why we use Nothing here.
     let ppcPltStubInfo = Nothing
-    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx txtBounds simOpts PPCSyn.ppc32ParserHooks
+    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx simOpts PPCSyn.ppc32ParserHooks
 
 simulatePPC64 :: GO.SimOpts -> GDiag.GreaseLogAction -> IO Results
 simulatePPC64 simOpts la = do
@@ -2104,13 +1947,13 @@ simulatePPC64 simOpts la = do
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
     loadedProg <- doLoad la proxy (GO.simEntryPoints simOpts) perms elf
-    txtBounds@(starttext, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
-    -- Return address must be in .text to satisfy the `in-text` requirement.
+    -- Use the start of .text as the return address on the stack.
+    starttext <- textStart la (Load.progLoadOptions loadedProg) elf
     archCtx <- ppc64Ctx (Just starttext) (GO.simStackArgumentSlots simOpts) (Load.progLoadedBinary loadedProg)
     -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
     -- Grease.Macaw.PLT for why we use Nothing here.
     let ppcPltStubInfo = Nothing
-    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx txtBounds simOpts PPCSyn.ppc64ParserHooks
+    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx simOpts PPCSyn.ppc64ParserHooks
 
 simulateX86Syntax ::
   GO.SimOpts ->
@@ -2133,10 +1976,10 @@ simulateX86 simOpts la = do
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
     loadedProg <- doLoad la proxy (GO.simEntryPoints simOpts) perms elf
-    txtBounds@(startText, _) <- textBounds la (Load.progLoadOptions loadedProg) elf
-    -- Return address must be in .text to satisfy the `in-text` requirement.
+    -- Use the start of .text as the return address on the stack.
+    startText <- textStart la (Load.progLoadOptions loadedProg) elf
     archCtx <- x86Ctx halloc (Just startText) (GO.simStackArgumentSlots simOpts)
-    simulateMacaw la halloc elf loadedProg (Just X86.x86_64PLTStubInfo) archCtx txtBounds simOpts X86Syn.x86ParserHooks
+    simulateMacaw la halloc elf loadedProg (Just X86.x86_64PLTStubInfo) archCtx simOpts X86Syn.x86ParserHooks
 
 simulateElf ::
   GO.SimOpts ->

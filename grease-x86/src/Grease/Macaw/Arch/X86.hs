@@ -80,7 +80,6 @@ x86Ctx halloc mbReturnAddr stackArgSlots = do
       , Arch._archGetIP = \regs -> do
           let CS.RV (CLM.LLVMPointer _base off) = regs ^. ixF' X86SymRegs.rip
           pure off
-      , Arch._archPcReg = X86.X86_IP
       , Arch._archIntegerArguments = \bak ->
           Stubs.x86_64LinuxIntegerArguments bak avals
       , Arch._archIntegerReturnRegisters = Stubs.x86_64LinuxIntegerReturnRegisters

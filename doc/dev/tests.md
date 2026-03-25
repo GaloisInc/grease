@@ -20,17 +20,7 @@ and (2) tests involving LLVM bitcode or S-expression files.
 These test `grease`'s machine code frontend by ingesting binaries. These test
 cases are organized into different subdirectories:
 
-1. `prop/`: Tests that exercise particular property assertions (i.e., requirements). This directory has sub-directories for each property supported by grease. Within each property-specific directory, there can be several directories:
-
-    a. `pos/`: "true positives", tests that should trigger (fail) the assertion, and do
-
-    b. `neg/`: "true negatives", tests that should not trigger (pass) the assertion, and don't
-
-    c. `xfail-pos/`: "false positives", i.e., type I error, tests that should not trigger the assertion, but do
-
-    d. `xfail-neg/`: "false negatives", i.e., type II error, tests that should trigger the assertion, but don't
-
-2. `refine/`: Tests that exercise the precondition refinement process but are not particularly relevant to any property assertions. Subdirectories:
+1. `refine/`: Tests that exercise the precondition refinement process. Subdirectories:
 
     a. `bug/`: tests that encounter an error that grease can't work around that might be a bug
 
@@ -42,7 +32,7 @@ cases are organized into different subdirectories:
 
     e. `xfail-neg/`: "false negatives", i.e., type II error, tests that have some sufficient precondition for successful execution, but grease can't find it
 
-3. `sanity/`: Tests that exercise earlier or more fundamental parts of `grease`, such as disassembly or machine code semantics. For these tests, we don't particularly care whether `grease` finds a refined precondition. This directory has a few subdirectories:
+2. `sanity/`: Tests that exercise earlier or more fundamental parts of `grease`, such as disassembly or machine code semantics. For these tests, we don't particularly care whether `grease` finds a refined precondition. This directory has a few subdirectories:
 
     a. `pass/`, for tests that don't cause any issues
 

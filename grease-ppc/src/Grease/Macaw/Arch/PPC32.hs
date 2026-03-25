@@ -74,7 +74,6 @@ ppc32Ctx mbReturnAddr stackArgSlots = do
       , Arch._archGetIP = \regs -> do
           let C.RV (CLM.LLVMPointer _base off) = regs ^. ixF' PPC.Symbolic.Regs.ip
           pure off
-      , Arch._archPcReg = PPC.PPC_IP
       , Arch._archVals = avals
       , Arch._archRelocSupported = ppc32RelocSupported
       , Arch._archIntegerArguments = \bak ->

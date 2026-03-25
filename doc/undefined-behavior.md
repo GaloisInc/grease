@@ -1,8 +1,7 @@
 # Undefined behavior
 
 GREASE aims to find or verify the absence of *bugs* in the program under analysis.
-It supports checking both for specific [requirements](requirements.md) and for generally suspicious behaviors.
-This page describes the latter.
+This page describes generally suspicious behaviors that GREASE can detect.
 
 What constitutes a bug?
 When analyzing C, C++, or Rust code, a conservative answer is that any form of reachable undefined behavior in a complete program constitutes a bug.

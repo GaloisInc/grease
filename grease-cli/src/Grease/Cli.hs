@@ -402,13 +402,6 @@ simOpts = do
   simDebugOpts <- debugOptsParser
   simEntryPoints <- Opt.many entrypointParser
   simMutGlobs <- globalsParser
-  simReqs <-
-    Opt.many
-      ( GCE.enumParser
-          [ Opt.long "req"
-          , Opt.help "names of requirements to test"
-          ]
-      )
   simNoHeuristics <- noHeuristicsParser
   simOverrides <- overridesParser
   simAddressOverrides <- addrOverridesParser

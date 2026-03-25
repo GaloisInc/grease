@@ -82,7 +82,6 @@ armCtx halloc mbReturnAddr stackArgSlots = do
       , Arch._archGetIP = \regs -> do
           let C.RV (CLM.LLVMPointer _base off) = regs ^. ixF' ARM.Symbolic.Regs.pc
           pure off
-      , Arch._archPcReg = ARM.pc
       , Arch._archVals = avals
       , Arch._archRelocSupported = armRelocSupported
       , Arch._archIntegerArguments = \bak ->

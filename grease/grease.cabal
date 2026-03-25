@@ -190,7 +190,6 @@ library
     , what4
 
   exposed-modules:
-    Grease.AssertProperty
     Grease.BranchTracer
     Grease.BranchTracer.Diagnostic
     Grease.Bug
@@ -259,7 +258,6 @@ library
     Grease.Pretty
     Grease.Refine
     Grease.Refine.Diagnostic
-    Grease.Requirement
     Grease.Scheduler
     Grease.Setup
     Grease.Setup.Annotations
