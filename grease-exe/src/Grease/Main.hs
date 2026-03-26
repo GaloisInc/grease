@@ -140,6 +140,7 @@ import Grease.Personality qualified as GP
 import Grease.Pretty (prettyPtrFnMap)
 import Grease.Profiler.Feature (greaseProfilerFeature)
 import Grease.Refine qualified as GRef
+import Grease.Refine.RefinementData qualified as GRef
 import Grease.Setup qualified as GSetup
 import Grease.Shape (ArgShapes, ExtShape)
 import Grease.Shape qualified as Shape
@@ -671,7 +672,7 @@ macawMemConfig ::
   , MSM.MacawProcessAssertion sym
   , ?memOpts :: CLM.MemOptions
   , ?lc :: CLTC.TypeContext
-  , GMSS.HasGreaseSimulatorState p cExt sym arch ret
+  , GMSS.HasGreaseSimulatorState p sym bak scope cExt arch ret argTys wptr
   , ToConc.HasToConcretize p
   ) =>
   GDiag.GreaseLogAction ->
@@ -759,7 +760,7 @@ macawInitState ::
   , ext ~ Symbolic.MacawExt arch
   , ret ~ Symbolic.ArchRegStruct arch
   , argTys ~ Symbolic.CtxToCrucibleType (Symbolic.ArchRegContext arch)
-  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch ret
+  , p ~ GreaseSimulatorState sym bak scope MDebug.MacawCommand arch ret argTys wptr
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   , ?lc :: CLTC.TypeContext
@@ -779,12 +780,13 @@ macawInitState ::
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
+  GRef.RefinementData sym bak scope ext argTys wptr ->
   C.GlobalVar ToConc.ToConcretizeType ->
   GSetup.SetupMem sym ->
   GSIO.InitializedFs sym wptr ->
   GSetup.Args sym ext (Symbolic.MacawCrucibleRegTypes arch) wptr ->
   IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
-macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa toConcVar setupMem initFs args = do
+macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa refineData toConcVar setupMem initFs args = do
   let sym = CB.backendGetSym bak
   regs <- liftIO (overrideRegs archCtx sym (GSetup.argVals args))
   EP.EntrypointCfgs
@@ -813,7 +815,7 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
   empTrace <- CR.emptyRecordedTrace sym
   repState <- CR.mkReplayState halloc empTrace
 
-  let pers = GP.mkPersonality memVar dbgCtx toConcVar
+  let pers = GP.mkPersonality memVar dbgCtx toConcVar refineData
   let personality =
         mkGreaseSimulatorState pers recState repState
           & discoveredFnHandles .~ discoveredHdls
@@ -834,7 +836,7 @@ macawRefineOnce ::
   , wptr ~ MC.ArchAddrWidth arch
   , ext ~ Symbolic.MacawExt arch
   , ret ~ Symbolic.ArchRegStruct arch
-  , p ~ GreaseSimulatorState MDebug.MacawCommand sym arch ret
+  , p ~ GreaseSimulatorState sym bak scope MDebug.MacawCommand arch ret argTys wptr
   , CLM.HasLLVMAnn sym
   , ?memOpts :: CLM.MemOptions
   , ?lc :: CLTC.TypeContext
@@ -1396,7 +1398,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
   let memVar = CLT.llvmMemVar llvmCtx
   (execFeats, profLogTask) <-
     llvmExecFeats
-      @(GLP.GreaseLLVMPersonality LDebug.LLVMCommand sym ret)
+      @(GLP.GreaseLLVMPersonality sym bak t LDebug.LLVMCommand ret argTys (CLLVM.ArchWidth arch))
       la
       bak
       simOpts
@@ -1449,8 +1451,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
         initMem
         heuristics
         execFeats
-        $ \toConc setupMem initFs args -> do
-          let llvmPers = GP.mkPersonality memVar dbgCtx toConc
+        $ \refineData toConc setupMem initFs args -> do
+          let llvmPers = GP.mkPersonality memVar dbgCtx toConc refineData
           let p =
                 GLP.mkGreaseLLVMPersonality llvmPers recState repState
           LLVM.initState

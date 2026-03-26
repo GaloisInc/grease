@@ -100,6 +100,7 @@ import Grease.Personality qualified as GP
 import Grease.Pretty (prettyPtrFnMap)
 import Grease.Refine qualified as GR
 import Grease.Refine.Diagnostic qualified as RDiag
+import Grease.Refine.RefinementData qualified as GR
 import Grease.Scheduler qualified as Sched
 import Grease.Setup qualified as GS
 import Grease.Shape qualified as Shape
@@ -1186,6 +1187,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                 , GR.refineInitState = concInitState
                 , GR.refineSolver = Conf.solver conf
                 , GR.refineSolverTimeout = GO.simSolverTimeout boundsOpts
+                , GR.refineErrMap = bbMapRef
                 }
         let dbgOpts = Conf.debugOpts conf
         let dbgCmdExt = MDebug.macawCommandExt (archCtx ^. Arch.archVals)
@@ -1193,7 +1195,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
         gssRecState <- RR.mkRecordState halloc
         gssEmpTrace <- RR.emptyRecordedTrace sym
         gssRepState <- RR.mkReplayState halloc gssEmpTrace
-        let gssPers = GP.mkPersonality memVar dbgCtx toConcVar
+        let gssPers = GP.mkPersonality memVar dbgCtx toConcVar refineData
         let greaseSimState =
               GMSS.mkGreaseSimulatorState gssPers gssRecState gssRepState
                 & GMSS.discoveredFnHandles .~ discoveredHdls
@@ -1202,11 +1204,6 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
             sym
             halloc
             greaseSimState
-            RFT.SrchRefineData
-              { RFT._greaseRefineData = refineData
-              , RFT._refineErrMap = bbMapRef
-              , RFT._refineResult = Nothing
-              }
         GM.initState
           bak
           gla
@@ -1372,11 +1369,8 @@ handleTarget ::
     Bool
 handleTarget archCtx _ sla initArgs st =
   let argNames = archCtx ^. Arch.archValueNames
-      rst =
-        ( CS.execResultContext st ^. CS.cruciblePersonality . RFT.refinementState ::
-            RFT.SrchRefineData sym bak t ext aty wptr
-        )
-   in case RFT._refineResult rst of
+      pers = CS.execResultContext st ^. CS.cruciblePersonality
+   in case pers ^. SP.refineResult of
         Just (RFT.RefineResult bid cData _trace) | isReachedBug bid -> do
           let addrWidth = archCtx ^. Arch.archInfo . to MAI.archAddrWidth
           let interestingShapes = interestingConcretizedShapes argNames initArgs (Conc.concArgs cData)
@@ -1612,6 +1606,9 @@ verifyReachable ::
   , ToConc.HasToConcretize p
   , ?memOpts :: CLM.MemOptions
   , Shape.ExtShape ext ~ Shape.PtrShape ext w
+  , ext ~ MS.MacawExt arch
+  , ret ~ MS.ArchRegStruct arch
+  , MC.MemWidth w
   ) =>
   ScreachLogAction ->
   GreaseLogAction ->
@@ -1645,13 +1642,10 @@ verifyReachable la gla bak initShape genericExecFeats refineResults = do
     result' <- CS.executeCrucible (replay : execFeats) st'
 
     let ctx = CSE.execResultContext result'
-    let RFT.SrchRefineData
-          { RFT._greaseRefineData = refineData
-          , RFT._refineErrMap = errMapRef
-          } = ctx ^. CS.cruciblePersonality . to SP._refineState
+    let pers = ctx ^. CS.cruciblePersonality
+    let refineData = pers ^. GP.personality . GP.pRefinementData
     obls <- CB.getProofObligations bak
-    errMap <- IORef.readIORef errMapRef
-    refResult <- GR.proveAndRefine bak result' gla errMap refineData obls
+    refResult <- GR.proveAndRefine bak result' gla refineData obls
     case refResult of
       GR.ProveBug bugInstance _
         | isReachedBug bugInstance ->

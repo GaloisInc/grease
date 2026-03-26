@@ -206,13 +206,14 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc archCtx = do
 
 -- | Like 'mkMacawOverrideMap', with 'builtinStubsOverrides'.
 mkMacawOverrideMapWithBuiltins ::
+  forall solver sym bak scope st fs arch p t cExt ret argTys wptr.
   ( OnlineSolverAndBackend solver sym bak scope st fs
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , Symbolic.SymArchConstraints arch
-  , HasGreaseSimulatorState p cExt sym arch ret
+  , HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
   bak ->
   -- | The paths of each user-supplied override file.

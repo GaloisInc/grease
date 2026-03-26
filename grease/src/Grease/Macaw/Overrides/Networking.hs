@@ -40,7 +40,7 @@ networkOverrides ::
   , ?memOpts :: CLM.MemOptions
   , MC.MemWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p cExt sym arch ret
+  , GMSS.HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
   CLSIO.LLVMFileSystem w ->
   CS.GlobalVar CLM.Mem ->
@@ -60,7 +60,7 @@ networkOverrides fs memVar mmConf =
 buildAcceptOverride ::
   ( CLM.HasPtrWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p cExt sym arch ret
+  , GMSS.HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
   CLSIO.LLVMFileSystem w ->
   StubsF.FunctionOverride
@@ -84,7 +84,7 @@ buildBindOverride ::
   , ?memOpts :: CLM.MemOptions
   , MC.MemWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p cExt sym arch ret
+  , GMSS.HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
   CS.GlobalVar CLM.Mem ->
   MS.MemModelConfig p sym arch CLM.Mem ->
@@ -106,7 +106,7 @@ buildBindOverride memVar mmConf =
 buildConnectOverride ::
   ( CLM.HasPtrWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p cExt sym arch ret
+  , GMSS.HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
   StubsF.FunctionOverride
     p
@@ -126,7 +126,7 @@ buildConnectOverride =
 buildListenOverride ::
   ( CLM.HasPtrWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p cExt sym arch ret
+  , GMSS.HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
   StubsF.FunctionOverride
     p
@@ -190,7 +190,7 @@ buildSendOverride fs memVar =
 buildSocketOverride ::
   ( CLM.HasPtrWidth w
   , w ~ MC.ArchAddrWidth arch
-  , GMSS.HasGreaseSimulatorState p cExt sym arch ret
+  , GMSS.HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
   CLSIO.LLVMFileSystem w ->
   StubsF.FunctionOverride
