@@ -61,12 +61,11 @@ networkOvTemplates ::
   ) =>
   bak ->
   CLSIO.LLVMFileSystem w ->
-  CS.GlobalVar CLM.Mem ->
   Seq.Seq (CLI.OverrideTemplate p sym LLVM arch)
-networkOvTemplates bak fs mvar =
+networkOvTemplates bak fs =
   fmap
     (\(CLI.SomeLLVMOverride ov) -> CLI.basic_llvm_override ov)
-    (Seq.fromList (networkLLVMOverrides bak fs mvar))
+    (Seq.fromList (networkLLVMOverrides bak fs))
 
 -- | Hook to run before executing a CFG.
 --
@@ -110,23 +109,22 @@ syntaxSetupHook la ovs skipFuns prog cfgs errCb =
   SetupHook $ \bak _halloc llvmCtx fs -> do
     let typeCtx = llvmCtx ^. CLT.llvmTypeCtx
     let dl = CLTC.llvmDataLayout typeCtx
-    let mvar = CLT.llvmMemVar llvmCtx
 
     -- Register built-in, networking, and user overrides.
     funOvs <-
-      registerLLVMSexpOverrides la (builtinLLVMOverrides fs <> networkOvTemplates bak fs mvar) ovs skipFuns bak llvmCtx fs prog errCb
+      registerLLVMSexpOverrides la (builtinLLVMOverrides fs <> networkOvTemplates bak fs) ovs skipFuns bak llvmCtx fs prog errCb
 
     -- In addition to binding function handles for the user overrides,
     -- we must also redirect function handles resulting from parsing
     -- forward declarations (`declare`) to actually call the overrides.
-    GLO.registerLLVMSexpProgForwardDeclarations la bak dl mvar funOvs errCb (CSyn.parsedProgForwardDecs prog)
+    GLO.registerLLVMSexpProgForwardDeclarations la bak dl funOvs errCb (CSyn.parsedProgForwardDecs prog)
 
     -- If a startup override exists and it contains forward declarations,
     -- then we redirect the function handles to actually call the respective
     -- overrides.
     Monad.forM_ (Map.elems cfgs) $ \entrypointCfgs ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-        GLO.registerLLVMSexpProgForwardDeclarations la bak dl mvar funOvs errCb startupOvFwdDecs
+        GLO.registerLLVMSexpProgForwardDeclarations la bak dl funOvs errCb startupOvFwdDecs
 
     -- Register defined functions. If there is a user override of the same
     -- name, use the override's definition instead so that it takes
@@ -139,7 +137,7 @@ syntaxSetupHook la ovs skipFuns prog cfgs errCb =
           C.SomeCFG defSsa <- pure $ C.toSSA defCfg
           CS.bindCFG defSsa
         Just (CLI.SomeLLVMOverride llvmOverride) ->
-          GLO.bindLLVMOverrideFnHandle mvar defHdl llvmOverride
+          GLO.bindLLVMOverrideFnHandle defHdl llvmOverride
 
 -- | A 'SetupHook' for LLVM CFGs from IR modules.
 moduleSetupHook ::
@@ -155,7 +153,6 @@ moduleSetupHook la ovs skipFuns trans cfgs errCb =
   SetupHook $ \bak _halloc llvmCtx fs -> do
     let typeCtx = llvmCtx ^. CLT.llvmTypeCtx
     let dl = CLTC.llvmDataLayout typeCtx
-    let mvar = CLT.llvmMemVar llvmCtx
     let llvmMod = trans ^. CLT.modTransModule
 
     -- Register defined functions...
@@ -166,10 +163,10 @@ moduleSetupHook la ovs skipFuns trans cfgs errCb =
     -- registering defined functions so that overrides take precedence over
     -- defined functions.
     funOvs <-
-      GLO.registerLLVMModuleOverrides la (builtinLLVMOverrides fs <> networkOvTemplates bak fs mvar) ovs skipFuns bak llvmCtx fs llvmMod errCb
+      GLO.registerLLVMModuleOverrides la (builtinLLVMOverrides fs <> networkOvTemplates bak fs) ovs skipFuns bak llvmCtx fs llvmMod errCb
     -- If a startup override exists and it contains forward declarations,
     -- then we redirect the function handles to actually call the respective
     -- overrides.
     Monad.forM_ (Map.elems cfgs) $ \entrypointCfgs ->
       Monad.forM_ (GE.startupOvForwardDecs <$> GE.entrypointStartupOv entrypointCfgs) $ \startupOvFwdDecs ->
-        GLO.registerLLVMSexpProgForwardDeclarations la bak dl mvar funOvs errCb startupOvFwdDecs
+        GLO.registerLLVMSexpProgForwardDeclarations la bak dl funOvs errCb startupOvFwdDecs

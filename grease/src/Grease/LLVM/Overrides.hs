@@ -15,6 +15,7 @@ module Grease.LLVM.Overrides (
   registerLLVMSexpProgForwardDeclarations,
 ) where
 
+import Control.Lens ((^.))
 import Control.Monad (forM, unless)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Foldable qualified as Foldable
@@ -64,11 +65,13 @@ doLog la diag = LJ.writeLog la (LLVMOverridesDiagnostic diag)
 bindLLVMOverrideFnHandle ::
   CB.IsSymInterface sym =>
   CLM.HasLLVMAnn sym =>
-  C.GlobalVar CLM.Mem ->
+  GP.HasMemVar p =>
   C.FnHandle fnArgs fnRet ->
   CLI.LLVMOverride p sym CLI.LLVM ovrArgs ovrRet ->
   CS.OverrideSim p sym CLI.LLVM rtp as r ()
-bindLLVMOverrideFnHandle mvar hdl llOv = do
+bindLLVMOverrideFnHandle hdl llOv = do
+  ctx <- CS.getContext
+  let mvar = GP.getMemVar (ctx ^. CS.cruciblePersonality)
   let fNm = C.handleName hdl
   let hdlArgs = C.handleArgTypes hdl
   let hdlRet = C.handleReturnType hdl
@@ -275,7 +278,7 @@ registerLLVMOverrides la builtinOvs userOvs skipFuns bak llvmCtx fs defns decls 
   -- so as to ensure that we get the dependencies correct.
   Foldable.for_ userOvs $ \(_, lso) -> do
     let fwdDecs = lsoForwardDeclarations lso
-    registerLLVMForwardDeclarations bak mvar allOvs errCb fwdDecs
+    registerLLVMForwardDeclarations bak allOvs errCb fwdDecs
   pure allOvs
  where
   registerOv ::
@@ -390,7 +393,6 @@ registerLLVMSexpProgForwardDeclarations ::
   GreaseLogAction ->
   bak ->
   CLI.DataLayout ->
-  C.GlobalVar CLM.Mem ->
   -- | The map of public function names to their overrides.
   Map.Map WFN.FunctionName (CLI.SomeLLVMOverride p sym CLI.LLVM) ->
   -- | What to do when a forward declaration cannot be resolved.
@@ -398,8 +400,8 @@ registerLLVMSexpProgForwardDeclarations ::
   -- | The map of forward declaration names to their handles.
   Map.Map WFN.FunctionName C.SomeHandle ->
   CS.OverrideSim p sym CLI.LLVM rtp as r ()
-registerLLVMSexpProgForwardDeclarations la bak dl mvar funOvs errCb =
-  registerLLVMForwardDeclarations bak mvar funOvs $
+registerLLVMSexpProgForwardDeclarations la bak dl funOvs errCb =
+  registerLLVMForwardDeclarations bak funOvs $
     CantResolveOverrideCallback $
       registerSkipOverride la dl errCb
 
@@ -415,7 +417,6 @@ registerLLVMForwardDeclarations ::
   , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   bak ->
-  C.GlobalVar CLM.Mem ->
   -- | The map of public function names to their overrides.
   Map.Map WFN.FunctionName (CLI.SomeLLVMOverride p sym CLI.LLVM) ->
   -- | What to do when a forward declaration cannot be resolved.
@@ -423,12 +424,14 @@ registerLLVMForwardDeclarations ::
   -- | The map of forward declaration names to their handles.
   Map.Map WFN.FunctionName C.SomeHandle ->
   CS.OverrideSim p sym CLI.LLVM rtp as r ()
-registerLLVMForwardDeclarations bak mvar funOvs errCb fwdDecs = do
+registerLLVMForwardDeclarations bak funOvs errCb fwdDecs = do
+  ctx <- CS.getContext
+  let mvar = GP.getMemVar (ctx ^. CS.cruciblePersonality)
   let CantResolveOverrideCallback cannotResolve = errCb
   Foldable.for_ (Map.toList fwdDecs) $ \(fwdDecName, C.SomeHandle hdl) ->
     case Map.lookup fwdDecName funOvs of
       Just (CLI.SomeLLVMOverride llvmOverride) ->
-        bindLLVMOverrideFnHandle mvar hdl llvmOverride
+        bindLLVMOverrideFnHandle hdl llvmOverride
       Nothing ->
         -- These string-manipulating overrides are *only* callable from
         -- S-expression files with forward-declarations of them.

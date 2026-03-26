@@ -46,16 +46,15 @@ networkLLVMOverrides ::
   ) =>
   bak ->
   CLSIO.LLVMFileSystem 64 ->
-  CS.GlobalVar CLM.Mem ->
   [CLI.SomeLLVMOverride p sym ext]
-networkLLVMOverrides bak fs memVar =
+networkLLVMOverrides bak fs =
   [ CLI.SomeLLVMOverride (socketOverride bak fs)
-  , CLI.SomeLLVMOverride (bindOverride bak fs memVar)
+  , CLI.SomeLLVMOverride (bindOverride bak fs)
   , CLI.SomeLLVMOverride (connectOverride bak)
   , CLI.SomeLLVMOverride (listenOverride bak)
   , CLI.SomeLLVMOverride (acceptOverride bak fs)
-  , CLI.SomeLLVMOverride (recvOverride bak fs memVar)
-  , CLI.SomeLLVMOverride (sendOverride bak fs memVar)
+  , CLI.SomeLLVMOverride (recvOverride bak fs)
+  , CLI.SomeLLVMOverride (sendOverride bak fs)
   ]
 
 -----
@@ -99,7 +98,6 @@ bindOverride ::
   ) =>
   bak ->
   CLSIO.LLVMFileSystem 64 ->
-  CS.GlobalVar CLM.Mem ->
   CLI.LLVMOverride
     p
     sym
@@ -110,11 +108,11 @@ bindOverride ::
         Ctx.::> CLM.LLVMPointerType 64
     )
     (CLM.LLVMPointerType 64)
-bindOverride bak _fs memVar =
+bindOverride bak _fs =
   [llvmOvr| i8* @bind( i8*, i8*, i8* ) |]
-    ( \_mvar args ->
+    ( \mvar args ->
         Ctx.uncurryAssignment
-          (GON.callBind bak memVar (loadSockaddrUnPath bak memVar))
+          (GON.callBind bak mvar (loadSockaddrUnPath bak mvar))
           args
     )
 
@@ -197,7 +195,6 @@ recvOverride ::
   ) =>
   bak ->
   CLSIO.LLVMFileSystem 64 ->
-  CS.GlobalVar CLM.Mem ->
   CLI.LLVMOverride
     p
     sym
@@ -209,9 +206,9 @@ recvOverride ::
         Ctx.::> CLM.LLVMPointerType 64
     )
     (CLM.LLVMPointerType 64)
-recvOverride bak fs memVar =
+recvOverride bak fs =
   [llvmOvr| i8* @recv( i8*, i8*, i8*, i8* ) |]
-    (\_mvar args -> Ctx.uncurryAssignment (GON.callRecv bak fs memVar) args)
+    (\mvar args -> Ctx.uncurryAssignment (GON.callRecv bak fs mvar) args)
 
 sendOverride ::
   ( CB.IsSymBackend sym bak
@@ -221,7 +218,6 @@ sendOverride ::
   ) =>
   bak ->
   CLSIO.LLVMFileSystem 64 ->
-  CS.GlobalVar CLM.Mem ->
   CLI.LLVMOverride
     p
     sym
@@ -233,9 +229,9 @@ sendOverride ::
         Ctx.::> CLM.LLVMPointerType 64
     )
     (CLM.LLVMPointerType 64)
-sendOverride bak fs memVar =
+sendOverride bak fs =
   [llvmOvr| i8* @send( i8*, i8*, i8*, i8* ) |]
-    (\_mvar args -> Ctx.uncurryAssignment (GON.callSend bak fs memVar) args)
+    (\mvar args -> Ctx.uncurryAssignment (GON.callSend bak fs mvar) args)
 
 -----
 -- LLVM-specific helpers
