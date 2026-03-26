@@ -112,7 +112,7 @@ execStateMemVar ::
 execStateMemVar st = getMemVar (ET.execStateContext st ^. CS.cruciblePersonality)
 
 -- | A class for personality types that contain a 'Personality' core.
-class HasPersonality p cExt sym ext ret | p -> cExt sym ext ret where
+class HasMemVar p => HasPersonality p cExt sym ext ret | p -> cExt sym ext ret where
   personality :: Lens' p (Personality cExt sym ext ret)
 
 instance HasPersonality (Personality cExt sym ext ret) cExt sym ext ret where

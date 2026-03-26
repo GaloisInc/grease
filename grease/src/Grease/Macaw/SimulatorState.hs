@@ -2,6 +2,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
@@ -132,6 +133,7 @@ mkGreaseSimulatorState pers recState repState =
 class
   ( Symbolic.HasMacawLazySimulatorState p sym (MC.ArchAddrWidth arch)
   , GSN.HasServerSocketFds p
+  , GP.HasPersonality p cExt sym (Symbolic.MacawExt arch) ret
   ) =>
   HasGreaseSimulatorState p cExt sym arch ret
     | p -> cExt sym arch ret

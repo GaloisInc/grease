@@ -107,7 +107,7 @@ instance GSN.HasServerSocketFds (ScreachSimulatorState p sym bak ext arch t ret 
   {-# INLINE serverSocketFdsL #-}
 
 instance
-  (MC.ArchAddrWidth arch ~ w) =>
+  (MC.ArchAddrWidth arch ~ w, ext ~ MS.MacawExt arch, ret ~ MS.ArchRegStruct arch) =>
   GMSS.HasGreaseSimulatorState
     (ScreachSimulatorState p sym bak ext arch t ret aty w)
     MDebug.MacawCommand
