@@ -65,7 +65,6 @@ newtype SetupHook sym arch
         , CLM.HasLLVMAnn sym
         , HasGreaseSimulatorState p cExt sym arch ret
         , HasToConcretize p
-        , GP.HasMemVar p
         ) =>
         bak ->
         -- Map of names of overridden functions to their implementations

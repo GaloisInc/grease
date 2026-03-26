@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2025
@@ -75,6 +76,7 @@ mkGreaseLLVMPersonality pers recState repState =
     }
 
 class
+  GP.HasPersonality p cExt sym LLVM ret =>
   HasGreaseLLVMPersonality p cExt sym ret
     | p -> cExt sym ret
   where

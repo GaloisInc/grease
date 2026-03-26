@@ -673,7 +673,6 @@ macawMemConfig ::
   , ?lc :: CLTC.TypeContext
   , GMSS.HasGreaseSimulatorState p cExt sym arch ret
   , ToConc.HasToConcretize p
-  , GP.HasMemVar p
   ) =>
   GDiag.GreaseLogAction ->
   C.GlobalVar CLM.Mem ->

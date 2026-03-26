@@ -517,7 +517,6 @@ initState ::
   , ?memOpts :: CLM.MemOptions
   , HasGreaseSimulatorState p cExt sym arch ret
   , HasToConcretize p
-  , GP.HasMemVar p
   ) =>
   bak ->
   GreaseLogAction ->
