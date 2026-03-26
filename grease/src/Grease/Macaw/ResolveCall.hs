@@ -148,12 +148,13 @@ newtype LookupFunctionHandleDispatch p sym arch
 -- found) if they can be found, and if not, skips them by simulating them as
 -- no-ops.
 defaultLookupFunctionHandleDispatch ::
+  forall solver sym bak t st fs arch p cExt ret argTys wptr.
   ( OnlineSolverAndBackend solver sym bak t st fs
   , Symbolic.SymArchConstraints arch
   , CLM.HasLLVMAnn sym
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , HasToConcretize p
-  , HasGreaseSimulatorState p cExt sym arch ret
+  , HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
   bak ->
   GreaseLogAction ->
@@ -243,10 +244,10 @@ data LookupFunctionHandleResult p sym arch where
 --
 -- The behavior of this function is documented in @doc/function-calls.md@.
 lookupFunctionHandleResult ::
-  forall arch sym bak solver scope st fs p rtp blocks r ctx cExt ret.
+  forall arch sym bak solver scope st fs p rtp blocks r ctx cExt ret t argTys wptr.
   ( OnlineSolverAndBackend solver sym bak scope st fs
   , Symbolic.SymArchConstraints arch
-  , HasGreaseSimulatorState p cExt sym arch ret
+  , HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
   bak ->
   GreaseLogAction ->
@@ -416,9 +417,10 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
         pure (SkippedFunctionCall (NotExecutable funcAddrOff), st)
 
 lookupFunctionHandle ::
+  forall solver sym bak t st fs arch p cExt ret argTys wptr.
   ( OnlineSolverAndBackend solver sym bak t st fs
   , Symbolic.SymArchConstraints arch
-  , HasGreaseSimulatorState p cExt sym arch ret
+  , HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
   bak ->
   GreaseLogAction ->
@@ -531,8 +533,9 @@ data LookupSyscallResult p sym arch atps rtps where
 --
 -- The behavior of this function is documented in @doc/syscalls.md@.
 lookupSyscallResult ::
+  forall sym bak p t cExt arch ret argTys wptr atps rtps rtp blocks r ctx.
   ( CB.IsSymBackend sym bak
-  , HasGreaseSimulatorState p cExt sym arch ret
+  , HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
   bak ->
   ArchContext arch ->
@@ -578,8 +581,9 @@ lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs 
 -- | An implementation of 'Symbolic.LookupSyscallHandle' that attempts to look
 -- up a syscall override and dispatches on the result.
 lookupSyscallHandle ::
+  forall sym bak p t cExt arch ret argTys wptr.
   ( CB.IsSymBackend sym bak
-  , HasGreaseSimulatorState p cExt sym arch ret
+  , HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
   bak ->
   ArchContext arch ->
@@ -601,8 +605,9 @@ lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd =
 -- code discovery]@ in "Grease.Macaw.SimulatorState") and bind the function
 -- handle to its CFG.
 discoverFuncAddr ::
+  forall arch p bak t cExt sym ret argTys wptr r f a.
   ( Symbolic.SymArchConstraints arch
-  , HasGreaseSimulatorState p cExt sym arch ret
+  , HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
   LJ.LogAction IO Diagnostic ->
   C.HandleAllocator ->

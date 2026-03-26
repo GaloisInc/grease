@@ -69,7 +69,6 @@ module Grease.Refine (
   NoHeuristic (..),
   proveAndRefine,
   ExecData (..),
-  RefinementData (..),
   refineOnce,
   execAndRefine,
   RefinementSummary (..),
@@ -119,14 +118,14 @@ import Grease.Options (BoundsOpts)
 import Grease.Options qualified as Opts
 import Grease.Personality qualified as GP
 import Grease.Refine.Diagnostic qualified as Diag
+import Grease.Refine.RefinementData qualified as RD
 import Grease.Scheduler qualified as Sched
 import Grease.Setup (InitialMem)
 import Grease.Setup qualified as Setup
-import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, PrettyExt)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
-import Grease.Solver (Solver, solverAdapter)
+import Grease.Solver (solverAdapter)
 import Grease.SymIO qualified as GSIO
 import Grease.Utility (tshow)
 import Grease.ValueName (ValueName)
@@ -317,21 +316,22 @@ consumer ::
   bak ->
   CS.ExecResult p sym ext r ->
   GreaseLogAction ->
-  Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
-  RefinementData sym bak ext argTys w ->
+  RD.RefinementData sym bak t ext argTys w ->
   C.ProofConsumer sym t (ProveRefineResult sym ext argTys)
-consumer bak execResult la bbMap refineData = do
-  let RefinementData
-        { refineAnns = anns
-        , refineArgNames = argNames
-        , refineArgShapes = argShapes
-        , refineHeuristics = heuristics
-        , refineInitState = initState
+consumer bak execResult la refineData = do
+  let RD.RefinementData
+        { RD.refineAnns = anns
+        , RD.refineArgNames = argNames
+        , RD.refineArgShapes = argShapes
+        , RD.refineHeuristics = heuristics
+        , RD.refineInitState = initState
+        , RD.refineErrMap = errMapRef
         } = refineData
   C.ProofConsumer $ \goal result -> do
     let sym = CB.backendGetSym bak
     let lp = CB.proofGoal goal
     let simErr = lp ^. W4.labeledPredMsg
+    bbMap <- readIORef errMapRef
     minfo <- lookupErrorInfo sym la (lp ^. W4.labeledPred) simErr bbMap
     case result of
       C.Proved{} -> do
@@ -416,18 +416,6 @@ execCfg bak execData = do
         o <- CB.getProofObligations bak
         pure (r, o, Seq.empty)
 
--- | Data needed for refinement
-data RefinementData sym bak ext argTys wptr
-  = RefinementData
-  { refineAnns :: Anns.Annotations sym ext argTys
-  , refineArgNames :: Ctx.Assignment ValueName argTys
-  , refineArgShapes :: ArgShapes ext NoTag argTys
-  , refineHeuristics :: [RefineHeuristic sym bak ext argTys]
-  , refineInitState :: Conc.InitialState sym ext argTys wptr
-  , refineSolver :: Solver
-  , refineSolverTimeout :: C.Timeout
-  }
-
 -- | Helper, not exported
 proveAndRefine ::
   forall p ext r solver sym bak t st argTys w fm.
@@ -442,17 +430,16 @@ proveAndRefine ::
   bak ->
   CS.ExecResult p sym ext r ->
   GreaseLogAction ->
-  Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
-  RefinementData sym bak ext argTys w ->
+  RD.RefinementData sym bak t ext argTys w ->
   CB.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
-proveAndRefine bak execResult la bbMap refineData goals = do
+proveAndRefine bak execResult la refineData goals = do
   let sym = CB.backendGetSym bak
-  let solver = refineSolver refineData
-  let tout = refineSolverTimeout refineData
+  let solver = RD.refineSolver refineData
+  let tout = RD.refineSolverTimeout refineData
   let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
   let strat = C.ProofStrategy prover combiner
-  let cons = consumer bak execResult la bbMap refineData
+  let cons = consumer bak execResult la refineData
   case goals of
     Nothing -> pure ProveSuccess
     Just goals' ->
@@ -499,11 +486,10 @@ execAndRefine ::
   bak ->
   W4FM.FloatModeRepr fm ->
   GreaseLogAction ->
-  RefinementData sym bak ext argTys w ->
-  IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym)) ->
+  RD.RefinementData sym bak t ext argTys w ->
   ExecData p sym ext ret ->
   m (ProveRefineResult sym ext argTys)
-execAndRefine bak _fm la refineData bbMapRef execData = do
+execAndRefine bak _fm la refineData execData = do
   let memVar = GP.execStateMemVar (execInitState execData)
   let refineOne initSt = do
         let execData' = execData{execInitState = initSt}
@@ -512,9 +498,8 @@ execAndRefine bak _fm la refineData bbMapRef execData = do
         refineResult <-
           case processExecResult execResult of
             Just cantRefine -> pure (ProveCantRefine cantRefine)
-            Nothing -> do
-              bbMap <- readIORef bbMapRef
-              proveAndRefine bak execResult la bbMap refineData goals
+            Nothing ->
+              proveAndRefine bak execResult la refineData goals
         case execPathStrat execData of
           Opts.Dfs -> do
             loc <- WI.getCurrentProgramLoc (CB.backendGetSym bak)
@@ -604,6 +589,7 @@ refineOnce ::
   ( ( MSM.MacawProcessAssertion sym
     , Mem.HasLLVMAnn sym
     ) =>
+    RD.RefinementData sym bak t ext argTys wptr ->
     C.GlobalVar ToConc.ToConcretizeType ->
     Setup.SetupMem sym ->
     GSIO.InitializedFs sym wptr ->
@@ -626,7 +612,6 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
   initFs_ <- GSIO.initialLlvmFileSystem halloc sym (Opts.simFsOpts simOpts)
   (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
   let initFs = initFs_{GSIO.initFsGlobals = globals1}
-  st <- mkInitState toConc setupMem initFs args
   let concInitState =
         Conc.InitialState
           { Conc.initStateArgs = args
@@ -634,6 +619,18 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
           , Conc.initStateMem = initMem
           }
   let boundsOpts = Opts.simBoundsOpts simOpts
+  let refineData =
+        RD.RefinementData
+          { RD.refineAnns = setupAnns
+          , RD.refineArgNames = argNames
+          , RD.refineArgShapes = argShapes
+          , RD.refineHeuristics = heuristics
+          , RD.refineInitState = concInitState
+          , RD.refineSolver = Opts.simSolver simOpts
+          , RD.refineSolverTimeout = Opts.simSolverTimeout boundsOpts
+          , RD.refineErrMap = bbMapRef
+          }
+  st <- mkInitState refineData toConc setupMem initFs args
   boundsFeats_ <- boundedExecFeats boundsOpts
   let boundsFeats = List.map CS.genericToExecutionFeature boundsFeats_
   let execData =
@@ -642,17 +639,7 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
           , execInitState = st
           , execPathStrat = Opts.simPathStrategy simOpts
           }
-  let refineData =
-        RefinementData
-          { refineAnns = setupAnns
-          , refineArgNames = argNames
-          , refineArgShapes = argShapes
-          , refineHeuristics = heuristics
-          , refineInitState = concInitState
-          , refineSolver = Opts.simSolver simOpts
-          , refineSolverTimeout = Opts.simSolverTimeout boundsOpts
-          }
-  execAndRefine bak fm la refineData bbMapRef execData
+  execAndRefine bak fm la refineData execData
 
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)

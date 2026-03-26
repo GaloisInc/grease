@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
@@ -22,6 +23,7 @@ import Control.Lens (Lens')
 import Control.Lens qualified as Lens
 import Control.Lens.TH (makeLenses)
 import Data.Kind (Type)
+import GHC.TypeLits (type Natural)
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Personality qualified as GP
 import Grease.SimulatorState.Networking qualified as GSN
@@ -30,29 +32,38 @@ import Lang.Crucible.LLVM (LLVM)
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Types (CrucibleType)
+import Lang.Crucible.Types qualified as CT (Ctx)
 
 -- | The Crucible state extension for holding LLVM-specific @grease@ state.
 type GreaseLLVMPersonality ::
-  -- @cExt@: debugger command extension type
-  Type ->
   -- @sym@: the symbolic backend expression type
+  Type ->
+  -- @bak@: the symbolic backend type
+  Type ->
+  -- @t@: the nonce generator scope
+  Type ->
+  -- @cExt@: debugger command extension type
   Type ->
   -- @ret@: the Crucible return type
   CrucibleType ->
+  -- @argTys@: Crucible argument types for the target function
+  CT.Ctx CrucibleType ->
+  -- @wptr@: pointer width
+  Natural ->
   Type
-data GreaseLLVMPersonality cExt sym ret
+data GreaseLLVMPersonality sym bak t cExt ret argTys wptr
   = GreaseLLVMPersonality
-  { _llvmPersonality :: GP.Personality cExt sym LLVM ret
+  { _llvmPersonality :: GP.Personality sym bak t cExt LLVM ret argTys wptr
   -- ^ The shared personality core. See 'Grease.Personality.Personality'.
   , _llvmRecordState ::
       CR.RecordState
-        (GreaseLLVMPersonality cExt sym ret)
+        (GreaseLLVMPersonality sym bak t cExt ret argTys wptr)
         sym
         LLVM
         (CS.RegEntry sym ret)
   , _llvmReplayState ::
       CR.ReplayState
-        (GreaseLLVMPersonality cExt sym ret)
+        (GreaseLLVMPersonality sym bak t cExt ret argTys wptr)
         sym
         LLVM
         (CS.RegEntry sym ret)
@@ -62,9 +73,9 @@ makeLenses ''GreaseLLVMPersonality
 
 -- | Create a 'GreaseLLVMPersonality' with the given configuration.
 mkGreaseLLVMPersonality ::
-  forall cExt sym ret p.
-  (p ~ GreaseLLVMPersonality cExt sym ret) =>
-  GP.Personality cExt sym LLVM ret ->
+  forall sym bak t cExt ret argTys wptr p.
+  (p ~ GreaseLLVMPersonality sym bak t cExt ret argTys wptr) =>
+  GP.Personality sym bak t cExt LLVM ret argTys wptr ->
   CR.RecordState p sym LLVM (CS.RegEntry sym ret) ->
   CR.ReplayState p sym LLVM (CS.RegEntry sym ret) ->
   p
@@ -76,37 +87,37 @@ mkGreaseLLVMPersonality pers recState repState =
     }
 
 class
-  GP.HasPersonality p cExt sym LLVM ret =>
-  HasGreaseLLVMPersonality p cExt sym ret
-    | p -> cExt sym ret
+  GP.HasPersonality p sym bak t cExt LLVM ret argTys wptr =>
+  HasGreaseLLVMPersonality p sym bak t cExt ret argTys wptr
+    | p -> sym bak t cExt ret argTys wptr
   where
-  greaseLlvmPersonality :: Lens' p (GreaseLLVMPersonality cExt sym ret)
+  greaseLlvmPersonality :: Lens' p (GreaseLLVMPersonality sym bak t cExt ret argTys wptr)
 
-instance HasGreaseLLVMPersonality (GreaseLLVMPersonality cExt sym ret) cExt sym ret where
+instance HasGreaseLLVMPersonality (GreaseLLVMPersonality sym bak t cExt ret argTys wptr) sym bak t cExt ret argTys wptr where
   greaseLlvmPersonality = id
   {-# INLINE greaseLlvmPersonality #-}
 
-instance Dbg.HasContext (GreaseLLVMPersonality cExt sym ret) cExt sym LLVM ret where
+instance Dbg.HasContext (GreaseLLVMPersonality sym bak t cExt ret argTys wptr) cExt sym LLVM ret where
   context = llvmPersonality . GP.pDbgContext
   {-# INLINE context #-}
 
-instance GP.HasMemVar (GreaseLLVMPersonality cExt sym ret) where
+instance GP.HasMemVar (GreaseLLVMPersonality sym bak t cExt ret argTys wptr) where
   getMemVar = Lens.view (llvmPersonality . GP.pMemVar)
 
-instance ToConc.HasToConcretize (GreaseLLVMPersonality cExt sym ret) where
+instance ToConc.HasToConcretize (GreaseLLVMPersonality sym bak t cExt ret argTys wptr) where
   toConcretize = Lens.view (llvmPersonality . GP.pToConcretize)
 
-instance GSN.HasServerSocketFds (GreaseLLVMPersonality cExt sym ret) where
+instance GSN.HasServerSocketFds (GreaseLLVMPersonality sym bak t cExt ret argTys wptr) where
   serverSocketFdsL = llvmPersonality . GP.pServerSocketFds
 
-instance GP.HasPersonality (GreaseLLVMPersonality cExt sym ret) cExt sym LLVM ret where
+instance GP.HasPersonality (GreaseLLVMPersonality sym bak t cExt ret argTys wptr) sym bak t cExt LLVM ret argTys wptr where
   personality = llvmPersonality
   {-# INLINE personality #-}
 
 instance
   CR.HasRecordState
-    (GreaseLLVMPersonality cExt sym ret)
-    (GreaseLLVMPersonality cExt sym ret)
+    (GreaseLLVMPersonality sym bak t cExt ret argTys wptr)
+    (GreaseLLVMPersonality sym bak t cExt ret argTys wptr)
     sym
     LLVM
     (CS.RegEntry sym ret)
@@ -116,8 +127,8 @@ instance
 
 instance
   CR.HasReplayState
-    (GreaseLLVMPersonality cExt sym ret)
-    (GreaseLLVMPersonality cExt sym ret)
+    (GreaseLLVMPersonality sym bak t cExt ret argTys wptr)
+    (GreaseLLVMPersonality sym bak t cExt ret argTys wptr)
     sym
     LLVM
     (CS.RegEntry sym ret)

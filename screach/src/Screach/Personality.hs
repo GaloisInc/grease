@@ -10,6 +10,7 @@ module Screach.Personality (
   recordState,
   replayState,
   distState,
+  refineResult,
   mkScreachSimulatorState,
 ) where
 
@@ -49,13 +50,13 @@ import Screach.ShortestDistanceScheduler qualified as ShortDistSched
 type ScreachSimulatorState ::
   Type -> Type -> Type -> Type -> Type -> Type -> CT.CrucibleType -> C.Ctx CT.CrucibleType -> Natural -> Type
 data ScreachSimulatorState p sym bak ext arch t ret aty w = ScreachSimulatorState
-  { _greaseSimulatorState :: GMSS.GreaseSimulatorState MDebug.MacawCommand sym arch ret
+  { _greaseSimulatorState :: GMSS.GreaseSimulatorState sym bak t MDebug.MacawCommand arch ret aty w
   , _distState :: IORef Dist.DijkstraCaches
   , _recordState ::
       CSR.RecordState (ScreachSimulatorState p sym bak ext arch t ret aty w) sym ext (CS.RegEntry sym ret)
   , _replayState ::
       CSR.ReplayState (ScreachSimulatorState p sym bak ext arch t ret aty w) sym ext (CS.RegEntry sym ret)
-  , _refineState :: RFT.SrchRefineData sym bak t ext aty w
+  , _refineResult :: Maybe (RFT.RefineResult sym ext aty)
   }
 
 makeLenses ''ScreachSimulatorState
@@ -110,10 +111,14 @@ instance
   (MC.ArchAddrWidth arch ~ w, ext ~ MS.MacawExt arch, ret ~ MS.ArchRegStruct arch) =>
   GMSS.HasGreaseSimulatorState
     (ScreachSimulatorState p sym bak ext arch t ret aty w)
-    MDebug.MacawCommand
     sym
+    bak
+    t
+    MDebug.MacawCommand
     arch
     ret
+    aty
+    w
   where
   greaseSimulatorState = greaseSimulatorState
   {-# INLINE greaseSimulatorState #-}
@@ -122,10 +127,14 @@ instance
   (ext ~ MS.MacawExt arch, ret ~ MS.ArchRegStruct arch) =>
   GP.HasPersonality
     (ScreachSimulatorState p sym bak ext arch t ret aty w)
-    MDebug.MacawCommand
     sym
+    bak
+    t
+    MDebug.MacawCommand
     ext
     ret
+    aty
+    w
   where
   personality = greaseSimulatorState . GMSS.gssPersonality
   {-# INLINE personality #-}
@@ -137,25 +146,18 @@ instance ToConc.HasToConcretize (ScreachSimulatorState p sym bak ext arch t ret 
   toConcretize = Lens.view (greaseSimulatorState . Lens.to ToConc.toConcretize)
 
 instance
-  RFT.HasRefinmentState
-    (ScreachSimulatorState p sym bak ext arch t ret aty w)
-    sym
-    bak
-    t
-    ext
-    aty
-    w
+  (ext ~ MS.MacawExt arch) =>
+  RFT.HasRefineResult (ScreachSimulatorState p sym bak ext arch t ret aty w) sym ext aty
   where
-  refinementState = refineState
+  refineResult = refineResult
 
 mkScreachSimulatorState ::
   forall sym bak t ext aty arch p ret w.
   sym ->
   HandleAllocator ->
-  GMSS.GreaseSimulatorState MDebug.MacawCommand sym arch ret ->
-  RFT.SrchRefineData sym bak t ext aty w ->
+  GMSS.GreaseSimulatorState sym bak t MDebug.MacawCommand arch ret aty w ->
   IO (ScreachSimulatorState p sym bak ext arch t ret aty w)
-mkScreachSimulatorState sym halloc gss schrRefineData = do
+mkScreachSimulatorState sym halloc gss = do
   recState <- CSR.mkRecordState halloc
   empTrace <- CSR.emptyRecordedTrace sym
   repState <- CSR.mkReplayState halloc empTrace
@@ -166,6 +168,6 @@ mkScreachSimulatorState sym halloc gss schrRefineData = do
       , _distState = distRef
       , _recordState = recState
       , _replayState = repState
-      , _refineState = schrRefineData
+      , _refineResult = Nothing
       }
 {-# INLINEABLE mkScreachSimulatorState #-}
