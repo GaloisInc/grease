@@ -993,12 +993,11 @@ initCFG ::
     ext
     Shape.NoTag
     aty ->
-  Maybe (IORef.IORef (Map.Map (Nonce.Nonce t CCC.BaseBoolType) (GH.ErrorDescription sym))) ->
   IO
     (CS.ExecState (SP.ScreachSimulatorState p sym bak ext arch t ret aty 64) sym ext (CS.RegEntry sym ret))
 initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
   let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` CCC.cfgHandle entryRegSsaCfg) mbEntryAddr
-   in \bak gla sla macawCfgConfig halloc conf archCtx mbTargetAddr mbStartupOvSomeSsaCfg rtLoc memVar setupHook execAction addrOvs argShapes mbErrMaps -> do
+   in \bak gla sla macawCfgConfig halloc conf archCtx mbTargetAddr mbStartupOvSomeSsaCfg rtLoc memVar setupHook execAction addrOvs argShapes -> do
         let dataLayout = macawDataLayout archCtx
         let rNames = archCtx ^. Arch.archRegNames
             argNames = archCtx ^. Arch.archValueNames
@@ -1019,7 +1018,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
           , GR.llvmErrCallback = recordLLVMAnnotation
           , GR.macawAssertionCallback = processMacawAssert
           } <-
-          GR.buildErrMaps mbErrMaps
+          GR.buildErrMaps
 
         let addrWidth = MC.addrWidthRepr (Proxy @64)
         LJ.writeLog
@@ -1579,7 +1578,7 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
             ]
 
     setupAssertThenAssume bak
-    firstState <- initShape initArgs Nothing
+    firstState <- initShape initArgs
     _result <- CS.executeCrucible startFeats firstState
     refineResults <- IORef.readIORef savedRef
     doLog sla $ Diag.RefinementResultCount $ length refineResults
@@ -1613,10 +1612,7 @@ verifyReachable ::
   ScreachLogAction ->
   GreaseLogAction ->
   bak ->
-  ( Shape.ArgShapes ext Shape.NoTag tys ->
-    Maybe (IORef.IORef (Map.Map (Nonce.Nonce t CT.BaseBoolType) (GH.ErrorDescription sym))) ->
-    IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
-  ) ->
+  (Shape.ArgShapes ext Shape.NoTag tys -> IO (CS.ExecState p sym ext (CS.RegEntry sym ret))) ->
   [CS.GenericExecutionFeature sym] ->
   [RFT.RefineResult sym ext tys] ->
   IO ()
@@ -1627,7 +1623,7 @@ verifyReachable la gla bak initShape genericExecFeats refineResults = do
         concArgShapes = Conc.concArgsShapes (Conc.concArgs cData)
         untagArgs = TFC.fmapFC (TFC.fmapFC (const Shape.NoTag)) concArgShapes
     -- TODO(internal#144): Incorporate the concretized filesystem.
-    st <- initShape (Shape.ArgShapes untagArgs) Nothing
+    st <- initShape (Shape.ArgShapes untagArgs)
 
     let trace = RFT.refineResultTrace rr
     let st' =
