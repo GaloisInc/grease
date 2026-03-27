@@ -22,6 +22,7 @@ data Config
   = Config
   { programConfig :: ProgramConfig
   , boundsOpts :: GO.BoundsOpts
+  , callOpts :: GO.CallOpts
   , debugOpts :: GO.DebugOpts
   , fsOpts :: GO.FsOpts
   , initPrecondOpts :: GO.InitialPreconditionOpts

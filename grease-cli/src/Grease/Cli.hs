@@ -12,6 +12,7 @@ module Grease.Cli (
   -- * Individual option parsers
   addrOverridesParser,
   boundsOptsParser,
+  callOptsParser,
   debugOptsParser,
   fsOptsParser,
   fsRootParser,
@@ -26,7 +27,6 @@ module Grease.Cli (
   symFilesParser,
   symStdinParser,
   simDumpCoverageParser,
-  simSkipFunsParser,
 
   -- * High-level entrypoints
   optsInfo,
@@ -60,7 +60,6 @@ import Lang.Crucible.Utils.Timeout (Timeout (Timeout))
 import Options.Applicative qualified as Opt
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char.Lexer qualified as TMCL
-import What4.FunctionName (FunctionName)
 
 ------------------------------------------------------------
 -- Helpers (not exported)
@@ -386,15 +385,54 @@ simDumpCoverageParser =
             )
     )
 
-simSkipFunsParser :: Opt.Parser (Set.Set FunctionName)
-simSkipFunsParser =
-  fmap Set.fromList $
-    Opt.many $
-      Opt.strOption
-        ( Opt.long "skip"
-            <> Opt.metavar "SYMBOL"
-            <> Opt.help "Skip these functions during execution"
-        )
+callOptsParser :: Opt.Parser GO.CallOpts
+callOptsParser = do
+  let callOptionsGroup = "Call options"
+  callErrorSymbolicFunCalls <-
+    fmap GO.ErrorSymbolicFunCalls $
+      Opt.parserOptionGroup callOptionsGroup $
+        Opt.switch
+          ( Opt.long "error-symbolic-fun-calls"
+              <> Opt.help
+                ( String.unlines
+                    [ "Throw an error if attempting to call a symbolic function handle or pointer"
+                    , "(by default, these calls will be skipped)"
+                    ]
+                )
+          )
+  callErrorSymbolicSyscalls <-
+    fmap GO.ErrorSymbolicSyscalls $
+      Opt.parserOptionGroup callOptionsGroup $
+        Opt.switch
+          ( Opt.long "error-symbolic-syscalls"
+              <> Opt.help
+                ( String.unlines
+                    [ "Throw an error if attempting to make a syscall with a symbolic number"
+                    , "(by default, these calls will be skipped)"
+                    ]
+                )
+          )
+  callSkipInvalidCallAddrs <-
+    fmap GO.SkipInvalidCallAddrs $
+      Opt.parserOptionGroup callOptionsGroup $
+        Opt.switch
+          ( Opt.long "skip-invalid-call-addrs"
+              <> Opt.help
+                ( String.unlines
+                    [ "Skip calls to invalid addresses."
+                    , "(by default, these calls will result in an error)"
+                    ]
+                )
+          )
+  callSkipFuns <-
+    fmap Set.fromList $
+      Opt.many $
+        Opt.strOption
+          ( Opt.long "skip"
+              <> Opt.metavar "SYMBOL"
+              <> Opt.help "Skip these functions during execution"
+          )
+  pure GO.CallOpts{..}
 
 simOpts :: Opt.Parser GO.SimOpts
 simOpts = do
@@ -437,18 +475,7 @@ simOpts = do
   simRawBinaryMode <-
     Opt.switch
       (Opt.long "raw-binary" <> Opt.help "load binary as a position dependent non-elf")
-  simErrorSymbolicFunCalls <-
-    fmap GO.ErrorSymbolicFunCalls $
-      Opt.parserOptionGroup callOptionsGroup $
-        Opt.switch
-          ( Opt.long "error-symbolic-fun-calls"
-              <> Opt.help
-                ( String.unlines
-                    [ "Throw an error if attempting to call a symbolic function handle or pointer"
-                    , "(by default, these calls will be skipped)"
-                    ]
-                )
-          )
+  simCallOpts <- callOptsParser
   simRawBinaryOffset <-
     Opt.option
       Opt.auto
@@ -457,30 +484,6 @@ simOpts = do
           <> Opt.value 0
           <> Opt.help "The load base for a raw binary"
       )
-  simErrorSymbolicSyscalls <-
-    fmap GO.ErrorSymbolicSyscalls $
-      Opt.parserOptionGroup callOptionsGroup $
-        Opt.switch
-          ( Opt.long "error-symbolic-syscalls"
-              <> Opt.help
-                ( String.unlines
-                    [ "Throw an error if attempting to make a syscall with a symbolic number"
-                    , "(by default, these calls will be skipped)"
-                    ]
-                )
-          )
-  simSkipInvalidCallAddrs <-
-    fmap GO.SkipInvalidCallAddrs $
-      Opt.parserOptionGroup callOptionsGroup $
-        Opt.switch
-          ( Opt.long "skip-invalid-call-addrs"
-              <> Opt.help
-                ( String.unlines
-                    [ "Skip calls to invalid addresses."
-                    , "(by default, these calls will result in an error)"
-                    ]
-                )
-          )
   simSkipUnsupportedRelocs <-
     fmap GO.SkipUnsupportedRelocs $
       Opt.switch
@@ -497,10 +500,7 @@ simOpts = do
   simInitPrecondOpts <- initPrecondOptsParser
   simBoundsOpts <- boundsOptsParser
   simDumpCoverage <- simDumpCoverageParser
-  simSkipFuns <- simSkipFunsParser
   pure GO.SimOpts{..}
- where
-  callOptionsGroup = "Call options"
 
 processSimOpts :: GO.SimOpts -> GO.SimOpts
 processSimOpts sOpts =
