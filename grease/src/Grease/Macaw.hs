@@ -28,7 +28,6 @@ import Data.Int (Int64)
 import Data.Kind (Type)
 import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.CFG qualified as MC
-import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader qualified as EL
 import Data.Macaw.Symbolic qualified as Symbolic
@@ -50,6 +49,7 @@ import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch (ArchContext, ArchRegs, ArchReloc)
 import Grease.Macaw.Arch qualified as Arch
+import Grease.Macaw.Load (BinMd)
 import Grease.Macaw.Load.Relocation (RelocType (RelativeReloc, SymbolReloc))
 import Grease.Macaw.Overrides.Address (AddressOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride)
@@ -426,13 +426,8 @@ memConfigWithHandles ::
   GreaseLogAction ->
   C.HandleAllocator ->
   ArchContext arch ->
-  EL.Memory (MC.ArchAddrWidth arch) ->
-  -- | Map of entrypoint addresses to their names
-  Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
-  -- | Map of addresses to PLT stub names
-  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
-  -- | Map of dynamic function names to their addresses
-  Map.Map WFN.FunctionName (MC.ArchSegmentOff arch) ->
+  BinMd arch ->
+  MC.Memory (MC.RegAddrWidth (MC.ArchReg arch)) ->
   -- | Map of names of overridden functions to their implementations
   Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
@@ -443,13 +438,21 @@ memConfigWithHandles ::
   (WFN.FunctionName -> IO ()) ->
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
   Symbolic.MemModelConfig p sym arch CLM.Mem
-memConfigWithHandles bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs syscallOvs callOpts errCb' memCfg =
+memConfigWithHandles bak logAction halloc arch binMd mem funOvs funAddrOvs syscallOvs callOpts errCb' memCfg =
   memCfg
-    { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs callOpts lfhd
+    { Symbolic.lookupFunctionHandle = ResolveCall.lookupFunctionHandle bak logAction halloc arch binMd mem funOvs funAddrOvs callOpts lfhd
     , Symbolic.lookupSyscallHandle = ResolveCall.lookupSyscallHandle bak arch syscallOvs callOpts lsd
     }
  where
-  lfhd = ResolveCall.defaultLookupFunctionHandleDispatch bak logAction halloc arch memory funOvs errCb'
+  lfhd =
+    ResolveCall.defaultLookupFunctionHandleDispatch
+      bak
+      logAction
+      halloc
+      arch
+      mem
+      funOvs
+      errCb'
   lsd = ResolveCall.defaultLookupSyscallDispatch bak logAction halloc arch
 
 -- | Check whether a pointer points to a relocation address, and if so, assert

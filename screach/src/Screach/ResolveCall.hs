@@ -3,16 +3,14 @@ module Screach.ResolveCall (
 ) where
 
 import Data.Macaw.CFG qualified as MC
-import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Symbolic qualified as Symbolic
-import Data.Map.Strict qualified as Map
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch (ArchContext)
+import Grease.Macaw.Load (BinMd)
 import Grease.Macaw.ResolveCall qualified as ResolveCall
 import Grease.Macaw.SimulatorState
 import Grease.Macaw.SkippedCall qualified as SkippedCall
 import Lang.Crucible.FunctionHandle qualified as CFH
-import What4.FunctionName qualified as WFN
 
 -- | A 'ResolveCall.LookupFunctionHandleDispatch' specifically geared towards
 -- ECFS files. ECFS files include shared libraries in a giant address space, so
@@ -28,19 +26,18 @@ ecfsLookupFunctionHandleDispatch ::
   GreaseLogAction ->
   CFH.HandleAllocator ->
   ArchContext arch ->
-  MC.Memory (MC.ArchAddrWidth arch) ->
-  Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
-  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
+  BinMd arch ->
+  MC.Memory (MC.RegAddrWidth (MC.ArchReg arch)) ->
   ResolveCall.LookupFunctionHandleDispatch p sym arch ->
   ResolveCall.LookupFunctionHandleDispatch p sym arch
-ecfsLookupFunctionHandleDispatch la halloc arch memory symMap pltStubs lfhd =
+ecfsLookupFunctionHandleDispatch la halloc arch binMd mem lfhd =
   let ResolveCall.LookupFunctionHandleDispatch defaultDispatch = lfhd
-   in ResolveCall.LookupFunctionHandleDispatch $ \st mem regs lfhr -> do
-        let dispatch' st' = defaultDispatch st' mem regs
+   in ResolveCall.LookupFunctionHandleDispatch $ \st llvmMem regs lfhr -> do
+        let dispatch' st' = defaultDispatch st' llvmMem regs
         case lfhr of
           ResolveCall.SkippedFunctionCall (SkippedCall.PltNoOverride pltAddr _pltName) -> do
             (hdl, st') <-
-              ResolveCall.discoverFuncAddr la halloc arch memory symMap pltStubs pltAddr st
+              ResolveCall.discoverFuncAddr la halloc arch binMd mem pltAddr st
             dispatch' st' $
               ResolveCall.DiscoveredFnHandle pltAddr hdl Nothing
           _ -> dispatch' st lfhr

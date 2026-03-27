@@ -11,19 +11,17 @@ import Data.Function ((&))
 import Data.Macaw.Architecture.Info qualified as MI
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
-import Data.Macaw.Memory.ElfLoader qualified as EL
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Utils.IncComp qualified as IncComp
-import Data.Map.Strict qualified as Map
 import Data.Parameterized.Some (Some (Some))
 import Grease.Diagnostic (Diagnostic (LoadDiagnostic))
 import Grease.Macaw.Arch (ArchContext, ArchRegCFG)
 import Grease.Macaw.Arch qualified as Arch
+import Grease.Macaw.Load (BinMd (binPltStubs, binSymMap))
 import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Utility (functionNameFromByteString, tshow)
 import Lang.Crucible.FunctionHandle qualified as C
 import Lumberjack qualified as LJ
-import What4.FunctionName qualified as WFN
 import What4.ProgramLoc qualified as WPL
 
 -- | We pass this log function to @macaw@ to wrap discovery events in a custom
@@ -54,20 +52,20 @@ discoverFunction ::
   LJ.LogAction IO Diagnostic ->
   C.HandleAllocator ->
   ArchContext arch ->
-  EL.Memory (MC.ArchAddrWidth arch) ->
-  -- | Map of entrypoint addresses to their names. Although this function only
-  -- explores a single function, it is still helpful to pass all of the
-  -- entrypoint addresses because it can be used to recover the name of the
-  -- function when logging.
-  Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
-  -- | Map of addresses to PLT stub names. We must mark these as trusted
-  -- function entry points—see @Note [Mark PLT stubs as trusted function
-  -- entry points]@ for an explanation.
-  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
+  -- | Although this function only explores a single function, it is still
+  -- helpful to pass all of the entrypoint addresses (via 'binSymMap') because
+  -- they can be used to recover the name of the function when logging. The PLT
+  -- stubs (via 'binPltStubs') are marked as trusted function entry points—see
+  -- @Note [Mark PLT stubs as trusted function entry points]@ for an
+  -- explanation.
+  BinMd arch ->
+  MC.Memory (MC.RegAddrWidth (MC.ArchReg arch)) ->
   -- | The function address to discover.
   MC.ArchSegmentOff arch ->
   m (ArchRegCFG arch)
-discoverFunction logAction halloc arch mem symMap pltStubs addr = do
+discoverFunction logAction halloc arch binMd mem addr = do
+  let symMap = binSymMap binMd
+  let pltStubs = binPltStubs binMd
   let archInf = arch ^. Arch.archInfo
   -- Mark the PLT stubs as trusted function entry points.
   -- See Note [Mark PLT stubs as trusted function entry points].

@@ -8,7 +8,7 @@
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
-module Grease.Macaw.Arch.AArch32 (armCtx) where
+module Grease.Macaw.Arch.AArch32 (armCtx, armRelocSupported) where
 
 import Control.Lens ((^.))
 import Data.BitVector.Sized qualified as BV

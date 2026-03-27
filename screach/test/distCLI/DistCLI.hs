@@ -12,6 +12,7 @@ import Control.Monad.State.Lazy (evalStateT)
 import Data.ByteString qualified as BS
 import Data.IORef qualified as IORef
 import Data.List qualified as List
+import Data.Macaw.BinaryLoader qualified as Loader
 import Data.Macaw.CFG qualified as MM
 import Data.Macaw.Symbolic.Syntax qualified as MSS
 import Data.Macaw.X86 qualified as MX86
@@ -24,6 +25,7 @@ import Data.Proxy
 import Grease.Diagnostic qualified as GD
 import Grease.Macaw.Arch.X86 (x86Ctx)
 import Grease.Macaw.Discovery qualified as GMD
+import Grease.Macaw.Load qualified as GL
 import Lang.Crucible.CFG.Core qualified as CCC
 import Lang.Crucible.CFG.Extension qualified as CCE
 import Lang.Crucible.CFG.Reg qualified as CCR
@@ -159,19 +161,13 @@ runDistTest DisttestConfig{callgraph = callgraph, progConfig = pconf} =
           x86Ctx halloc retAddr slots
       )
     cfgCache <- IORef.newIORef Map.empty
-    Scrch.LoadedELF
-      { Scrch.mem = mem
-      , Scrch.symMap = symMap
-      , Scrch.pltStubs = pltStubs
-      , Scrch.dynFunMap = _dynFunMap
-      , Scrch.entrypointAddr = _entrypointAddr
-      , Scrch.isECFS = _isECFS
-      , Scrch.loadOptions = _loadOptions
-      , Scrch.relocs = _relocs
-      } <-
-      Scrch.loadElfFromConfig pconf sla gla archCtx
+    lElf <- Scrch.loadElfFromConfig pconf sla gla archCtx
+    let loadedProg = Scrch.loadedProgram lElf
+    let binMd = GL.progBinMd loadedProg
+    let mem = Loader.memoryImage (GL.progLoadedBinary loadedProg)
+    let symMap = GL.binSymMap binMd
     let discover addr = do
-          cfg <- GMD.discoverFunction gla halloc archCtx mem symMap pltStubs addr
+          cfg <- GMD.discoverFunction gla halloc archCtx binMd mem addr
           maybe
             (pure ())
             (\raddr -> LJ.writeLog sla (ScrchDiag.DistanceDiagnostic $ Diagnostic.DiscoveredCFG raddr cfg))
@@ -180,9 +176,9 @@ runDistTest DisttestConfig{callgraph = callgraph, progConfig = pconf} =
     -- TODO this results in duplicate caches we should commit to the monad or IORef
     let flatGetCfg (Dist.FunctionEntry floc) =
           let addr = (locToAddress floc :: MM.MemWord 64)
-           in CG.getCFG (CG.CFGCache cfgCache) mem addr sla gla halloc archCtx symMap pltStubs
+           in CG.getCFG (CG.CFGCache cfgCache) binMd mem addr sla gla halloc archCtx
     let rcall (Dist.FunctionEntry fentry) (Dist.Callsite callsite) =
-          CG.resolveCall cg (CG.CFGCache cfgCache) sla gla mem halloc archCtx symMap pltStubs fentry callsite
+          CG.resolveCall cg (CG.CFGCache cfgCache) sla gla binMd mem halloc archCtx fentry callsite
     -- We want to find the target entry instruction
 
     let resolveReturnsFromCG :: Dist.FunctionEntry -> Dist.Callsite -> [Dist.AddressLocation]
