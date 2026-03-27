@@ -255,16 +255,9 @@ data ErrorCallbacks sym t
 -- to the 'errorMap' as an 'ErrorDescription'
 buildErrMaps ::
   sym ~ WE.ExprBuilder t st fs =>
-  Maybe
-    ( IORef
-        ( Map.Map
-            (Nonce t C.BaseBoolType)
-            (ErrorDescription sym)
-        )
-    ) ->
   IO (ErrorCallbacks sym t)
-buildErrMaps mbBBMap = do
-  bbMapRef <- Maybe.maybe (newIORef Map.empty) pure mbBBMap
+buildErrMaps = do
+  bbMapRef <- newIORef Map.empty
   let recordLLVMAnnotation callStack (Mem.BoolAnn ann) bb =
         modifyIORef bbMapRef $
           Map.insert ann (CrucibleLLVMError bb callStack)
@@ -604,7 +597,7 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
     , llvmErrCallback = recordLLVMAnnotation
     , macawAssertionCallback = processMacawAssert
     } <-
-    buildErrMaps Nothing
+    buildErrMaps
   let ?recordLLVMAnnotation = recordLLVMAnnotation
   let ?processMacawAssert = processMacawAssert
   (args, setupMem, setupAnns) <-

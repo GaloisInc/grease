@@ -22,16 +22,12 @@ import Data.Data (Proxy (Proxy))
 import Data.IORef (IORef, modifyIORef', newIORef)
 import Data.Kind (Type)
 import Data.Macaw.CFG qualified as MC
-import Data.Map qualified as Map
 import Data.Parameterized.Ctx (Ctx)
-import Data.Parameterized.Nonce qualified as Nonce
-import GHC.IORef qualified as IORef
 import Grease.Bug qualified as GR
 import Grease.Concretize qualified as GR
 import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Diagnostic qualified as GrDiag
-import Grease.Heuristic qualified as GH
 import Grease.Personality qualified as GP
 import Grease.Refine qualified as GR
 import Grease.Refine.Diagnostic qualified as GRDiag
@@ -160,18 +156,13 @@ refineState ::
   GreaseLogAction ->
   RftOpt.RefineReplay ->
   C.ExecResult p sym ext rtp ->
-  -- | A function that initializes a new crucible state from the argument specification and
-  -- an annotation map of term nonces to error descriptions.
-  ( ArgShapes ext Shape.NoTag tys ->
-    Maybe (IORef.IORef (Map.Map (Nonce.Nonce t CT.BaseBoolType) (GH.ErrorDescription sym))) ->
-    IO (C.ExecState p sym ext (CS.RegEntry sym ret))
-  ) ->
+  -- | A function that initializes a new crucible state from the argument specification.
+  (ArgShapes ext Shape.NoTag tys -> IO (C.ExecState p sym ext (CS.RegEntry sym ret))) ->
   IO
     (C.ExecutionFeatureResult p sym ext rtp)
 refineState bak sla gla refineReplay st config = do
   let pers = C.execResultContext st ^. C.cruciblePersonality
   let rdata = pers ^. GP.personality . GP.pRefinementData
-  let errMapRef = GR.refineErrMap rdata
   let memVar = GP.getMemVar pers
   LJ.writeLog gla (GrDiag.RefineDiagnostic (GRDiag.ExecutionResult memVar st))
   obls <- C.withBackend (C.execResultContext st) $ \bak' ->
@@ -206,10 +197,7 @@ refineState bak sla gla refineReplay st config = do
         )
       CB.clearProofObligations bak
       CB.resetAssumptionState bak
-      initSt <-
-        config
-          shp
-          (Just errMapRef)
+      initSt <- config shp
 
       C.ExecutionFeatureNewState
         <$> pauseLinearState
@@ -247,10 +235,7 @@ refineFeature ::
   ScreachLogAction ->
   GreaseLogAction ->
   RftOpt.RefineReplay ->
-  ( ArgShapes ext Shape.NoTag tys ->
-    Maybe (IORef.IORef (Map.Map (Nonce.Nonce t CT.BaseBoolType) (GH.ErrorDescription sym))) ->
-    IO (C.ExecState p sym ext (CS.RegEntry sym ret))
-  ) ->
+  (ArgShapes ext Shape.NoTag tys -> IO (C.ExecState p sym ext (CS.RegEntry sym ret))) ->
   C.ExecutionFeature p sym ext rtp
 refineFeature bak sla gla refineReplay initCfg = C.ExecutionFeature $ \case
   C.ResultState (C.TimeoutResult _) -> do
@@ -291,12 +276,8 @@ sdseExecFeatures ::
   ScreachLogAction ->
   GreaseLogAction ->
   RftOpt.RefineReplay ->
-  -- | The function that creates a new initial state from a fresh argument spec and
-  -- an annotation map of errors.
-  ( ArgShapes ext Shape.NoTag tys ->
-    Maybe (IORef.IORef (Map.Map (Nonce.Nonce t CT.BaseBoolType) (GH.ErrorDescription sym))) ->
-    IO (C.ExecState p sym ext (CS.RegEntry sym ret))
-  ) ->
+  -- | The function that creates a new initial state from a fresh argument spec.
+  (ArgShapes ext Shape.NoTag tys -> IO (C.ExecState p sym ext (CS.RegEntry sym ret))) ->
   Sched.PrioritizationFunction p sym ext rtp ->
   -- | Determines if a given state is the target state for SDSE
   (C.ExecResult p sym ext rtp -> IO Bool) ->
