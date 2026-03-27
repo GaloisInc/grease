@@ -21,6 +21,10 @@ module Grease.Syntax (
   ParsedOverridesYaml (..),
   resolveOverridesYaml,
   ResolvedOverridesYaml (..),
+
+  -- * Combined loading of overrides YAML files
+  LoadOverridesYamlError (..),
+  loadOverridesYaml,
 ) where
 
 import Control.Monad (unless)
@@ -214,6 +218,42 @@ resolveOverridesYaml loadOpts mem fnOvNames (ParsedOverridesYaml parsedFunAddrs)
   pure $ ResolvedOverridesYaml $ Map.fromList resolvedFunAddrs
  where
   loadOffset = fromMaybe 0 $ MML.loadOffset loadOpts
+
+-- | Errors that can occur when loading overrides YAML files.
+data LoadOverridesYamlError
+  = LoadOverridesYamlParseError ParseOverridesYamlError
+  | LoadOverridesYamlResolveError ResolveOverridesYamlError
+
+instance PP.Pretty LoadOverridesYamlError where
+  pretty = \case
+    LoadOverridesYamlParseError e -> PP.pretty e
+    LoadOverridesYamlResolveError e -> PP.pretty e
+
+-- | Parse and resolve overrides from a list of YAML file paths.
+loadOverridesYaml ::
+  MM.MemWidth w =>
+  MML.LoadOptions ->
+  MM.Memory w ->
+  -- | The set of override names.
+  Set WFN.FunctionName ->
+  -- | Paths to overrides YAML files.
+  [FilePath] ->
+  IO (Either LoadOverridesYamlError (ResolvedOverridesYaml w))
+loadOverridesYaml loadOpts mem fnOvNames yamlPaths = runExceptT $ do
+  parsed <-
+    fmap mconcat $
+      traverse
+        ( \path -> do
+            result <- liftIO $ parseOverridesYaml path
+            case result of
+              Left err -> throwE $ LoadOverridesYamlParseError err
+              Right ok -> pure ok
+        )
+        yamlPaths
+  result <- liftIO $ resolveOverridesYaml loadOpts mem fnOvNames parsed
+  case result of
+    Left err -> throwE $ LoadOverridesYamlResolveError err
+    Right ok -> pure ok
 
 -- | Helper, not exported.
 --

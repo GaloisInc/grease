@@ -149,7 +149,7 @@ import Grease.Shape.Parse qualified as Parse
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Grease.Solver (withSolverOnlineBackend)
 import Grease.SymIO qualified as GSIO
-import Grease.Syntax (parseOverridesYaml, parsedProgramCfgMap, resolveOverridesYaml)
+import Grease.Syntax (loadOverridesYaml, parsedProgramCfgMap)
 import Grease.Syntax qualified as GSyn
 import Grease.Syscall (builtinGenericSyscalls)
 import Grease.Time (time)
@@ -708,20 +708,13 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
       Left (GMOS.MacawSExpOverrideParseError e@GSyn.SyntaxParseError{}) -> userErr la (PP.pretty e)
       Left e@GMOS.MacawSExpOverrideLoaderError{} -> userErr la (PP.pretty e)
       Right ok -> pure ok
-  fnAddrOvsRaw_ <-
-    fmap mconcat . Monad.sequence
-      <$> traverse parseOverridesYaml (GO.simOverridesYaml simOpts)
-  fnAddrOvsRaw <-
-    case fnAddrOvsRaw_ of
-      Left err -> userErr la (PP.pretty err)
-      Right ok -> pure ok
-  fnAddrOvs_ <- resolveOverridesYaml loadOpts memory (Map.keysSet fnOvsMap) fnAddrOvsRaw
   fnAddrOvs <-
-    case fnAddrOvs_ of
-      -- See Note [Explicitly listed errors]
-      Left e@GSyn.AddressUnresolvable{} -> userErr la (PP.pretty e)
-      Left e@GSyn.FunctionNameNotFound{} -> userErr la (PP.pretty e)
-      Right ok -> pure ok
+    loadOverridesYaml loadOpts memory (Map.keysSet fnOvsMap) (GO.simOverridesYaml simOpts)
+      >>= \case
+        -- See Note [Explicitly listed errors]
+        Left e@GSyn.LoadOverridesYamlParseError{} -> userErr la (PP.pretty e)
+        Left e@GSyn.LoadOverridesYamlResolveError{} -> userErr la (PP.pretty e)
+        Right ok -> pure ok
   let memCfg =
         GM.memConfigWithHandles
           bak
