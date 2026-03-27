@@ -222,11 +222,23 @@ See [The S-expression language](sexp.md) for more details.
 (declare @conc-vector-bv-16 ((v (Vector (Bitvector 16)))) (Vector (Bitvector 16)))
 (declare @conc-vector-bv-32 ((v (Vector (Bitvector 32)))) (Vector (Bitvector 32)))
 (declare @conc-vector-bv-64 ((v (Vector (Bitvector 64)))) (Vector (Bitvector 64)))
+(declare @unique-conc-bool ((b Bool)) Bool)
+(declare @unique-conc-bv-8 ((bv (Bitvector 8))) (Bitvector 8))
+(declare @unique-conc-bv-16 ((bv (Bitvector 16))) (Bitvector 16))
+(declare @unique-conc-bv-32 ((bv (Bitvector 32))) (Bitvector 32))
+(declare @unique-conc-bv-64 ((bv (Bitvector 64))) (Bitvector 64))
+(declare @unique-conc-integer ((i Integer)) Integer)
+(declare @unique-conc-nat ((n Nat)) Nat)
+(declare @unique-conc-ptr-32 ((p (Ptr 32))) (Ptr 32))
+(declare @unique-conc-ptr-64 ((p (Ptr 64))) (Ptr 64))
+(declare @unique-conc-vector-bv-8 ((v (Vector (Bitvector 8)))) (Vector (Bitvector 8)))
+(declare @unique-conc-vector-bv-16 ((v (Vector (Bitvector 16)))) (Vector (Bitvector 16)))
+(declare @unique-conc-vector-bv-32 ((v (Vector (Bitvector 32)))) (Vector (Bitvector 32)))
+(declare @unique-conc-vector-bv-64 ((v (Vector (Bitvector 64)))) (Vector (Bitvector 64)))
 (declare @fresh-bytes ((name (String Unicode)) (num (Bitvector w))) (Vector (Bitvector 8)))
 ```
 
-For LLVM S-expression files (programs or overrides), the following overrides are
-also available:
+For LLVM S-expression files (programs or overrides), the following overrides are also available:
 ```
 (declare @read-bytes ((x (Ptr 64))) (Vector (Bitvector 8)))
 (declare @read-c-string ((x (Ptr 64))) (String Unicode))

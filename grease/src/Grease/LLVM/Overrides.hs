@@ -56,6 +56,8 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lumberjack qualified as LJ
 import Text.LLVM.AST qualified as L
+import What4.Expr.Builder qualified as WEB
+import What4.FloatMode qualified as W4FM
 import What4.FunctionName qualified as WFN
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
@@ -142,13 +144,15 @@ sexpOvDefineDecls p =
 --
 -- * User-defined overrides from S-expressions (see 'loadOverrides')
 registerLLVMOverrides ::
-  forall sym bak arch p rtp as r scope st fs solver.
+  forall sym bak arch p rtp as r scope st fs fm solver.
   ( CLM.HasPtrWidth 64
   , CLM.HasLLVMAnn sym
   , ToConc.HasToConcretize p
   , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
+  , fs ~ WEB.Flags fm
+  , C.KnownRepr W4FM.FloatModeRepr fm
   , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   GreaseLogAction ->
@@ -306,13 +310,15 @@ registerLLVMOverrides la builtinOvs userOvs skipFuns bak llvmCtx fs defns decls 
 --
 -- * User-defined overrides from S-expressions (see 'loadOverrides')
 registerLLVMSexpOverrides ::
-  forall sym bak arch p rtp as r scope st fs solver.
+  forall sym bak arch p rtp as r scope st fs fm solver.
   ( CLM.HasPtrWidth 64
   , CLM.HasLLVMAnn sym
   , ToConc.HasToConcretize p
   , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
+  , fs ~ WEB.Flags fm
+  , C.KnownRepr W4FM.FloatModeRepr fm
   , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   GreaseLogAction ->
@@ -345,13 +351,15 @@ registerLLVMSexpOverrides la builtinOvs sexpOvs skipFuns bak llvmCtx fs prog err
 --
 -- * User-defined overrides from S-expressions (see 'loadOverrides')
 registerLLVMModuleOverrides ::
-  forall sym bak arch p rtp as r scope st fs solver.
+  forall sym bak arch p rtp as r scope st fs fm solver.
   ( CLM.HasPtrWidth 64
   , CLM.HasLLVMAnn sym
   , ToConc.HasToConcretize p
   , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   , ?lc :: TypeContext
+  , fs ~ WEB.Flags fm
+  , C.KnownRepr W4FM.FloatModeRepr fm
   , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   GreaseLogAction ->
@@ -382,12 +390,14 @@ registerLLVMModuleOverrides la builtinOvs sexpOvs skipFuns bak llvmCtx fs llMod 
 -- to call the corresponding LLVM overrides. Treat any calls to unresolved
 -- forward declarations as though the functions were skipped.
 registerLLVMSexpProgForwardDeclarations ::
-  forall sym bak p rtp as r scope st fs solver.
+  forall sym bak p rtp as r scope st fs fm solver.
   ( CLM.HasPtrWidth 64
   , CLM.HasLLVMAnn sym
   , ToConc.HasToConcretize p
   , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
+  , fs ~ WEB.Flags fm
+  , C.KnownRepr W4FM.FloatModeRepr fm
   , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   GreaseLogAction ->
@@ -414,6 +424,8 @@ registerLLVMForwardDeclarations ::
   , ToConc.HasToConcretize p
   , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
+  , fs ~ WEB.Flags fm
+  , C.KnownRepr W4FM.FloatModeRepr fm
   , OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   bak ->
@@ -425,6 +437,7 @@ registerLLVMForwardDeclarations ::
   Map.Map WFN.FunctionName C.SomeHandle ->
   CS.OverrideSim p sym CLI.LLVM rtp as r ()
 registerLLVMForwardDeclarations bak funOvs errCb fwdDecs = do
+  let fm = C.knownRepr
   ctx <- CS.getContext
   let mvar = GP.getMemVar (ctx ^. CS.cruciblePersonality)
   let CantResolveOverrideCallback cannotResolve = errCb
@@ -474,6 +487,51 @@ registerLLVMForwardDeclarations bak funOvs errCb fwdDecs = do
             unless ok (cannotResolve fwdDecName hdl)
           "conc-vector-bv-64" -> do
             ok <- tryBindTypedOverride hdl (Conc.concVectorBvOverride bak (C.knownNat @64))
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-bv-8" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcBvOverride bak fm (C.knownNat @8))
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-bv-16" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcBvOverride bak fm (C.knownNat @16))
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-bv-32" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcBvOverride bak fm (C.knownNat @32))
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-bv-64" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcBvOverride bak fm (C.knownNat @64))
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-bool" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcBoolOverride bak fm)
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-integer" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcIntegerOverride bak fm)
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-nat" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcNatOverride bak fm)
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-ptr-8" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcPtrOverride bak fm (C.knownNat @8))
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-ptr-16" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcPtrOverride bak fm (C.knownNat @16))
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-ptr-32" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcPtrOverride bak fm (C.knownNat @32))
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-ptr-64" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcPtrOverride bak fm (C.knownNat @64))
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-vector-bv-8" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcVectorBvOverride bak fm (C.knownNat @8))
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-vector-bv-16" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcVectorBvOverride bak fm (C.knownNat @16))
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-vector-bv-32" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcVectorBvOverride bak fm (C.knownNat @32))
+            unless ok (cannotResolve fwdDecName hdl)
+          "unique-conc-vector-bv-64" -> do
+            ok <- tryBindTypedOverride hdl (Conc.uniqueConcVectorBvOverride bak fm (C.knownNat @64))
             unless ok (cannotResolve fwdDecName hdl)
           "fresh-bytes" -> do
             ok <- tryBindTypedOverride hdl (freshBytesOverride ?ptrWidth)
