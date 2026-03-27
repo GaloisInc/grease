@@ -26,6 +26,19 @@ additional types and operations, see:
 
 There are a few overrides that are only available in S-expression files
 (programs or overrides).
+
+### Concretization overrides
+
+GREASE provides two kinds of concretization overrides:
+
+**Unsound concretization** (`conc-*`): Makes 1 solver query to get a concrete
+value. Fast but unsound for verification; picks an arbitrary value when
+multiple solutions exist.
+
+**Sound (unique) concretization** (`unique-conc-*`): Makes 2 solver queries to
+check if the value has exactly one possible model. If unique, concretizes;
+otherwise returns the symbolic value unchanged. Sound for verification.
+
 ```
 (declare @conc-bool ((b Bool)) Bool)
 (declare @conc-bv-8 ((bv (Bitvector 8))) (Bitvector 8))
@@ -40,24 +53,55 @@ There are a few overrides that are only available in S-expression files
 (declare @conc-vector-bv-16 ((v (Vector (Bitvector 16)))) (Vector (Bitvector 16)))
 (declare @conc-vector-bv-32 ((v (Vector (Bitvector 32)))) (Vector (Bitvector 32)))
 (declare @conc-vector-bv-64 ((v (Vector (Bitvector 64)))) (Vector (Bitvector 64)))
-(declare @fresh-bytes ((name (String Unicode)) (num (Bitvector w))) (Vector (Bitvector 8)))
+
+(declare @unique-conc-bool ((b Bool)) Bool)
+(declare @unique-conc-bv-8 ((bv (Bitvector 8))) (Bitvector 8))
+(declare @unique-conc-bv-16 ((bv (Bitvector 16))) (Bitvector 16))
+(declare @unique-conc-bv-32 ((bv (Bitvector 32))) (Bitvector 32))
+(declare @unique-conc-bv-64 ((bv (Bitvector 64))) (Bitvector 64))
+(declare @unique-conc-integer ((i Integer)) Integer)
+(declare @unique-conc-nat ((n Nat)) Nat)
+(declare @unique-conc-ptr-32 ((p (Ptr 32))) (Ptr 32))
+(declare @unique-conc-ptr-64 ((p (Ptr 64))) (Ptr 64))
+(declare @unique-conc-vector-bv-8 ((v (Vector (Bitvector 8)))) (Vector (Bitvector 8)))
+(declare @unique-conc-vector-bv-16 ((v (Vector (Bitvector 16)))) (Vector (Bitvector 16)))
+(declare @unique-conc-vector-bv-32 ((v (Vector (Bitvector 32)))) (Vector (Bitvector 32)))
+(declare @unique-conc-vector-bv-64 ((v (Vector (Bitvector 64)))) (Vector (Bitvector 64)))
 ```
 
-### `@conc-bool`, `@conc-integer`, `@conc-nat`, `@conc-bv-*`
+#### `@conc-bool`, `@conc-integer`, `@conc-nat`, `@conc-bv-*`
 
 These overrides request a model from the SMT solver and return the concrete
 value of the input in the model.
 
-### `@conc-ptr-*`
+#### `@unique-conc-bool`, `@unique-conc-integer`, `@unique-conc-nat`, `@unique-conc-bv-*`
+
+These overrides check if the value has a unique concrete value across all
+satisfying models. If unique, returns the concrete value; otherwise returns
+the symbolic value unchanged.
+
+#### `@conc-ptr-*`
 
 These overrides request a model from the SMT solver and return a pointer with
 both the block number and offset concretized in the same model.
 
-### `@conc-vector-bv-*`
+#### `@unique-conc-ptr-*`
+
+These overrides check if the pointer has a unique block number and offset
+across all satisfying models. If unique, returns the concrete pointer;
+otherwise returns the symbolic pointer unchanged.
+
+#### `@conc-vector-bv-*`
 
 These overrides request a model from the SMT solver and return a vector where
 all bitvector elements have been concretized in the same model. This ensures
 consistency across all elements of the vector.
+
+#### `@unique-conc-vector-bv-*`
+
+These overrides check if all elements of the vector have unique concrete values
+across all satisfying models. If all elements are uniquely determined, returns
+the concrete vector; otherwise returns the symbolic vector unchanged.
 
 ### `@fresh-bytes`
 

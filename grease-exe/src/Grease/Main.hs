@@ -1362,6 +1362,8 @@ getLlvmInitArgShapes la opts llvmMod argNames cfg = do
 simulateLlvmCfg ::
   forall sym bak arch solver t st fm argTys ret.
   ( CLM.HasPtrWidth (CLLVM.ArchWidth arch)
+  , sym ~ WEB.ExprBuilder t st (WEB.Flags fm)
+  , C.KnownRepr WE.FloatModeRepr fm
   , GUtil.OnlineSolverAndBackend solver sym bak t st (WEB.Flags fm)
   , ?parserHooks :: CSyn.ParserHooks CLLVM.LLVM
   ) =>

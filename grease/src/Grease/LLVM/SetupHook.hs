@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | c.f. "Grease.Macaw.SetupHook"
 module Grease.LLVM.SetupHook (
@@ -44,6 +45,8 @@ import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lumberjack qualified as LJ
+import What4.Expr.Builder qualified as WEB
+import What4.FloatMode qualified as W4FM
 import What4.FunctionName qualified as WFN
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
@@ -75,8 +78,11 @@ networkOvTemplates bak fs =
 -- c.f. 'Grease.Macaw.SetupHook.SetupHook'
 newtype SetupHook sym arch
   = SetupHook
-      ( forall p bak rtp a r scope st fs solver.
+      ( forall p bak rtp a r scope st fs fm solver.
         ( CB.IsSymBackend sym bak
+        , sym ~ WEB.ExprBuilder scope st fs
+        , fs ~ WEB.Flags fm
+        , C.KnownRepr W4FM.FloatModeRepr fm
         , ArchWidth arch ~ 64
         , CLM.HasPtrWidth (ArchWidth arch)
         , CLM.HasLLVMAnn sym

@@ -34,11 +34,16 @@ import Lang.Crucible.LLVM.Translation qualified as CLT
 import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.GlobalState qualified as CS
+import What4.Expr.Builder qualified as WEB
+import What4.FloatMode qualified as W4FM
 
 initState ::
-  forall p sym bak arch m st fs argTys retTy solver scope.
+  forall p sym bak arch m st fs fm argTys retTy solver scope.
   ( MonadIO m
   , MonadThrow m
+  , sym ~ WEB.ExprBuilder scope st fs
+  , fs ~ WEB.Flags fm
+  , C.KnownRepr W4FM.FloatModeRepr fm
   , OnlineSolverAndBackend solver sym bak scope st fs
   , 16 C.<= ArchWidth arch
   , ArchWidth arch ~ 64
