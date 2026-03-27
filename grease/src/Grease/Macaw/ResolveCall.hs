@@ -43,7 +43,6 @@ import Data.Map.Strict qualified as Map
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
 import Data.Parameterized.NatRepr (knownNat)
-import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import GHC.Word (Word64)
@@ -71,7 +70,7 @@ import Grease.Macaw.SkippedCall (
   ),
  )
 import Grease.Macaw.Syscall (macawSyscallOverride)
-import Grease.Options (ErrorSymbolicFunCalls, ErrorSymbolicSyscalls, SkipInvalidCallAddrs, getErrorSymbolicFunCalls, getErrorSymbolicSyscalls, getSkipInvalidCallAddrs)
+import Grease.Options qualified as Opts
 import Grease.Syntax (ResolvedOverridesYaml, getResolvedOverridesYaml)
 import Grease.Utility (OnlineSolverAndBackend, segoffToAbsoluteAddr)
 import Lang.Crucible.Analysis.Postdom qualified as C
@@ -263,17 +262,14 @@ lookupFunctionHandleResult ::
   -- | Map of names of overridden functions to their implementations
   Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
-  -- | Functions that should be skipped even if they are defined
-  Set WFN.FunctionName ->
-  ErrorSymbolicFunCalls ->
-  SkipInvalidCallAddrs ->
+  Opts.CallOpts ->
   CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
   Ctx.Assignment (CS.RegValue' sym) (Symbolic.MacawCrucibleRegTypes arch) ->
   IO
     ( LookupFunctionHandleResult p sym arch
     , CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
     )
-lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns errorSymbolicFunCalls skipInvalidCallAddrs st regs = do
+lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs callOpts st regs = do
   -- First, obtain the address contained in the instruction pointer.
   symAddr0 <- (arch ^. Arch.archGetIP) regs
   -- Next, attempt to concretize the address. We must do this because it is
@@ -298,7 +294,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
     -- entirely, but if the user passes --error-symbolic-fun-calls, then this is
     -- treated as an error.
     Nothing ->
-      if getErrorSymbolicFunCalls errorSymbolicFunCalls
+      if Opts.getErrorSymbolicFunCalls (Opts.callErrorSymbolicFunCalls callOpts)
         then
           CB.addFailedAssertion bak $
             CS.AssertFailureSimError
@@ -314,7 +310,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
         case Loader.resolveAbsoluteAddress memory bvMemWord of
           Nothing ->
             let addrString = BV.ppHex knownNat bv
-             in if getSkipInvalidCallAddrs skipInvalidCallAddrs
+             in if Opts.getSkipInvalidCallAddrs (Opts.callSkipInvalidCallAddrs callOpts)
                   then
                     pure (SkippedFunctionCall (InvalidAddress addrString), st)
                   else
@@ -341,7 +337,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
       , CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
       )
   maybeUserSkip nm els =
-    if Set.member nm skipFuns
+    if Set.member nm (Opts.callSkipFuns callOpts)
       then pure (SkippedFunctionCall (UserSkip nm), st)
       else els
 
@@ -436,15 +432,12 @@ lookupFunctionHandle ::
   -- | Map of names of overridden functions to their implementations
   Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
-  -- | Functions that should be skipped even if they are defined
-  Set WFN.FunctionName ->
-  ErrorSymbolicFunCalls ->
-  SkipInvalidCallAddrs ->
+  Opts.CallOpts ->
   LookupFunctionHandleDispatch p sym arch ->
   Symbolic.LookupFunctionHandle p sym arch
-lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns errorSymbolicFunCalls skipInvalidCallAddrs lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
+lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs callOpts lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
   let LookupFunctionHandleDispatch dispatch = lfhd
-  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs skipFuns errorSymbolicFunCalls skipInvalidCallAddrs st regs
+  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs callOpts st regs
   dispatch st' mem regs res
 
 -- | Dispatch on the result of looking up a syscall override. The
@@ -543,17 +536,17 @@ lookupSyscallResult ::
   Map.Map
     WFN.FunctionName
     (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
-  ErrorSymbolicSyscalls ->
+  Opts.CallOpts ->
   Ctx.Assignment C.TypeRepr atps ->
   Ctx.Assignment C.TypeRepr rtps ->
   CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
   CS.RegEntry sym (C.StructType atps) ->
   IO (LookupSyscallResult p sym arch atps rtps)
-lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs = do
+lookupSyscallResult bak arch syscallOvs callOpts atps rtps st regs = do
   symSyscallBV <- (arch ^. Arch.archSyscallNumberRegister) bak atps regs
   case WI.asBV (CS.regValue symSyscallBV) of
     Nothing ->
-      if getErrorSymbolicSyscalls errorSymbolicSyscalls
+      if Opts.getErrorSymbolicSyscalls (Opts.callErrorSymbolicSyscalls callOpts)
         then
           CB.addFailedAssertion bak $
             CS.AssertFailureSimError
@@ -591,14 +584,14 @@ lookupSyscallHandle ::
   Map.Map
     WFN.FunctionName
     (Stubs.SomeSyscall p sym (Symbolic.MacawExt arch)) ->
-  ErrorSymbolicSyscalls ->
+  Opts.CallOpts ->
   -- | Dispatch on the result of looking up a syscall override.
   LookupSyscallDispatch p sym arch ->
   Symbolic.LookupSyscallHandle p sym arch
-lookupSyscallHandle bak arch syscallOvs errorSymbolicSyscalls lsd =
+lookupSyscallHandle bak arch syscallOvs callOpts lsd =
   Symbolic.LookupSyscallHandle $ \atps rtps st regs -> do
     let LookupSyscallDispatch dispatch = lsd
-    res <- lookupSyscallResult bak arch syscallOvs errorSymbolicSyscalls atps rtps st regs
+    res <- lookupSyscallResult bak arch syscallOvs callOpts atps rtps st regs
     dispatch atps rtps st regs res
 
 -- | Perform code discovery on the function address (see @Note [Incremental

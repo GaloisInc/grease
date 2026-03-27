@@ -137,6 +137,7 @@ conf =
   Conf.Config
     <$> programConfig
     <*> GC.boundsOptsParser
+    <*> GC.callOptsParser
     <*> GC.debugOptsParser
     <*> GC.fsOptsParser
     <*> GC.initPrecondOptsParser

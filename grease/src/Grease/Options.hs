@@ -13,6 +13,7 @@ module Grease.Options (
   TypeUnrollingBound (..),
   MutableGlobalState (..),
   ExtraStackSlots (..),
+  CallOpts (..),
   ErrorSymbolicFunCalls (..),
   ErrorSymbolicSyscalls (..),
   SkipInvalidCallAddrs (..),
@@ -124,6 +125,23 @@ Similar considerations apply for derived Show instances, which also have
 different behavior when `stock`-derived.
 -}
 
+-- | Options related to how function calls and syscalls are handled.
+data CallOpts
+  = CallOpts
+  { callErrorSymbolicFunCalls :: ErrorSymbolicFunCalls
+  -- ^ Throw an error if attempting to call a symbolic function handle or
+  -- pointer. Default: 'False' (skip such calls).
+  , callErrorSymbolicSyscalls :: ErrorSymbolicSyscalls
+  -- ^ Throw an error if attempting a system call with a symbolic number.
+  -- Default: 'False' (skip such calls).
+  , callSkipInvalidCallAddrs :: SkipInvalidCallAddrs
+  -- ^ Skip calls to invalid addresses in binaries instead of erroring.
+  -- Default: 'False'.
+  , callSkipFuns :: Set FunctionName
+  -- ^ Functions that should be skipped even if they are defined.
+  }
+  deriving Show
+
 -- | Bounds, limits, and timeouts.
 data BoundsOpts
   = BoundsOpts
@@ -184,12 +202,8 @@ data SimOpts
   -- ^ Run the debugger execution feature
   , simEntryPoints :: [Entrypoint]
   -- ^ Names or address of function to simulate
-  , simErrorSymbolicFunCalls :: ErrorSymbolicFunCalls
-  -- ^ Default: 'False'.
-  , simErrorSymbolicSyscalls :: ErrorSymbolicSyscalls
-  -- ^ Default: 'False'.
-  , simSkipInvalidCallAddrs :: SkipInvalidCallAddrs
-  -- ^ Default: 'False'.
+  , simCallOpts :: CallOpts
+  -- ^ Options for handling function calls and syscalls
   , simSkipUnsupportedRelocs :: SkipUnsupportedRelocs
   -- ^ Default: 'False'.
   , simMutGlobs :: MutableGlobalState
@@ -225,7 +239,6 @@ data SimOpts
   , simFsOpts :: FsOpts
   , simInitPrecondOpts :: InitialPreconditionOpts
   , simDumpCoverage :: Maybe FilePath
-  , simSkipFuns :: Set FunctionName
   }
   deriving Show
 

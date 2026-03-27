@@ -722,9 +722,6 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
       Left e@GSyn.AddressUnresolvable{} -> userErr la (PP.pretty e)
       Left e@GSyn.FunctionNameNotFound{} -> userErr la (PP.pretty e)
       Right ok -> pure ok
-  let errorSymbolicFunCalls = GO.simErrorSymbolicFunCalls simOpts
-  let errorSymbolicSyscalls = GO.simErrorSymbolicSyscalls simOpts
-  let skipInvalidCallAddrs = GO.simSkipInvalidCallAddrs simOpts
   let memCfg =
         GM.memConfigWithHandles
           bak
@@ -738,10 +735,7 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
           fnOvsMap
           fnAddrOvs
           builtinGenericSyscalls
-          (GO.simSkipFuns simOpts)
-          errorSymbolicFunCalls
-          errorSymbolicSyscalls
-          skipInvalidCallAddrs
+          (GO.simCallOpts simOpts)
           (declaredFunNotFound la)
           memCfg_
   pure (memCfg, fnOvsMap)
@@ -1235,7 +1229,7 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
   let setupHook :: forall sym. Macaw.SetupHook sym arch
       setupHook =
         let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
-         in Macaw.syntaxSetupHook la errCb dl (GO.simSkipFuns simOpts) cfgs prog
+         in Macaw.syntaxSetupHook la errCb dl (GO.callSkipFuns (GO.simCallOpts simOpts)) cfgs prog
   let macawCfgConfig =
         MacawCfgConfig
           { mcDataLayout = dl
@@ -1461,7 +1455,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
             (CLLVM.llvmExtensionImpl ?memOpts)
             p
             halloc
-            (GO.simErrorSymbolicFunCalls simOpts)
+            (GO.callErrorSymbolicFunCalls (GO.simCallOpts simOpts))
             setupMem
             -- TODO: just take the whole initFs
             (GSIO.initFs initFs)
@@ -1584,7 +1578,7 @@ simulateLlvmSyntax simOpts la = do
   let llvmMod = Nothing
   let setupHook :: forall sym arch. LLVM.SetupHook sym arch
       setupHook =
-        LLVM.syntaxSetupHook la sexpOvs (GO.simSkipFuns simOpts) prog cfgs $
+        LLVM.syntaxSetupHook la sexpOvs (GO.callSkipFuns (GO.simCallOpts simOpts)) prog cfgs $
           GLO.CantResolveOverrideCallback $
             \nm _hdl -> liftIO (declaredFunNotFound la nm)
   simulateLlvmCfgs la simOpts halloc llvmCtx llvmMod mkMem setupHook cfgs
@@ -1679,7 +1673,7 @@ simulateLlvm transOpts simOpts la = do
     sexpOvs <- loadLLVMSExpOvs la (GO.simOverrides simOpts) halloc mvar
     let setupHook :: forall sym. LLVM.SetupHook sym arch
         setupHook =
-          LLVM.moduleSetupHook la sexpOvs (GO.simSkipFuns simOpts) trans cfgs $
+          LLVM.moduleSetupHook la sexpOvs (GO.callSkipFuns (GO.simCallOpts simOpts)) trans cfgs $
             GLO.CantResolveOverrideCallback $
               \nm _hdl -> liftIO (declaredFunNotFound la nm)
 

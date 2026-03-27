@@ -1090,10 +1090,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                 Left e@Syntax.AddressUnresolvable{} -> usrErr e
                 Left e@Syntax.FunctionNameNotFound{} -> usrErr e
                 Right resolved -> pure resolved
-        -- TODO(internal#87): make an option for grease ErrorSymbolicFunCalls
-        let errorSymbolicFunCalls = GO.ErrorSymbolicFunCalls{GO.getErrorSymbolicFunCalls = True}
-        let errorSymbolicSyscalls = GO.ErrorSymbolicSyscalls{GO.getErrorSymbolicSyscalls = True}
-        let skipInvalidCallAddrs = GO.SkipInvalidCallAddrs True
+        let cOpts = Conf.callOpts conf
         let defaultLfhd =
               ResolveCall.defaultLookupFunctionHandleDispatch
                 bak
@@ -1121,10 +1118,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                   fnOvsMap
                   fnAddrOvs
                   builtinGenericSyscalls
-                  Set.empty -- TODO(internal#152): functions to skip
-                  errorSymbolicFunCalls
-                  errorSymbolicSyscalls
-                  skipInvalidCallAddrs
+                  cOpts
                   (overrideError sla)
                   memCfg0
               )
@@ -1140,9 +1134,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                       dynFunMap
                       fnOvsMap
                       fnAddrOvs
-                      Set.empty -- TODO(internal#152): functions to skip
-                      errorSymbolicFunCalls
-                      skipInvalidCallAddrs
+                      cOpts
                       lfhd
                 }
         evalFn <- MS.withArchEval @MS.LLVMMemory @MX86.X86_64 (archCtx ^. Arch.archVals) sym pure
