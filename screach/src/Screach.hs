@@ -1069,27 +1069,13 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
             Left (GMOS.MacawSExpOverrideParseError e@Syntax.SyntaxParseError{}) -> usrErr (GMOS.MacawSExpOverrideParseError e)
             Left e@GMOS.MacawSExpOverrideLoaderError{} -> usrErr e
             Right m -> pure m
-        fnAddrOvsRawResults <- liftIO $ traverse Syntax.parseOverridesYaml (Conf.overridesYaml conf)
-        fnAddrOvsRaw <-
-          let usrErr = userError sla . PP.pretty
-           in case sequence fnAddrOvsRawResults of
-                -- See Note [Explicitly listed errors]
-                Left e@Syntax.YamlParseError{} -> usrErr e
-                Left e@Syntax.UnexpectedYamlKeys{} -> usrErr e
-                Left e@Syntax.InvalidAddress{} -> usrErr e
-                Left e@Syntax.ExpectedString{} -> usrErr e
-                Left e@Syntax.ExpectedObject{} -> usrErr e
-                Left e@Syntax.ExpectedNullableObject{} -> usrErr e
-                Right parsed -> pure $ mconcat parsed
-        fnAddrOvsResult <-
-          liftIO $ Syntax.resolveOverridesYaml loadOpts mem (Map.keysSet fnOvsMap) fnAddrOvsRaw
         fnAddrOvs <-
-          let usrErr = userError sla . PP.pretty
-           in case fnAddrOvsResult of
-                -- See Note [Explicitly listed errors]
-                Left e@Syntax.AddressUnresolvable{} -> usrErr e
-                Left e@Syntax.FunctionNameNotFound{} -> usrErr e
-                Right resolved -> pure resolved
+          liftIO (Syntax.loadOverridesYaml loadOpts mem (Map.keysSet fnOvsMap) (Conf.overridesYaml conf))
+            >>= \case
+              -- See Note [Explicitly listed errors]
+              Left e@Syntax.LoadOverridesYamlParseError{} -> userError sla (PP.pretty e)
+              Left e@Syntax.LoadOverridesYamlResolveError{} -> userError sla (PP.pretty e)
+              Right ok -> pure ok
         let cOpts = Conf.callOpts conf
         let defaultLfhd =
               ResolveCall.defaultLookupFunctionHandleDispatch
