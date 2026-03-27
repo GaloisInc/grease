@@ -223,6 +223,7 @@ library screach-dist-test-cli
       macaw-x86-symbolic,
       macaw-x86-syntax,
       macaw-base,
+      macaw-loader,
       parameterized-utils,
       crucible,
       crucible-llvm,

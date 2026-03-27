@@ -8,7 +8,7 @@
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
-module Grease.Macaw.Arch.X86 (x86Ctx) where
+module Grease.Macaw.Arch.X86 (x86Ctx, x64RelocSupported) where
 
 import Control.Lens ((.~), (^.))
 import Control.Monad.IO.Class (liftIO)

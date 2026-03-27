@@ -54,7 +54,6 @@ import Data.Macaw.BinaryLoader.AArch32 ()
 import Data.Macaw.BinaryLoader.Raw ()
 import Data.Macaw.BinaryLoader.X86 ()
 import Data.Macaw.CFG qualified as MC
-import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
 import Data.Macaw.Memory.LoadCommon qualified as MML
@@ -110,15 +109,15 @@ import Grease.LLVM.SetupHook.Diagnostic qualified as LDiag (Diagnostic (LLVMTran
 import Grease.LLVM.Shapes qualified as GLS
 import Grease.Macaw qualified as GM
 import Grease.Macaw.Arch qualified as Arch
-import Grease.Macaw.Arch.AArch32 (armCtx)
-import Grease.Macaw.Arch.PPC32 (ppc32Ctx)
-import Grease.Macaw.Arch.PPC64 (ppc64Ctx)
-import Grease.Macaw.Arch.X86 (x86Ctx)
+import Grease.Macaw.Arch.AArch32 (armCtx, armRelocSupported)
+import Grease.Macaw.Arch.PPC32 (ppc32Ctx, ppc32RelocSupported)
+import Grease.Macaw.Arch.PPC64 (ppc64Ctx, ppc64RelocSupported)
+import Grease.Macaw.Arch.X86 (x64RelocSupported, x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
 import Grease.Macaw.Entrypoint (checkMacawEntrypointCfgsSignatures)
 import Grease.Macaw.Entrypoint qualified as GME
 import Grease.Macaw.Load qualified as Load
-import Grease.Macaw.Load.Relocation (RelocType (SymbolReloc), RelocationError (RelocationSymbolNotFound), elfRelocationMap)
+import Grease.Macaw.Load.Relocation qualified as Reloc
 import Grease.Macaw.Overrides (mkMacawOverrideMapWithBuiltins)
 import Grease.Macaw.Overrides.Address (AddressOverrides, loadAddressOverrides)
 import Grease.Macaw.Overrides.Address qualified as AddrOv
@@ -435,22 +434,12 @@ checkMustFail bak errs = do
 -- fills the fields of this data type with default or uninteresting values, as
 -- S-expression programs do not require analyzing machine code.
 data MacawCfgConfig arch = MacawCfgConfig
-  { mcDataLayout :: DataLayout
-  -- ^ The data layout to use in the underlying memory model.
-  , mcLoadOptions :: MML.LoadOptions
-  -- ^ The load options used to load addresses in the binary.
-  , mcSymMap :: Discovery.AddrSymMap (MC.ArchAddrWidth arch)
-  -- ^ Map of entrypoint addresses to their names.
-  , mcPltStubs :: Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName
-  -- ^ Map of addresses to PLT stub names.
-  , mcDynFunMap :: Map.Map WFN.FunctionName (MC.ArchSegmentOff arch)
-  -- ^ Map of dynamic function names to their addresses.
-  , mcRelocs :: Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (Arch.ArchReloc arch)
-  -- ^ Map of relocation addresses and types.
+  { mcBinMd :: Load.BinMd arch
+  -- ^ Binary metadata (maps, load options, etc.).
   , mcMemory :: MC.Memory (MC.RegAddrWidth (MC.ArchReg arch))
   -- ^ The memory layout of the binary.
   , mcElf :: Maybe (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
-  -- ^ 'Just' the ELF of the target binary if it exists, and 'Nothing' otherwise
+  -- ^ The ELF header info, if loading from an ELF binary.
   }
 
 -- | Create a 'DataLayout' suitable for @macaw-symbolic@'s needs. Currently,
@@ -689,14 +678,10 @@ macawMemConfig ::
     , Map WFN.FunctionName (MacawSExpOverride p sym arch)
     )
 macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable = do
-  let MacawCfgConfig
-        { mcLoadOptions = loadOpts
-        , mcSymMap = symMap
-        , mcPltStubs = pltStubs
-        , mcDynFunMap = dynFunMap
-        , mcRelocs = relocs
-        , mcMemory = memory
-        } = macawCfgConfig
+  let binMd = mcBinMd macawCfgConfig
+      memory = mcMemory macawCfgConfig
+      relocs = Load.binRelocs binMd
+      loadOpts = Load.binLoadOptions binMd
   let skipUnsupportedRelocs = GO.simSkipUnsupportedRelocs simOpts
   let memCfg_ = GM.memConfigInitial bak archCtx memPtrTable skipUnsupportedRelocs relocs
   let userOvPaths = GO.simOverrides simOpts
@@ -721,10 +706,8 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
           la
           halloc
           archCtx
+          binMd
           memory
-          symMap
-          pltStubs
-          dynFunMap
           fnOvsMap
           fnAddrOvs
           builtinGenericSyscalls
@@ -858,7 +841,7 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallbac
     halloc
     bak
     fm
-    (mcDataLayout macawCfgConfig)
+    (macawDataLayout archCtx)
     argNames
     argNames
     regTypes
@@ -1006,10 +989,11 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
   pure finalResult
  where
   MacawCfgConfig
-    { mcDataLayout = dl
-    , mcRelocs = relocs
+    { mcBinMd = binMd
     , mcMemory = memory
     } = macawCfgConfig
+  dl = macawDataLayout archCtx
+  relocs = Load.binRelocs binMd
 
 simulateMacawCfgs ::
   forall arch.
@@ -1062,7 +1046,7 @@ simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfg
                     , GOut.batchLoadOffset =
                         fromMaybe 0 $
                           MML.loadOffset $
-                            mcLoadOptions macawCfgConfig
+                            Load.binLoadOptions (mcBinMd macawCfgConfig)
                     }
             pure (entry, result)
 
@@ -1225,12 +1209,7 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
          in Macaw.syntaxSetupHook la errCb dl (GO.callSkipFuns (GO.simCallOpts simOpts)) cfgs prog
   let macawCfgConfig =
         MacawCfgConfig
-          { mcDataLayout = dl
-          , mcLoadOptions = MML.defaultLoadOptions
-          , mcSymMap = Map.empty
-          , mcPltStubs = Map.empty
-          , mcDynFunMap = Map.empty
-          , mcRelocs = Map.empty
+          { mcBinMd = Load.emptyBinMd
           , mcMemory = memory
           , mcElf = Nothing
           }
@@ -1252,37 +1231,15 @@ simulateMacaw ::
   C.HandleAllocator ->
   Elf.ElfHeaderInfo (MC.ArchAddrWidth arch) ->
   Load.LoadedProgram arch ->
-  Maybe (PLT.PLTStubInfo (Arch.ArchReloc arch)) ->
   Arch.ArchContext arch ->
   GO.SimOpts ->
   CSyn.ParserHooks (Symbolic.MacawExt arch) ->
   IO Results
-simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx simOpts parserHooks = do
+simulateMacaw la halloc elf loadedProg archCtx simOpts parserHooks = do
   let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
-  let dl = macawDataLayout archCtx
-  let memory = Loader.memoryImage $ Load.progLoadedBinary loadedProg
-  let loadOpts = Load.progLoadOptions loadedProg
-  let symMap = Load.progSymMap loadedProg
-  let dynFunMap = Load.progDynFunMap loadedProg
+  let memory = Loader.memoryImage (Load.progLoadedBinary loadedProg)
+  let binMd = Load.progBinMd loadedProg
 
-  relocs <-
-    case elfRelocationMap (Proxy @(Arch.ArchReloc arch)) loadOpts elf of
-      Left err@RelocationSymbolNotFound{} -> malformedElf la (PP.pretty err)
-      Right rs -> pure rs
-  let symbolRelocs =
-        Map.mapMaybe
-          ( \(reloc, symb) ->
-              if (archCtx ^. Arch.archRelocSupported) reloc == Just SymbolReloc
-                then Just $ GUtil.functionNameFromByteString symb
-                else Nothing
-          )
-          relocs
-
-  pltStubSegOffToNameMap <-
-    GMPLT.resolvePltStubs (GO.simProgPath simOpts) mbPltStubInfo loadOpts elf symbolRelocs (GO.simPltStubs simOpts) memory
-      >>= \case
-        Left err@GMPLT.CouldNotResolvePltStub{} -> malformedElf la (PP.pretty err)
-        Right pltStubs -> pure pltStubs
   entries <-
     if List.null (GO.simEntryPoints simOpts)
       then do
@@ -1290,10 +1247,10 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx simOpts parserHooks
         pure
           ( List.map
               (\(k, v) -> (EP.entrypointFromBytestring v, k))
-              (Map.toList (Load.progSymMap loadedProg))
+              (Map.toList (Load.binSymMap binMd))
           )
       else forM (GO.simEntryPoints simOpts) $ \entry -> do
-        case Map.lookup entry (Load.progEntrypointAddrs loadedProg) of
+        case Map.lookup entry (Load.binEntrypointAddrs binMd) of
           Nothing -> panic "simulateMacaw" ["Entrypoint not in map"]
           Just a -> pure (entry, a)
 
@@ -1301,7 +1258,7 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx simOpts parserHooks
     fmap Map.fromList $
       forM entries $ \(entry, entryAddr) -> do
         C.Reg.SomeCFG cfg <-
-          discoverFunction la halloc archCtx memory symMap pltStubSegOffToNameMap entryAddr
+          discoverFunction la halloc archCtx binMd memory entryAddr
         mbStartupOv <-
           case EP.entrypointStartupOvPath entry of
             Nothing -> pure Nothing
@@ -1322,15 +1279,9 @@ simulateMacaw la halloc elf loadedProg mbPltStubInfo archCtx simOpts parserHooks
       setupHook =
         let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
          in Macaw.binSetupHook errCb addrOvs cfgs
-
   let macawCfgConfig =
         MacawCfgConfig
-          { mcDataLayout = dl
-          , mcLoadOptions = loadOpts
-          , mcSymMap = symMap
-          , mcPltStubs = pltStubSegOffToNameMap
-          , mcDynFunMap = dynFunMap
-          , mcRelocs = fst <$> relocs
+          { mcBinMd = binMd
           , mcMemory = memory
           , mcElf = Just elf
           }
@@ -1742,9 +1693,10 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
 
     entryAddrs :: [(Maybe FilePath, Text.Text, MM.MemSegmentOff (MC.RegAddrWidth (MC.ArchReg arch)))] <- forM entries getAddressEntrypoint
     let ?parserHooks = machineCodeParserHooks (Proxy @arch) parserHooks
+    let emptyBinMd = Load.emptyBinMd
     cfgs <-
       fmap Map.fromList $ forM entryAddrs $ \(mbOverride, entText, entAddr) -> do
-        C.Reg.SomeCFG cfg <- discoverFunction la halloc archCtx memory Map.empty Map.empty entAddr
+        C.Reg.SomeCFG cfg <- discoverFunction la halloc archCtx emptyBinMd memory entAddr
         mbStartupOv <-
           case mbOverride of
             Nothing -> pure Nothing
@@ -1769,15 +1721,9 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
         setupHook =
           let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
            in Macaw.binSetupHook errCb addrOvs cfgs
-    let dl = macawDataLayout archCtx
     let macawCfgConfig =
           MacawCfgConfig
-            { mcDataLayout = dl
-            , mcLoadOptions = MML.defaultLoadOptions
-            , mcSymMap = Map.empty
-            , mcPltStubs = Map.empty
-            , mcDynFunMap = Map.empty
-            , mcRelocs = Map.empty
+            { mcBinMd = emptyBinMd
             , mcMemory = memory
             , mcElf = Nothing
             }
@@ -1849,19 +1795,24 @@ doLoad ::
   ( 16 C.<= MC.ArchAddrWidth arch
   , Symbolic.SymArchConstraints arch
   , Loader.BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
+  , Elf.IsRelocationType (Arch.ArchReloc arch)
+  , Elf.RelocationWidth (Arch.ArchReloc arch) ~ MC.ArchAddrWidth arch
   , ?memOpts :: CLM.MemOptions
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   ) =>
   GDiag.GreaseLogAction ->
-  proxy arch ->
   [EP.Entrypoint] ->
   Permissions ->
   Elf.ElfHeaderInfo (MC.ArchAddrWidth arch) ->
+  (Arch.ArchReloc arch -> Maybe Reloc.RelocType) ->
+  Maybe (PLT.PLTStubInfo (Arch.ArchReloc arch)) ->
+  FilePath ->
+  [GMPLT.PltStub] ->
   IO (Load.LoadedProgram arch)
-doLoad la _proxy entries perms elf = do
+doLoad la entries perms elf relocSupported mbPltStubInfo path userPltStubs = do
   let usrErr = userErr la . PP.pretty
   let badElf = malformedElf la . PP.pretty
-  Load.load la entries perms elf
+  Load.load la entries perms elf relocSupported mbPltStubInfo path userPltStubs
     >>= \case
       Right ok -> pure ok
       -- See Note [Explicitly listed errors]
@@ -1877,6 +1828,8 @@ doLoad la _proxy entries perms elf = do
       Left e@Load.CoreDumpPcError{} -> badElf e
       Left e@Load.CoreDumpAddressUnresolvable{} -> badElf e
       Left e@Load.CoreDumpNoEntrypoint{} -> badElf e
+      Left e@Load.RelocationMapError{} -> badElf e
+      Left e@Load.PltStubResolutionError{} -> badElf e
 
 simulateARM :: GO.SimOpts -> GDiag.GreaseLogAction -> IO Results
 simulateARM simOpts la = do
@@ -1885,11 +1838,20 @@ simulateARM simOpts la = do
   (perms, elf) <- readElfHeaderInfo la proxy (GO.simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- doLoad la proxy (GO.simEntryPoints simOpts) perms elf
+    loadedProg <-
+      doLoad
+        la
+        (GO.simEntryPoints simOpts)
+        perms
+        elf
+        armRelocSupported
+        (Just ARM.armPLTStubInfo)
+        (GO.simProgPath simOpts)
+        (GO.simPltStubs simOpts)
     -- Use the start of .text as the return address on the stack.
-    starttext <- textStart la (Load.progLoadOptions loadedProg) elf
+    starttext <- textStart la (Load.binLoadOptions (Load.progBinMd loadedProg)) elf
     archCtx <- armCtx halloc (Just starttext) (GO.simStackArgumentSlots simOpts)
-    simulateMacaw la halloc elf loadedProg (Just ARM.armPLTStubInfo) archCtx simOpts AArch32Syn.aarch32ParserHooks
+    simulateMacaw la halloc elf loadedProg archCtx simOpts AArch32Syn.aarch32ParserHooks
 
 simulatePPC32Syntax ::
   GO.SimOpts ->
@@ -1922,14 +1884,23 @@ simulatePPC32 simOpts la = do
   (perms, elf) <- readElfHeaderInfo la proxy (GO.simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- doLoad la proxy (GO.simEntryPoints simOpts) perms elf
-    -- Use the start of .text as the return address on the stack.
-    starttext <- textStart la (Load.progLoadOptions loadedProg) elf
-    archCtx <- ppc32Ctx (Just starttext) (GO.simStackArgumentSlots simOpts)
     -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
     -- Grease.Macaw.PLT for why we use Nothing here.
     let ppcPltStubInfo = Nothing
-    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx simOpts PPCSyn.ppc32ParserHooks
+    loadedProg <-
+      doLoad
+        la
+        (GO.simEntryPoints simOpts)
+        perms
+        elf
+        ppc32RelocSupported
+        ppcPltStubInfo
+        (GO.simProgPath simOpts)
+        (GO.simPltStubs simOpts)
+    -- Use the start of .text as the return address on the stack.
+    starttext <- textStart la (Load.binLoadOptions (Load.progBinMd loadedProg)) elf
+    archCtx <- ppc32Ctx (Just starttext) (GO.simStackArgumentSlots simOpts)
+    simulateMacaw la halloc elf loadedProg archCtx simOpts PPCSyn.ppc32ParserHooks
 
 simulatePPC64 :: GO.SimOpts -> GDiag.GreaseLogAction -> IO Results
 simulatePPC64 simOpts la = do
@@ -1938,14 +1909,23 @@ simulatePPC64 simOpts la = do
   (perms, elf) <- readElfHeaderInfo la proxy (GO.simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- doLoad la proxy (GO.simEntryPoints simOpts) perms elf
-    -- Use the start of .text as the return address on the stack.
-    starttext <- textStart la (Load.progLoadOptions loadedProg) elf
-    archCtx <- ppc64Ctx (Just starttext) (GO.simStackArgumentSlots simOpts) (Load.progLoadedBinary loadedProg)
     -- See Note [Subtleties of resolving PLT stubs] (Wrinkle 3: PowerPC) in
     -- Grease.Macaw.PLT for why we use Nothing here.
     let ppcPltStubInfo = Nothing
-    simulateMacaw la halloc elf loadedProg ppcPltStubInfo archCtx simOpts PPCSyn.ppc64ParserHooks
+    loadedProg <-
+      doLoad
+        la
+        (GO.simEntryPoints simOpts)
+        perms
+        elf
+        ppc64RelocSupported
+        ppcPltStubInfo
+        (GO.simProgPath simOpts)
+        (GO.simPltStubs simOpts)
+    -- Use the start of .text as the return address on the stack.
+    starttext <- textStart la (Load.binLoadOptions (Load.progBinMd loadedProg)) elf
+    archCtx <- ppc64Ctx (Just starttext) (GO.simStackArgumentSlots simOpts) (Load.progLoadedBinary loadedProg)
+    simulateMacaw la halloc elf loadedProg archCtx simOpts PPCSyn.ppc64ParserHooks
 
 simulateX86Syntax ::
   GO.SimOpts ->
@@ -1967,11 +1947,20 @@ simulateX86 simOpts la = do
   (perms, elf) <- readElfHeaderInfo la proxy (GO.simProgPath simOpts)
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <- doLoad la proxy (GO.simEntryPoints simOpts) perms elf
+    loadedProg <-
+      doLoad
+        la
+        (GO.simEntryPoints simOpts)
+        perms
+        elf
+        x64RelocSupported
+        (Just X86.x86_64PLTStubInfo)
+        (GO.simProgPath simOpts)
+        (GO.simPltStubs simOpts)
     -- Use the start of .text as the return address on the stack.
-    startText <- textStart la (Load.progLoadOptions loadedProg) elf
+    startText <- textStart la (Load.binLoadOptions (Load.progBinMd loadedProg)) elf
     archCtx <- x86Ctx halloc (Just startText) (GO.simStackArgumentSlots simOpts)
-    simulateMacaw la halloc elf loadedProg (Just X86.x86_64PLTStubInfo) archCtx simOpts X86Syn.x86ParserHooks
+    simulateMacaw la halloc elf loadedProg archCtx simOpts X86Syn.x86ParserHooks
 
 simulateElf ::
   GO.SimOpts ->

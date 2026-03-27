@@ -30,12 +30,11 @@ import Data.IORef qualified as IORef
 import Data.IntMap qualified as IntMap
 import Data.List qualified as List
 import Data.Macaw.Architecture.Info qualified as MAI
-import Data.Macaw.BinaryLoader qualified as MBL
+import Data.Macaw.BinaryLoader qualified as Loader
 import Data.Macaw.BinaryLoader.ELF qualified as MBLE
 -- BinaryLoader instance
 import Data.Macaw.BinaryLoader.X86 ()
 import Data.Macaw.CFG qualified as MC
-import Data.Macaw.Discovery qualified as MD
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.LoadCommon qualified as LC
 import Data.Macaw.Symbolic qualified as MS
@@ -78,12 +77,10 @@ import Grease.Heuristic qualified as GH
 import Grease.Macaw qualified as GM
 import Grease.Macaw.Arch (ArchContext, ArchReloc)
 import Grease.Macaw.Arch qualified as Arch
-import Grease.Macaw.Arch.X86 (x86Ctx)
+import Grease.Macaw.Arch.X86 (x64RelocSupported, x86Ctx)
 import Grease.Macaw.Discovery qualified as GMD
 import Grease.Macaw.Entrypoint qualified as GME
 import Grease.Macaw.Load qualified as GL
-import Grease.Macaw.Load.Relocation (RelocType (SymbolReloc), elfRelocationMap)
-import Grease.Macaw.Load.Relocation qualified as GMLR
 import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.Address qualified as GMOA
 import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
@@ -464,30 +461,6 @@ initDebugger la dbgOpts cExt t = do
   let outps = Dbg.Outputs (doLog la . Diag.DebuggerOutput . pp)
   Dbg.initCtx cExt prettyPtrFnMap inps outps t
 
--- | Machine code-specific arguments that are used throughout 'analyzeCfg'. This
--- exists primarily to reduce the number of distinct arguments we need to pass
--- to this function. Generally speaking, 'analyzeSyntax' fills the fields of
--- this data type with default or uninteresting values, as S-expression programs
--- do not require analyzing machine code.
-data MacawCfgConfig arch = MacawCfgConfig
-  { mcLoadOptions :: LC.LoadOptions
-  -- ^ The load options used to load addresses in the binary.
-  , mcSymMap :: MD.AddrSymMap (MC.ArchAddrWidth arch)
-  -- ^ Map of entrypoint addresses to their names.
-  , mcPltStubs :: Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName
-  -- ^ Map of addresses to PLT stub names.
-  , mcDynFunMap :: Map.Map WFN.FunctionName (MC.ArchSegmentOff arch)
-  -- ^ Map of dynamic function names to their addresses.
-  , mcRelocs :: Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (ArchReloc arch)
-  -- ^ Map of relocation addresses and types.
-  , mcMemory :: MC.Memory (MC.RegAddrWidth (MC.ArchReg arch))
-  -- ^ The memory layout of the binary.
-  , mcEntryAddr :: Maybe (MC.ArchSegmentOff arch)
-  -- ^ The entrypoint address in the binary.
-  , mcIsEcfs :: Bool
-  -- ^ 'True' if this is an ECFS file, 'False' otherwise.
-  }
-
 -- | Convert a register-based CFG ('CCR.SomeCFG') to an SSA-based CFG
 -- ('CCC.SomeCFG').
 toSsaSomeCfg ::
@@ -638,19 +611,9 @@ analyzeSyntax conf sla gla halloc archCtx = do
       Left e@GME.BadRet{} -> usrErr e
       Right cfgs -> pure cfgs
 
-  let macawCfgConfig =
-        MacawCfgConfig
-          { mcLoadOptions = LC.defaultLoadOptions
-          , mcSymMap = Map.empty
-          , mcPltStubs = Map.empty
-          , mcDynFunMap = Map.empty
-          , mcRelocs = Map.empty
-          , mcMemory = MC.emptyMemory (archCtx ^. Arch.archInfo . to MAI.archAddrWidth)
-          , mcEntryAddr = Nothing
-          , mcIsEcfs = False
-          }
-  let loadOpts = mcLoadOptions macawCfgConfig
-  let mem = mcMemory macawCfgConfig
+  let emptyBinMd = GL.emptyBinMd
+  let loadOpts = GL.binLoadOptions emptyBinMd
+  let mem = MC.emptyMemory (archCtx ^. Arch.archInfo . to MAI.archAddrWidth)
   addrOvs <- loadAddrOvs archCtx conf halloc loadOpts mem resolvedTargetLoc
   let setupHook :: forall sym. GM.SetupHook sym arch
       setupHook = GM.SetupHook $ \bak funOvs -> do
@@ -663,9 +626,8 @@ analyzeSyntax conf sla gla halloc archCtx = do
     sla
     gla
     halloc
-    macawCfgConfig
     archCtx
-    Nothing -- elf
+    Nothing -- no LoadedELF for syntax programs
     setupHook
     resolvedTargetLoc
     (GMSH.ExecutingAddressAction (\_ -> pure ()))
@@ -695,17 +657,27 @@ loadElfFromConfig ::
   ScreachLogAction ->
   GreaseLogAction ->
   ArchContext arch ->
-  IO (LoadedELF 64)
-loadElfFromConfig conf sla gla archCtx = do
+  IO LoadedELF
+loadElfFromConfig conf sla gla _archCtx = do
   let entryLoc = Conf.entryLoc conf
   let entrypointList = [entryLocToGreaseEntrypoint entryLoc]
   (perms, elfBinary) <- readElfBinary conf
   let elf = elfBinaryHeaderInfo elfBinary
-  loadedProgResult <- GL.load @MX86.X86_64 gla entrypointList perms elf
+  -- TODO: PLT stubs option support? (instead of [])
+  loadResult <-
+    GL.load @MX86.X86_64
+      gla
+      entrypointList
+      perms
+      elf
+      x64RelocSupported
+      (Just MX86.x86_64PLTStubInfo)
+      (Conf.confProgram conf)
+      []
   let usrErr = userError sla . PP.pretty
   let badElf = malformedElf sla . PP.pretty
   loadedProg <-
-    case loadedProgResult of
+    case loadResult of
       -- See Note [Explicitly listed errors]
       -- User errors
       Left e@GL.UnsupportedObjectFile{} -> usrErr e
@@ -719,44 +691,18 @@ loadElfFromConfig conf sla gla archCtx = do
       Left e@GL.CoreDumpPcError{} -> badElf e
       Left e@GL.CoreDumpAddressUnresolvable{} -> badElf e
       Left e@GL.CoreDumpNoEntrypoint{} -> badElf e
+      Left e@GL.RelocationMapError{} -> badElf e
+      Left e@GL.PltStubResolutionError{} -> badElf e
       Right prog -> pure prog
-  let GL.LoadedProgram
-        { GL.progLoadedBinary = bin
-        , GL.progLoadOptions = loadOpts
-        , GL.progSymMap = symMap
-        , GL.progDynFunMap = dynFunMap
-        , GL.progEntrypointAddrs = entrypointAddrs
-        } = loadedProg
+  let loadOpts = GL.binLoadOptions (GL.progBinMd loadedProg)
   let loadOffset = fromMaybe 0 (LC.loadOffset loadOpts)
-  let mem = MBL.memoryImage bin
-  relocs <-
-    case elfRelocationMap (Proxy @(ArchReloc MX86.X86_64)) loadOpts elf of
-      -- See Note [Explicitly listed errors]
-      Left e@GMLR.RelocationSymbolNotFound{} -> malformedElf sla (PP.pretty e)
-      Right relocsMap -> pure relocsMap
-  -- TODO: PLT stubs option support? (instead of [])
+  let mem = Loader.memoryImage (GL.progLoadedBinary loadedProg)
+  let entrypointAddrs = GL.binEntrypointAddrs (GL.progBinMd loadedProg)
+
+  -- For ECFS binaries, override PLT stubs with ECFS-specific resolution.
   pltStubs <-
     case elfBinary of
-      RawElfBinary _ -> do
-        let symbolRelocs =
-              Map.mapMaybe
-                ( \(reloc, symb) ->
-                    if (archCtx ^. Arch.archRelocSupported) reloc == Just SymbolReloc
-                      then Just $ GU.functionNameFromByteString symb
-                      else Nothing
-                )
-                relocs
-        GMP.resolvePltStubs
-          (Conf.confProgram conf)
-          (Just MX86.x86_64PLTStubInfo)
-          loadOpts
-          elf
-          symbolRelocs
-          []
-          mem
-          >>= \case
-            Left err@GMP.CouldNotResolvePltStub{} -> malformedElf sla (PP.pretty err)
-            Right pltStubs -> pure pltStubs
+      RawElfBinary _ -> pure $ GL.binPltStubs (GL.progBinMd loadedProg)
       EcfsBinary ecfs -> do
         let ecfsPltStubs = SE.findEcfsPltStubs loadOpts ecfs
         resolvedEcfsPltStubs <-
@@ -782,17 +728,16 @@ loadElfFromConfig conf sla gla archCtx = do
   let isEcfs = case elfBinary of
         EcfsBinary{} -> True
         RawElfBinary{} -> False
+  let loadedProg_ =
+        loadedProg
+          { GL.progBinMd = (GL.progBinMd loadedProg){GL.binPltStubs = pltStubs}
+          }
   pure $
     LoadedELF
       { loadedElf = elfBinaryHeaderInfo elfBinary
+      , loadedProgram = loadedProg_
       , entrypointAddr = entryAddr
-      , mem = mem
-      , symMap = symMap
-      , pltStubs = pltStubs
       , isECFS = isEcfs
-      , dynFunMap = dynFunMap
-      , loadOptions = loadOpts
-      , relocs = relocs
       }
 
 resolveAnalysisLoc ::
@@ -839,7 +784,7 @@ withPrioritizationFunction ::
   CG.CFGCache 64 ->
   ScreachLogAction ->
   GreaseLogAction ->
-  LoadedELF 64 ->
+  LoadedELF ->
   CFH.HandleAllocator ->
   ResolvedTargetLoc 64 ->
   ( ( forall p sym rtp.
@@ -969,12 +914,12 @@ initCFG ::
   , MC.RegAddrWidth (MC.ArchReg arch) ~ 64
   ) =>
   CCC.SomeCFG ext args ret ->
-  -- | The entrypoint address to start discovery at
-  Maybe (MM.MemSegmentOff 64) ->
+  -- | 'Just' the 'LoadedELF' if analyzing a binary, 'Nothing' for
+  -- S-expression programs.
+  Maybe LoadedELF ->
   bak ->
   GreaseLogAction ->
   ScreachLogAction ->
-  MacawCfgConfig arch ->
   CFH.HandleAllocator ->
   Conf.Config ->
   ArchContext arch ->
@@ -995,23 +940,27 @@ initCFG ::
     aty ->
   IO
     (CS.ExecState (SP.ScreachSimulatorState p sym bak ext arch t ret aty 64) sym ext (CS.RegEntry sym ret))
-initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
-  let discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` CCC.cfgHandle entryRegSsaCfg) mbEntryAddr
-   in \bak gla sla macawCfgConfig halloc conf archCtx mbTargetAddr mbStartupOvSomeSsaCfg rtLoc memVar setupHook execAction addrOvs argShapes -> do
+initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
+  let mbEntryAddr = entrypointAddr <$> mbLoadedElf
+      isEcfs = maybe False isECFS mbLoadedElf
+      discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` CCC.cfgHandle entryRegSsaCfg) mbEntryAddr
+   in \bak gla sla halloc conf archCtx mbTargetAddr mbStartupOvSomeSsaCfg rtLoc memVar setupHook execAction addrOvs argShapes -> do
+        let (binMd, mem) =
+              maybe
+                ( GL.emptyBinMd
+                , MC.emptyMemory (archCtx ^. Arch.archInfo . to MAI.archAddrWidth)
+                )
+                (\lelf -> let lp = loadedProgram lelf in (GL.progBinMd lp, Loader.memoryImage (GL.progLoadedBinary lp)))
+                mbLoadedElf
         let dataLayout = macawDataLayout archCtx
         let rNames = archCtx ^. Arch.archRegNames
             argNames = archCtx ^. Arch.archValueNames
             regTypes = archCtx ^. Arch.archRegTypes
-        let MacawCfgConfig
-              { mcLoadOptions = loadOpts
-              , mcSymMap = symMap
-              , mcPltStubs = pltStubs
-              , mcDynFunMap = dynFunMap
-              , mcRelocs = relocs
-              , mcMemory = mem
-              , mcEntryAddr = _
-              , mcIsEcfs = isEcfs
-              } = macawCfgConfig
+        let loadOpts = GL.binLoadOptions binMd
+            symMap = GL.binSymMap binMd
+            pltStubs = GL.binPltStubs binMd
+            dynFunMap = GL.binDynFunMap binMd
+            relocs = GL.binRelocs binMd
         let sym = CB.backendGetSym bak
         GR.ErrorCallbacks
           { GR.errorMap = bbMapRef
@@ -1088,7 +1037,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                 (overrideError sla)
         let lfhd
               | isEcfs =
-                  ecfsLookupFunctionHandleDispatch gla halloc archCtx mem symMap pltStubs defaultLfhd
+                  ecfsLookupFunctionHandleDispatch gla halloc archCtx binMd mem defaultLfhd
               | otherwise =
                   defaultLfhd
         let memCfg =
@@ -1097,10 +1046,8 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                   gla
                   halloc
                   archCtx
+                  binMd
                   mem
-                  symMap
-                  pltStubs
-                  dynFunMap
                   fnOvsMap
                   fnAddrOvs
                   builtinGenericSyscalls
@@ -1114,10 +1061,8 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbEntryAddr =
                       gla
                       halloc
                       archCtx
+                      binMd
                       mem
-                      symMap
-                      pltStubs
-                      dynFunMap
                       fnOvsMap
                       fnAddrOvs
                       cOpts
@@ -1230,17 +1175,12 @@ analyzeElf ::
 analyzeElf conf sla gla halloc archCtx = do
   let progConf = Conf.programConfig conf
   let entryLoc = Conf.entryLoc progConf
-  elf@LoadedELF
-    { symMap = symMap
-    , loadOptions = loadOpts
-    , mem = mem
-    , pltStubs = pltStubs
-    , entrypointAddr = entryAddr
-    , relocs = relocs
-    , isECFS = isEcfs
-    , dynFunMap = dynFunMap
-    } <-
-    loadElfFromConfig progConf sla gla archCtx
+  elf <- loadElfFromConfig progConf sla gla archCtx
+  let loadedProg_ = loadedProgram elf
+  let entryAddr = entrypointAddr elf
+  let mem = Loader.memoryImage (GL.progLoadedBinary loadedProg_)
+  let symMap = GL.binSymMap (GL.progBinMd loadedProg_)
+  let loadOpts = GL.binLoadOptions (GL.progBinMd loadedProg_)
   withMaybeFile (Conf.simDumpCoverage conf) WriteMode $ \mbCovHandle -> do
     let secsJson = GL.dumpSections mem
     case mbCovHandle of
@@ -1266,7 +1206,7 @@ analyzeElf conf sla gla halloc archCtx = do
           setupHookCommon sla bak addrOvs funOvs mbEntryStartupOv
 
     CCR.SomeCFG entryRegCfg <-
-      GMD.discoverFunction gla halloc archCtx mem symMap pltStubs entryAddr
+      GMD.discoverFunction gla halloc archCtx (GL.progBinMd loadedProg_) mem entryAddr
     let entryCfgs_ =
           GE.EntrypointCfgs
             { GE.entrypointStartupOv = mbEntryStartupOv
@@ -1279,18 +1219,6 @@ analyzeElf conf sla gla halloc archCtx = do
             Left e@GME.BadArgs{} -> usrErr e
             Left e@GME.BadRet{} -> usrErr e
             Right cfgs -> pure cfgs
-
-    let macawCfgConfig =
-          MacawCfgConfig
-            { mcLoadOptions = loadOpts
-            , mcSymMap = symMap
-            , mcPltStubs = pltStubs
-            , mcDynFunMap = dynFunMap
-            , mcRelocs = fmap fst relocs
-            , mcMemory = mem
-            , mcEntryAddr = Just entryAddr
-            , mcIsEcfs = isEcfs
-            }
     let
       addressHandle :: GMSH.ExecutingAddressAction arch
       addressHandle =
@@ -1316,9 +1244,8 @@ analyzeElf conf sla gla halloc archCtx = do
           sla
           gla
           halloc
-          macawCfgConfig
           archCtx
-          (Just (loadedElf elf))
+          (Just elf)
           setupHook
           resolvedTargetLoc
           addressHandle
@@ -1405,9 +1332,10 @@ analyzeCfg ::
   ScreachLogAction ->
   GreaseLogAction ->
   CFH.HandleAllocator ->
-  MacawCfgConfig arch ->
   ArchContext arch ->
-  Maybe (Elf.ElfHeaderInfo 64) ->
+  -- | 'Just' the 'LoadedELF' if analyzing a binary, 'Nothing' for
+  -- S-expression programs.
+  Maybe LoadedELF ->
   (forall sym. GM.SetupHook sym arch) ->
   ResolvedTargetLoc (MC.ArchAddrWidth arch) ->
   GMSH.ExecutingAddressAction arch ->
@@ -1422,7 +1350,15 @@ analyzeCfg ::
     Sched.PrioritizationFunction p sym ext rtp
   ) ->
   IO ()
-analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc execAction addrOvs entryCfgs pFunc = do
+analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction addrOvs entryCfgs pFunc = do
+  let mbEntryAddr = entrypointAddr <$> mbLoadedElf
+  let isEcfs = maybe False isECFS mbLoadedElf
+  let mbEhi = loadedElf <$> mbLoadedElf
+  let mem =
+        maybe
+          (MC.emptyMemory (archCtx ^. Arch.archInfo . to MAI.archAddrWidth))
+          (Loader.memoryImage . GL.progLoadedBinary . loadedProgram)
+          mbLoadedElf
   doLog sla $ Diag.SearchingForTarget rtLoc
 
   GE.EntrypointCfgs
@@ -1431,11 +1367,6 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
     } <-
     pure entryCfgs
   let mbStartupOvCfg = GE.startupOvCfg <$> startupOv
-
-  let MacawCfgConfig
-        { mcMemory = mem
-        , mcEntryAddr = mbEntryAddr
-        } = macawCfgConfig
 
   entryRegSomeSsaCfg <- pure $ toSSA entryRegCfgSome
   let mbStartupOvSomeSsaCfg = fmap toSsaSomeCfg mbStartupOvCfg
@@ -1504,11 +1435,10 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
     let initShape =
           initCFG
             entryRegSomeSsaCfg
-            mbEntryAddr
+            mbLoadedElf
             bak
             gla
             sla
-            macawCfgConfig
             halloc
             conf
             archCtx

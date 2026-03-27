@@ -10,6 +10,8 @@
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Load (
+  BinMd (..),
+  emptyBinMd,
   LoadedProgram (..),
   LoadError (..),
   load,
@@ -32,11 +34,13 @@ import Data.Macaw.BinaryLoader.ELF qualified as Loader
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader qualified as EL
+import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
 import Data.Macaw.Memory.LoadCommon qualified as LC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Proxy (Proxy (Proxy))
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Tuple qualified as Tuple
@@ -44,7 +48,11 @@ import Data.Vector qualified as Vec
 import Data.Word (Word64)
 import Grease.Diagnostic (Diagnostic (LoadDiagnostic), GreaseLogAction)
 import Grease.Entrypoint (Entrypoint, EntrypointLocation (EntrypointAddress, EntrypointCoreDump, EntrypointSymbolName), entrypointLocation)
+import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Load.Diagnostic qualified as Diag
+import Grease.Macaw.Load.Relocation (RelocType (SymbolReloc))
+import Grease.Macaw.Load.Relocation qualified as Reloc
+import Grease.Macaw.PLT qualified as GPLT
 import Grease.Utility (functionNameFromByteString, tshow)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
@@ -57,21 +65,48 @@ import What4.FunctionName qualified as WFN
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LoadDiagnostic diag)
 
-data LoadedProgram arch
-  = LoadedProgram
-  { progLoadedBinary :: Loader.LoadedBinary arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
-  , progLoadOptions :: LC.LoadOptions
-  , progSymMap :: Map.Map (MC.ArchSegmentOff arch) BS.ByteString
+-- | Binary metadata: all per-binary maps and settings, but not memory
+-- (which can be recovered via 'Loader.memoryImage' from 'LoadedProgram').
+data BinMd arch
+  = BinMd
+  { binLoadOptions :: LC.LoadOptions
+  -- ^ The load options used to load addresses in the binary.
+  , binSymMap :: Map.Map (MC.ArchSegmentOff arch) BS.ByteString
   -- ^ A map of all function addresses to their symbol names. Note that it
   -- is possible for a single function address to have multiple function
   -- symbols (https://github.com/GaloisInc/macaw-loader/issues/25), so this
   -- map will arbitrarily pick one of the symbol names.
-  , progDynFunMap :: Map.Map WFN.FunctionName (MC.ArchSegmentOff arch)
+  , binPltStubs :: Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName
+  -- ^ Map of PLT stub addresses to their function names.
+  , binDynFunMap :: Map.Map WFN.FunctionName (MC.ArchSegmentOff arch)
   -- ^ A map of visible, dynamic function symbol names (UTF-8–encoded) to
   -- their corresponding function addresses.
-  , progEntrypointAddrs :: Map Entrypoint (MC.ArchSegmentOff arch)
+  , binRelocs :: Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (Arch.ArchReloc arch)
+  -- ^ Map of relocation addresses to their types.
+  , binEntrypointAddrs :: Map Entrypoint (MC.ArchSegmentOff arch)
   -- ^ The entrypoint addresses after resolving the user-supplied
   -- 'Entrypoint'.
+  }
+
+-- | An empty 'BinMd' for use in paths that don't load a binary
+-- (e.g., Crucible S-expression programs).
+emptyBinMd :: BinMd arch
+emptyBinMd =
+  BinMd
+    { binLoadOptions = LC.defaultLoadOptions
+    , binSymMap = Map.empty
+    , binPltStubs = Map.empty
+    , binDynFunMap = Map.empty
+    , binRelocs = Map.empty
+    , binEntrypointAddrs = Map.empty
+    }
+
+data LoadedProgram arch
+  = LoadedProgram
+  { progLoadedBinary :: Loader.LoadedBinary arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
+  -- ^ The loaded binary image (use 'Loader.memoryImage' to get memory).
+  , progBinMd :: BinMd arch
+  -- ^ Binary metadata (maps, load options, etc.).
   }
 
 -- | Errors that can occur during binary loading
@@ -88,6 +123,8 @@ data LoadError
   | CoreDumpPcError CoreDump.CoreDumpAnalyzeError
   | CoreDumpAddressUnresolvable Word64
   | CoreDumpNoEntrypoint
+  | RelocationMapError Reloc.RelocationError
+  | PltStubResolutionError GPLT.CouldNotResolvePltStub
 
 instance PP.Pretty LoadError where
   pretty =
@@ -118,6 +155,10 @@ instance PP.Pretty LoadError where
           PP.<+> ", but this could not be resolved to an address in the binary."
       CoreDumpNoEntrypoint ->
         "Could not find an entrypoint address in the binary."
+      RelocationMapError err ->
+        PP.pretty err
+      PltStubResolutionError err ->
+        PP.pretty err
 
 -- | Compute the 'LC.LoadOptions' for the binary being analyzed. Note that we do
 -- different things depending on whether the binary is a position-independent
@@ -146,14 +187,25 @@ load ::
   ( 16 C.<= MC.ArchAddrWidth arch
   , Symbolic.SymArchConstraints arch
   , Loader.BinaryLoader arch (Elf.ElfHeaderInfo (MC.RegAddrWidth (MC.ArchReg arch)))
+  , Elf.IsRelocationType (Arch.ArchReloc arch)
+  , Elf.RelocationWidth (Arch.ArchReloc arch) ~ MC.ArchAddrWidth arch
   , ?memOpts :: CLM.MemOptions
   ) =>
   GreaseLogAction ->
   [Entrypoint] ->
   Permissions ->
   Elf.ElfHeaderInfo (MC.RegAddrWidth (MC.ArchReg arch)) ->
+  -- | Check if a relocation type is supported and what kind it is.
+  (Arch.ArchReloc arch -> Maybe Reloc.RelocType) ->
+  -- | PLT stub heuristics, or 'Nothing' if PLT stubs cannot be found for
+  -- this architecture.
+  Maybe (PLT.PLTStubInfo (Arch.ArchReloc arch)) ->
+  -- | Path to the binary (for error messages).
+  FilePath ->
+  -- | User-specified PLT stubs.
+  [GPLT.PltStub] ->
   IO (Either LoadError (LoadedProgram arch))
-load la userEntrypoints perms elf = runExceptT $ do
+load la userEntrypoints perms elf relocSupported mbPltStubInfo path userPltStubs = runExceptT $ do
   let loadOpts = loadOptions (Elf.elfIsPie perms elf)
   loaded <- liftIO $ Loader.loadBinary @arch loadOpts elf
   let mem = Loader.memoryImage loaded
@@ -219,13 +271,41 @@ load la userEntrypoints perms elf = runExceptT $ do
             Map.empty
             dynFunSegOffs
 
+  -- Compute relocation map
+  relocs <-
+    case Reloc.elfRelocationMap (Proxy @(Arch.ArchReloc arch)) loadOpts elf of
+      Left err -> throwE $ RelocationMapError err
+      Right rs -> pure rs
+
+  -- Filter for symbol relocations needed by PLT stub resolution
+  let symbolRelocs =
+        Map.mapMaybe
+          ( \(reloc, symb) ->
+              if relocSupported reloc == Just SymbolReloc
+                then Just $ functionNameFromByteString symb
+                else Nothing
+          )
+          relocs
+
+  -- Resolve PLT stubs
+  pltStubs <-
+    liftIO (GPLT.resolvePltStubs path mbPltStubInfo loadOpts elf symbolRelocs userPltStubs mem)
+      >>= \case
+        Left err -> throwE $ PltStubResolutionError err
+        Right ps -> pure ps
+
   return
     LoadedProgram
       { progLoadedBinary = loaded
-      , progLoadOptions = loadOpts
-      , progSymMap = symMap
-      , progDynFunMap = dynFunMap
-      , progEntrypointAddrs = entryAddrMap
+      , progBinMd =
+          BinMd
+            { binLoadOptions = loadOpts
+            , binSymMap = symMap
+            , binPltStubs = pltStubs
+            , binDynFunMap = dynFunMap
+            , binRelocs = Map.map fst relocs
+            , binEntrypointAddrs = entryAddrMap
+            }
       }
 
 -- Helper, not exported

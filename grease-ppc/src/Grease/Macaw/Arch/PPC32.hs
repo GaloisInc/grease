@@ -8,7 +8,7 @@
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
-module Grease.Macaw.Arch.PPC32 (ppc32Ctx) where
+module Grease.Macaw.Arch.PPC32 (ppc32Ctx, ppc32RelocSupported) where
 
 import Control.Lens ((^.))
 import Data.BitVector.Sized qualified as BV

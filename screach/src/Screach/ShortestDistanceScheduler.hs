@@ -18,6 +18,7 @@ import Control.Monad.State (MonadIO (liftIO), MonadTrans (lift), StateT, runStat
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
 import Data.IORef (IORef)
 import Data.IORef qualified as IORef
+import Data.Macaw.BinaryLoader qualified as Loader
 import Data.Macaw.CFG qualified as MM
 import Data.Macaw.X86 qualified as MA
 import Data.Maybe qualified as Maybe
@@ -25,6 +26,7 @@ import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Some qualified as Some
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch qualified as Arch
+import Grease.Macaw.Load qualified as GL
 import Grease.Scheduler qualified as Sched
 import Lang.Crucible.CFG.Core qualified as CCC
 import Lang.Crucible.FunctionHandle qualified as CFH
@@ -186,21 +188,18 @@ sdsePrioritizationFunction ::
   Dist.DistanceConfig ->
   ScrchDiagnostic.ScreachLogAction ->
   GreaseLogAction ->
-  LoadedELF 64 ->
+  LoadedELF ->
   CFH.HandleAllocator ->
   Sched.PrioritizationFunction p sym ext rtp
 sdsePrioritizationFunction tgtAddr tgtFunction archCtx cg cache distConfig sla gla lElf halloc frame state =
-  let LoadedELF
-        { symMap = symMap
-        , mem = mem
-        , pltStubs = pltStubs
-        } = lElf
+  let binMd = GL.progBinMd (loadedProgram lElf)
+      mem = Loader.memoryImage (GL.progLoadedBinary (loadedProgram lElf))
       cachesRef = distancesRef (state ^. C.stateContext . C.cruciblePersonality)
       maybeRes :: MaybeT (Dist.DistanceMonad Dist.DijkstraCaches) Dist.Distance
       maybeRes =
         do
           (cfg, snode) <- MaybeT $ liftIO $ getExplorationEntry state frame
-          let rcall (Dist.FunctionEntry fentry) (Dist.Callsite callsite) = CG.resolveCall cg cache sla gla mem halloc archCtx symMap pltStubs fentry callsite
+          let rcall (Dist.FunctionEntry fentry) (Dist.Callsite callsite) = CG.resolveCall cg cache sla gla binMd mem halloc archCtx fentry callsite
           Dist.CallStack cs <- MaybeT $ lift $ Just <$> callStackFromSimState state
           let poppedCS = Maybe.fromMaybe [] $ tailMay cs
           let
@@ -217,7 +216,7 @@ sdsePrioritizationFunction tgtAddr tgtFunction archCtx cg cache distConfig sla g
                         Nothing -> do
                           LJ.writeLog sla (ScrchDiagnostic.AttemptedToReturnViaCallgraphForNonAddressFunction floc)
                           pure Nothing
-                        Just a -> CG.getCFG cache mem a sla gla halloc archCtx symMap pltStubs
+                        Just a -> CG.getCFG cache binMd mem a sla gla halloc archCtx
                 )
           let retHandler =
                 Dist.ReturnHandler

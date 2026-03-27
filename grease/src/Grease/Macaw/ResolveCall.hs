@@ -34,7 +34,6 @@ import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.BinaryLoader.ELF qualified as Loader
 import Data.Macaw.CFG qualified as MC
-import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Discovery.Classifier qualified as Discovery
 import Data.Macaw.Memory.ElfLoader qualified as EL
 import Data.Macaw.Symbolic qualified as Symbolic
@@ -51,6 +50,7 @@ import Grease.Diagnostic (Diagnostic (ResolveCallDiagnostic), GreaseLogAction)
 import Grease.Macaw.Arch (ArchContext)
 import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Discovery (discoverFunction)
+import Grease.Macaw.Load (BinMd (binDynFunMap, binPltStubs))
 import Grease.Macaw.Overrides (lookupMacawForwardDeclarationOverride)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride, msoPublicFnHandle, msoPublicOverride, msoSomeFunctionOverride))
 import Grease.Macaw.ResolveCall.Diagnostic qualified as Diag
@@ -252,13 +252,8 @@ lookupFunctionHandleResult ::
   GreaseLogAction ->
   C.HandleAllocator ->
   ArchContext arch ->
-  EL.Memory (MC.ArchAddrWidth arch) ->
-  -- | Map of entrypoint addresses to their names
-  Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
-  -- | Map of addresses to PLT stub names
-  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
-  -- | Map of dynamic function names to their addresses
-  Map.Map WFN.FunctionName (MC.ArchSegmentOff arch) ->
+  BinMd arch ->
+  MC.Memory (MC.RegAddrWidth (MC.ArchReg arch)) ->
   -- | Map of names of overridden functions to their implementations
   Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
@@ -269,7 +264,7 @@ lookupFunctionHandleResult ::
     ( LookupFunctionHandleResult p sym arch
     , CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx
     )
-lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs callOpts st regs = do
+lookupFunctionHandleResult bak la halloc arch binMd mem funOvs funAddrOvs callOpts st regs = do
   -- First, obtain the address contained in the instruction pointer.
   symAddr0 <- (arch ^. Arch.archGetIP) regs
   -- Next, attempt to concretize the address. We must do this because it is
@@ -307,7 +302,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
         bvWord64 = fromIntegral @Integer @Word64 (BV.asUnsigned bv)
         bvMemWord = EL.memWord bvWord64
        in
-        case Loader.resolveAbsoluteAddress memory bvMemWord of
+        case Loader.resolveAbsoluteAddress mem bvMemWord of
           Nothing ->
             let addrString = BV.ppHex knownNat bv
              in if Opts.getSkipInvalidCallAddrs (Opts.callSkipInvalidCallAddrs callOpts)
@@ -363,12 +358,12 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
                 , st
                 )
     -- Next, check if this is a PLT stub.
-    | Just pltStubName <- Map.lookup funcAddrOff pltStubs =
+    | Just pltStubName <- Map.lookup funcAddrOff (binPltStubs binMd) =
         maybeUserSkip pltStubName $
           if
             | -- If a PLT stub jumps to an address within the same binary
               -- or shared library, resolve it...
-              Just pltCallAddr <- Map.lookup pltStubName dynFunMap ->
+              Just pltCallAddr <- Map.lookup pltStubName (binDynFunMap binMd) ->
                 do
                   doLog la $ Diag.PltCall pltStubName funcAddrOff pltCallAddr
                   go pltCallAddr
@@ -401,7 +396,7 @@ lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap f
     | Discovery.isExecutableSegOff funcAddrOff = do
         fixedAddr <- (arch ^. Arch.archPCFixup) bak regs funcAddrOff
         (hdl, st') <-
-          discoverFuncAddr la halloc arch memory symMap pltStubs fixedAddr st
+          discoverFuncAddr la halloc arch binMd mem fixedAddr st
         let nm = C.handleName hdl
         maybeUserSkip nm $
           pure
@@ -422,23 +417,18 @@ lookupFunctionHandle ::
   GreaseLogAction ->
   C.HandleAllocator ->
   ArchContext arch ->
-  EL.Memory (MC.ArchAddrWidth arch) ->
-  -- | Map of entrypoint addresses to their names
-  Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
-  -- | Map of addresses to PLT stub names
-  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
-  -- | Map of dynamic function names to their addresses
-  Map.Map WFN.FunctionName (MC.ArchSegmentOff arch) ->
+  BinMd arch ->
+  MC.Memory (MC.RegAddrWidth (MC.ArchReg arch)) ->
   -- | Map of names of overridden functions to their implementations
   Map.Map WFN.FunctionName (MacawSExpOverride p sym arch) ->
   ResolvedOverridesYaml (MC.ArchAddrWidth arch) ->
   Opts.CallOpts ->
   LookupFunctionHandleDispatch p sym arch ->
   Symbolic.LookupFunctionHandle p sym arch
-lookupFunctionHandle bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs callOpts lfhd = Symbolic.LookupFunctionHandle $ \st mem regs -> do
+lookupFunctionHandle bak la halloc arch binMd mem funOvs funAddrOvs callOpts lfhd = Symbolic.LookupFunctionHandle $ \st llvmMem regs -> do
   let LookupFunctionHandleDispatch dispatch = lfhd
-  (res, st') <- lookupFunctionHandleResult bak la halloc arch memory symMap pltStubs dynFunMap funOvs funAddrOvs callOpts st regs
-  dispatch st' mem regs res
+  (res, st') <- lookupFunctionHandleResult bak la halloc arch binMd mem funOvs funAddrOvs callOpts st regs
+  dispatch st' llvmMem regs res
 
 -- | Dispatch on the result of looking up a syscall override. The
 -- 'lookupSyscallHandle' function invokes a continuation of this type after it
@@ -605,11 +595,8 @@ discoverFuncAddr ::
   LJ.LogAction IO Diagnostic ->
   C.HandleAllocator ->
   ArchContext arch ->
-  EL.Memory (MC.ArchAddrWidth arch) ->
-  -- | Map of entrypoint addresses to their names
-  Discovery.AddrSymMap (MC.ArchAddrWidth arch) ->
-  -- | Map of addresses to PLT stub names
-  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
+  BinMd arch ->
+  MC.Memory (MC.RegAddrWidth (MC.ArchReg arch)) ->
   -- | The function address
   MC.ArchSegmentOff arch ->
   -- | The current Crucible state
@@ -618,9 +605,9 @@ discoverFuncAddr ::
     ( MacawFnHandle arch
     , CS.SimState p sym (Symbolic.MacawExt arch) r f a
     )
-discoverFuncAddr logAction halloc arch memory symMap pltStubs addr st0 = do
+discoverFuncAddr logAction halloc arch binMd mem addr st0 = do
   C.Reg.SomeCFG regCFG <-
-    discoverFunction logAction halloc arch memory symMap pltStubs addr
+    discoverFunction logAction halloc arch binMd mem addr
   C.SomeCFG funcCFG <- pure (C.toSSA regCFG)
   let cfgHdl = C.cfgHandle funcCFG
   let st1 = st0 & stateDiscoveredFnHandles %~ Map.insert addr cfgHdl

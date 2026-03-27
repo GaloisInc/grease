@@ -31,7 +31,6 @@ import Data.Graph.Inductive.NodeMap qualified as GNM
 import Data.Graph.Inductive.PatriciaTree qualified as GPT
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
-import Data.Macaw.Discovery qualified as MD
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map qualified as Map
@@ -45,6 +44,7 @@ import GHC.TypeNats (type (<=))
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Discovery qualified as GMD
+import Grease.Macaw.Load (BinMd (..))
 import Lang.Crucible.CFG.Core qualified as CCC
 import Lang.Crucible.CFG.Reg qualified as CCR
 import Lang.Crucible.CFG.SSAConversion qualified as CCS
@@ -168,23 +168,22 @@ getCFG ::
   , Symbolic.SymArchConstraints arch
   ) =>
   CFGCache w ->
+  BinMd arch ->
   MM.Memory w ->
   MM.MemWord w ->
   ScreachLogAction ->
   GreaseLogAction ->
   CFH.HandleAllocator ->
   Arch.ArchContext arch ->
-  MD.AddrSymMap (MC.ArchAddrWidth arch) ->
-  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
   IO (Maybe (Some.Some CCC.AnyCFG))
-getCFG (CFGCache cfgCache) mem addr sla gla halloc archCtx symMap pltStubs =
+getCFG (CFGCache cfgCache) binMd mem addr sla gla halloc archCtx =
   case MM.resolveAbsoluteAddr mem addr of
     Just segOff -> do
       cache <- IORef.readIORef cfgCache
       case Map.lookup segOff cache of
         Just cfg -> pure $ Just cfg
         Nothing -> do
-          CCR.SomeCFG cfgReg <- GMD.discoverFunction gla halloc archCtx mem symMap pltStubs segOff
+          CCR.SomeCFG cfgReg <- GMD.discoverFunction gla halloc archCtx binMd mem segOff
           LJ.writeLog sla (ScrchDiag.DistanceDiagnostic $ Diagnositc.DiscoveredCFG addr (CCR.SomeCFG cfgReg))
           let cfg' = case CCS.toSSA cfgReg of
                 CCC.SomeCFG cfg -> Some.Some $ CCC.AnyCFG cfg
@@ -237,15 +236,14 @@ resolveCall ::
   CFGCache w ->
   ScreachLogAction ->
   GreaseLogAction ->
+  BinMd arch ->
   MM.Memory w ->
   CFH.HandleAllocator ->
   Arch.ArchContext arch ->
-  MD.AddrSymMap (MC.ArchAddrWidth arch) ->
-  Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName ->
   WPL.ProgramLoc ->
   WPL.ProgramLoc ->
   IO [Some.Some CCC.AnyCFG]
-resolveCall callGraph cfgCaches sla gla mem hLoc archContext symMap pltStubs callerLoc callsiteLoc = do
+resolveCall callGraph cfgCaches sla gla binMd mem hLoc archContext callerLoc callsiteLoc = do
   let mbCaller = locToAddressMaybe callerLoc
   let mbCallsite = locToAddressMaybe callsiteLoc
   case (mbCaller, mbCallsite) of
@@ -273,4 +271,4 @@ resolveCall callGraph cfgCaches sla gla mem hLoc archContext symMap pltStubs cal
       pure []
  where
   getCFGFromAddr :: MM.MemWord w -> IO (Maybe (Some.Some CCC.AnyCFG))
-  getCFGFromAddr addr = getCFG cfgCaches mem addr sla gla hLoc archContext symMap pltStubs
+  getCFGFromAddr addr = getCFG cfgCaches binMd mem addr sla gla hLoc archContext
