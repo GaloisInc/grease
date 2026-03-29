@@ -19,3 +19,5 @@ end
 function no_heuristic() check 'Unable to find a heuristic for any goal' end
 
 function uninit_stack() check 'Likely bug: uninitialized stack read' end
+
+function stack_corruption() check 'stack corruption (return address was modified)' end

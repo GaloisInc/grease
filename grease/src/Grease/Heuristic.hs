@@ -18,6 +18,7 @@ module Grease.Heuristic (
   HeuristicResult (..),
   RefineHeuristic,
   mustFailHeuristic,
+  shadowStackHeuristic,
   llvmHeuristics,
   macawHeuristics,
   ErrorDescription (..),
@@ -52,6 +53,7 @@ import Grease.Heuristic.Diagnostic qualified as Diag
 import Grease.Heuristic.Result (CantRefine (Exhausted, Exit, MissingFunc, MissingSemantics, MutableGlobal, SolverTimeout, SolverUnknown, Timeout, Unsupported), HeuristicResult (CantRefine, PossibleBug, RefinedPrecondition, Unknown), mergeResultsOptimistic)
 import Grease.Macaw.RegName (RegName, mkRegName)
 import Grease.MustFail qualified as MustFail
+import Grease.ShadowStack qualified as ShadowStack
 import Grease.Panic (panic)
 import Grease.Setup (InitialMem (InitialMem))
 import Grease.Setup.Annotations qualified as Anns
@@ -592,6 +594,29 @@ mustFailHeuristic bak _anns _initMem obligation minfo _argNames _args =
       if Bool.not mustFail
         then pure Unknown
         else pure (PossibleBug bug)
+
+-- | Heuristic that recognizes shadow stack corruption proof obligations.
+-- These are created by 'Grease.ShadowStack.assertCorruption' and always have
+-- 'falsePred' as their goal, so they are trivially disproved by the solver.
+shadowStackHeuristic ::
+  forall sym bak ext argTys.
+  CB.IsSymBackend sym bak =>
+  RefineHeuristic sym bak ext argTys
+shadowStackHeuristic _bak _anns _initMem obligation _minfo _argNames _args =
+  let lp = CB.proofGoal obligation
+      simError = lp ^. W4.labeledPredMsg
+   in case CS.simErrorReason simError of
+        CS.GenericSimError msg
+          | msg == ShadowStack.shadowStackCorruptionMsg ->
+              let bug =
+                    Bug.BugInstance
+                      { Bug.bugType = Bug.StackCorruption
+                      , Bug.bugLoc = ppProgramLoc (CS.simErrorLoc simError)
+                      , Bug.bugDetails = Nothing
+                      , Bug.bugUb = Nothing
+                      }
+               in pure (PossibleBug bug)
+        _ -> pure Unknown
 
 pointerHeuristic ::
   forall wptr solver sym bak t st fs ext argTys.

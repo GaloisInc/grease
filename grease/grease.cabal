@@ -264,6 +264,7 @@ library
     Grease.Refine.RefinementData
     Grease.Scheduler
     Grease.Setup
+    Grease.ShadowStack
     Grease.Setup.Annotations
     Grease.Setup.Diagnostic
     Grease.Shape

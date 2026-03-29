@@ -128,6 +128,7 @@ import Grease.Macaw.PLT qualified as GMPLT
 import Grease.Macaw.RegName (mkRegName)
 import Grease.Macaw.SetupHook qualified as Macaw (SetupHook, binSetupHook, syntaxSetupHook)
 import Grease.Macaw.Shapes qualified as GMS
+import Grease.ShadowStack qualified as SS
 import Grease.Macaw.SimulatorHooks (ExecutingAddressAction (ExecutingAddressAction))
 import Grease.Macaw.SimulatorState (GreaseSimulatorState, discoveredFnHandles, mkGreaseSimulatorState)
 import Grease.Macaw.SimulatorState qualified as GMSS
@@ -767,15 +768,23 @@ macawInitState ::
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
+  SS.ShadowStack wptr ->
   GRef.RefinementData sym bak scope ext argTys wptr ->
   C.GlobalVar ToConc.ToConcretizeType ->
   GSetup.SetupMem sym ->
   GSIO.InitializedFs sym wptr ->
   GSetup.Args sym ext (Symbolic.MacawCrucibleRegTypes arch) wptr ->
   IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
-macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa refineData toConcVar setupMem initFs args = do
+macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa ss refineData toConcVar setupMem initFs args = do
   let sym = CB.backendGetSym bak
   regs <- liftIO (overrideRegs archCtx sym (GSetup.argVals args))
+  -- Push entry function's return address onto the shadow stack.
+  -- Use try/catch because the initial memory at [RSP] may not be readable.
+  let mem0 = GSetup.getSetupMem setupMem
+  mbAddr0 <- X.try ((archCtx ^. Arch.archFunctionReturnAddr) bak (archCtx ^. Arch.archVals) regs mem0) >>= \case
+    Left (_ :: X.SomeException) -> pure Nothing
+    Right mbAddr -> pure mbAddr
+  SS.pushReturnAddr ss WFN.startFunctionName mbAddr0
   EP.EntrypointCfgs
     { EP.entrypointStartupOv = mbStartupOvSsa
     , EP.entrypointCfg = ssa@(C.SomeCFG ssaCfg)
@@ -852,6 +861,8 @@ macawRefineOnce ::
 macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
   let argNames = archCtx ^. Arch.archValueNames
       regTypes = archCtx ^. Arch.archRegTypes
+  ss <- SS.newShadowStack
+  ssFeat <- SS.shadowStackFeature bak archCtx memVar ss
   GRef.refineOnce
     la
     simOpts
@@ -865,8 +876,8 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallbac
     argShapes
     initMem
     heuristics
-    execFeats
-    (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
+    (ssFeat : execFeats)
+    (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa ss)
     `X.catches` [ X.Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
                     pure $ GRef.ProveCantRefine $ H.MissingSemantics $ GUtil.pshow ex
                 , X.Handler
@@ -960,8 +971,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
   -- preconditions.)
   let heuristics =
         if GO.simNoHeuristics simOpts
-          then [H.mustFailHeuristic]
-          else H.macawHeuristics la rNames List.++ [H.mustFailHeuristic]
+          then [H.shadowStackHeuristic, H.mustFailHeuristic]
+          else H.macawHeuristics la rNames List.++ [H.shadowStackHeuristic, H.mustFailHeuristic]
   result <- GRef.refinementLoop la bounds argNames initArgShapes $ \argShapes ->
     macawRefineOnce
       la
@@ -1423,8 +1434,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
     -- See comment above on heuristics in 'simulateMacawCfg'
     let heuristics =
           if GO.simNoHeuristics simOpts
-            then [H.mustFailHeuristic]
-            else H.llvmHeuristics la List.++ [H.mustFailHeuristic]
+            then [H.shadowStackHeuristic, H.mustFailHeuristic]
+            else H.llvmHeuristics la List.++ [H.shadowStackHeuristic, H.mustFailHeuristic]
     GRef.refinementLoop la bounds argNames initArgShapes $ \argShapes ->
       GRef.refineOnce
         la

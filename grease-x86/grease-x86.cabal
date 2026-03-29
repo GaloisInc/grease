@@ -149,6 +149,7 @@ library
     , crucible-llvm
     , elf-edit
     , lens
+    , macaw-base
     , macaw-symbolic
     , macaw-x86
     , macaw-x86-symbolic
