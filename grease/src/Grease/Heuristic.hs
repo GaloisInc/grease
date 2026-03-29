@@ -18,6 +18,7 @@ module Grease.Heuristic (
   HeuristicResult (..),
   RefineHeuristic,
   mustFailHeuristic,
+  shadowStackHeuristic,
   llvmHeuristics,
   macawHeuristics,
   ErrorDescription (..),
@@ -54,6 +55,7 @@ import Grease.MustFail qualified as MustFail
 import Grease.Panic (panic)
 import Grease.Setup (InitialMem (InitialMem))
 import Grease.Setup.Annotations qualified as Anns
+import Grease.ShadowStack qualified as ShadowStack
 import Grease.Shape (ArgShapes, ExtShape, Shape (ShapeExt), argShapes)
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (MemShape (Uninitialized), ModifyPtrError, Offset (Offset), PtrShape (ShapePtr, ShapePtrBV), PtrTarget, bytesToPointers, growPtrTarget, growPtrTargetUpTo, initializeOrGrowPtrTarget, modifyPtrTarget, ptrTarget)
@@ -592,6 +594,31 @@ mustFailHeuristic bak _anns _initMem obligation minfo _argNames _args =
       if Bool.not mustFail
         then pure Unknown
         else pure (PossibleBug bug)
+
+-- | Heuristic that recognizes shadow stack corruption proof obligations.
+-- These are created by 'Grease.ShadowStack.assertReturnAddr', which asserts
+-- that the return-time instruction pointer equals the saved return address; the
+-- solver disproves the obligation exactly when the return address may have been
+-- corrupted.
+shadowStackHeuristic ::
+  forall sym bak ext argTys.
+  CB.IsSymBackend sym bak =>
+  RefineHeuristic sym bak ext argTys
+shadowStackHeuristic _bak _anns _initMem obligation _minfo _argNames _args =
+  let lp = CB.proofGoal obligation
+      simError = lp ^. W4.labeledPredMsg
+   in case CS.simErrorReason simError of
+        CS.GenericSimError msg
+          | msg == ShadowStack.shadowStackCorruptionMsg ->
+              let bug =
+                    Bug.BugInstance
+                      { Bug.bugType = Bug.StackCorruption
+                      , Bug.bugLoc = ppProgramLoc (CS.simErrorLoc simError)
+                      , Bug.bugDetails = Nothing
+                      , Bug.bugUb = Nothing
+                      }
+               in pure (PossibleBug bug)
+        _ -> pure Unknown
 
 pointerHeuristic ::
   forall wptr solver sym bak t st fs ext argTys.
