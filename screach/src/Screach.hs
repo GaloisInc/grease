@@ -1555,23 +1555,24 @@ analyzeCfg conf sla gla halloc macawCfgConfig archCtx mbEhi setupHook rtLoc exec
                 else []
             ]
 
-    setupAssertThenAssume bak
+    setupAssertThenAssume (Conf.assertThenAssume conf) bak
     firstState <- initShape initArgs
     _result <- CS.executeCrucible startFeats firstState
     refineResults <- IORef.readIORef savedRef
     doLog sla $ Diag.RefinementResultCount $ length refineResults
     verifyReachable sla gla bak initShape genericExecFeats refineResults
  where
-  setupAssertThenAssume bak = do
-    let sym = CB.backendGetSym bak
-    let cfg = WI.getConfiguration sym
-    assertThenAssume <- W4C.getOptionSetting CB.assertThenAssumeConfigOption cfg
-    -- This can technically return warnings/errors, but seems unlikely in this
-    -- case...
-    warns <- W4C.setOpt assertThenAssume True
-    case warns of
-      [] -> pure ()
-      _else -> panic "setupAssertThenAssume" (List.map show warns)
+  setupAssertThenAssume enableAssertThenAssume bak = do
+    Monad.when enableAssertThenAssume $ do
+      let sym = CB.backendGetSym bak
+      let cfg = WI.getConfiguration sym
+      assertThenAssume <- W4C.getOptionSetting CB.assertThenAssumeConfigOption cfg
+      -- This can technically return warnings/errors, but seems unlikely in this
+      -- case...
+      warns <- W4C.setOpt assertThenAssume True
+      case warns of
+        [] -> pure ()
+        _else -> panic "setupAssertThenAssume" (List.map show warns)
 
 verifyReachable ::
   ( p ~ SP.ScreachSimulatorState p0 sym bak ext arch t ret tys w

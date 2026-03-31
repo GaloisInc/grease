@@ -207,6 +207,18 @@ conf =
           )
       )
     <*> GC.simDumpCoverageParser
+    <*> Opts.flag
+          True
+          False  -- Note: flipped to make True default
+          ( Opts.long "no-path-sat"
+              <> Opts.help "Disable path satisfiability checking"
+          )
+    <*> Opts.flag
+          True
+          False  -- Note: flipped to make True default
+          ( Opts.long "no-assert-then-assume"
+              <> Opts.help "Disable assert-then-assume (assertions don't make paths unsatisfiable)"
+          )
 
 -- | Parse a 'Conf.Config'
 cli :: Opts.ParserInfo Conf.Config

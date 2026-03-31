@@ -6,7 +6,9 @@ module Grease.ExecutionFeatures (
   greaseExecFeats,
 ) where
 
+import Control.Monad (when)
 import Data.List qualified as List
+import Data.Maybe qualified as Maybe
 import Data.Time.Clock (secondsToNominalDiffTime)
 import Grease.BranchTracer (greaseBranchTracerFeature)
 import Grease.Diagnostic (GreaseLogAction)
@@ -41,26 +43,28 @@ boundedExecFeats boundsOpts = do
   timeoutFeat <- CS.timeoutFeature (secondsToNominalDiffTime symexTimeout)
   pure [boundExecFeat, boundRecFeat, timeoutFeat]
 
--- | Path satisfiability feature, plus enables 'C.assertThenAssumeConfigOption'
+-- | Path satisfiability feature, optionally enables 'C.assertThenAssumeConfigOption'
 pathSatFeat ::
   ( CB.IsSymBackend sym bak
   , bak ~ C.OnlineBackend solver scope st fs
   , sym ~ WE.ExprBuilder scope st (WE.Flags fm)
   , WPO.OnlineSolver solver
   ) =>
+  Bool ->  -- ^ Enable assert-then-assume
   bak ->
   IO (CS.GenericExecutionFeature sym)
-pathSatFeat bak = do
+pathSatFeat enableAssertThenAssume bak = do
   let sym = CB.backendGetSym bak
   pathSat <- C.pathSatisfiabilityFeature sym (C.considerSatisfiability bak)
-  let cfg = WI.getConfiguration sym
-  assertThenAssume <- W4C.getOptionSetting CB.assertThenAssumeConfigOption cfg
-  -- This can technically return warnings/errors, but seems unlikely in this
-  -- case...
-  warns <- W4C.setOpt assertThenAssume True
-  case warns of
-    [] -> pure ()
-    _ -> panic "configurePathSatFeature" (List.map show warns)
+  when enableAssertThenAssume $ do
+    let cfg = WI.getConfiguration sym
+    assertThenAssume <- W4C.getOptionSetting CB.assertThenAssumeConfigOption cfg
+    -- This can technically return warnings/errors, but seems unlikely in this
+    -- case...
+    warns <- W4C.setOpt assertThenAssume True
+    case warns of
+      [] -> pure ()
+      _ -> panic "configurePathSatFeature" (List.map show warns)
   pure pathSat
 
 -- | Debugger, path satisfiability, and branch tracing features
@@ -78,17 +82,21 @@ greaseExecFeats ::
   ) =>
   GreaseLogAction ->
   bak ->
+  Bool ->  -- ^ Enable path satisfiability checking
+  Bool ->  -- ^ Enable assert-then-assume
   -- | Debugger configuration, if desired
   Maybe (Dbg.ExtImpl cExt p sym ext ret) ->
   IO [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)]
-greaseExecFeats la bak dbgOpts = do
+greaseExecFeats la bak enablePathSat enableAssertThenAssume dbgOpts = do
   let execFeats_ =
         case dbgOpts of
           Just extImpl -> [Dbg.debugger extImpl]
           Nothing -> []
-  pathSat <- pathSatFeat bak
+  mbPathSat <- if enablePathSat
+                 then Just <$> pathSatFeat enableAssertThenAssume bak
+                 else pure Nothing
   let execFeats =
-        CS.genericToExecutionFeature pathSat
-          : greaseBranchTracerFeature la
+        Maybe.maybeToList (fmap CS.genericToExecutionFeature mbPathSat)
+          ++ greaseBranchTracerFeature la
           : execFeats_
   pure execFeats

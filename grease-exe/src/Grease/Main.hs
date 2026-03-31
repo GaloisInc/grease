@@ -614,7 +614,7 @@ macawExecFeats la bak memVar archCtx macawCfgConfig simOpts = do
                 extImpl = MDebug.macawExtImpl prettyPtrFnMap memVar (archCtx ^. Arch.archVals) mbElf
              in Just extImpl
           else Nothing
-  feats <- greaseExecFeats la bak dbgOpts
+  feats <- greaseExecFeats la bak (GO.simPathSat simOpts) (GO.simAssertThenAssume simOpts) dbgOpts
   pure (feats, snd <$> profFeatLog)
 
 llvmExecFeats ::
@@ -635,7 +635,7 @@ llvmExecFeats la bak simOpts memVar = do
         if GO.debug (GO.simDebugOpts simOpts)
           then Just (LDebug.llvmExtImpl memVar)
           else Nothing
-  feats <- greaseExecFeats la bak dbgOpts
+  feats <- greaseExecFeats la bak (GO.simPathSat simOpts) (GO.simAssertThenAssume simOpts) dbgOpts
   pure (feats, snd <$> profFeatLog)
 
 initDebugger ::

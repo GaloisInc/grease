@@ -500,6 +500,20 @@ simOpts = do
   simInitPrecondOpts <- initPrecondOptsParser
   simBoundsOpts <- boundsOptsParser
   simDumpCoverage <- simDumpCoverageParser
+  simPathSat <-
+    Opt.flag
+      True   -- default: enabled
+      False  -- value when flag present
+      ( Opt.long "no-path-sat"
+          <> Opt.help "Disable path satisfiability checking"
+      )
+  simAssertThenAssume <-
+    Opt.flag
+      True   -- default: enabled
+      False  -- value when flag present
+      ( Opt.long "no-assert-then-assume"
+          <> Opt.help "Disable assert-then-assume (assertions don't make paths unsatisfiable)"
+      )
   pure GO.SimOpts{..}
 
 processSimOpts :: GO.SimOpts -> GO.SimOpts

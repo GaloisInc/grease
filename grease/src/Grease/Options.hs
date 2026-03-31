@@ -239,6 +239,10 @@ data SimOpts
   , simFsOpts :: FsOpts
   , simInitPrecondOpts :: InitialPreconditionOpts
   , simDumpCoverage :: Maybe FilePath
+  , simPathSat :: Bool
+  -- ^ Enable path satisfiability checking (default: True)
+  , simAssertThenAssume :: Bool
+  -- ^ Enable assert-then-assume for path-sat (default: True)
   }
   deriving Show
 

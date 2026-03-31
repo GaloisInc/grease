@@ -42,4 +42,8 @@ data Config
   , avoidedLocations :: [AnalysisLoc]
   , targetContainingFunction :: Maybe Word64
   , simDumpCoverage :: Maybe FilePath
+  , pathSat :: Bool
+  -- ^ Enable path satisfiability checking (default: True)
+  , assertThenAssume :: Bool
+  -- ^ Enable assert-then-assume for path-sat (default: True)
   }
