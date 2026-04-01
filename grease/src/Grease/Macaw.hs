@@ -4,12 +4,14 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw (
   SetupHook (..),
+  buildMacawExtImpl,
   emptyMacawMem,
   minimalArgShapes,
   memConfigInitial,
@@ -60,12 +62,14 @@ import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
 import Grease.Options qualified as Opts
 import Grease.Panic (panic)
 import Grease.Personality qualified as GP
+import Grease.Reachability.AnalysisLoc (ResolvedTargetLoc, resolvedTargetAddr)
+import Grease.Reachability.GoalEvaluator qualified as GoalEval
 import Grease.Setup (InitialMem (InitialMem), SetupMem, getSetupMem)
 import Grease.Shape (ArgShapes (ArgShapes), Shape (ShapeBool, ShapeExt, ShapeStruct))
 import Grease.Shape.NoTag (NoTag (NoTag))
 import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape (ShapePtrBV, ShapePtrBVLit))
 import Grease.Syntax (ResolvedOverridesYaml)
-import Grease.Utility (printHandle)
+import Grease.Utility (OnlineSolverAndBackend, printHandle)
 import Lang.Crucible.Analysis.Postdom qualified as C
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as CB
@@ -499,6 +503,45 @@ assertRelocSupported arch loc (CLM.LLVMPointer _base offset) relocs =
               CB.abortExecBecause (CB.AssertionFailure simErr)
         _ ->
           pure ()
+
+-- | Build a 'CS.ExtensionImpl' for Macaw simulation.
+--
+-- Sets up the goal evaluator: if a resolved target address is provided and no
+-- target override is present, 'GoalEval.goalEvaluatorMacawExtension' is applied
+-- to detect when the target address is reached during simulation.
+--
+-- We omit the goal evaluator in the case that we have a target override because
+-- the target override determines when we have truly reached the goal (by
+-- calling the `@reached` built-in).
+buildMacawExtImpl ::
+  ( w ~ MC.ArchAddrWidth arch
+  , MC.MemWidth w
+  , 1 C.<= w
+  , Symbolic.SymArchConstraints arch
+  , OnlineSolverAndBackend solver sym bak scope st fs
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
+  ) =>
+  Symbolic.GenArchVals Symbolic.LLVMMemory arch ->
+  sym ->
+  CS.GlobalVar CLM.Mem ->
+  Symbolic.MemModelConfig p sym arch CLM.Mem ->
+  GreaseLogAction ->
+  bak ->
+  MC.Memory w ->
+  -- | Resolved target location, if any
+  Maybe (ResolvedTargetLoc w) ->
+  -- | Target override path, if any
+  Maybe FilePath ->
+  IO (CS.ExtensionImpl p sym (Symbolic.MacawExt arch))
+buildMacawExtImpl archVals sym memVar memCfg la bak mem mbRtLoc mbOverride = do
+  evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory archVals sym pure
+  let ext0 = Symbolic.macawExtensions evalFn memVar memCfg
+  pure $ case (mbRtLoc, mbOverride) of
+    (Just rtLoc, Nothing)
+      | Just tgtAddr <- resolvedTargetAddr rtLoc ->
+          GoalEval.goalEvaluatorMacawExtension ext0 la bak mem rtLoc (GoalEval.TargetAddress tgtAddr)
+    _ -> ext0
 
 initState ::
   forall arch sym bak t solver scope st fs p cExt ret argTys wptr.

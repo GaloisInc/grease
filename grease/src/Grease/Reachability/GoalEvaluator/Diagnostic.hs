@@ -1,15 +1,18 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Screach.GoalEvaluator.Diagnostic (
+-- |
+-- Copyright        : (c) Galois, Inc. 2025
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Reachability.GoalEvaluator.Diagnostic (
   Diagnostic (..),
   severity,
 ) where
 
 import Data.Macaw.Memory qualified as MM
 import Grease.Diagnostic.Severity (Severity (Debug, Info))
+import Grease.Reachability.AnalysisLoc (ResolvedTargetLoc)
 import Prettyprinter qualified as PP
-import Screach.AnalysisLoc (ResolvedTargetLoc (..))
 import What4.SatResult qualified as W4
 
 data Diagnostic where

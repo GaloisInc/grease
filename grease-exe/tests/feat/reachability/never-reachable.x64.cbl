@@ -1,6 +1,6 @@
 ; A basic program where the vulnerability is /not/ reached.
 
-;; flags {"--entry-symbol", "test"}
+;; flags {"--symbol", "test"}
 ;; flags {"--target-symbol", "vuln"}
 ;; go(prog)
 

@@ -81,4 +81,12 @@ branching. A strategy can be specified using `--path-strategy`.
 - `dfs` stands for *depth-first search*. In this mode, GREASE never merges
   paths, and explores paths in a depth-first traversal.
 
+## Reachability analysis
+
+GREASE can check whether a particular target location is reachable from the
+analysis entrypoint. Specify a target using one of:
+
+- `--target-symbol SYMBOL`: Target a function by symbol name.
+- `--target-addr ADDR`: Target a function by address.
+
 <!-- Copyright (c) Galois, Inc. 2024. -->

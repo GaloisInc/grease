@@ -3,21 +3,27 @@
 {-# LANGUAGE LambdaCase #-}
 
 -- | Reachability verification
-module Screach.Verify (verifyReachable) where
+--
+-- Copyright        : (c) Galois, Inc. 2026
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Reachability.Verify (verifyReachable) where
 
 import Control.Lens ((&), (.~))
 import Control.Monad qualified as Monad
-import Data.Macaw.CFG qualified as MC
 import Data.Parameterized.TraversableFC qualified as TFC
+import Grease.Bug qualified as Bug
+import Grease.Concretize (ConcretizedData)
 import Grease.Concretize qualified as Conc
 import Grease.Concretize.ToConcretize qualified as ToConc
-import Grease.Diagnostic (GreaseLogAction)
+import Grease.Diagnostic (Diagnostic (ReachabilityVerifyDiagnostic), GreaseLogAction)
 import Grease.Personality qualified as GP
+import Grease.Reachability.Verify.Diagnostic qualified as Diag
 import Grease.Refine qualified as GR
 import Grease.Scheduler qualified as Sched
+import Grease.Shape (ArgShapes (ArgShapes))
 import Grease.Shape qualified as Shape
-import Grease.Shape.NoTag qualified as Shape
-import Grease.Shape.Pointer qualified as Shape
+import Grease.Shape.NoTag (NoTag (NoTag))
+import Grease.Shape.Pointer (PtrDataMode (Precond), PtrShape)
 import Grease.Utility qualified as GU
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Extension qualified as CCE
@@ -26,46 +32,38 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Types qualified as CT
 import Lumberjack qualified as LJ
-import Screach.Diagnostic (Diagnostic (VerifyDiagnostic), ScreachLogAction)
-import Screach.Heuristic (isReachedBug)
-import Screach.Verify.Diagnostic qualified as Diag
 import What4.Expr qualified as WE
 
-doLog :: ScreachLogAction -> Diag.Diagnostic -> IO ()
-doLog la diag = LJ.writeLog la (VerifyDiagnostic diag)
-
--- | Re-run simulation for each 'Conc.ConcretizedData', using the concrete
--- argument shapes and the recorded trace to confirm the target is reachable.
--- Logs verification outcome.
+-- | Re-run simulation for each 'ConcretizedData', using the concrete argument
+-- shapes and the recorded trace to confirm the target is reachable. Logs
+-- verification outcome.
 verifyReachable ::
   forall p sym bak cExt ext t ret tys w solver st fm.
-  ( TFC.TraversableFC (Shape.ExtShape ext 'Shape.Precond)
+  ( TFC.TraversableFC (Shape.ExtShape ext 'Precond)
   , CCE.IsSyntaxExtension ext
   , GU.OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
   , 16 CT.<= w
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
   , ?memOpts :: CLM.MemOptions
-  , Shape.ExtShape ext ~ Shape.PtrShape ext w
-  , MC.MemWidth w
+  , Shape.ExtShape ext ~ PtrShape ext w
   , CR.HasReplayState p p sym ext (CS.RegEntry sym ret)
   , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
   , GP.HasPersonality p sym bak t cExt ext ret tys w
   ) =>
-  ScreachLogAction ->
   GreaseLogAction ->
   bak ->
-  (Shape.ArgShapes ext Shape.NoTag tys -> IO (CS.ExecState p sym ext (CS.RegEntry sym ret))) ->
   [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
-  [Conc.ConcretizedData sym ext tys] ->
+  -- | Create an initial execution state from concrete argument shapes.
+  (Shape.ArgShapes ext NoTag tys -> IO (CS.ExecState p sym ext (CS.RegEntry sym ret))) ->
+  [ConcretizedData sym ext tys] ->
   IO ()
-verifyReachable la gla bak initShape execFeats cDataList =
-  Monad.forM_ (zip [1 ..] cDataList) $ \(no, cData) -> do
-    doLog la (Diag.VerifyReachable (length cDataList) no)
+verifyReachable la bak execFeats initShape cDatas =
+  Monad.forM_ (zip [1 ..] cDatas) $ \(no, cData) -> do
+    LJ.writeLog la (ReachabilityVerifyDiagnostic (Diag.VerifyReachable (length cDatas) no))
     let concArgShapes = Conc.concArgsShapes (Conc.concArgs cData)
-        untagArgs = TFC.fmapFC (TFC.fmapFC (const Shape.NoTag)) concArgShapes
-    -- TODO(#640): Incorporate the concretized filesystem.
-    st <- initShape (Shape.ArgShapes untagArgs)
+        untagArgs = TFC.fmapFC (TFC.fmapFC (const NoTag)) concArgShapes
+    st <- initShape (ArgShapes untagArgs)
     let trace = Conc.concTrace cData
         st' =
           st
@@ -74,11 +72,13 @@ verifyReachable la gla bak initShape execFeats cDataList =
               . CR.replayState
               . CR.initialTrace
               .~ trace
-    result' <- CS.executeCrucible (CR.replayFeature True : CR.recordFeature : execFeats) st'
+    result <- CS.executeCrucible (CR.replayFeature True : CR.recordFeature : execFeats) st'
     obls <- CB.getProofObligations bak
-    refResult <- GR.proveAndRefine bak result' gla obls
-    case refResult of
-      GR.ProveBug bugInstance _
-        | isReachedBug bugInstance ->
-            doLog la Diag.VerifySuccess
-      _ -> doLog la Diag.VerifyFailure
+    refResult <- GR.proveAndRefine bak result la obls
+    LJ.writeLog la $
+      ReachabilityVerifyDiagnostic $
+        case refResult of
+          GR.ProveBug bugInstance _
+            | Bug.bugType bugInstance == Bug.ReachedTarget ->
+                Diag.VerifySuccess
+          _ -> Diag.VerifyFailure

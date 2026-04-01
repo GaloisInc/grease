@@ -10,8 +10,8 @@ import Data.Macaw.Memory qualified as MM
 import Data.Text (Text)
 import Data.Void (Void, absurd)
 import Grease.Diagnostic.Severity (Severity (Error, Info))
+import Grease.Reachability.AnalysisLoc (ResolvedTargetLoc)
 import Prettyprinter qualified as PP
-import Screach.AnalysisLoc (ResolvedTargetLoc)
 
 data Diagnostic where
   DebuggerOutput ::

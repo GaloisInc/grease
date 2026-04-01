@@ -1,7 +1,7 @@
-; A basic S-expression program that checks to see if screach can detect if a
+; A basic S-expression program that checks whether grease can detect if a
 ; call to a function defined in the S-expression program has been reached.
 
-;; flags {"--entry-symbol", "test"}
+;; flags {"--symbol", "test"}
 ;; flags {"--target-symbol", "vuln"}
 ;; go(prog)
 

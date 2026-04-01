@@ -14,13 +14,12 @@ import Data.Time.Clock qualified as Time
 import Data.Time.Format qualified as Time
 import Grease.Diagnostic qualified as Grease
 import Grease.Diagnostic.Severity (Severity (Debug, Warn))
+import Grease.Reachability.GoalEvaluator.Diagnostic qualified as GoalEvaluator
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import Screach.Distance.Diagnostic qualified as Distance
-import Screach.GoalEvaluator.Diagnostic qualified as GoalEvaluator
 import Screach.Run.Diagnostic qualified as Run
-import Screach.Verify.Diagnostic qualified as Verify
 import System.IO (stderr)
 import What4.ProgramLoc qualified as WPL
 import Prelude hiding (log)
@@ -34,7 +33,6 @@ data Diagnostic where
   GreaseDiagnostic :: Grease.Diagnostic -> Diagnostic
   RunDiagnostic :: Run.Diagnostic -> Diagnostic
   DistanceDiagnostic :: Distance.Diagnostic -> Diagnostic
-  VerifyDiagnostic :: Verify.Diagnostic -> Diagnostic
   ScheduledSuccessor :: WPL.ProgramLoc -> WPL.ProgramLoc -> Int -> Diagnostic
   ExecutingFrame :: WPL.ProgramLoc -> String -> Diagnostic
   ResumingFrame :: WPL.ProgramLoc -> Diagnostic
@@ -47,7 +45,6 @@ instance PP.Pretty Diagnostic where
       GreaseDiagnostic diag -> PP.pretty diag
       RunDiagnostic diag -> PP.pretty diag
       DistanceDiagnostic diag -> PP.pretty diag
-      VerifyDiagnostic diag -> PP.pretty diag
       ScheduledSuccessor loc fromLoc dist ->
         PP.hsep ["Scheduled:", PP.viaShow loc, "from", PP.viaShow fromLoc, "at distance", PP.pretty dist]
       ExecutingFrame loc stType -> PP.hsep ["Executing frame:", PP.viaShow loc, PP.pretty stType]
@@ -65,7 +62,6 @@ severity =
     GreaseDiagnostic diag -> Grease.severity diag
     RunDiagnostic diag -> Run.severity diag
     DistanceDiagnostic diag -> Distance.severity diag
-    VerifyDiagnostic diag -> Verify.severity diag
     ScheduledSuccessor{} -> Debug
     ExecutingFrame _ _ -> Debug
     ResumingFrame{} -> Debug

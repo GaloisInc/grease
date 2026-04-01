@@ -6,8 +6,9 @@ module Screach.Config (
 import Data.Word (Word64)
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Options qualified as GO
+import Grease.Reachability.AnalysisLoc (AnalysisLoc, TargetLoc)
 import Grease.Solver (Solver)
-import Screach.AnalysisLoc (AnalysisLoc, EntryLoc, TargetLoc)
+import Screach.AnalysisLoc (EntryLoc)
 import Screach.Distance qualified as Dist
 import Screach.RefinementOptions (AllSolutions, RefineReplay)
 

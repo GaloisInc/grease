@@ -61,11 +61,17 @@ data BatchStatus
   | BatchItersExceeded
   | BatchCantRefine CantRefine
   | BatchSuccess
+  | BatchTargetNotReached
   deriving (Show, Generic)
 
 instance Aeson.ToJSON BatchStatus
 
 instance PP.Pretty BatchStatus where
+  pretty (BatchBug (MkBatchBug b _ shapes))
+    | Bug.bugType b == Bug.ReachedTarget =
+        if shapes == ""
+          then PP.emptyDoc
+          else PP.vcat ["Concretized arguments:", "", PP.pretty shapes]
   pretty (BatchBug (MkBatchBug b _ shapes)) =
     PP.vcat $
       [ "Likely bug:" PP.<+> PP.pretty b
@@ -99,6 +105,7 @@ instance PP.Pretty BatchStatus where
     "Failed to infer precondition; maximum iterations exceeded"
   pretty (BatchCantRefine b) = PP.pretty b
   pretty BatchSuccess = "Success"
+  pretty BatchTargetNotReached = "Failed to reach target"
 
 -- | A 'BatchStatus' and any other information that is useful to report (e.g.,
 -- for consumption by tools that use @grease@'s JSON output).

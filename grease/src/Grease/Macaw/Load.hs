@@ -37,7 +37,6 @@ import Data.Macaw.Memory.ElfLoader qualified as EL
 import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
 import Data.Macaw.Memory.LoadCommon qualified as LC
 import Data.Macaw.Symbolic qualified as Symbolic
-import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Proxy (Proxy (Proxy))
@@ -49,6 +48,10 @@ import Data.Word (Word64)
 import Grease.Diagnostic (Diagnostic (LoadDiagnostic), GreaseLogAction)
 import Grease.Entrypoint (Entrypoint, EntrypointLocation (EntrypointAddress, EntrypointCoreDump, EntrypointSymbolName), entrypointLocation)
 import Grease.Macaw.Arch qualified as Arch
+import Grease.Macaw.BinMd (
+  BinMd (BinMd, binDynFunMap, binEntrypointAddrs, binLoadOptions, binPltStubs, binRelocs, binSymMap),
+  emptyBinMd,
+ )
 import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Macaw.Load.Relocation (RelocType (SymbolReloc))
 import Grease.Macaw.Load.Relocation qualified as Reloc
@@ -64,42 +67,6 @@ import What4.FunctionName qualified as WFN
 
 doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (LoadDiagnostic diag)
-
--- | Binary metadata: all per-binary maps and settings, but not memory
--- (which can be recovered via 'Loader.memoryImage' from 'LoadedProgram').
-data BinMd arch
-  = BinMd
-  { binLoadOptions :: LC.LoadOptions
-  -- ^ The load options used to load addresses in the binary.
-  , binSymMap :: Map.Map (MC.ArchSegmentOff arch) BS.ByteString
-  -- ^ A map of all function addresses to their symbol names. Note that it
-  -- is possible for a single function address to have multiple function
-  -- symbols (https://github.com/GaloisInc/macaw-loader/issues/25), so this
-  -- map will arbitrarily pick one of the symbol names.
-  , binPltStubs :: Map.Map (MC.ArchSegmentOff arch) WFN.FunctionName
-  -- ^ Map of PLT stub addresses to their function names.
-  , binDynFunMap :: Map.Map WFN.FunctionName (MC.ArchSegmentOff arch)
-  -- ^ A map of visible, dynamic function symbol names (UTF-8–encoded) to
-  -- their corresponding function addresses.
-  , binRelocs :: Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (Arch.ArchReloc arch)
-  -- ^ Map of relocation addresses to their types.
-  , binEntrypointAddrs :: Map Entrypoint (MC.ArchSegmentOff arch)
-  -- ^ The entrypoint addresses after resolving the user-supplied
-  -- 'Entrypoint'.
-  }
-
--- | An empty 'BinMd' for use in paths that don't load a binary
--- (e.g., Crucible S-expression programs).
-emptyBinMd :: BinMd arch
-emptyBinMd =
-  BinMd
-    { binLoadOptions = LC.defaultLoadOptions
-    , binSymMap = Map.empty
-    , binPltStubs = Map.empty
-    , binDynFunMap = Map.empty
-    , binRelocs = Map.empty
-    , binEntrypointAddrs = Map.empty
-    }
 
 data LoadedProgram arch
   = LoadedProgram

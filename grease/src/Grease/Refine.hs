@@ -69,6 +69,7 @@ module Grease.Refine (
   NoHeuristic (..),
   proveAndRefine,
   ExecData (..),
+  setupOnce,
   refineOnce,
   setupRefinement,
   RefinementSetup (..),
@@ -614,6 +615,39 @@ setupRefinement la fsOpts solverTimeout halloc bak dl initMem inputs = do
         , setupArgs = args
         , setupErrorCallbacks = callbacks
         }
+
+-- | Set up the initial 'CS.ExecState' for use in reachability verification
+-- or trace replay. Like 'setupRefinement', but also invokes @mkInitState@
+-- and returns the resulting state alongside the 'RD.RefinementData'.
+setupOnce ::
+  ( CLM.HasPtrWidth wptr
+  , C.IsSyntaxExtension ext
+  , CB.IsSymBackend sym bak
+  , sym ~ WE.ExprBuilder t st fs
+  , ?memOpts :: CLM.MemOptions
+  , ExtShape ext ~ PtrShape ext wptr
+  , Cursor.CursorExt ext ~ PtrCursor.Dereference ext wptr
+  ) =>
+  GreaseLogAction ->
+  Opts.FsOpts ->
+  C.Timeout ->
+  C.HandleAllocator ->
+  bak ->
+  DataLayout ->
+  InitialMem sym ->
+  RD.RefinementInputs sym bak ext argTys ->
+  ( ( MSM.MacawProcessAssertion sym
+    , Mem.HasLLVMAnn sym
+    ) =>
+    RefinementSetup sym bak t ext argTys wptr ->
+    IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
+  ) ->
+  IO (CS.ExecState p sym ext (CS.RegEntry sym ret), RD.RefinementData sym bak t ext argTys wptr)
+setupOnce la fsOpts solverTimeout halloc bak dl initMem inputs mkInitState = do
+  setup <- setupRefinement la fsOpts solverTimeout halloc bak dl initMem inputs
+  EC.withErrorCallbacks (setupErrorCallbacks setup) $ do
+    st <- mkInitState setup
+    pure (st, setupRefinementData setup)
 
 -- | Run 'Setup.setup' then 'execAndRefine'. Usually passed to 'refinementLoop'.
 refineOnce ::

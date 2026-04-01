@@ -18,6 +18,7 @@ module Grease.Heuristic (
   HeuristicResult (..),
   RefineHeuristic,
   mustFailHeuristic,
+  reachedTargetHeuristic,
   llvmHeuristics,
   macawHeuristics,
   ErrorDescription (..),
@@ -53,6 +54,7 @@ import Grease.Heuristic.Result (CantRefine (Exhausted, Exit, MissingFunc, Missin
 import Grease.Macaw.RegName (RegName, mkRegName)
 import Grease.MustFail qualified as MustFail
 import Grease.Panic (panic)
+import Grease.Reachability.GoalEvaluator (isReachedTargetError)
 import Grease.Setup (InitialMem (InitialMem))
 import Grease.Setup.Annotations qualified as Anns
 import Grease.Shape (ArgShapes, ExtShape, Shape (ShapeExt), argShapes)
@@ -592,6 +594,27 @@ mustFailHeuristic bak _anns _initMem obligation minfo _argNames _args =
       if Bool.not mustFail
         then pure Unknown
         else pure (PossibleBug bug)
+
+-- | A heuristic that intercepts 'GE.reachedTargetMsg' proof obligations,
+-- which are injected by the goal evaluator when a reachability target is
+-- reached. Must be placed before 'mustFailHeuristic' in the heuristic list so
+-- that it takes priority.
+reachedTargetHeuristic ::
+  RefineHeuristic sym bak ext argTys
+reachedTargetHeuristic _bak _anns _initMem goal _minfo _argNames _argShapes = do
+  let lp = CB.proofGoal goal
+  let simError = lp ^. W4.labeledPredMsg
+  if isReachedTargetError simError
+    then
+      pure $
+        PossibleBug $
+          Bug.BugInstance
+            { Bug.bugType = Bug.ReachedTarget
+            , Bug.bugLoc = ppProgramLoc (CS.simErrorLoc simError)
+            , Bug.bugUb = Nothing
+            , Bug.bugDetails = Nothing
+            }
+    else pure Unknown
 
 pointerHeuristic ::
   forall wptr solver sym bak t st fs ext argTys.

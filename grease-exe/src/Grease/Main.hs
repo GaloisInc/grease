@@ -138,6 +138,10 @@ import Grease.Panic (Grease, panic)
 import Grease.Personality qualified as GP
 import Grease.Pretty (prettyPtrFnMap)
 import Grease.Profiler.Feature (greaseProfilerFeature)
+import Grease.Reachability.AnalysisLoc qualified as GAL
+import Grease.Reachability.GoalEvaluator qualified as GE
+import Grease.Reachability.Verify qualified as GRV
+import Grease.Reachability.Verify.Diagnostic qualified as GRVDiag
 import Grease.Refine qualified as GRef
 import Grease.Refine.RefinementData qualified as GRef
 import Grease.Setup qualified as GSetup
@@ -442,6 +446,17 @@ data MacawCfgConfig arch = MacawCfgConfig
   -- ^ The ELF header info, if loading from an ELF binary.
   }
 
+-- | Resolve the target location (if any) specified in 'GO.SimOpts' against
+-- the binary described by a 'MacawCfgConfig'.
+resolveSimTarget ::
+  MC.MemWidth (MC.RegAddrWidth (MC.ArchReg arch)) =>
+  MacawCfgConfig arch ->
+  GO.SimOpts ->
+  Maybe (GAL.ResolvedTargetLoc (MC.RegAddrWidth (MC.ArchReg arch)))
+resolveSimTarget macawCfgConfig simOpts =
+  GO.simTargetLoc simOpts <&> \(GAL.TargetLoc loc) ->
+    GAL.resolveTargetLoc (mcMemory macawCfgConfig) (mcBinMd macawCfgConfig) loc
+
 -- | Create a 'DataLayout' suitable for @macaw-symbolic@'s needs. Currently,
 -- this simply overrides the 'DataLayout.defaultDataLayout' with a reasonable
 -- endianness value based on the architecture.
@@ -604,8 +619,19 @@ macawExecFeats la bak memVar archCtx macawCfgConfig simOpts = do
                 extImpl = MDebug.macawExtImpl prettyPtrFnMap memVar (archCtx ^. Arch.archVals) mbElf
              in Just extImpl
           else Nothing
-  feats <- greaseExecFeats la bak dbgOpts
-  pure (feats, snd <$> profFeatLog)
+  feats <- greaseExecFeats la bak (GO.simBoundsOpts simOpts) dbgOpts
+  let mbResolvedTarget = resolveSimTarget macawCfgConfig simOpts
+  let mbGoalEvalFeat =
+        case (mbResolvedTarget, GO.simTargetOverride simOpts) of
+          (Just rtLoc@(GAL.ResolvedTargetLocSymbol nm _), Nothing) ->
+            Just $
+              CS.genericToExecutionFeature $
+                GE.goalEvaluatorExecFeature la bak rtLoc (GE.TargetFunctionName nm)
+          -- We omit the goal evaluator in the case that we have a target
+          -- override because the target override determines when we have truly
+          -- reached the goal (by calling the `@reached` built-in).
+          _ -> Nothing
+  pure (feats ++ Maybe.maybeToList mbGoalEvalFeat, snd <$> profFeatLog)
 
 llvmExecFeats ::
   forall p sym bak ext ret solver scope st fm.
@@ -626,7 +652,7 @@ llvmExecFeats la bak simOpts memVar = do
         if GO.debug (GO.simDebugOpts simOpts)
           then Just (LDebug.llvmExtImpl memVar)
           else Nothing
-  feats <- greaseExecFeats la bak dbgOpts
+  feats <- greaseExecFeats la bak (GO.simBoundsOpts simOpts) dbgOpts
   pure (feats, snd <$> profFeatLog)
 
 initDebugger ::
@@ -687,7 +713,7 @@ macawMemConfig la mvar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable 
   let skipUnsupportedRelocs = GO.simSkipUnsupportedRelocs simOpts
   let memCfg_ = GM.memConfigInitial bak archCtx memPtrTable skipUnsupportedRelocs relocs
   let userOvPaths = GO.simOverrides simOpts
-  fnOvsMap_ <- mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg_ fs
+  fnOvsMap_ <- mkMacawOverrideMapWithBuiltins la bak userOvPaths halloc mvar archCtx memCfg_ fs
   fnOvsMap <-
     case fnOvsMap_ of
       -- See Note [Explicitly listed errors]
@@ -772,8 +798,8 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
   let mbStartupOvSsaCfg = EP.startupOvCfg <$> mbStartupOvSsa
   let fs = GSIO.initFs initFs
   (memCfg, fnOvsMap) <- macawMemConfig la memVar fs bak halloc macawCfgConfig archCtx simOpts memPtrTable
-  evalFn <- Symbolic.withArchEval @Symbolic.LLVMMemory @_ (archCtx ^. Arch.archVals) sym pure
-  let macawExtImpl = Symbolic.macawExtensions evalFn memVar memCfg
+  let mbResolvedTarget = resolveSimTarget macawCfgConfig simOpts
+  macawExtImpl <- GM.buildMacawExtImpl (archCtx ^. Arch.archVals) sym memVar memCfg la bak (mcMemory macawCfgConfig) mbResolvedTarget (GO.simTargetOverride simOpts)
   let ssaCfgHdl = C.cfgHandle ssaCfg
   -- At this point, the only function we have discovered is the user-requested
   -- entrypoint function. If we are simulating a binary, add it to the
@@ -941,8 +967,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
   -- preconditions.)
   let heuristics =
         if GO.simNoHeuristics simOpts
-          then [H.mustFailHeuristic]
-          else H.macawHeuristics la rNames List.++ [H.mustFailHeuristic]
+          then [H.reachedTargetHeuristic, H.mustFailHeuristic]
+          else H.macawHeuristics la rNames List.++ [H.reachedTargetHeuristic, H.mustFailHeuristic]
   result <- GRef.refinementLoop la bounds argNames initArgShapes $ \argShapes -> do
     let inputs =
           GRef.RefinementInputs
@@ -971,9 +997,35 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
       mbCfgAddr
       entrypointCfgsSsa
   finalResult <- case result of
-    GRef.RefinementBug b cData ->
-      let addrWidth = archCtx ^. Arch.archInfo . to MI.archAddrWidth
-       in pure (GOut.BatchBug (toBatchBug fm addrWidth argNames regTypes initArgShapes b cData))
+    GRef.RefinementBug b cData
+      | Bug.bugType b == Bug.ReachedTarget -> do
+          let addrWidth = archCtx ^. Arch.archInfo . to MI.archAddrWidth
+          LJ.writeLog la (GDiag.ReachabilityVerifyDiagnostic GRVDiag.ReachabilityReach)
+          let initShape shapes =
+                let inputs' =
+                      GRef.RefinementInputs
+                        { GRef.refineInputArgNames = argNames
+                        , GRef.refineInputArgTypes = regTypes
+                        , GRef.refineInputArgShapes = shapes
+                        , GRef.refineInputHeuristics = heuristics
+                        , GRef.refineInputSolver = GO.simSolver simOpts
+                        }
+                 in fst
+                      <$> GRef.setupOnce
+                        la
+                        (GO.simFsOpts simOpts)
+                        (GO.simSolverTimeout (GO.simBoundsOpts simOpts))
+                        halloc
+                        bak
+                        (macawDataLayout archCtx)
+                        initMem
+                        inputs'
+                        (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
+          GRV.verifyReachable la bak execFeats initShape [cData]
+          pure (GOut.BatchBug (toBatchBug fm addrWidth argNames regTypes initArgShapes b cData))
+      | otherwise ->
+          let addrWidth = archCtx ^. Arch.archInfo . to MI.archAddrWidth
+           in pure (GOut.BatchBug (toBatchBug fm addrWidth argNames regTypes initArgShapes b cData))
     GRef.RefinementCantRefine b ->
       pure (GOut.BatchCantRefine b)
     GRef.RefinementItersExceeded ->
@@ -989,7 +1041,9 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
                 let addrWidth = archCtx ^. Arch.archInfo . to MI.archAddrWidth
                  in toFailedPredicate fm addrWidth argNames regTypes initArgShapes noHeuristic
     GRef.RefinementSuccess _argShapes ->
-      pure GOut.BatchSuccess
+      case resolveSimTarget macawCfgConfig simOpts of
+        Just _ -> pure GOut.BatchTargetNotReached
+        Nothing -> pure GOut.BatchSuccess
   traverse_ cancel profLogTask
   pure finalResult
  where
@@ -1144,9 +1198,19 @@ loadAddrOvs ::
   C.HandleAllocator ->
   MM.Memory (MC.ArchAddrWidth arch) ->
   GO.SimOpts ->
+  -- | Pre-resolved target location, for adding the target override as an
+  -- address override when both @--target-override@ and a resolvable target
+  -- address are present.
+  Maybe (GAL.ResolvedTargetLoc (MC.ArchAddrWidth arch)) ->
   IO (AddressOverrides arch)
-loadAddrOvs la archCtx halloc memory simOpts = do
-  mbAddrOvs <- loadAddressOverrides (archCtx ^. Arch.archRegStructType) halloc memory (GO.simAddressOverrides simOpts)
+loadAddrOvs la archCtx halloc memory simOpts mbResolvedTarget = do
+  let tgtOvEntry = do
+        tgtOvPath <- GO.simTargetOverride simOpts
+        rtLoc <- mbResolvedTarget
+        tgtAddr <- GAL.resolvedTargetAddr rtLoc
+        pure (toInteger (MM.memWordValue tgtAddr), tgtOvPath)
+  let allAddrOvs = Maybe.maybeToList tgtOvEntry ++ GO.simAddressOverrides simOpts
+  mbAddrOvs <- loadAddressOverrides (archCtx ^. Arch.archRegStructType) halloc memory allAddrOvs
   let usrErr = userErr la . PP.pretty
   case mbAddrOvs of
     -- See Note [Explicitly listed errors]
@@ -1212,13 +1276,15 @@ simulateMacawSyntax la halloc archCtx simOpts parserHooks = do
       setupHook =
         let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
          in Macaw.syntaxSetupHook la errCb dl (GO.callSkipFuns (GO.simCallOpts simOpts)) cfgs prog
-  let macawCfgConfig =
+  let emptyBinMd = Load.emptyBinMd
+      macawCfgConfig =
         MacawCfgConfig
-          { mcBinMd = Load.emptyBinMd
+          { mcBinMd = emptyBinMd
           , mcMemory = memory
           , mcElf = Nothing
           }
-  addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
+  let resolvedTarget = resolveSimTarget macawCfgConfig simOpts
+  addrOvs <- loadAddrOvs la archCtx halloc memory simOpts resolvedTarget
   simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs'
 
 simulateMacaw ::
@@ -1279,17 +1345,18 @@ simulateMacaw la halloc elf loadedProg archCtx simOpts parserHooks = do
                 }
         pure (entry, EP.MacawEntrypointCfgs entrypointCfgs (Just entryAddr))
 
-  addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
-  let setupHook :: forall sym. Macaw.SetupHook sym arch
-      setupHook =
-        let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
-         in Macaw.binSetupHook errCb addrOvs cfgs
   let macawCfgConfig =
         MacawCfgConfig
           { mcBinMd = binMd
           , mcMemory = memory
           , mcElf = Just elf
           }
+  let resolvedTarget = resolveSimTarget macawCfgConfig simOpts
+  addrOvs <- loadAddrOvs la archCtx halloc memory simOpts resolvedTarget
+  let setupHook :: forall sym. Macaw.SetupHook sym arch
+      setupHook =
+        let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
+         in Macaw.binSetupHook errCb addrOvs cfgs
   simulateMacawCfgs la halloc macawCfgConfig archCtx simOpts setupHook addrOvs cfgs
 
 -- | Compute the initial 'ArgShapes' for an LLVM CFG.
@@ -1378,8 +1445,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
     -- See comment above on heuristics in 'simulateMacawCfg'
     let heuristics =
           if GO.simNoHeuristics simOpts
-            then [H.mustFailHeuristic]
-            else H.llvmHeuristics la List.++ [H.mustFailHeuristic]
+            then [H.reachedTargetHeuristic, H.mustFailHeuristic]
+            else H.llvmHeuristics la List.++ [H.reachedTargetHeuristic, H.mustFailHeuristic]
     GRef.refinementLoop la bounds argNames initArgShapes $ \argShapes -> do
       let inputs =
             GRef.RefinementInputs
@@ -1731,17 +1798,18 @@ simulateMacawRaw la memory halloc archCtx simOpts parserHooks =
           ( EP.Entrypoint{EP.entrypointLocation = EP.EntrypointAddress entText, EP.entrypointStartupOvPath = mbOverride}
           , EP.MacawEntrypointCfgs entrypointCfgs (Just entAddr)
           )
-    addrOvs <- loadAddrOvs la archCtx halloc memory simOpts
-    let setupHook :: forall sym. Macaw.SetupHook sym arch
-        setupHook =
-          let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
-           in Macaw.binSetupHook errCb addrOvs cfgs
     let macawCfgConfig =
           MacawCfgConfig
             { mcBinMd = emptyBinMd
             , mcMemory = memory
             , mcElf = Nothing
             }
+    let resolvedTarget = resolveSimTarget macawCfgConfig simOpts
+    addrOvs <- loadAddrOvs la archCtx halloc memory simOpts resolvedTarget
+    let setupHook :: forall sym. Macaw.SetupHook sym arch
+        setupHook =
+          let errCb = GLO.CantResolveOverrideCallback $ \nm _hdl -> liftIO (declaredFunNotFound la nm)
+           in Macaw.binSetupHook errCb addrOvs cfgs
     simulateMacawCfgs
       la
       halloc

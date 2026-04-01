@@ -19,3 +19,16 @@ end
 function no_heuristic() check 'Unable to find a heuristic for any goal' end
 
 function uninit_stack() check 'Likely bug: uninitialized stack read' end
+
+function reached(f)
+  check(string.format("Reached target function '%s'", f))
+  checkln '(sat)'
+  check 'Reached target!'
+end
+
+function verified()
+  check_not 'Failed to verify reachability!'
+  check 'Verified reachability'
+end
+
+function failed_to_reach() check 'Failed to reach target' end

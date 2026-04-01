@@ -11,6 +11,8 @@ module Grease.Cli (
 
   -- * Individual option parsers
   addrOverridesParser,
+  analysisLocAddressParser,
+  analysisLocSymbolParser,
   boundsOptsParser,
   callOptsParser,
   debugOptsParser,
@@ -27,6 +29,8 @@ module Grease.Cli (
   symFilesParser,
   symStdinParser,
   simDumpCoverageParser,
+  targetLocParser,
+  targetOverrideParser,
 
   -- * High-level entrypoints
   optsInfo,
@@ -51,6 +55,7 @@ import Grease.Macaw.Overrides.Address (addressOverrideParser)
 import Grease.Macaw.PLT (pltStubParser)
 import Grease.Options (SimOpts (simDumpCoverage))
 import Grease.Options qualified as GO
+import Grease.Reachability.AnalysisLoc (AnalysisLoc (AnalysisLocAddress, AnalysisLocSymbol), TargetLoc (TargetLoc))
 import Grease.Shape.Simple (SimpleShape)
 import Grease.Shape.Simple qualified as Simple
 import Grease.Solver (Solver (Yices))
@@ -60,6 +65,7 @@ import Lang.Crucible.Utils.Timeout (Timeout (Timeout))
 import Options.Applicative qualified as Opt
 import Text.Megaparsec qualified as TM
 import Text.Megaparsec.Char.Lexer qualified as TMCL
+import What4.FunctionName qualified as WFN
 
 ------------------------------------------------------------
 -- Helpers (not exported)
@@ -385,6 +391,48 @@ simDumpCoverageParser =
             )
     )
 
+-- | Parse an 'AnalysisLocAddress' value.
+analysisLocAddressParser ::
+  Opt.Mod Opt.OptionFields Word64 -> Opt.Parser AnalysisLoc
+analysisLocAddressParser m =
+  AnalysisLocAddress <$> Opt.option Opt.auto m
+
+-- | Parse an 'AnalysisLocSymbol' value.
+analysisLocSymbolParser ::
+  Opt.Mod Opt.OptionFields WFN.FunctionName -> Opt.Parser AnalysisLoc
+analysisLocSymbolParser m =
+  AnalysisLocSymbol <$> Opt.strOption m
+
+-- | Parse an optional 'TargetLoc' from @--target-addr@ or @--target-symbol@.
+targetLocParser :: Opt.Parser (Maybe TargetLoc)
+targetLocParser =
+  Opt.optional $
+    TargetLoc
+      <$> ( analysisLocAddressParser (targetMod "target-addr" "ADDR" "Address")
+              Opt.<|> analysisLocSymbolParser (targetMod "target-symbol" "SYMBOL" "Symbol name")
+          )
+ where
+  targetMod :: String -> String -> String -> Opt.Mod Opt.OptionFields a
+  targetMod long metavar what =
+    Opt.long long
+      <> Opt.metavar metavar
+      <> Opt.help (what ++ " of the reachability target")
+
+-- | Parse an optional @--target-override@ file path.
+targetOverrideParser :: Opt.Parser (Maybe FilePath)
+targetOverrideParser =
+  Opt.optional $
+    Opt.strOption $
+      Opt.long "target-override"
+        <> Opt.metavar "FILE"
+        <> Opt.help
+          ( "Path to a Crucible S-expression override file to install at the "
+              ++ "target address. When present, the override (rather than the "
+              ++ "built-in goal evaluator) determines when the target has been "
+              ++ "reached. Only meaningful when --target-addr or --target-symbol "
+              ++ "is also specified."
+          )
+
 callOptsParser :: Opt.Parser GO.CallOpts
 callOptsParser = do
   let callOptionsGroup = "Call options"
@@ -500,6 +548,8 @@ simOpts = do
   simInitPrecondOpts <- initPrecondOptsParser
   simBoundsOpts <- boundsOptsParser
   simDumpCoverage <- simDumpCoverageParser
+  simTargetLoc <- targetLocParser
+  simTargetOverride <- targetOverrideParser
   pure GO.SimOpts{..}
 
 processSimOpts :: GO.SimOpts -> GO.SimOpts
