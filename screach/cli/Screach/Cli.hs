@@ -14,13 +14,12 @@ import Data.Text (Text)
 import Data.Void (Void)
 import Data.Word (Word64)
 import GHC.Num (Natural)
+import Grease.Reachability.AnalysisLoc (AnalysisLoc (AnalysisLocAddress, AnalysisLocSymbol), TargetLoc (TargetLoc))
 import Grease.Cli qualified as GC
 import Grease.Diagnostic.Severity qualified as Sev
 import Options.Applicative qualified as Opts
 import Screach.AnalysisLoc (
-  AnalysisLoc (..),
   EntryLoc (..),
-  TargetLoc (..),
   entryAddressStartupOvParser,
   entrySymbolStartupOvParser,
  )

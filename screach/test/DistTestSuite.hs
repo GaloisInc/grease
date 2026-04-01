@@ -1,6 +1,7 @@
 import Data.Maybe (mapMaybe)
 import Data.String (IsString (fromString))
 import DistCLI qualified as Dist
+import Grease.Reachability.AnalysisLoc qualified as GRAL
 import Grease.Diagnostic.Severity qualified as GD
 import Grease.Options qualified as GRS
 import Screach.AnalysisLoc qualified as Screach
@@ -23,7 +24,7 @@ fileToTest fileName =
                 { Screach.confProgram = base ++ ".exe"
                 , Screach.entryLoc =
                     Screach.EntryLoc
-                      (Screach.AnalysisLocSymbol (fromString "foo"))
+                      (GRAL.AnalysisLocSymbol (fromString "foo"))
                       Nothing
                 , verbosity = GD.Debug
                 , Screach.stackArgumentSlots = GRS.ExtraStackSlots 0

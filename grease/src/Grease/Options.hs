@@ -31,6 +31,7 @@ import Data.Map.Strict (Map)
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Word (Word64)
+import Grease.Reachability.AnalysisLoc (TargetLoc)
 import Grease.Diagnostic.Severity (Severity)
 import Grease.Entrypoint (Entrypoint)
 import Grease.Macaw.PLT (PltStub)
@@ -239,6 +240,15 @@ data SimOpts
   , simFsOpts :: FsOpts
   , simInitPrecondOpts :: InitialPreconditionOpts
   , simDumpCoverage :: Maybe FilePath
+  , simTargetLoc :: Maybe TargetLoc
+  -- ^ Optional target location for reachability analysis. When 'Nothing',
+  -- performs standard bug-finding analysis. When 'Just', also checks
+  -- reachability of the specified target.
+  , simTargetOverride :: Maybe FilePath
+  -- ^ Optional path to a Crucible S-expression override file to install at
+  -- the target address. When present, the override (rather than the built-in
+  -- goal evaluator) determines when the target has been reached. Only
+  -- meaningful when 'simTargetLoc' is also set.
   }
   deriving Show
 

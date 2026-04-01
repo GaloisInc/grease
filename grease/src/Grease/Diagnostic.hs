@@ -14,6 +14,7 @@ module Grease.Diagnostic (
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Grease.BranchTracer.Diagnostic qualified as BranchTracer
 import Grease.Diagnostic.Severity (Severity)
+import Grease.Reachability.GoalEvaluator.Diagnostic qualified as GoalEvaluator
 import Grease.Heuristic.Diagnostic qualified as Heuristic
 import Grease.LLVM.Overrides.Diagnostic qualified as LLVMOverrides
 import Grease.LLVM.SetupHook.Diagnostic qualified as LLVMSetupHook
@@ -24,6 +25,7 @@ import Grease.Macaw.ResolveCall.Diagnostic qualified as ResolveCall
 import Grease.Macaw.SetupHook.Diagnostic qualified as MacawSetupHook
 import Grease.Macaw.SimulatorHooks.Diagnostic qualified as SimulatorHooks
 import Grease.Main.Diagnostic qualified as Main
+import Grease.Reachability.Verify.Diagnostic qualified as ReachabilityVerify
 import Grease.Refine.Diagnostic qualified as Refine
 import Grease.Setup.Diagnostic qualified as Setup
 import Grease.Skip.Diagnostic qualified as Skip
@@ -38,6 +40,7 @@ import System.IO (stderr)
 -- type implements 'PP.Pretty'.
 data Diagnostic where
   BranchTracerDiagnostic :: BranchTracer.Diagnostic -> Diagnostic
+  GoalEvaluatorDiagnostic :: GoalEvaluator.Diagnostic -> Diagnostic
   HeuristicDiagnostic :: Heuristic.Diagnostic -> Diagnostic
   LLVMOverridesDiagnostic :: LLVMOverrides.Diagnostic -> Diagnostic
   LLVMSetupHookDiagnostic :: LLVMSetupHook.Diagnostic -> Diagnostic
@@ -49,6 +52,7 @@ data Diagnostic where
   ResolveCallDiagnostic :: ResolveCall.Diagnostic -> Diagnostic
   SetupDiagnostic :: Setup.Diagnostic -> Diagnostic
   SimulatorHooksDiagnostic :: SimulatorHooks.Diagnostic -> Diagnostic
+  ReachabilityVerifyDiagnostic :: ReachabilityVerify.Diagnostic -> Diagnostic
   SkipDiagnostic :: Skip.Diagnostic -> Diagnostic
   DwarfShapesDiagnostic :: Dwarf.Diagnostic -> Diagnostic
 
@@ -56,6 +60,7 @@ instance PP.Pretty Diagnostic where
   pretty =
     \case
       BranchTracerDiagnostic diag -> PP.pretty diag
+      GoalEvaluatorDiagnostic diag -> PP.pretty diag
       HeuristicDiagnostic diag -> PP.pretty diag
       LLVMOverridesDiagnostic diag -> PP.pretty diag
       LLVMSetupHookDiagnostic diag -> PP.pretty diag
@@ -67,6 +72,7 @@ instance PP.Pretty Diagnostic where
       ResolveCallDiagnostic diag -> PP.pretty diag
       SetupDiagnostic diag -> PP.pretty diag
       SimulatorHooksDiagnostic diag -> PP.pretty diag
+      ReachabilityVerifyDiagnostic diag -> PP.pretty diag
       SkipDiagnostic diag -> PP.pretty diag
       DwarfShapesDiagnostic diag -> PP.pretty diag
 
@@ -74,6 +80,7 @@ severity :: Diagnostic -> Severity
 severity =
   \case
     BranchTracerDiagnostic diag -> BranchTracer.severity diag
+    GoalEvaluatorDiagnostic diag -> GoalEvaluator.severity diag
     HeuristicDiagnostic diag -> Heuristic.severity diag
     LLVMOverridesDiagnostic diag -> LLVMOverrides.severity diag
     LLVMSetupHookDiagnostic diag -> LLVMSetupHook.severity diag
@@ -85,6 +92,7 @@ severity =
     ResolveCallDiagnostic diag -> ResolveCall.severity diag
     SetupDiagnostic diag -> Setup.severity diag
     SimulatorHooksDiagnostic diag -> SimulatorHooks.severity diag
+    ReachabilityVerifyDiagnostic diag -> ReachabilityVerify.severity diag
     SkipDiagnostic diag -> Skip.severity diag
     DwarfShapesDiagnostic diag -> Dwarf.severity diag
 
