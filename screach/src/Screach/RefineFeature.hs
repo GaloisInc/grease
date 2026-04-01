@@ -53,6 +53,7 @@ import Screach.Panic qualified as Scrch
 import Screach.RefinementOptions qualified as RftOpt
 import Screach.Run.Diagnostic qualified as RDiag
 import What4.Expr qualified as WE
+import What4.Interface qualified as WI
 import What4.Protocol.Online qualified as WPO
 
 -- | The result of refinement.
@@ -213,8 +214,12 @@ refineState bak sla gla refineReplay st config = do
           Scrch.panic "executeCfgPath " ["should use path splitting"]
     globs <- C.execResultGlobals mergeStates result
     let sym = CB.backendGetSym bak
+    let evalBool b =
+          case WI.asConstantPred b of
+            Just b' -> pure b'
+            Nothing -> Scrch.panic "getRecordedTrace" ["should use path splitting"]
     let traceVar = C.execResultContext result Lens.^. C.cruciblePersonality . CR.recordState
-    CR.getRecordedTrace globs traceVar sym
+    CR.getConcreteRecordedTrace globs traceVar sym evalBool
 
 -- | A feature that uses GREASE to refine states where the obligations are not provable and restart the symbolic executor
 -- or annotates the state with bug information (if a potential bug is found.)
