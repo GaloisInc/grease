@@ -7,6 +7,7 @@ module Screach.Run.Diagnostic (
 ) where
 
 import Data.Macaw.Memory qualified as MM
+import Data.Text (Text)
 import Data.Void (Void, absurd)
 import Grease.Diagnostic.Severity (Severity (Error, Info, Warn))
 import Prettyprinter qualified as PP
@@ -36,6 +37,10 @@ data Diagnostic where
   RefinementCantRefine ::
     Diagnostic
   RefinementStateTimedOut ::
+    Diagnostic
+  RefinementPathAborted ::
+    -- | Short description of why the path was aborted
+    Text ->
     Diagnostic
   RefinementBug ::
     Diagnostic
@@ -82,6 +87,8 @@ instance PP.Pretty Diagnostic where
         failedToReach "Can't refine"
       RefinementStateTimedOut ->
         failedToReach "Can't refine due to timeout"
+      RefinementPathAborted reason ->
+        "Execution path aborted:" PP.<+> PP.pretty reason
       RefinementBug ->
         failedToReach "Found likely bug"
       RefinementResultCount numResults ->
@@ -113,6 +120,7 @@ severity =
     RefinementItersExceeded{} -> Info
     RefinementCantRefine{} -> Info
     RefinementStateTimedOut{} -> Info
+    RefinementPathAborted{} -> Info
     RefinementBug{} -> Info
     RefinementResultCount{} -> Info
     VerifyFailure{} -> Warn
