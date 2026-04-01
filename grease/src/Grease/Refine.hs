@@ -78,6 +78,8 @@ module Grease.Refine (
   -- The following are used by a downstream project
 
   -- * Implementation details
+  processExecResult,
+  shortResult,
   findPredAnnotations,
 ) where
 
@@ -535,25 +537,26 @@ execAndRefine bak _fm la refineData execData = do
               Left C.TimedOut -> pure (ProveCantRefine SolverTimeout)
               Right combinedResult -> pure (C.subgoalResult combinedResult)
   liftIO (go refineResult)
- where
-  -- Very short summary for single-line log message
-  shortResult =
-    \case
-      ProveSuccess -> "success"
-      ProveBug{} -> "likely bug"
-      ProveNoHeuristic{} -> "possible bug"
-      ProveRefine{} -> "refined precondition"
-      ProveCantRefine (Exhausted{}) -> "resource exhausted"
-      ProveCantRefine (Exit (Just code)) -> "exited with " <> tshow code
-      ProveCantRefine (Exit Nothing) -> "exited"
-      ProveCantRefine (MissingFunc (Just nm)) -> "missing function " <> Text.pack nm
-      ProveCantRefine (MissingFunc{}) -> "missing function"
-      ProveCantRefine (MissingSemantics{}) -> "missing semantics"
-      ProveCantRefine (MutableGlobal{}) -> "load from mut global"
-      ProveCantRefine (SolverTimeout{}) -> "solver timeout"
-      ProveCantRefine (SolverUnknown{}) -> "solver unknown"
-      ProveCantRefine (Timeout{}) -> "symex timeout"
-      ProveCantRefine (Unsupported{}) -> "unsupported feature"
+
+-- | Very short summary of a 'ProveRefineResult' for single-line log messages.
+shortResult :: ProveRefineResult sym ext argTys -> Text.Text
+shortResult =
+  \case
+    ProveSuccess -> "success"
+    ProveBug{} -> "likely bug"
+    ProveNoHeuristic{} -> "possible bug"
+    ProveRefine{} -> "refined precondition"
+    ProveCantRefine (Exhausted{}) -> "resource exhausted"
+    ProveCantRefine (Exit (Just code)) -> "exited with " <> tshow code
+    ProveCantRefine (Exit Nothing) -> "exited"
+    ProveCantRefine (MissingFunc (Just nm)) -> "missing function " <> Text.pack nm
+    ProveCantRefine (MissingFunc{}) -> "missing function"
+    ProveCantRefine (MissingSemantics{}) -> "missing semantics"
+    ProveCantRefine (MutableGlobal{}) -> "load from mut global"
+    ProveCantRefine (SolverTimeout{}) -> "solver timeout"
+    ProveCantRefine (SolverUnknown{}) -> "solver unknown"
+    ProveCantRefine (Timeout{}) -> "symex timeout"
+    ProveCantRefine (Unsupported{}) -> "unsupported feature"
 
 -- | Run 'Setup.setup' then 'execAndRefine'. Usually passed to 'refinementLoop'.
 refineOnce ::

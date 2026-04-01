@@ -165,46 +165,54 @@ refineState bak sla gla refineReplay st config = do
   let rdata = pers ^. GP.personality . GP.pRefinementData
   let memVar = GP.getMemVar pers
   LJ.writeLog gla (GrDiag.RefineDiagnostic (GRDiag.ExecutionResult memVar st))
-  obls <- C.withBackend (C.execResultContext st) $ \bak' ->
-    CB.getProofObligations bak'
-  refResult <- GR.proveAndRefine bak st gla rdata obls
-  trc <- getRecordedTrace st
-  case refResult of
-    GR.ProveSuccess -> do
-      doLog sla RDiag.RefinementSuccess
+  -- Check if execution aborted before trying to prove obligations.
+  -- Without this, aborted paths (e.g., unsupported relocations) are
+  -- silently treated as "success" because there are no proof obligations.
+  case GR.processExecResult st of
+    Just cantRefine -> do
+      doLog sla (RDiag.RefinementPathAborted (GR.shortResult (GR.ProveCantRefine cantRefine)))
       pure C.ExecutionFeatureNoChange
-    GR.ProveCantRefine{} -> do
-      doLog sla RDiag.RefinementCantRefine
-      pure C.ExecutionFeatureNoChange
-    GR.ProveNoHeuristic{} -> do
-      doLog sla RDiag.RefinementNoHeuristic
-      pure C.ExecutionFeatureNoChange
-    GR.ProveBug bi cdata ->
-      let
-        rresultL :: Lens.Lens' (C.ExecResult p sym ext rtp) (Maybe (RefineResult sym ext tys))
-        rresultL = Sched.execResultContextLens . C.cruciblePersonality . refineResult
-        nres = st & rresultL ?~ RefineResult bi cdata trc
-       in
-        pure $
-          C.ExecutionFeatureModifiedState $
-            C.ResultState nres
-    GR.ProveRefine shp -> do
-      let addrWidth = MC.addrWidthRepr (Proxy @w)
-      LJ.writeLog
-        gla
-        ( GrDiag.RefineDiagnostic $
-            GRDiag.RefinementUsingPrecondition addrWidth (GR.refineArgNames rdata) shp
-        )
-      CB.clearProofObligations bak
-      CB.resetAssumptionState bak
-      initSt <- config shp
+    Nothing -> do
+      obls <- C.withBackend (C.execResultContext st) $ \bak' ->
+        CB.getProofObligations bak'
+      refResult <- GR.proveAndRefine bak st gla rdata obls
+      trc <- getRecordedTrace st
+      case refResult of
+        GR.ProveSuccess -> do
+          doLog sla RDiag.RefinementSuccess
+          pure C.ExecutionFeatureNoChange
+        GR.ProveCantRefine _ -> do
+          doLog sla (RDiag.RefinementPathAborted (GR.shortResult refResult))
+          pure C.ExecutionFeatureNoChange
+        GR.ProveNoHeuristic{} -> do
+          doLog sla RDiag.RefinementNoHeuristic
+          pure C.ExecutionFeatureNoChange
+        GR.ProveBug bi cdata ->
+          let
+            rresultL :: Lens.Lens' (C.ExecResult p sym ext rtp) (Maybe (RefineResult sym ext tys))
+            rresultL = Sched.execResultContextLens . C.cruciblePersonality . refineResult
+            nres = st & rresultL ?~ RefineResult bi cdata trc
+           in
+            pure $
+              C.ExecutionFeatureModifiedState $
+                C.ResultState nres
+        GR.ProveRefine shp -> do
+          let addrWidth = MC.addrWidthRepr (Proxy @w)
+          LJ.writeLog
+            gla
+            ( GrDiag.RefineDiagnostic $
+                GRDiag.RefinementUsingPrecondition addrWidth (GR.refineArgNames rdata) shp
+            )
+          CB.clearProofObligations bak
+          CB.resetAssumptionState bak
+          initSt <- config shp
 
-      C.ExecutionFeatureNewState
-        <$> pauseLinearState
-          (CB.backendGetSym bak)
-          initSt
-          trc
-          refineReplay
+          C.ExecutionFeatureNewState
+            <$> pauseLinearState
+              (CB.backendGetSym bak)
+              initSt
+              trc
+              refineReplay
  where
   getRecordedTrace result = do
     -- These panics are impossible. Because we use path splitting, there will
