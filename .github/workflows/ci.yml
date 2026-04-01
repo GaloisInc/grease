@@ -154,6 +154,13 @@ jobs:
           -- screach/test-data/fig2-sdse.elf --entry-symbol go --target-symbol vuln \
           >> "${GITHUB_STEP_SUMMARY}"
 
+        python3 scripts/perf.py \
+          --package exe:screach \
+          -- screach/test-data/zlib-cve-2022-37434.elf --entry-symbol main \
+          --target-addr 0x38d6 --target-override screach/test-data/extra/zlib-cve-2022-37434.cbl \
+          --sym-stdin 225 --loop-bound 256 --timeout 120 --solver-timeout 120 \
+          >> "${GITHUB_STEP_SUMMARY}"
+
     # This step will produce a Github-flavored Markdown report on the "job
     # summary" page. The report will first contain the output of `hpc report`
     # in a code block, followed by a collapsible "spoiler" containing the more
