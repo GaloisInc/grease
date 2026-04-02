@@ -150,8 +150,8 @@ def checkout_ref(ref: Optional[str]) -> tuple[str, str]:
     return ref, get_commit_sha()
 
 
-def run_with_cabal(package: str, args: list[str]) -> str:
-    """Run package with cabal, adding RTS flags."""
+def run_with_cabal(package: str, args: list[str]) -> tuple[str, int]:
+    """Run package with cabal, adding RTS flags. Returns (output, returncode)."""
     cmd = ["cabal", "run", package, "--"] + args + ["+RTS", "-s"]
 
     print(f"Running: {' '.join(cmd)}", file=sys.stderr)
@@ -162,19 +162,18 @@ def run_with_cabal(package: str, args: list[str]) -> str:
         text=True,
     )
 
-    if result.returncode != 0:
-        print("Error running executable:", file=sys.stderr)
-        print(result.stderr, file=sys.stderr)
-        sys.exit(1)
-
-    return result.stderr
+    return result.stdout + result.stderr, result.returncode
 
 
 def format_markdown(metrics: PerfMetrics) -> str:
     """Format metrics as markdown for GitHub job summary."""
-    cmd_str = f"cabal run {metrics.package} -- {' '.join(metrics.cli_args)} +RTS -s"
+    import os
 
-    markdown = f"""## Performance Metrics
+    cmd_str = f"cabal run {metrics.package} -- {' '.join(metrics.cli_args)} +RTS -s"
+    name = (
+        os.path.basename(metrics.cli_args[0]) if metrics.cli_args else metrics.package
+    )
+    markdown = f"""## Performance Metrics: {name}
 
 **Package:** `{metrics.package}`
 **Command:** `{cmd_str}`
@@ -211,6 +210,12 @@ def main() -> int:
         help="Cabal target to run (e.g., exe:grease, exe:screach)",
     )
     parser.add_argument(
+        "--expect",
+        type=str,
+        default=None,
+        help="String that must appear in the executable's output; exits 1 if not found.",
+    )
+    parser.add_argument(
         "args",
         nargs="+",
         help="Arguments to pass to the executable",
@@ -219,12 +224,24 @@ def main() -> int:
     args = parser.parse_args()
 
     ref, commit_sha = checkout_ref(args.ref)
-    stderr = run_with_cabal(args.package, args.args)
+    output, returncode = run_with_cabal(args.package, args.args)
     metrics = PerfMetrics.from_rts_output(
-        stderr, args.package, args.args, ref, commit_sha
+        output, args.package, args.args, ref, commit_sha
     )
 
     print(format_markdown(metrics))
+
+    if args.expect is not None:
+        if args.expect not in output:
+            print(
+                f"Error: expected output {args.expect!r} not found in executable output",
+                file=sys.stderr,
+            )
+            return 1
+    elif returncode != 0:
+        print(f"Error running executable (exit {returncode}):", file=sys.stderr)
+        print(output, file=sys.stderr)
+        return 1
 
     return 0
 
