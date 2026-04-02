@@ -395,13 +395,13 @@ execCfg bak execData = do
   withCleanup $
     case strat of
       Opts.Dfs -> do
-        (bf, rf, wq) <- Sched.schedulerFeatures bak Sched.dfsPolicy (\_ -> pure Sched.ContinueExploring)
+        (bf, rf, wq) <- Sched.schedulerFeatures bak Sched.dfsPolicy (\_ -> pure Sched.StopExploring)
         r <- CS.executeCrucible (feats ++ [bf, rf]) initialState
         o <- CB.getProofObligations bak
         rest <- Sched.drainAll wq
         pure (r, o, rest)
       Opts.Bfs -> do
-        (bf, rf, wq) <- Sched.schedulerFeatures bak Sched.bfsPolicy (\_ -> pure Sched.ContinueExploring)
+        (bf, rf, wq) <- Sched.schedulerFeatures bak Sched.bfsPolicy (\_ -> pure Sched.StopExploring)
         r <- CS.executeCrucible (feats ++ [bf, rf]) initialState
         o <- CB.getProofObligations bak
         rest <- Sched.drainAll wq
