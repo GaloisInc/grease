@@ -21,6 +21,7 @@ import Data.IORef qualified as IORef
 import Data.Kind (Type)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as MS
+import Data.Macaw.X86 qualified as MA
 import Data.Macaw.Symbolic.Debug qualified as MDebug
 import Data.Parameterized.Ctx qualified as C
 import GHC.TypeLits (type Natural)
@@ -63,6 +64,9 @@ makeLenses ''ScreachSimulatorState
 
 instance ShortDistSched.HasDistancesState (ScreachSimulatorState p sym bak ext arch t ret aty w) where
   distancesRef = _distState
+
+instance (arch ~ MA.X86_64) => GMSS.HasDiscoveryState (ScreachSimulatorState p sym bak ext arch t ret aty w) arch where
+  getDiscoveryStateRef sss = Lens.view (greaseSimulatorState . GMSS.discoveryStateRef) sss
 
 instance
   ( ext ~ MS.MacawExt arch

@@ -166,8 +166,11 @@ runDistTest DisttestConfig{callgraph = callgraph, progConfig = pconf} =
     let binMd = GL.progBinMd loadedProg
     let mem = Loader.memoryImage (GL.progLoadedBinary loadedProg)
     let symMap = GL.binSymMap binMd
+    let pltStubs = GL.binPltStubs binMd
+    let discoveryState0 = GMD.mkInitialDiscoveryState archCtx mem symMap pltStubs
+    discStateRef <- IORef.newIORef discoveryState0
     let discover addr = do
-          cfg <- GMD.discoverFunction gla halloc archCtx binMd mem addr
+          cfg <- GMD.discoverFunctionIncremental gla halloc archCtx discStateRef symMap addr
           maybe
             (pure ())
             (\raddr -> LJ.writeLog sla (ScrchDiag.DistanceDiagnostic $ Diagnostic.DiscoveredCFG raddr cfg))
@@ -176,9 +179,9 @@ runDistTest DisttestConfig{callgraph = callgraph, progConfig = pconf} =
     -- TODO this results in duplicate caches we should commit to the monad or IORef
     let flatGetCfg (Dist.FunctionEntry floc) =
           let addr = (locToAddress floc :: MM.MemWord 64)
-           in CG.getCFG (CG.CFGCache cfgCache) binMd mem addr sla gla halloc archCtx
+           in CG.getCFG (CG.CFGCache cfgCache) discStateRef binMd mem addr sla gla halloc archCtx
     let rcall (Dist.FunctionEntry fentry) (Dist.Callsite callsite) =
-          CG.resolveCall cg (CG.CFGCache cfgCache) sla gla binMd mem halloc archCtx fentry callsite
+          CG.resolveCall cg (CG.CFGCache cfgCache) discStateRef sla gla binMd mem halloc archCtx fentry callsite
     -- We want to find the target entry instruction
 
     let resolveReturnsFromCG :: Dist.FunctionEntry -> Dist.Callsite -> [Dist.AddressLocation]

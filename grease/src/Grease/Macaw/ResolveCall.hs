@@ -49,12 +49,12 @@ import Grease.Concretize.ToConcretize (HasToConcretize)
 import Grease.Diagnostic (Diagnostic (ResolveCallDiagnostic), GreaseLogAction)
 import Grease.Macaw.Arch (ArchContext)
 import Grease.Macaw.Arch qualified as Arch
-import Grease.Macaw.Discovery (discoverFunction)
-import Grease.Macaw.Load (BinMd (binDynFunMap, binPltStubs))
+import Grease.Macaw.Discovery (discoverFunctionIncremental)
+import Grease.Macaw.Load (BinMd (binDynFunMap, binPltStubs, binSymMap))
 import Grease.Macaw.Overrides (lookupMacawForwardDeclarationOverride)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride, msoPublicFnHandle, msoPublicOverride, msoSomeFunctionOverride))
 import Grease.Macaw.ResolveCall.Diagnostic qualified as Diag
-import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, MacawOverride, stateDiscoveredFnHandles, stateSyscallHandles)
+import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, MacawOverride, discoveryStateRef, greaseSimulatorState, stateDiscoveredFnHandles, stateSyscallHandles)
 import Grease.Macaw.SkippedCall (
   SkippedFunctionCall (
     InvalidAddress,
@@ -586,7 +586,9 @@ lookupSyscallHandle bak arch syscallOvs callOpts lsd =
 
 -- | Perform code discovery on the function address (see @Note [Incremental
 -- code discovery]@ in "Grease.Macaw.SimulatorState") and bind the function
--- handle to its CFG.
+-- handle to its CFG. Uses the shared 'Discovery.DiscoveryState' stored in the
+-- 'GreaseSimulatorState' so that each successive discovery benefits from
+-- knowledge accumulated by previous ones.
 discoverFuncAddr ::
   forall arch p bak t cExt sym ret argTys wptr r f a.
   ( Symbolic.SymArchConstraints arch
@@ -605,9 +607,11 @@ discoverFuncAddr ::
     ( MacawFnHandle arch
     , CS.SimState p sym (Symbolic.MacawExt arch) r f a
     )
-discoverFuncAddr logAction halloc arch binMd mem addr st0 = do
+discoverFuncAddr logAction halloc arch binMd _mem addr st0 = do
+  let stateRef = st0 ^. CS.stateContext . CS.cruciblePersonality . greaseSimulatorState . discoveryStateRef
+  let symMap = binSymMap binMd
   C.Reg.SomeCFG regCFG <-
-    discoverFunction logAction halloc arch binMd mem addr
+    discoverFunctionIncremental logAction halloc arch stateRef symMap addr
   C.SomeCFG funcCFG <- pure (C.toSSA regCFG)
   let cfgHdl = C.cfgHandle funcCFG
   let st1 = st0 & stateDiscoveredFnHandles %~ Map.insert addr cfgHdl

@@ -78,6 +78,7 @@ import Grease.Macaw qualified as GM
 import Grease.Macaw.Arch (ArchContext, ArchReloc)
 import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Arch.X86 (x64RelocSupported, x86Ctx)
+import Data.Macaw.Discovery qualified as Discovery
 import Grease.Macaw.Discovery qualified as GMD
 import Grease.Macaw.Entrypoint qualified as GME
 import Grease.Macaw.Load qualified as GL
@@ -628,6 +629,7 @@ analyzeSyntax conf sla gla halloc archCtx = do
     halloc
     archCtx
     Nothing -- no LoadedELF for syntax programs
+    Nothing -- no discovery state for syntax programs
     setupHook
     resolvedTargetLoc
     (GMSH.ExecutingAddressAction (\_ -> pure ()))
@@ -789,6 +791,7 @@ withPrioritizationFunction ::
   ResolvedTargetLoc 64 ->
   ( ( forall p sym rtp.
       ( SDSE.HasDistancesState p
+      , GMSS.HasDiscoveryState p MX86.X86_64
       , RR.HasRecordState p p sym ext rtp
       , RR.HasReplayState p p sym ext rtp
       , WI.IsExprBuilder sym
@@ -816,6 +819,7 @@ withPrioritizationFunction conf avoidList archCtx cfgCache sla gla elf halloc re
           MM.MemWord 64 ->
           forall p sym ext rtp.
           ( SDSE.HasDistancesState p
+          , GMSS.HasDiscoveryState p MX86.X86_64
           , RR.HasRecordState p p sym ext rtp
           , RR.HasReplayState p p sym ext rtp
           , WI.IsExprBuilder sym
@@ -841,6 +845,7 @@ withPrioritizationFunction conf avoidList archCtx cfgCache sla gla elf halloc re
         cgPfunc ::
           forall p sym ext rtp.
           ( SDSE.HasDistancesState p
+          , GMSS.HasDiscoveryState p MX86.X86_64
           , RR.HasRecordState p p sym ext rtp
           , RR.HasReplayState p p sym ext rtp
           , WI.IsExprBuilder sym
@@ -917,6 +922,10 @@ initCFG ::
   -- | 'Just' the 'LoadedELF' if analyzing a binary, 'Nothing' for
   -- S-expression programs.
   Maybe LoadedELF ->
+  -- | Initial discovery state, potentially including results from
+  -- discovering the entrypoint function. 'Nothing' for S-expression
+  -- programs, which have no binary to discover.
+  Maybe (Discovery.DiscoveryState arch) ->
   bak ->
   GreaseLogAction ->
   ScreachLogAction ->
@@ -940,7 +949,7 @@ initCFG ::
     aty ->
   IO
     (CS.ExecState (SP.ScreachSimulatorState p sym bak ext arch t ret aty 64) sym ext (CS.RegEntry sym ret))
-initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
+initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf mbDiscState0 =
   let mbEntryAddr = entrypointAddr <$> mbLoadedElf
       isEcfs = maybe False isECFS mbLoadedElf
       discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` CCC.cfgHandle entryRegSsaCfg) mbEntryAddr
@@ -1117,9 +1126,13 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
         gssRecState <- RR.mkRecordState halloc
         gssEmpTrace <- RR.emptyRecordedTrace sym
         gssRepState <- RR.mkReplayState halloc gssEmpTrace
+        let discState = Maybe.fromMaybe
+              (GMD.mkInitialDiscoveryState archCtx mem symMap pltStubs)
+              mbDiscState0
+        discStateRef <- IORef.newIORef discState
         let gssPers = GP.mkPersonality memVar dbgCtx toConcVar refineData
         let greaseSimState =
-              GMSS.mkGreaseSimulatorState gssPers gssRecState gssRepState
+              GMSS.mkGreaseSimulatorState gssPers discStateRef gssRecState gssRepState
                 & GMSS.discoveredFnHandles .~ discoveredHdls
         personality <-
           SP.mkScreachSimulatorState
@@ -1205,8 +1218,10 @@ analyzeElf conf sla gla halloc archCtx = do
         setupHook = GM.SetupHook $ \bak funOvs ->
           setupHookCommon sla bak addrOvs funOvs mbEntryStartupOv
 
-    CCR.SomeCFG entryRegCfg <-
-      GMD.discoverFunction gla halloc archCtx (GL.progBinMd loadedProg_) mem entryAddr
+    let pltStubs = GL.binPltStubs (GL.progBinMd loadedProg_)
+    let s0 = GMD.mkInitialDiscoveryState archCtx mem symMap pltStubs
+    (CCR.SomeCFG entryRegCfg, discState) <-
+      GMD.discoverFunction gla halloc archCtx s0 symMap entryAddr
     let entryCfgs_ =
           GE.EntrypointCfgs
             { GE.entrypointStartupOv = mbEntryStartupOv
@@ -1246,6 +1261,7 @@ analyzeElf conf sla gla halloc archCtx = do
           halloc
           archCtx
           (Just elf)
+          (Just discState)
           setupHook
           resolvedTargetLoc
           addressHandle
@@ -1336,6 +1352,10 @@ analyzeCfg ::
   -- | 'Just' the 'LoadedELF' if analyzing a binary, 'Nothing' for
   -- S-expression programs.
   Maybe LoadedELF ->
+  -- | Initial discovery state, potentially including results from
+  -- discovering the entrypoint function. 'Nothing' for S-expression
+  -- programs, which have no binary to discover.
+  Maybe (Discovery.DiscoveryState arch) ->
   (forall sym. GM.SetupHook sym arch) ->
   ResolvedTargetLoc (MC.ArchAddrWidth arch) ->
   GMSH.ExecutingAddressAction arch ->
@@ -1343,6 +1363,7 @@ analyzeCfg ::
   GE.EntrypointCfgs (CCR.SomeCFG ext args ret) ->
   ( forall p sym rtp.
     ( SDSE.HasDistancesState p
+    , GMSS.HasDiscoveryState p MX86.X86_64
     , RR.HasRecordState p p sym ext rtp
     , RR.HasReplayState p p sym ext rtp
     , WI.IsExprBuilder sym
@@ -1350,7 +1371,7 @@ analyzeCfg ::
     Sched.PrioritizationFunction p sym ext rtp
   ) ->
   IO ()
-analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction addrOvs entryCfgs pFunc = do
+analyzeCfg conf sla gla halloc archCtx mbLoadedElf mbDiscState0 setupHook rtLoc execAction addrOvs entryCfgs pFunc = do
   let mbEntryAddr = entrypointAddr <$> mbLoadedElf
   let isEcfs = maybe False isECFS mbLoadedElf
   let mbEhi = loadedElf <$> mbLoadedElf
@@ -1436,6 +1457,7 @@ analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction ad
           initCFG
             entryRegSomeSsaCfg
             mbLoadedElf
+            mbDiscState0
             bak
             gla
             sla
