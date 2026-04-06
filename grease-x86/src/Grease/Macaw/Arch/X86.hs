@@ -125,3 +125,4 @@ x64FixupStackPointer regs = do
     eight <- WI.bvLit sym widthRepr (BV.mkBV widthRepr 8)
     rsp' <- CS.RV <$> CLM.ptrAdd sym widthRepr rsp eight
     pure (regs & ixF' X86SymRegs.rsp .~ rsp')
+

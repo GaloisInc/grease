@@ -25,6 +25,7 @@ data BugType
   = MustFail
   | OneMustFail
   | UninitStackRead
+  | StackCorruption
   deriving (Eq.Eq, Generic, Show)
 
 instance Aeson.ToJSON BugType
@@ -35,6 +36,7 @@ instance PP.Pretty BugType where
       MustFail -> "unavoidable error (safety condition is unsatisfiable)"
       OneMustFail -> "at least one bug occurs (safety conditions are jointly unsatisfiable)"
       UninitStackRead -> "uninitialized stack read"
+      StackCorruption -> "stack corruption (return address was modified)"
 
 -- TODO: Add callstack
 data BugInstance
