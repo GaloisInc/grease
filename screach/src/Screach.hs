@@ -1275,7 +1275,7 @@ handleTarget archCtx _ sla initArgs st =
   let argNames = archCtx ^. Arch.archValueNames
       pers = CS.execResultContext st ^. CS.cruciblePersonality
    in case pers ^. SP.refineResult of
-        Just (RFT.RefineResult bid cData _trace) | isReachedBug bid -> do
+        Just (RFT.RefineResult bid cData) | isReachedBug bid -> do
           let addrWidth = archCtx ^. Arch.archInfo . to MAI.archAddrWidth
           let interestingShapes = interestingConcretizedShapes argNames initArgs (Conc.concArgs cData)
           let prettyData = Conc.printConcData addrWidth argNames interestingShapes cData
@@ -1533,7 +1533,7 @@ verifyReachable la gla bak initShape genericExecFeats refineResults = do
     -- TODO(internal#144): Incorporate the concretized filesystem.
     st <- initShape (Shape.ArgShapes untagArgs)
 
-    let trace = RFT.refineResultTrace rr
+    let trace = Conc.concTrace (RFT.refineResultConcData rr)
     let st' =
           st
             & Sched.execStateContextLens
@@ -1543,7 +1543,7 @@ verifyReachable la gla bak initShape genericExecFeats refineResults = do
               .~ trace
     let execFeats = List.map CS.genericToExecutionFeature genericExecFeats
     let replay = SR.replayFeature True
-    result' <- CS.executeCrucible (replay : execFeats) st'
+    result' <- CS.executeCrucible (replay : SR.recordFeature : execFeats) st'
 
     let ctx = CSE.execResultContext result'
     let pers = ctx ^. CS.cruciblePersonality

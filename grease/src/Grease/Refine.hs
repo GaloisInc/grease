@@ -142,6 +142,7 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.Simulator qualified as CS
+import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
 import Lumberjack qualified as LJ
@@ -305,6 +306,7 @@ consumer ::
   , 16 C.<= w
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
+  , CR.HasRecordState p p sym ext r
   , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
@@ -334,7 +336,9 @@ consumer bak execResult la refineData = do
         pure ProveSuccess
       C.Disproved groundEvalFn _ -> do
         toConc <- ToConc.readToConcretize groundEvalFn execResult
-        cData <- Conc.makeConcretizedData bak groundEvalFn minfo initState toConc
+        globs <- liftIO (ToConc.execResultGroundGlobals groundEvalFn execResult)
+        let traceVar = CS.execResultContext execResult ^. CS.cruciblePersonality . CR.recordState
+        cData <- Conc.makeConcretizedData bak groundEvalFn minfo initState toConc globs traceVar
         doLog la $ Diag.SolverGoalFailed sym lp minfo
         let
           runHeuristics ::
@@ -419,6 +423,7 @@ proveAndRefine ::
   , 16 C.<= w
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
+  , CR.HasRecordState p p sym ext r
   , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
@@ -474,6 +479,7 @@ execAndRefine ::
   , 16 C.<= w
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
+  , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
   , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
@@ -564,6 +570,7 @@ refineOnce ::
   , C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
   , ToConc.HasToConcretize p
+  , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
   , GP.HasMemVar p
   , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext wptr

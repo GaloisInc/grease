@@ -68,7 +68,6 @@ data RefineResult sym ext aty
   = RefineResult
   { refineResultBug :: GR.BugInstance
   , refineResultConcData :: GR.ConcretizedData sym ext aty
-  , refineResultTrace :: CR.RecordedTrace sym
   }
 
 -- | Class for personality types that hold a 'RefineResult'.
@@ -177,7 +176,6 @@ refineState bak sla gla refineReplay st config = do
       obls <- C.withBackend (C.execResultContext st) $ \bak' ->
         CB.getProofObligations bak'
       refResult <- GR.proveAndRefine bak st gla rdata obls
-      trc <- getRecordedTrace st
       case refResult of
         GR.ProveSuccess -> do
           doLog sla RDiag.RefinementSuccess
@@ -192,7 +190,7 @@ refineState bak sla gla refineReplay st config = do
           let
             rresultL :: Lens.Lens' (C.ExecResult p sym ext rtp) (Maybe (RefineResult sym ext tys))
             rresultL = Sched.execResultContextLens . C.cruciblePersonality . refineResult
-            nres = st & rresultL ?~ RefineResult bi cdata trc
+            nres = st & rresultL ?~ RefineResult bi cdata
            in
             pure $
               C.ExecutionFeatureModifiedState $
@@ -207,6 +205,7 @@ refineState bak sla gla refineReplay st config = do
           CB.clearProofObligations bak
           CB.resetAssumptionState bak
           initSt <- config shp
+          trc <- getRecordedTrace st
 
           C.ExecutionFeatureNewState
             <$> pauseLinearState
