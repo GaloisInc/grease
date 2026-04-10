@@ -9,7 +9,7 @@ configs = ["fourmolu.yaml"]
 files = ["*.hs"]
 args = "all"
 check = "fourmolu --mode check"
-cmd = "fourmolu"
+cmd = "fourmolu --mode inplace"
 
 [[tool]]
 name = "hlint"
