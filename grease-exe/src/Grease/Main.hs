@@ -586,6 +586,7 @@ macawExecFeats ::
   , ext ~ Symbolic.MacawExt arch
   , ?parserHooks :: CSyn.ParserHooks ext
   , Dbg.HasContext p MDebug.MacawCommand sym ext (Symbolic.ArchRegStruct arch)
+  , CR.HasRecordState p p sym ext (CS.RegEntry sym (Symbolic.ArchRegStruct arch))
   ) =>
   GDiag.GreaseLogAction ->
   bak ->
@@ -612,6 +613,7 @@ llvmExecFeats ::
   , ext ~ CLLVM.LLVM
   , ?parserHooks :: CSyn.ParserHooks ext
   , Dbg.HasContext p LDebug.LLVMCommand sym ext ret
+  , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
   ) =>
   GDiag.GreaseLogAction ->
   bak ->

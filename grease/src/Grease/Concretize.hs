@@ -58,11 +58,14 @@ import Lang.Crucible.Concretize qualified as Conc
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
+import Lang.Crucible.Simulator.GlobalState qualified as LCSG
+import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Simulator.SymSequence qualified as C
 import Lang.Crucible.SymIO qualified as SymIO
 import Numeric (showHex)
 import Prettyprinter qualified as PP
 import What4.Expr qualified as WE
+import What4.Expr.GroundEval qualified as WEG
 import What4.FloatMode qualified as W4FM
 import What4.Interface qualified as WI
 
@@ -141,10 +144,11 @@ data ConcretizedData sym ext argTys
   , concFs :: ConcFs
   , concMem :: ConcMem sym
   , concErr :: Maybe (ErrorDescription sym)
+  , concTrace :: CR.RecordedTrace sym
   }
 
 makeConcretizedData ::
-  forall solver sym ext wptr bak t st argTys fm.
+  forall solver sym ext wptr bak t st argTys fm p r.
   OnlineSolverAndBackend solver sym bak t st fm =>
   CLMP.HasPtrWidth wptr =>
   (ExtShape ext ~ PtrShape ext wptr) =>
@@ -153,8 +157,11 @@ makeConcretizedData ::
   Maybe (ErrorDescription sym) ->
   InitialState sym ext argTys wptr ->
   CS.RegValue sym ToConcretizeType ->
+  -- | Global state from the execution result, used to retrieve the recorded trace
+  LCSG.SymGlobalState sym ->
+  CR.RecordState p sym ext r ->
   IO (ConcretizedData sym ext argTys)
-makeConcretizedData bak groundEvalFn minfo initState extra = do
+makeConcretizedData bak groundEvalFn minfo initState extra globs traceVar = do
   let InitialState
         { initStateArgs = Args initArgs initAllocMap
         , initStateFs = initFs
@@ -189,6 +196,8 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
   cFs <- traverse (traverse (fmap toWord8 . gFn)) (SymIO.symbolicFiles initFs)
   cMem <- CLM.concMemImpl sym gFn initMem
   cErr <- traverse (\eds -> Err.concretizeErrorDescription sym groundEvalFn eds) minfo
+  let evalBool = WEG.groundEval groundEvalFn
+  cTrace <- CR.getConcreteRecordedTrace globs traceVar sym evalBool
   pure $
     ConcretizedData
       { concArgs = ConcArgs cArgs
@@ -196,6 +205,7 @@ makeConcretizedData bak groundEvalFn minfo initState extra = do
       , concFs = ConcFs cFs
       , concMem = ConcMem cMem
       , concErr = cErr
+      , concTrace = cTrace
       }
  where
   concretizePtrTarget ::

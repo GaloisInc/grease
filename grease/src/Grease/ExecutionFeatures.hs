@@ -20,6 +20,7 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.BoundedExec qualified as C
 import Lang.Crucible.Simulator.BoundedRecursion qualified as C
 import Lang.Crucible.Simulator.PathSatisfiability qualified as C
+import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Utils.Seconds qualified as C
 import Prettyprinter qualified as PP
@@ -63,7 +64,7 @@ pathSatFeat bak = do
     _ -> panic "configurePathSatFeature" (List.map show warns)
   pure pathSat
 
--- | Debugger, path satisfiability, and branch tracing features
+-- | Debugger, path satisfiability, branch tracing, and record/replay features
 greaseExecFeats ::
   ( CB.IsSymBackend sym bak
   , C.IsSyntaxExtension ext
@@ -75,6 +76,7 @@ greaseExecFeats ::
   , sym ~ WE.ExprBuilder scope st (WE.Flags fm)
   , WPO.OnlineSolver solver
   , Dbg.HasContext p cExt sym ext ret
+  , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
   ) =>
   GreaseLogAction ->
   bak ->
@@ -88,7 +90,8 @@ greaseExecFeats la bak dbgOpts = do
           Nothing -> []
   pathSat <- pathSatFeat bak
   let execFeats =
-        CS.genericToExecutionFeature pathSat
+        CR.recordFeature
+          : CS.genericToExecutionFeature pathSat
           : greaseBranchTracerFeature la
           : execFeats_
   pure execFeats

@@ -18,6 +18,7 @@ module Grease.Concretize.ToConcretize (
   ToConcretizeType,
   HasToConcretize (toConcretize),
   newToConcretize,
+  execResultGroundGlobals,
   readToConcretize,
   stateToConcretize,
   addToConcretize,
