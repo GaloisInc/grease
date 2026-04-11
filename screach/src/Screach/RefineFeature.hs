@@ -162,7 +162,6 @@ refineState ::
     (C.ExecutionFeatureResult p sym ext rtp)
 refineState bak sla gla refineReplay st config = do
   let pers = C.execResultContext st ^. C.cruciblePersonality
-  let rdata = pers ^. GP.personality . GP.pRefinementData
   let memVar = GP.getMemVar pers
   LJ.writeLog gla (GrDiag.RefineDiagnostic (GRDiag.ExecutionResult memVar st))
   -- Check if execution aborted before trying to prove obligations.
@@ -175,7 +174,7 @@ refineState bak sla gla refineReplay st config = do
     Nothing -> do
       obls <- C.withBackend (C.execResultContext st) $ \bak' ->
         CB.getProofObligations bak'
-      refResult <- GR.proveAndRefine bak st gla rdata obls
+      refResult <- GR.proveAndRefine bak st gla obls
       case refResult of
         GR.ProveSuccess -> do
           doLog sla RDiag.RefinementSuccess
@@ -197,6 +196,7 @@ refineState bak sla gla refineReplay st config = do
                 C.ResultState nres
         GR.ProveRefine shp -> do
           let addrWidth = MC.addrWidthRepr (Proxy @w)
+          let rdata = pers ^. GP.personality . GP.pRefinementData
           LJ.writeLog
             gla
             ( GrDiag.RefineDiagnostic $

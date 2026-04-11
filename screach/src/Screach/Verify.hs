@@ -5,7 +5,7 @@
 -- | Reachability verification
 module Screach.Verify (verifyReachable) where
 
-import Control.Lens ((&), (.~), (^.))
+import Control.Lens ((&), (.~))
 import Control.Monad qualified as Monad
 import Data.Macaw.CFG qualified as MC
 import Data.Parameterized.TraversableFC qualified as TFC
@@ -23,7 +23,6 @@ import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Extension qualified as CCE
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
-import Lang.Crucible.Simulator.ExecutionTree qualified as CSE
 import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Types qualified as CT
 import Lumberjack qualified as LJ
@@ -76,11 +75,8 @@ verifyReachable la gla bak initShape execFeats cDataList =
               . CR.initialTrace
               .~ trace
     result' <- CS.executeCrucible (CR.replayFeature True : CR.recordFeature : execFeats) st'
-    let ctx = CSE.execResultContext result'
-    let pers = ctx ^. CS.cruciblePersonality
-    let refineData = pers ^. GP.personality . GP.pRefinementData
     obls <- CB.getProofObligations bak
-    refResult <- GR.proveAndRefine bak result' gla refineData obls
+    refResult <- GR.proveAndRefine bak result' gla obls
     case refResult of
       GR.ProveBug bugInstance _
         | isReachedBug bugInstance ->
