@@ -586,11 +586,9 @@ refineOnce ::
   W4FM.FloatModeRepr fm ->
   DataLayout ->
   Ctx.Assignment ValueName argTys ->
-  Ctx.Assignment ValueName argTys ->
   Ctx.Assignment C.TypeRepr argTys ->
-  ArgShapes ext NoTag argTys ->
   InitialMem sym ->
-  [RefineHeuristic sym bak ext argTys] ->
+  RD.RefinementInputs sym bak ext argTys ->
   [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
   ( ( MSM.MacawProcessAssertion sym
     , Mem.HasLLVMAnn sym
@@ -603,7 +601,8 @@ refineOnce ::
     IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
   ) ->
   IO (ProveRefineResult sym ext argTys)
-refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem heuristics execFeats mkInitState = do
+refineOnce la simOpts halloc bak fm dl valueNames argTys initMem inputs execFeats mkInitState = do
+  let RD.RefinementInputs{RD.refineInputArgShapes = argShapes} = inputs
   let sym = CB.backendGetSym bak
   ErrorCallbacks
     { errorMap = bbMapRef
@@ -627,13 +626,7 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
   let boundsOpts = Opts.simBoundsOpts simOpts
   let refineData =
         RD.RefinementData
-          { RD.refineInputs =
-              RD.RefinementInputs
-                { RD.refineInputArgNames = argNames
-                , RD.refineInputArgShapes = argShapes
-                , RD.refineInputHeuristics = heuristics
-                , RD.refineInputSolver = Opts.simSolver simOpts
-                }
+          { RD.refineInputs = inputs
           , RD.refineAnns = setupAnns
           , RD.refineInitState = concInitState
           , RD.refineSolverTimeout = Opts.simSolverTimeout boundsOpts

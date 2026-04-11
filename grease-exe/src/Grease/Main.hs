@@ -824,17 +824,16 @@ macawRefineOnce ::
   AddressOverrides arch ->
   bak ->
   WE.FloatModeRepr fm ->
-  ArgShapes ext NoTag argTys ->
   H.InitialMem sym ->
   C.GlobalVar CLM.Mem ->
-  [H.RefineHeuristic sym bak ext argTys] ->
+  GRef.RefinementInputs sym bak ext argTys ->
   [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
   -- | If simulating a binary, this is 'Just' the address of the user-requested
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
   IO (GRef.ProveRefineResult sym ext argTys)
-macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm argShapes initMem memVar heuristics execFeats mbCfgAddr entrypointCfgsSsa = do
+macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm initMem memVar inputs execFeats mbCfgAddr entrypointCfgsSsa = do
   let argNames = archCtx ^. Arch.archValueNames
       regTypes = archCtx ^. Arch.archRegTypes
   GRef.refineOnce
@@ -845,11 +844,9 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallbac
     fm
     (macawDataLayout archCtx)
     argNames
-    argNames
     regTypes
-    argShapes
     initMem
-    heuristics
+    inputs
     execFeats
     (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
     `X.catches` [ X.Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
@@ -947,7 +944,14 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
         if GO.simNoHeuristics simOpts
           then [H.mustFailHeuristic]
           else H.macawHeuristics la rNames List.++ [H.mustFailHeuristic]
-  result <- GRef.refinementLoop la bounds argNames initArgShapes $ \argShapes ->
+  result <- GRef.refinementLoop la bounds argNames initArgShapes $ \argShapes -> do
+    let inputs =
+          GRef.RefinementInputs
+            { GRef.refineInputArgNames = argNames
+            , GRef.refineInputArgShapes = argShapes
+            , GRef.refineInputHeuristics = heuristics
+            , GRef.refineInputSolver = GO.simSolver simOpts
+            }
     macawRefineOnce
       la
       archCtx
@@ -960,10 +964,9 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
       addrOvs
       bak
       fm
-      argShapes
       initMem
       memVar
-      heuristics
+      inputs
       execFeats
       mbCfgAddr
       entrypointCfgsSsa
@@ -1378,7 +1381,14 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
           if GO.simNoHeuristics simOpts
             then [H.mustFailHeuristic]
             else H.llvmHeuristics la List.++ [H.mustFailHeuristic]
-    GRef.refinementLoop la bounds argNames initArgShapes $ \argShapes ->
+    GRef.refinementLoop la bounds argNames initArgShapes $ \argShapes -> do
+      let inputs =
+            GRef.RefinementInputs
+              { GRef.refineInputArgNames = argNames
+              , GRef.refineInputArgShapes = argShapes
+              , GRef.refineInputHeuristics = heuristics
+              , GRef.refineInputSolver = GO.simSolver simOpts
+              }
       GRef.refineOnce
         la
         simOpts
@@ -1387,11 +1397,9 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
         fm
         dl
         valueNames
-        argNames
         argTys
-        argShapes
         initMem
-        heuristics
+        inputs
         execFeats
         $ \refineData toConc setupMem initFs args -> do
           let llvmPers = GP.mkPersonality memVar dbgCtx toConc refineData
