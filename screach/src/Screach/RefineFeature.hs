@@ -200,7 +200,7 @@ refineState bak sla gla refineReplay st config = do
           LJ.writeLog
             gla
             ( GrDiag.RefineDiagnostic $
-                GRDiag.RefinementUsingPrecondition addrWidth (GR.refineArgNames rdata) shp
+                GRDiag.RefinementUsingPrecondition addrWidth (GR.refineInputArgNames (GR.refineInputs rdata)) shp
             )
           CB.clearProofObligations bak
           CB.resetAssumptionState bak
