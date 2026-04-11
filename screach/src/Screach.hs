@@ -1101,12 +1101,15 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
 
         let refineData =
               GR.RefinementData
-                { GR.refineAnns = setupAnns
-                , GR.refineArgNames = argNames
-                , GR.refineArgShapes = argShapes
-                , GR.refineHeuristics = heuristics
+                { GR.refineInputs =
+                    GR.RefinementInputs
+                      { GR.refineInputArgNames = argNames
+                      , GR.refineInputArgShapes = argShapes
+                      , GR.refineInputHeuristics = heuristics
+                      , GR.refineInputSolver = Conf.solver conf
+                      }
+                , GR.refineAnns = setupAnns
                 , GR.refineInitState = concInitState
-                , GR.refineSolver = Conf.solver conf
                 , GR.refineSolverTimeout = GO.simSolverTimeout boundsOpts
                 , GR.refineErrMap = bbMapRef
                 }

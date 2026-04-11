@@ -317,13 +317,16 @@ consumer ::
   C.ProofConsumer sym t (ProveRefineResult sym ext argTys)
 consumer bak execResult la refineData = do
   let RD.RefinementData
-        { RD.refineAnns = anns
-        , RD.refineArgNames = argNames
-        , RD.refineArgShapes = argShapes
-        , RD.refineHeuristics = heuristics
+        { RD.refineInputs = inputs
+        , RD.refineAnns = anns
         , RD.refineInitState = initState
         , RD.refineErrMap = errMapRef
         } = refineData
+  let RD.RefinementInputs
+        { RD.refineInputArgNames = argNames
+        , RD.refineInputArgShapes = argShapes
+        , RD.refineInputHeuristics = heuristics
+        } = inputs
   C.ProofConsumer $ \goal result -> do
     let sym = CB.backendGetSym bak
     let lp = CB.proofGoal goal
@@ -435,7 +438,7 @@ proveAndRefine ::
   IO (ProveRefineResult sym ext argTys)
 proveAndRefine bak execResult la refineData goals = do
   let sym = CB.backendGetSym bak
-  let solver = RD.refineSolver refineData
+  let solver = RD.refineInputSolver (RD.refineInputs refineData)
   let tout = RD.refineSolverTimeout refineData
   let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
   let strat = C.ProofStrategy prover combiner
@@ -624,12 +627,15 @@ refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes init
   let boundsOpts = Opts.simBoundsOpts simOpts
   let refineData =
         RD.RefinementData
-          { RD.refineAnns = setupAnns
-          , RD.refineArgNames = argNames
-          , RD.refineArgShapes = argShapes
-          , RD.refineHeuristics = heuristics
+          { RD.refineInputs =
+              RD.RefinementInputs
+                { RD.refineInputArgNames = argNames
+                , RD.refineInputArgShapes = argShapes
+                , RD.refineInputHeuristics = heuristics
+                , RD.refineInputSolver = Opts.simSolver simOpts
+                }
+          , RD.refineAnns = setupAnns
           , RD.refineInitState = concInitState
-          , RD.refineSolver = Opts.simSolver simOpts
           , RD.refineSolverTimeout = Opts.simSolverTimeout boundsOpts
           , RD.refineErrMap = bbMapRef
           }
