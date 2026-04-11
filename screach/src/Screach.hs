@@ -956,25 +956,13 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
             argNames = archCtx ^. Arch.archValueNames
             regTypes = archCtx ^. Arch.archRegTypes
         let loadOpts = GL.binLoadOptions binMd
-            symMap = GL.binSymMap binMd
-            pltStubs = GL.binPltStubs binMd
-            dynFunMap = GL.binDynFunMap binMd
             relocs = GL.binRelocs binMd
-        let sym = CB.backendGetSym bak
-        GR.ErrorCallbacks
-          { GR.errorMap = bbMapRef
-          , GR.llvmErrCallback = recordLLVMAnnotation
-          , GR.macawAssertionCallback = processMacawAssert
-          } <-
-          GR.buildErrMaps
-
         let addrWidth = MC.addrWidthRepr (Proxy @64)
         LJ.writeLog
           gla
           (GD.RefineDiagnostic (RDiag.RefinementUsingPrecondition addrWidth argNames argShapes))
-        let ?recordLLVMAnnotation = recordLLVMAnnotation
-        let ?processMacawAssert = processMacawAssert
-        (initMem, memCfg0) <- do
+        (initMem, ptrTable) <- do
+          let ?recordLLVMAnnotation = \_ _ _ -> pure ()
           memModelContents <-
             case Conf.globals conf of
               GO.Initialized -> pure MSML.ConcreteMutable
@@ -988,98 +976,8 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
               mem
               memModelContents
               relocs
-          let skipRelocs = GO.SkipUnsupportedRelocs False
-          let memCfg = GM.memConfigInitial bak archCtx ptrTable skipRelocs relocs
-          pure (mem0, memCfg)
-        (args, setupMem, setupAnns) <- GS.setup gla bak dataLayout argNames regTypes argShapes initMem
-        -- TODO: When adding support for AArch32 and PPC, override the link
-        -- registers like GREASE does, probably should refactor that in GREASE
-        -- to make it easier to use here - part of ArchCtx?
-
-        -- Initialize the file system
-        GSIO.InitializedFs fileContents fs globals0 initFsOv <-
-          liftIO $ GSIO.initialLlvmFileSystem halloc sym (Conf.fsOpts conf)
-
-        let userOvPaths = Conf.overrides conf
-        let ovs =
-              SF.customScreachOverrides sla
-                <> builtinStubsOverrides
-                  memVar
-                  memCfg0
-                  fs
-                  (archCtx ^. Arch.archInfo . to MAI.archEndianness)
-        fnOvsMap <- liftIO $ do
-          result <- GMO.mkMacawOverrideMap bak ovs userOvPaths halloc archCtx
-          let usrErr = userError sla . PP.pretty
-          case result of
-            -- See Note [Explicitly listed errors]
-            Left (GMOS.MacawSExpOverrideParseError e@Syntax.SExpressionParseError{}) -> usrErr (GMOS.MacawSExpOverrideParseError e)
-            Left (GMOS.MacawSExpOverrideParseError e@Syntax.SyntaxParseError{}) -> usrErr (GMOS.MacawSExpOverrideParseError e)
-            Left e@GMOS.MacawSExpOverrideLoaderError{} -> usrErr e
-            Right m -> pure m
-        fnAddrOvs <-
-          liftIO (Syntax.loadOverridesYaml loadOpts mem (Map.keysSet fnOvsMap) (Conf.overridesYaml conf))
-            >>= \case
-              -- See Note [Explicitly listed errors]
-              Left e@Syntax.LoadOverridesYamlParseError{} -> userError sla (PP.pretty e)
-              Left e@Syntax.LoadOverridesYamlResolveError{} -> userError sla (PP.pretty e)
-              Right ok -> pure ok
-        let cOpts = Conf.callOpts conf
-        let defaultLfhd =
-              ResolveCall.defaultLookupFunctionHandleDispatch
-                bak
-                gla
-                halloc
-                archCtx
-                mem
-                fnOvsMap
-                (overrideError sla)
-        let lfhd
-              | isEcfs =
-                  ecfsLookupFunctionHandleDispatch gla halloc archCtx binMd mem defaultLfhd
-              | otherwise =
-                  defaultLfhd
-        let memCfg =
-              ( GM.memConfigWithHandles
-                  bak
-                  gla
-                  halloc
-                  archCtx
-                  binMd
-                  mem
-                  fnOvsMap
-                  fnAddrOvs
-                  builtinGenericSyscalls
-                  cOpts
-                  (overrideError sla)
-                  memCfg0
-              )
-                { MS.lookupFunctionHandle =
-                    ResolveCall.lookupFunctionHandle
-                      bak
-                      gla
-                      halloc
-                      archCtx
-                      binMd
-                      mem
-                      fnOvsMap
-                      fnAddrOvs
-                      cOpts
-                      lfhd
-                }
-        evalFn <- MS.withArchEval @MS.LLVMMemory @MX86.X86_64 (archCtx ^. Arch.archVals) sym pure
-        let macawExtImpl = MS.macawExtensions evalFn memVar memCfg
-        let extImpl =
-              -- We omit the goal evaluator in the case that we have a target
-              -- override because the target override determines when we have
-              -- truly reached the goal (by calling the `@reached` built-in).
-              case mbTargetAddr of
-                Just targetAddr
-                  | Nothing <- Conf.targetOverride conf ->
-                      GE.goalEvaluatorMacawExtension macawExtImpl sla bak mem rtLoc targetAddr
-                _ ->
-                  macawExtImpl
-        (toConcVar, globals1) <- liftIO $ ToConc.newToConcretize halloc globals0
+          pure (mem0, ptrTable)
+        let skipRelocs = GO.SkipUnsupportedRelocs False
         -- NB: We intentionally exclude `mustFailHeuristics` here. This is
         -- primarily because must-fail would incorrectly deem targets that are
         -- always reachable in all paths as refinement failures. Note that
@@ -1087,64 +985,148 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
         -- a bug-finding mechanism), so it shouldn't impact screach's
         -- reachability results.
         let heuristics =
-              reachedHeuristic
-                : if Conf.noHeuristics conf
-                  then []
-                  else GH.macawHeuristics gla rNames
-        let concInitState =
-              Conc.InitialState
-                { Conc.initStateArgs = args
-                , Conc.initStateFs = fileContents
-                , Conc.initStateMem = initMem
-                }
+              let ?recordLLVMAnnotation = \_ _ _ -> pure ()
+               in reachedHeuristic
+                    : if Conf.noHeuristics conf
+                      then []
+                      else GH.macawHeuristics gla rNames
         let boundsOpts = Conf.boundsOpts conf
-
-        let refineData =
-              GR.RefinementData
-                { GR.refineInputs =
-                    GR.RefinementInputs
-                      { GR.refineInputArgNames = argNames
-                      , GR.refineInputArgShapes = argShapes
-                      , GR.refineInputHeuristics = heuristics
-                      , GR.refineInputSolver = Conf.solver conf
-                      }
-                , GR.refineAnns = setupAnns
-                , GR.refineInitState = concInitState
-                , GR.refineSolverTimeout = GO.simSolverTimeout boundsOpts
-                , GR.refineErrMap = bbMapRef
+        let inputs =
+              GR.RefinementInputs
+                { GR.refineInputArgNames = argNames
+                , GR.refineInputArgShapes = argShapes
+                , GR.refineInputHeuristics = heuristics
+                , GR.refineInputSolver = Conf.solver conf
                 }
-        let dbgOpts = Conf.debugOpts conf
-        let dbgCmdExt = MDebug.macawCommandExt (archCtx ^. Arch.archVals)
-        dbgCtx <- initDebugger sla dbgOpts dbgCmdExt (archCtx ^. Arch.archRegStructType)
-        gssRecState <- RR.mkRecordState halloc
-        gssEmpTrace <- RR.emptyRecordedTrace sym
-        gssRepState <- RR.mkReplayState halloc gssEmpTrace
-        let gssPers = GP.mkPersonality memVar dbgCtx toConcVar refineData
-        let greaseSimState =
-              GMSS.mkGreaseSimulatorState gssPers gssRecState gssRepState
-                & GMSS.discoveredFnHandles .~ discoveredHdls
-        personality <-
-          SP.mkScreachSimulatorState
-            sym
-            halloc
-            greaseSimState
-        GM.initState
-          bak
+        GR.setupRefinement
           gla
-          extImpl
-          execAction
+          (Conf.fsOpts conf)
+          (GO.simSolverTimeout boundsOpts)
           halloc
-          setupMem
-          globals1
-          initFsOv
-          archCtx
-          setupHook
-          addrOvs
-          personality
-          (GS.argVals args)
-          fnOvsMap
-          mbStartupOvSomeSsaCfg
-          (CCC.SomeCFG entryRegSsaCfg)
+          bak
+          dataLayout
+          argNames
+          regTypes
+          initMem
+          inputs
+          ( \refineData toConc setupMem initFs args -> do
+              let memCfg0 = GM.memConfigInitial bak archCtx ptrTable skipRelocs relocs
+              let sym = CB.backendGetSym bak
+              let fs = GSIO.initFs initFs
+                  globals1 = GSIO.initFsGlobals initFs
+                  initFsOv = GSIO.initFsOverride initFs
+              let userOvPaths = Conf.overrides conf
+              let ovs =
+                    SF.customScreachOverrides sla
+                      <> builtinStubsOverrides
+                        memVar
+                        memCfg0
+                        fs
+                        (archCtx ^. Arch.archInfo . to MAI.archEndianness)
+              fnOvsMap <- liftIO $ do
+                result <- GMO.mkMacawOverrideMap bak ovs userOvPaths halloc archCtx
+                let usrErr = userError sla . PP.pretty
+                case result of
+                  -- See Note [Explicitly listed errors]
+                  Left (GMOS.MacawSExpOverrideParseError e@Syntax.SExpressionParseError{}) -> usrErr (GMOS.MacawSExpOverrideParseError e)
+                  Left (GMOS.MacawSExpOverrideParseError e@Syntax.SyntaxParseError{}) -> usrErr (GMOS.MacawSExpOverrideParseError e)
+                  Left e@GMOS.MacawSExpOverrideLoaderError{} -> usrErr e
+                  Right m -> pure m
+              fnAddrOvs <-
+                liftIO (Syntax.loadOverridesYaml loadOpts mem (Map.keysSet fnOvsMap) (Conf.overridesYaml conf))
+                  >>= \case
+                    -- See Note [Explicitly listed errors]
+                    Left e@Syntax.LoadOverridesYamlParseError{} -> userError sla (PP.pretty e)
+                    Left e@Syntax.LoadOverridesYamlResolveError{} -> userError sla (PP.pretty e)
+                    Right ok -> pure ok
+              let cOpts = Conf.callOpts conf
+              let defaultLfhd =
+                    ResolveCall.defaultLookupFunctionHandleDispatch
+                      bak
+                      gla
+                      halloc
+                      archCtx
+                      mem
+                      fnOvsMap
+                      (overrideError sla)
+              let lfhd
+                    | isEcfs =
+                        ecfsLookupFunctionHandleDispatch gla halloc archCtx binMd mem defaultLfhd
+                    | otherwise =
+                        defaultLfhd
+              let memCfg =
+                    ( GM.memConfigWithHandles
+                        bak
+                        gla
+                        halloc
+                        archCtx
+                        binMd
+                        mem
+                        fnOvsMap
+                        fnAddrOvs
+                        builtinGenericSyscalls
+                        cOpts
+                        (overrideError sla)
+                        memCfg0
+                    )
+                      { MS.lookupFunctionHandle =
+                          ResolveCall.lookupFunctionHandle
+                            bak
+                            gla
+                            halloc
+                            archCtx
+                            binMd
+                            mem
+                            fnOvsMap
+                            fnAddrOvs
+                            cOpts
+                            lfhd
+                      }
+              evalFn <- MS.withArchEval @MS.LLVMMemory @MX86.X86_64 (archCtx ^. Arch.archVals) sym pure
+              let macawExtImpl = MS.macawExtensions evalFn memVar memCfg
+              let extImpl =
+                    -- We omit the goal evaluator in the case that we have a target
+                    -- override because the target override determines when we have
+                    -- truly reached the goal (by calling the `@reached` built-in).
+                    case mbTargetAddr of
+                      Just targetAddr
+                        | Nothing <- Conf.targetOverride conf ->
+                            GE.goalEvaluatorMacawExtension macawExtImpl sla bak mem rtLoc targetAddr
+                      _ ->
+                        macawExtImpl
+              let dbgOpts = Conf.debugOpts conf
+              let dbgCmdExt = MDebug.macawCommandExt (archCtx ^. Arch.archVals)
+              dbgCtx <- initDebugger sla dbgOpts dbgCmdExt (archCtx ^. Arch.archRegStructType)
+              gssRecState <- RR.mkRecordState halloc
+              gssEmpTrace <- RR.emptyRecordedTrace sym
+              gssRepState <- RR.mkReplayState halloc gssEmpTrace
+              let gssPers = GP.mkPersonality memVar dbgCtx toConc refineData
+              let greaseSimState =
+                    GMSS.mkGreaseSimulatorState gssPers gssRecState gssRepState
+                      & GMSS.discoveredFnHandles .~ discoveredHdls
+              personality <-
+                SP.mkScreachSimulatorState
+                  sym
+                  halloc
+                  greaseSimState
+              GM.initState
+                bak
+                gla
+                extImpl
+                execAction
+                halloc
+                setupMem
+                globals1
+                initFsOv
+                archCtx
+                setupHook
+                addrOvs
+                personality
+                (GS.argVals args)
+                fnOvsMap
+                mbStartupOvSomeSsaCfg
+                (CCC.SomeCFG entryRegSsaCfg)
+          )
 
 withMaybeFile :: Maybe FilePath -> IOMode -> (Maybe Handle -> IO a) -> IO a
 withMaybeFile Nothing _ f = f Nothing
@@ -1353,7 +1335,6 @@ analyzeCfg ::
   ) ->
   IO ()
 analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction addrOvs entryCfgs pFunc = do
-  let mbEntryAddr = entrypointAddr <$> mbLoadedElf
   let isEcfs = maybe False isECFS mbLoadedElf
   let mbEhi = loadedElf <$> mbLoadedElf
   let mem =

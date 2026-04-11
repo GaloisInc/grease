@@ -70,6 +70,7 @@ module Grease.Refine (
   proveAndRefine,
   ExecData (..),
   refineOnce,
+  setupRefinement,
   execAndRefine,
   RefinementSummary (..),
   refinementLoop,
@@ -287,7 +288,7 @@ lookupErrorInfo ::
   C.SimError ->
   Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym) ->
   IO (Maybe (ErrorDescription sym))
-lookupErrorInfo sym la goalPred simErr bbMap =
+lookupErrorInfo sym la goalPred _simErr bbMap =
   case findPredAnnotations sym goalPred of
     [] -> do
       doLog la Diag.NoAnnotationOnPredicate
@@ -298,30 +299,37 @@ lookupErrorInfo sym la goalPred simErr bbMap =
         pure Nothing
       info -> pure info
 
+-- | Extract the 'GP.Personality' from an 'CS.ExecResult'. Not exported.
+execResultPersonality ::
+  GP.HasPersonality p sym bak t cExt ext ret argTys wptr =>
+  CS.ExecResult p sym ext rtp ->
+  GP.Personality sym bak t cExt ext ret argTys wptr
+execResultPersonality r = CS.execResultContext r ^. CS.cruciblePersonality . GP.personality
+
 -- | How to consume the results of trying to prove a goal. Not exported.
 consumer ::
-  forall p ext r solver sym bak t st argTys w fm.
+  forall p ext ret solver sym bak t st cExt argTys w fm.
   ( C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st fm
   , 16 C.<= w
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
-  , CR.HasRecordState p p sym ext r
+  , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
+  , GP.HasPersonality p sym bak t cExt ext ret argTys w
   , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
-  CS.ExecResult p sym ext r ->
+  CS.ExecResult p sym ext (CS.RegEntry sym ret) ->
   GreaseLogAction ->
-  RD.RefinementData sym bak t ext argTys w ->
   C.ProofConsumer sym t (ProveRefineResult sym ext argTys)
-consumer bak execResult la refineData = do
+consumer bak execResult la = do
   let RD.RefinementData
         { RD.refineInputs = inputs
         , RD.refineAnns = anns
         , RD.refineInitState = initState
         , RD.refineErrMap = errMapRef
-        } = refineData
+        } = execResultPersonality execResult ^. GP.pRefinementData
   let RD.RefinementInputs
         { RD.refineInputArgNames = argNames
         , RD.refineInputArgShapes = argShapes
@@ -420,29 +428,30 @@ execCfg bak execData = do
 
 -- | Helper, not exported
 proveAndRefine ::
-  forall p ext r solver sym bak t st argTys w fm.
+  forall p ext ret solver sym bak t st cExt argTys w fm.
   ( C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st fm
   , 16 C.<= w
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
-  , CR.HasRecordState p p sym ext r
+  , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
+  , GP.HasPersonality p sym bak t cExt ext ret argTys w
   , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
-  CS.ExecResult p sym ext r ->
+  CS.ExecResult p sym ext (CS.RegEntry sym ret) ->
   GreaseLogAction ->
-  RD.RefinementData sym bak t ext argTys w ->
   CB.ProofObligations sym ->
   IO (ProveRefineResult sym ext argTys)
-proveAndRefine bak execResult la refineData goals = do
+proveAndRefine bak execResult la goals = do
   let sym = CB.backendGetSym bak
+  let refineData = execResultPersonality execResult ^. GP.pRefinementData
   let solver = RD.refineInputSolver (RD.refineInputs refineData)
   let tout = RD.refineSolverTimeout refineData
   let prover = C.offlineProver tout sym W4.defaultLogData (solverAdapter solver)
   let strat = C.ProofStrategy prover combiner
-  let cons = consumer bak execResult la refineData
+  let cons = consumer bak execResult la
   case goals of
     Nothing -> pure ProveSuccess
     Just goals' ->
@@ -475,7 +484,7 @@ processExecResult =
     _ -> Nothing
 
 execAndRefine ::
-  forall ext solver sym bak t st argTys ret w m fm p.
+  forall ext solver sym bak t st cExt argTys ret w m fm p.
   ( MonadIO m
   , C.IsSyntaxExtension ext
   , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
@@ -483,17 +492,16 @@ execAndRefine ::
   , CLM.HasPtrWidth w
   , ToConc.HasToConcretize p
   , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
-  , GP.HasMemVar p
+  , GP.HasPersonality p sym bak t cExt ext ret argTys w
   , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext w
   ) =>
   bak ->
   W4FM.FloatModeRepr fm ->
   GreaseLogAction ->
-  RD.RefinementData sym bak t ext argTys w ->
   ExecData p sym ext ret ->
   m (ProveRefineResult sym ext argTys)
-execAndRefine bak _fm la refineData execData = do
+execAndRefine bak _fm la execData = do
   let memVar = GP.execStateMemVar (execInitState execData)
   let refineOne initSt = do
         let execData' = execData{execInitState = initSt}
@@ -503,7 +511,7 @@ execAndRefine bak _fm la refineData execData = do
           case processExecResult execResult of
             Just cantRefine -> pure (ProveCantRefine cantRefine)
             Nothing ->
-              proveAndRefine bak execResult la refineData goals
+              proveAndRefine bak execResult la goals
         case execPathStrat execData of
           Opts.Dfs -> do
             loc <- WI.getCurrentProgramLoc (CB.backendGetSym bak)
@@ -567,6 +575,73 @@ shortResult =
     ProveCantRefine (Timeout{}) -> "symex timeout"
     ProveCantRefine (Unsupported{}) -> "unsupported feature"
 
+-- | Set up the initial state for use in 'refineOnce' or trace replay.
+-- Handles error-callback setup, argument allocation, and filesystem
+-- initialization, then delegates to @mkResult@ to produce some result @r@.
+-- Returns the result together with the 'RD.RefinementData' so that callers
+-- which also need to call 'proveAndRefine' (e.g., 'refineOnce') can do so.
+setupRefinement ::
+  ( CLM.HasPtrWidth wptr
+  , C.IsSyntaxExtension ext
+  , CB.IsSymBackend sym bak
+  , sym ~ WE.ExprBuilder t st fs
+  , ?memOpts :: CLM.MemOptions
+  , ExtShape ext ~ PtrShape ext wptr
+  , Cursor.CursorExt ext ~ PtrCursor.Dereference ext wptr
+  ) =>
+  GreaseLogAction ->
+  Opts.FsOpts ->
+  C.Timeout ->
+  C.HandleAllocator ->
+  bak ->
+  DataLayout ->
+  Ctx.Assignment ValueName argTys ->
+  Ctx.Assignment C.TypeRepr argTys ->
+  InitialMem sym ->
+  RD.RefinementInputs sym bak ext argTys ->
+  ( ( MSM.MacawProcessAssertion sym
+    , Mem.HasLLVMAnn sym
+    ) =>
+    RD.RefinementData sym bak t ext argTys wptr ->
+    C.GlobalVar ToConc.ToConcretizeType ->
+    Setup.SetupMem sym ->
+    GSIO.InitializedFs sym wptr ->
+    Setup.Args sym ext argTys wptr ->
+    IO r
+  ) ->
+  IO r
+setupRefinement la fsOpts solverTimeout halloc bak dl valueNames argTys initMem inputs mkResult = do
+  let argShapes = RD.refineInputArgShapes inputs
+  let sym = CB.backendGetSym bak
+  ErrorCallbacks
+    { errorMap = bbMapRef
+    , llvmErrCallback = recordLLVMAnnotation
+    , macawAssertionCallback = processMacawAssert
+    } <-
+    buildErrMaps
+  let ?recordLLVMAnnotation = recordLLVMAnnotation
+  let ?processMacawAssert = processMacawAssert
+  (args, setupMem, setupAnns) <-
+    Setup.setup la bak dl valueNames argTys argShapes initMem
+  initFs_ <- GSIO.initialLlvmFileSystem halloc sym fsOpts
+  (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
+  let initFs = initFs_{GSIO.initFsGlobals = globals1}
+  let concInitState =
+        Conc.InitialState
+          { Conc.initStateArgs = args
+          , Conc.initStateFs = GSIO.initFsContents initFs
+          , Conc.initStateMem = initMem
+          }
+  let refineData =
+        RD.RefinementData
+          { RD.refineInputs = inputs
+          , RD.refineAnns = setupAnns
+          , RD.refineInitState = concInitState
+          , RD.refineSolverTimeout = solverTimeout
+          , RD.refineErrMap = bbMapRef
+          }
+  mkResult refineData toConc setupMem initFs args
+
 -- | Run 'Setup.setup' then 'execAndRefine'. Usually passed to 'refinementLoop'.
 refineOnce ::
   ( CLM.HasPtrWidth wptr
@@ -574,7 +649,7 @@ refineOnce ::
   , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
   , ToConc.HasToConcretize p
   , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
-  , GP.HasMemVar p
+  , GP.HasPersonality p sym bak t cExt ext ret argTys wptr
   , ?memOpts :: CLM.MemOptions
   , ExtShape ext ~ PtrShape ext wptr
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext wptr
@@ -602,38 +677,20 @@ refineOnce ::
   ) ->
   IO (ProveRefineResult sym ext argTys)
 refineOnce la simOpts halloc bak fm dl valueNames argTys initMem inputs execFeats mkInitState = do
-  let RD.RefinementInputs{RD.refineInputArgShapes = argShapes} = inputs
-  let sym = CB.backendGetSym bak
-  ErrorCallbacks
-    { errorMap = bbMapRef
-    , llvmErrCallback = recordLLVMAnnotation
-    , macawAssertionCallback = processMacawAssert
-    } <-
-    buildErrMaps
-  let ?recordLLVMAnnotation = recordLLVMAnnotation
-  let ?processMacawAssert = processMacawAssert
-  (args, setupMem, setupAnns) <-
-    Setup.setup la bak dl valueNames argTys argShapes initMem
-  initFs_ <- GSIO.initialLlvmFileSystem halloc sym (Opts.simFsOpts simOpts)
-  (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
-  let initFs = initFs_{GSIO.initFsGlobals = globals1}
-  let concInitState =
-        Conc.InitialState
-          { Conc.initStateArgs = args
-          , Conc.initStateFs = GSIO.initFsContents initFs
-          , Conc.initStateMem = initMem
-          }
-  let boundsOpts = Opts.simBoundsOpts simOpts
-  let refineData =
-        RD.RefinementData
-          { RD.refineInputs = inputs
-          , RD.refineAnns = setupAnns
-          , RD.refineInitState = concInitState
-          , RD.refineSolverTimeout = Opts.simSolverTimeout boundsOpts
-          , RD.refineErrMap = bbMapRef
-          }
-  st <- mkInitState refineData toConc setupMem initFs args
-  boundsFeats_ <- boundedExecFeats boundsOpts
+  st <-
+    setupRefinement
+      la
+      (Opts.simFsOpts simOpts)
+      (Opts.simSolverTimeout (Opts.simBoundsOpts simOpts))
+      halloc
+      bak
+      dl
+      valueNames
+      argTys
+      initMem
+      inputs
+      mkInitState
+  boundsFeats_ <- boundedExecFeats (Opts.simBoundsOpts simOpts)
   let boundsFeats = List.map CS.genericToExecutionFeature boundsFeats_
   let execData =
         ExecData
@@ -641,7 +698,7 @@ refineOnce la simOpts halloc bak fm dl valueNames argTys initMem inputs execFeat
           , execInitState = st
           , execPathStrat = Opts.simPathStrategy simOpts
           }
-  execAndRefine bak fm la refineData execData
+  execAndRefine bak fm la execData
 
 data RefinementSummary sym ext tys
   = RefinementSuccess (ArgShapes ext NoTag tys)
