@@ -143,6 +143,8 @@ library
         Screach.Run.Diagnostic
         Screach.ShortestDistanceScheduler
         Screach.RefineFeature
+        Screach.Verify
+        Screach.Verify.Diagnostic
     build-depends:
         bv-sized,
         bytestring,
