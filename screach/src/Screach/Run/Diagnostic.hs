@@ -9,7 +9,7 @@ module Screach.Run.Diagnostic (
 import Data.Macaw.Memory qualified as MM
 import Data.Text (Text)
 import Data.Void (Void, absurd)
-import Grease.Diagnostic.Severity (Severity (Error, Info, Warn))
+import Grease.Diagnostic.Severity (Severity (Error, Info))
 import Prettyprinter qualified as PP
 import Screach.AnalysisLoc (ResolvedTargetLoc)
 
@@ -48,16 +48,6 @@ data Diagnostic where
     -- | The number of refinement results.
     Int ->
     Diagnostic
-  VerifyFailure ::
-    Diagnostic
-  VerifyReachable ::
-    -- | Total number of results
-    Int ->
-    -- | Current result number
-    Int ->
-    Diagnostic
-  VerifySuccess ::
-    Diagnostic
   UserError ::
     PP.Doc Void ->
     Diagnostic
@@ -93,15 +83,6 @@ instance PP.Pretty Diagnostic where
         failedToReach "Found likely bug"
       RefinementResultCount numResults ->
         "Result count:" PP.<+> PP.pretty numResults
-      VerifyFailure -> "Failed to verify reachability!"
-      VerifyReachable total cur ->
-        PP.hsep
-          [ "Verifying reachability of result"
-          , PP.pretty cur
-          , "/"
-          , PP.pretty total
-          ]
-      VerifySuccess -> "Verified reachability"
       UserError e -> "User error:" PP.<+> fmap absurd e
       Unsupported e -> "Not yet supported:" PP.<+> fmap absurd e
    where
@@ -123,8 +104,5 @@ severity =
     RefinementPathAborted{} -> Info
     RefinementBug{} -> Info
     RefinementResultCount{} -> Info
-    VerifyFailure{} -> Warn
-    VerifyReachable{} -> Info
-    VerifySuccess{} -> Info
     UserError{} -> Error
     Unsupported{} -> Error

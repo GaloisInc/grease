@@ -123,11 +123,9 @@ import Lang.Crucible.LLVM.DataLayout qualified as CLD
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Lang.Crucible.Simulator qualified as CS
-import Lang.Crucible.Simulator.ExecutionTree qualified as CSE
 import Lang.Crucible.Simulator.RecordAndReplay qualified as RR
 import Lang.Crucible.Simulator.RecordAndReplay qualified as SR
 import Lang.Crucible.Syntax.Concrete qualified as CSC
-import Lang.Crucible.Types qualified as CT
 import Lumberjack qualified as LJ
 import Numeric (showHex)
 import Numeric.Natural (Natural)
@@ -158,6 +156,7 @@ import Screach.RefineFeature qualified as RFT
 import Screach.ResolveCall (ecfsLookupFunctionHandleDispatch)
 import Screach.Run.Diagnostic qualified as Diag
 import Screach.ShortestDistanceScheduler qualified as SDSE
+import Screach.Verify qualified as SV
 import System.Directory (Permissions, getPermissions)
 import System.Exit qualified as Exit
 import System.FilePath (isExtensionOf)
@@ -1490,7 +1489,13 @@ analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction ad
     _result <- CS.executeCrucible startFeats firstState
     refineResults <- IORef.readIORef savedRef
     doLog sla $ Diag.RefinementResultCount $ length refineResults
-    verifyReachable sla gla bak initShape genericExecFeats refineResults
+    SV.verifyReachable
+      sla
+      gla
+      bak
+      initShape
+      genericExecFeats
+      refineResults
  where
   setupAssertThenAssume bak = do
     let sym = CB.backendGetSym bak
@@ -1502,59 +1507,6 @@ analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction ad
     case warns of
       [] -> pure ()
       _else -> panic "setupAssertThenAssume" (List.map show warns)
-
-verifyReachable ::
-  ( p ~ SP.ScreachSimulatorState p0 sym bak ext arch t ret tys w
-  , TFC.TraversableFC (Shape.ExtShape ext 'Shape.Precond)
-  , CCE.IsSyntaxExtension ext
-  , GU.OnlineSolverAndBackend solver sym bak t st fm
-  , 16 CT.<= w
-  , CLM.HasPtrWidth w
-  , ToConc.HasToConcretize p
-  , ?memOpts :: CLM.MemOptions
-  , Shape.ExtShape ext ~ Shape.PtrShape ext w
-  , ext ~ MS.MacawExt arch
-  , ret ~ MS.ArchRegStruct arch
-  , MC.MemWidth w
-  ) =>
-  ScreachLogAction ->
-  GreaseLogAction ->
-  bak ->
-  (Shape.ArgShapes ext Shape.NoTag tys -> IO (CS.ExecState p sym ext (CS.RegEntry sym ret))) ->
-  [CS.GenericExecutionFeature sym] ->
-  [RFT.RefineResult sym ext tys] ->
-  IO ()
-verifyReachable la gla bak initShape genericExecFeats refineResults = do
-  Monad.forM_ (zip [1 ..] refineResults) $ \(no, rr) -> do
-    doLog la (Diag.VerifyReachable (length refineResults) no)
-    let cData = RFT.refineResultConcData rr
-        concArgShapes = Conc.concArgsShapes (Conc.concArgs cData)
-        untagArgs = TFC.fmapFC (TFC.fmapFC (const Shape.NoTag)) concArgShapes
-    -- TODO(internal#144): Incorporate the concretized filesystem.
-    st <- initShape (Shape.ArgShapes untagArgs)
-
-    let trace = Conc.concTrace (RFT.refineResultConcData rr)
-    let st' =
-          st
-            & Sched.execStateContextLens
-              . CS.cruciblePersonality
-              . SP.replayState
-              . SR.initialTrace
-              .~ trace
-    let execFeats = List.map CS.genericToExecutionFeature genericExecFeats
-    let replay = SR.replayFeature True
-    result' <- CS.executeCrucible (replay : SR.recordFeature : execFeats) st'
-
-    let ctx = CSE.execResultContext result'
-    let pers = ctx ^. CS.cruciblePersonality
-    let refineData = pers ^. GP.personality . GP.pRefinementData
-    obls <- CB.getProofObligations bak
-    refResult <- GR.proveAndRefine bak result' gla refineData obls
-    case refResult of
-      GR.ProveBug bugInstance _
-        | isReachedBug bugInstance ->
-            doLog la Diag.VerifySuccess
-      _ -> doLog la Diag.VerifyFailure
 
 runScreach :: Conf.Config -> ScreachLogAction -> IO ()
 runScreach conf sla = do
