@@ -7,9 +7,7 @@ module Screach.Verify (verifyReachable) where
 
 import Control.Lens ((&), (.~), (^.))
 import Control.Monad qualified as Monad
-import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
-import Data.Macaw.Symbolic qualified as MS
 import Data.Parameterized.TraversableFC qualified as TFC
 import Grease.Concretize qualified as Conc
 import Grease.Concretize.ToConcretize qualified as ToConc
@@ -31,21 +29,18 @@ import Lang.Crucible.Types qualified as CT
 import Lumberjack qualified as LJ
 import Screach.Diagnostic (Diagnostic (VerifyDiagnostic), ScreachLogAction)
 import Screach.Heuristic (isReachedBug)
-import Screach.Personality qualified as SP
-import Screach.RefineFeature (RefineResult, refineResultConcData)
 import Screach.Verify.Diagnostic qualified as Diag
 import What4.Expr qualified as WE
 
 doLog :: ScreachLogAction -> Diag.Diagnostic -> IO ()
 doLog la diag = LJ.writeLog la (VerifyDiagnostic diag)
 
--- | Re-run simulation for each 'RefineResult', using the concrete argument
--- shapes and the recorded trace to confirm the target is reachable. Logs
--- verification outcome.
+-- | Re-run simulation for each 'Conc.ConcretizedData', using the concrete
+-- argument shapes and the recorded trace to confirm the target is reachable.
+-- Logs verification outcome.
 verifyReachable ::
-  forall p p0 sym bak ext arch t ret tys w solver st fm.
-  ( p ~ SP.ScreachSimulatorState p0 sym bak ext arch t ret tys w
-  , TFC.TraversableFC (Shape.ExtShape ext 'Shape.Precond)
+  forall p sym bak cExt ext t ret tys w solver st fm.
+  ( TFC.TraversableFC (Shape.ExtShape ext 'Shape.Precond)
   , CCE.IsSyntaxExtension ext
   , GU.OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
   , 16 CT.<= w
@@ -53,22 +48,22 @@ verifyReachable ::
   , ToConc.HasToConcretize p
   , ?memOpts :: CLM.MemOptions
   , Shape.ExtShape ext ~ Shape.PtrShape ext w
-  , ext ~ MS.MacawExt arch
-  , ret ~ MS.ArchRegStruct arch
   , MC.MemWidth w
+  , CR.HasReplayState p p sym ext (CS.RegEntry sym ret)
+  , CR.HasRecordState p p sym ext (CS.RegEntry sym ret)
+  , GP.HasPersonality p sym bak t cExt ext ret tys w
   ) =>
   ScreachLogAction ->
   GreaseLogAction ->
   bak ->
   (Shape.ArgShapes ext Shape.NoTag tys -> IO (CS.ExecState p sym ext (CS.RegEntry sym ret))) ->
-  [CS.GenericExecutionFeature sym] ->
-  [RefineResult sym ext tys] ->
+  [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
+  [Conc.ConcretizedData sym ext tys] ->
   IO ()
-verifyReachable la gla bak initShape genericExecFeats refineResults =
-  Monad.forM_ (zip [1 ..] refineResults) $ \(no, rr) -> do
-    doLog la (Diag.VerifyReachable (length refineResults) no)
-    let cData = refineResultConcData rr
-        concArgShapes = Conc.concArgsShapes (Conc.concArgs cData)
+verifyReachable la gla bak initShape execFeats cDataList =
+  Monad.forM_ (zip [1 ..] cDataList) $ \(no, cData) -> do
+    doLog la (Diag.VerifyReachable (length cDataList) no)
+    let concArgShapes = Conc.concArgsShapes (Conc.concArgs cData)
         untagArgs = TFC.fmapFC (TFC.fmapFC (const Shape.NoTag)) concArgShapes
     -- TODO(#640): Incorporate the concretized filesystem.
     st <- initShape (Shape.ArgShapes untagArgs)
@@ -80,7 +75,6 @@ verifyReachable la gla bak initShape genericExecFeats refineResults =
               . CR.replayState
               . CR.initialTrace
               .~ trace
-    let execFeats = List.map CS.genericToExecutionFeature genericExecFeats
     result' <- CS.executeCrucible (CR.replayFeature True : CR.recordFeature : execFeats) st'
     let ctx = CSE.execResultContext result'
     let pers = ctx ^. CS.cruciblePersonality
