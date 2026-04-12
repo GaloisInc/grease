@@ -1494,8 +1494,8 @@ analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction ad
       gla
       bak
       initShape
-      genericExecFeats
-      refineResults
+      (List.map CS.genericToExecutionFeature genericExecFeats)
+      (map RFT.refineResultConcData refineResults)
  where
   setupAssertThenAssume bak = do
     let sym = CB.backendGetSym bak
