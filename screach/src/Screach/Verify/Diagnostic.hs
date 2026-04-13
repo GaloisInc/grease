@@ -11,16 +11,13 @@ import Grease.Diagnostic.Severity (Severity (Info, Warn))
 import Prettyprinter qualified as PP
 
 data Diagnostic
-  = -- | "Verifying reachability of result N / M"
-    VerifyReachable
+  = VerifyReachable
       -- | Total number of results
       Int
       -- | Current result number
       Int
-  | -- | "Verified reachability"
-    VerifySuccess
-  | -- | "Failed to verify reachability!"
-    VerifyFailure
+  | VerifySuccess
+  | VerifyFailure
   deriving (Show)
 
 instance PP.Pretty Diagnostic where
