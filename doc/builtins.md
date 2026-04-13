@@ -236,6 +236,7 @@ See [The S-expression language](sexp.md) for more details.
 (declare @unique-conc-vector-bv-32 ((v (Vector (Bitvector 32)))) (Vector (Bitvector 32)))
 (declare @unique-conc-vector-bv-64 ((v (Vector (Bitvector 64)))) (Vector (Bitvector 64)))
 (declare @fresh-bytes ((name (String Unicode)) (num (Bitvector w))) (Vector (Bitvector 8)))
+(declare @reached ((b Bool)) Unit)`
 ```
 
 For LLVM S-expression files (programs or overrides), the following overrides are also available:

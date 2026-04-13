@@ -24,6 +24,7 @@ import Prettyprinter qualified as PP
 data BugType
   = MustFail
   | OneMustFail
+  | ReachedTarget
   | UninitStackRead
   deriving (Eq.Eq, Generic, Show)
 
@@ -34,6 +35,7 @@ instance PP.Pretty BugType where
     \case
       MustFail -> "unavoidable error (safety condition is unsatisfiable)"
       OneMustFail -> "at least one bug occurs (safety conditions are jointly unsatisfiable)"
+      ReachedTarget -> "reached target"
       UninitStackRead -> "uninitialized stack read"
 
 -- TODO: Add callstack

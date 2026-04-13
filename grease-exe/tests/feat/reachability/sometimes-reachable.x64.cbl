@@ -1,7 +1,7 @@
-; Checks if screach can detect if a call to a function that is only reachable
+; Checks if grease can detect if a call to a function that is only reachable
 ; in one arm of a symbolic branch.
 
-;; flags {"--entry-symbol", "test"}
+;; flags {"--symbol", "test"}
 ;; flags {"--target-symbol", "vuln"}
 ;; go(prog)
 

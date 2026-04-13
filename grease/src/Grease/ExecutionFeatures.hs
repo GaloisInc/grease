@@ -80,18 +80,20 @@ greaseExecFeats ::
   ) =>
   GreaseLogAction ->
   bak ->
+  GO.BoundsOpts ->
   -- | Debugger configuration, if desired
   Maybe (Dbg.ExtImpl cExt p sym ext ret) ->
   IO [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)]
-greaseExecFeats la bak dbgOpts = do
+greaseExecFeats la bak boundsOpts dbgOpts = do
   let execFeats_ =
         case dbgOpts of
           Just extImpl -> [Dbg.debugger extImpl]
           Nothing -> []
   pathSat <- pathSatFeat bak
+  boundsFeats <- List.map CS.genericToExecutionFeature <$> boundedExecFeats boundsOpts
   let execFeats =
         CR.recordFeature
           : CS.genericToExecutionFeature pathSat
           : greaseBranchTracerFeature la
-          : execFeats_
+          : execFeats_ List.++ boundsFeats
   pure execFeats

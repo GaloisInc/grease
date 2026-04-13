@@ -38,7 +38,7 @@ import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Diagnostic (GreaseLogAction)
 import Grease.Macaw.Arch (ArchContext)
 import Grease.Macaw.Arch qualified as Arch
-import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
+import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides, reachabilityBuiltinOverrides)
 import Grease.Macaw.Overrides.SExp (MacawSExpOverride (MacawSExpOverride), MacawSExpOverrideError, loadOverrides)
 import Grease.Macaw.Overrides.SExp qualified as GMOS
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState, MacawFnHandle, MacawOverride)
@@ -204,7 +204,8 @@ mkMacawOverrideMap bak builtinOvs userOvPaths halloc archCtx = do
   regsRepr :: C.TypeRepr (Symbolic.ArchRegStruct arch)
   regsRepr = archCtx ^. Arch.archRegStructType
 
--- | Like 'mkMacawOverrideMap', with 'builtinStubsOverrides'.
+-- | Like 'mkMacawOverrideMap', with 'builtinStubsOverrides' and
+-- 'reachabilityBuiltinOverrides'.
 mkMacawOverrideMapWithBuiltins ::
   forall solver sym bak scope st fs arch p t cExt ret argTys wptr.
   ( OnlineSolverAndBackend solver sym bak scope st fs
@@ -215,6 +216,7 @@ mkMacawOverrideMapWithBuiltins ::
   , Symbolic.SymArchConstraints arch
   , HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
   ) =>
+  GreaseLogAction ->
   bak ->
   -- | The paths of each user-supplied override file.
   [FilePath] ->
@@ -224,9 +226,11 @@ mkMacawOverrideMapWithBuiltins ::
   Symbolic.MemModelConfig p sym arch CLM.Mem ->
   LLVMFileSystem (MC.ArchAddrWidth arch) ->
   IO (Either MacawSExpOverrideError (Map.Map WFN.FunctionName (MacawSExpOverride p sym arch)))
-mkMacawOverrideMapWithBuiltins bak userOvPaths halloc mvar archCtx memCfg fs = do
+mkMacawOverrideMapWithBuiltins la bak userOvPaths halloc mvar archCtx memCfg fs = do
   let endian = archCtx ^. Arch.archInfo . to MAI.archEndianness
-  let builtinOvs = builtinStubsOverrides mvar memCfg fs endian
+  let builtinOvs =
+        builtinStubsOverrides mvar memCfg fs endian
+          <> reachabilityBuiltinOverrides la
   mkMacawOverrideMap bak builtinOvs userOvPaths halloc archCtx
 
 -- | Redirect handles for forward declarations in an S-expression file to

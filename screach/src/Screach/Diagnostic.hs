@@ -14,11 +14,11 @@ import Data.Time.Clock qualified as Time
 import Data.Time.Format qualified as Time
 import Grease.Diagnostic qualified as Grease
 import Grease.Diagnostic.Severity (Severity (Debug, Warn))
+import Grease.Reachability.GoalEvaluator.Diagnostic qualified as GoalEvaluator
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
 import Screach.Distance.Diagnostic qualified as Distance
-import Screach.GoalEvaluator.Diagnostic qualified as GoalEvaluator
 import Screach.Run.Diagnostic qualified as Run
 import System.IO (stderr)
 import What4.ProgramLoc qualified as WPL

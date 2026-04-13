@@ -130,10 +130,6 @@ library
         Screach.Distance.Diagnostic
         Screach.Ecfs
         Screach.Explore
-        Screach.FunctionOverride
-        Screach.GoalEvaluator
-        Screach.GoalEvaluator.Diagnostic
-        Screach.Heuristic
         Screach.LoadedELF
         Screach.LocationExecutionFeature
         Screach.Panic

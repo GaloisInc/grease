@@ -225,6 +225,7 @@ library
     Grease.LLVM.SimulatorHooks.Diagnostic
     Grease.Macaw
     Grease.Macaw.Arch
+    Grease.Macaw.BinMd
     Grease.Macaw.Discovery
     Grease.Macaw.Dwarf
     Grease.Macaw.Dwarf.Diagnostic
@@ -262,6 +263,12 @@ library
     Grease.Refine
     Grease.Refine.Diagnostic
     Grease.Refine.RefinementData
+    Grease.Reachability.AnalysisLoc
+    Grease.Reachability.GoalEvaluator
+    Grease.Reachability.GoalEvaluator.Diagnostic
+    Grease.Reachability.Overrides
+    Grease.Reachability.Verify
+    Grease.Reachability.Verify.Diagnostic
     Grease.Scheduler
     Grease.Setup
     Grease.Setup.Annotations

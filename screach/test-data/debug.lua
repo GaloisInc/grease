@@ -5,5 +5,5 @@ flags {"--target-symbol", "vuln"}
 flags {"--debug"}
 flags {"--debug-cmd", "help"}
 flags {"--debug-cmd", "quit"}
-go "test-data/id.cbl"
+go "../grease-exe/tests/feat/reachability/id.x64.cbl"
 check "help (h): Display help text"

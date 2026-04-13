@@ -1,8 +1,8 @@
 ; A program which reaches the target and then goes into an infinite loop. The
-; desired behavior is for screach to exit right after finding the target,
+; desired behavior is for grease to exit right after finding the target,
 ; thereby avoiding the infinite loop.
 
-;; flags {"--entry-symbol", "test"}
+;; flags {"--symbol", "test"}
 ;; flags {"--target-symbol", "vuln"}
 ;; go(prog)
 

@@ -2,7 +2,10 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Screach.GoalEvaluator (
+-- |
+-- Copyright        : (c) Galois, Inc. 2025
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+module Grease.Reachability.GoalEvaluator (
   goalEvaluatorExecFeature,
   TargetFunctionName (..),
   goalEvaluatorMacawExtension,
@@ -20,6 +23,9 @@ import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic qualified as MS
+import Grease.Reachability.AnalysisLoc (ResolvedTargetLoc)
+import Grease.Diagnostic (Diagnostic (GoalEvaluatorDiagnostic), GreaseLogAction)
+import Grease.Reachability.GoalEvaluator.Diagnostic qualified as Diag
 import Grease.Utility qualified as GU
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as CBO
@@ -29,9 +35,6 @@ import Lang.Crucible.Simulator.ExecutionTree qualified as C
 import Lang.Crucible.Simulator.Operations qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lumberjack qualified as LJ
-import Screach.AnalysisLoc (ResolvedTargetLoc)
-import Screach.Diagnostic (Diagnostic (GoalEvaluatorDiagnostic), ScreachLogAction)
-import Screach.GoalEvaluator.Diagnostic as Diag
 import What4.Config qualified as W4C
 import What4.FunctionName qualified as WFN
 import What4.Interface qualified as WI
@@ -39,7 +42,7 @@ import What4.ProgramLoc qualified as WPL
 import What4.Protocol.Online qualified as WPO
 import What4.SatResult qualified as W4
 
-doLog :: MonadIO m => ScreachLogAction -> Diag.Diagnostic -> m ()
+doLog :: MonadIO m => GreaseLogAction -> Diag.Diagnostic -> m ()
 doLog la diag = LJ.writeLog la (GoalEvaluatorDiagnostic diag)
 
 -- | The name of the target function in a Crucible S-expression program.
@@ -48,14 +51,14 @@ newtype TargetFunctionName = TargetFunctionName WFN.FunctionName
 -- | A 'C.GenericExecutionFeature' that intercepts Crucible function calls to
 -- detect if a target function has been called. This is only ever needed when
 -- analyzing targets with symbol names (e.g., with @--target-symbol@). When
--- analyzing targets with addresses (e.g., with @--target-addr@), @screach@ uses
+-- analyzing targets with addresses (e.g., with @--target-addr@), @grease@ uses
 -- 'goalEvaluatorMacawExtension' instead, which is address-oriented.
 goalEvaluatorExecFeature ::
   forall sym bak solver scope st fs w.
   ( GU.OnlineSolverAndBackend solver sym bak scope st fs
   , MC.MemWidth w
   ) =>
-  ScreachLogAction ->
+  GreaseLogAction ->
   bak ->
   ResolvedTargetLoc w ->
   TargetFunctionName ->
@@ -101,7 +104,7 @@ goalEvaluatorMacawExtension ::
   , GU.OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   C.ExtensionImpl p sym (MS.MacawExt arch) ->
-  ScreachLogAction ->
+  GreaseLogAction ->
   bak ->
   MC.Memory w ->
   ResolvedTargetLoc w ->
@@ -120,7 +123,7 @@ goalEvaluatorExtensionExec ::
   , GU.OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
   C.EvalStmtFunc p sym (MS.MacawExt arch) ->
-  ScreachLogAction ->
+  GreaseLogAction ->
   bak ->
   MC.Memory w ->
   ResolvedTargetLoc w ->
@@ -139,7 +142,7 @@ goalEvaluatorExtensionExec inner la bak mem rtLoc (TargetAddress tgtAddr) stmt s
   inner stmt st
 
 -- | Deem this path as /potentially/ reachable by asserting a
--- reachability-related assertion. @screach@ will recognize the error message in
+-- reachability-related assertion. @grease@ will recognize the error message in
 -- the assertion failure as having reached the target.
 --
 -- In addition, check whether this path is /definitely/ reachable by consulting
@@ -151,11 +154,11 @@ deemPotentiallyReachable ::
   ( MM.MemWidth w
   , GU.OnlineSolverAndBackend solver sym bak scope st fs
   ) =>
-  ScreachLogAction ->
+  GreaseLogAction ->
   bak ->
   ResolvedTargetLoc w ->
   C.SimState p sym ext rtp f a ->
-  -- | Predicate to assert, 'W4.truePred' is a good default
+  -- | Predicate to assert, 'WI.truePred' is a good default
   WI.Pred sym ->
   IO (Maybe CB.AbortExecReason)
 deemPotentiallyReachable la bak rtLoc st goal = do

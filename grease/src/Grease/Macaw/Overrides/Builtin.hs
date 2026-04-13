@@ -8,6 +8,7 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Overrides.Builtin (
   builtinStubsOverrides,
+  reachabilityBuiltinOverrides,
 ) where
 
 import Data.List qualified as List
@@ -26,6 +27,7 @@ import Grease.Macaw.Overrides.Defs (customStubsOverrides)
 import Grease.Macaw.Overrides.Networking (networkOverrides)
 import Grease.Macaw.Overrides.Sscanf (sscanfFamilyOverrides)
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
+import Grease.Reachability.Overrides (reachabilityBuiltinOverrides)
 import Grease.Utility (llvmOverrideName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C
@@ -34,7 +36,7 @@ import Lang.Crucible.LLVM.Intrinsics.Cast qualified as Cast
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as CLSIO
 import Lang.Crucible.LLVM.TypeContext qualified as CLTC
-import Lang.Crucible.Simulator.OverrideSim qualified as CS
+import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.RegMap (RegEntry (RegEntry))
 import Lang.Crucible.Simulator.RegValue (RegValue' (RV))
 import Stubs.FunctionOverride qualified as Stubs

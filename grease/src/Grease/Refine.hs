@@ -69,6 +69,7 @@ module Grease.Refine (
   NoHeuristic (..),
   proveAndRefine,
   ExecData (..),
+  setupOnce,
   refineOnce,
   execAndRefine,
   RefinementSummary (..),
@@ -91,7 +92,6 @@ import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.IORef (IORef, modifyIORef, readIORef)
 import Data.IORef qualified as IORef
-import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic.Memory qualified as MSM
@@ -113,7 +113,6 @@ import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic (Diagnostic (RefineDiagnostic), GreaseLogAction)
 import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
-import Grease.ExecutionFeatures (boundedExecFeats)
 import Grease.Heuristic (HeuristicResult (CantRefine, PossibleBug, RefinedPrecondition, Unknown), OnlineSolverAndBackend, RefineHeuristic)
 import Grease.Heuristic.Result (CantRefine (Exhausted, Exit, MissingFunc, MissingSemantics, MutableGlobal, SolverTimeout, SolverUnknown, Timeout, Unsupported))
 import Grease.Options (BoundsOpts)
@@ -564,7 +563,79 @@ shortResult =
     ProveCantRefine (Timeout{}) -> "symex timeout"
     ProveCantRefine (Unsupported{}) -> "unsupported feature"
 
--- | Run 'Setup.setup' then 'execAndRefine'. Usually passed to 'refinementLoop'.
+-- | Set up the initial 'CS.ExecState' for use in 'refineOnce' or trace replay.
+-- Handles error-callback setup, argument allocation, and filesystem
+-- initialization, then delegates to @mkInitState@ to build the concrete state.
+-- Returns the state together with the 'RD.RefinementData' so that callers
+-- which also need to call 'proveAndRefine' (e.g. 'refineOnce') can do so.
+setupOnce ::
+  ( CLM.HasPtrWidth wptr
+  , C.IsSyntaxExtension ext
+  , OnlineSolverAndBackend solver sym bak t st (WE.Flags fm)
+  , ?memOpts :: CLM.MemOptions
+  , ExtShape ext ~ PtrShape ext wptr
+  , Cursor.CursorExt ext ~ PtrCursor.Dereference ext wptr
+  ) =>
+  GreaseLogAction ->
+  Opts.SimOpts ->
+  C.HandleAllocator ->
+  bak ->
+  W4FM.FloatModeRepr fm ->
+  DataLayout ->
+  Ctx.Assignment ValueName argTys ->
+  Ctx.Assignment ValueName argTys ->
+  Ctx.Assignment C.TypeRepr argTys ->
+  ArgShapes ext NoTag argTys ->
+  InitialMem sym ->
+  [RefineHeuristic sym bak ext argTys] ->
+  ( ( MSM.MacawProcessAssertion sym
+    , Mem.HasLLVMAnn sym
+    ) =>
+    RD.RefinementData sym bak t ext argTys wptr ->
+    C.GlobalVar ToConc.ToConcretizeType ->
+    Setup.SetupMem sym ->
+    GSIO.InitializedFs sym wptr ->
+    Setup.Args sym ext argTys wptr ->
+    IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
+  ) ->
+  IO (CS.ExecState p sym ext (CS.RegEntry sym ret), RD.RefinementData sym bak t ext argTys wptr)
+setupOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem heuristics mkInitState = do
+  let sym = CB.backendGetSym bak
+  ErrorCallbacks
+    { errorMap = bbMapRef
+    , llvmErrCallback = recordLLVMAnnotation
+    , macawAssertionCallback = processMacawAssert
+    } <-
+    buildErrMaps
+  let ?recordLLVMAnnotation = recordLLVMAnnotation
+  let ?processMacawAssert = processMacawAssert
+  (args, setupMem, setupAnns) <-
+    Setup.setup la bak dl valueNames argTys argShapes initMem
+  initFs_ <- GSIO.initialLlvmFileSystem halloc sym (Opts.simFsOpts simOpts)
+  (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
+  let initFs = initFs_{GSIO.initFsGlobals = globals1}
+  let concInitState =
+        Conc.InitialState
+          { Conc.initStateArgs = args
+          , Conc.initStateFs = GSIO.initFsContents initFs
+          , Conc.initStateMem = initMem
+          }
+  let boundsOpts = Opts.simBoundsOpts simOpts
+  let refineData =
+        RD.RefinementData
+          { RD.refineAnns = setupAnns
+          , RD.refineArgNames = argNames
+          , RD.refineArgShapes = argShapes
+          , RD.refineHeuristics = heuristics
+          , RD.refineInitState = concInitState
+          , RD.refineSolver = Opts.simSolver simOpts
+          , RD.refineSolverTimeout = Opts.simSolverTimeout boundsOpts
+          , RD.refineErrMap = bbMapRef
+          }
+  st <- mkInitState refineData toConc setupMem initFs args
+  pure (st, refineData)
+
+-- | Run 'setupOnce' then 'execAndRefine'. Usually passed to 'refinementLoop'.
 refineOnce ::
   ( CLM.HasPtrWidth wptr
   , C.IsSyntaxExtension ext
@@ -601,44 +672,11 @@ refineOnce ::
   ) ->
   IO (ProveRefineResult sym ext argTys)
 refineOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem heuristics execFeats mkInitState = do
-  let sym = CB.backendGetSym bak
-  ErrorCallbacks
-    { errorMap = bbMapRef
-    , llvmErrCallback = recordLLVMAnnotation
-    , macawAssertionCallback = processMacawAssert
-    } <-
-    buildErrMaps
-  let ?recordLLVMAnnotation = recordLLVMAnnotation
-  let ?processMacawAssert = processMacawAssert
-  (args, setupMem, setupAnns) <-
-    Setup.setup la bak dl valueNames argTys argShapes initMem
-  initFs_ <- GSIO.initialLlvmFileSystem halloc sym (Opts.simFsOpts simOpts)
-  (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
-  let initFs = initFs_{GSIO.initFsGlobals = globals1}
-  let concInitState =
-        Conc.InitialState
-          { Conc.initStateArgs = args
-          , Conc.initStateFs = GSIO.initFsContents initFs
-          , Conc.initStateMem = initMem
-          }
-  let boundsOpts = Opts.simBoundsOpts simOpts
-  let refineData =
-        RD.RefinementData
-          { RD.refineAnns = setupAnns
-          , RD.refineArgNames = argNames
-          , RD.refineArgShapes = argShapes
-          , RD.refineHeuristics = heuristics
-          , RD.refineInitState = concInitState
-          , RD.refineSolver = Opts.simSolver simOpts
-          , RD.refineSolverTimeout = Opts.simSolverTimeout boundsOpts
-          , RD.refineErrMap = bbMapRef
-          }
-  st <- mkInitState refineData toConc setupMem initFs args
-  boundsFeats_ <- boundedExecFeats boundsOpts
-  let boundsFeats = List.map CS.genericToExecutionFeature boundsFeats_
+  (st, refineData) <-
+    setupOnce la simOpts halloc bak fm dl valueNames argNames argTys argShapes initMem heuristics mkInitState
   let execData =
         ExecData
-          { execFeats = execFeats List.++ boundsFeats
+          { execFeats = execFeats
           , execInitState = st
           , execPathStrat = Opts.simPathStrategy simOpts
           }

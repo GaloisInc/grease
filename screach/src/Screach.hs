@@ -55,16 +55,16 @@ import Data.Parameterized.TraversableFC qualified as TFC
 import Data.Proxy (Proxy (Proxy))
 import Data.Set qualified as Set
 import Data.Text qualified as Text
-import Data.Text.Encoding qualified as Text
 import Data.Text.IO qualified as Text.IO
 import Data.Time.Clock qualified as Time
 import Data.Time.Format qualified as Time
-import Data.Tuple qualified as Tuple
 import Data.Type.Equality (testEquality)
 import Data.Void (Void, absurd)
 import Data.Word (Word64)
 import GHC.IO.Handle (Handle)
 import GHC.IO.Handle.FD (withFile)
+import Grease.Reachability.AnalysisLoc qualified as GAL
+import Grease.Bug qualified as Bug
 import Grease.Concretize (ConcArgs (..))
 import Grease.Concretize qualified as Conc
 import Grease.Concretize.ToConcretize qualified as ToConc
@@ -73,6 +73,8 @@ import Grease.Diagnostic qualified as GD
 import Grease.Diagnostic.Severity qualified as GD
 import Grease.Entrypoint qualified as GE
 import Grease.ExecutionFeatures qualified as GEF
+import Grease.Reachability.GoalEvaluator qualified as GGE
+import Grease.Reachability.Verify qualified as GRV
 import Grease.Heuristic qualified as GH
 import Grease.Macaw qualified as GM
 import Grease.Macaw.Arch (ArchContext, ArchReloc)
@@ -83,7 +85,7 @@ import Grease.Macaw.Entrypoint qualified as GME
 import Grease.Macaw.Load qualified as GL
 import Grease.Macaw.Overrides qualified as GMO
 import Grease.Macaw.Overrides.Address qualified as GMOA
-import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides)
+import Grease.Macaw.Overrides.Builtin (builtinStubsOverrides, reachabilityBuiltinOverrides)
 import Grease.Macaw.Overrides.SExp qualified as GMOS
 import Grease.Macaw.PLT qualified as GMP
 import Grease.Macaw.ResolveCall qualified as ResolveCall
@@ -109,7 +111,6 @@ import Grease.Solver qualified as Solver
 import Grease.SymIO qualified as GSIO
 import Grease.Syntax qualified as Syntax
 import Grease.Syscall (builtinGenericSyscalls)
-import Grease.Utility qualified as GU
 import Grease.ValueName (ValueName, getValueName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as CBO
@@ -123,23 +124,14 @@ import Lang.Crucible.LLVM.DataLayout qualified as CLD
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Lang.Crucible.Simulator qualified as CS
-import Lang.Crucible.Simulator.ExecutionTree qualified as CSE
 import Lang.Crucible.Simulator.RecordAndReplay qualified as RR
 import Lang.Crucible.Simulator.RecordAndReplay qualified as SR
 import Lang.Crucible.Syntax.Concrete qualified as CSC
-import Lang.Crucible.Types qualified as CT
 import Lumberjack qualified as LJ
 import Numeric (showHex)
 import Numeric.Natural (Natural)
 import Prettyprinter qualified as PP
 import Prettyprinter.Render.Text qualified as PP
-import Screach.AnalysisLoc (
-  AnalysisLoc (..),
-  EntryLoc (..),
-  ResolvedTargetLoc (..),
-  TargetLoc (..),
-  entryLocToGreaseEntrypoint,
- )
 import Screach.AnalysisLoc qualified as SAL
 import Screach.CallGraph qualified as CG
 import Screach.Config qualified as Conf
@@ -147,9 +139,6 @@ import Screach.Diagnostic (Diagnostic (RunDiagnostic), ScreachLogAction)
 import Screach.Diagnostic qualified as SD
 import Screach.Distance qualified as Dist
 import Screach.Ecfs qualified as SE
-import Screach.FunctionOverride qualified as SF
-import Screach.GoalEvaluator qualified as GE
-import Screach.Heuristic (isReachedBug, reachedHeuristic)
 import Screach.LoadedELF
 import Screach.LocationExecutionFeature qualified as LocLog
 import Screach.Panic (panic)
@@ -469,26 +458,6 @@ toSsaSomeCfg ::
   CCC.SomeCFG ext init ret
 toSsaSomeCfg (CCR.SomeCFG cfg) = CCS.toSSA cfg
 
--- | Given an address in a binary, find the address and name of the nearest
--- function at or before that address. We use this as a heuristic to determine
--- what function is likely to contain the supplied address.
-
--- NB: This heuristic is not perfect, as we really ought to be considering the
--- size of the function to determine if it actually contains the supplied
--- address. Doing so would require plumbing through some extra function symbol
--- information to the macaw-loader API, however, which would prove annoying. For
--- now, this heuristic likely suffices, and it is the same approach used to
--- power the @--core-dump@ flag in @grease@.
-resolveNearestFunction ::
-  MM.MemWidth w =>
-  MM.Memory w ->
-  Map.Map (MM.MemSegmentOff w) WFN.FunctionName ->
-  MM.MemWord w ->
-  Maybe (MM.MemSegmentOff w, WFN.FunctionName)
-resolveNearestFunction mem symMap addr = do
-  addrSegOff <- MBLE.resolveAbsoluteAddress mem addr
-  Map.lookupLE addrSegOff symMap
-
 -- | Inspect the user-supplied program's file extension to determine how to
 -- analyze it.
 analyzeFile ::
@@ -576,11 +545,11 @@ analyzeSyntax conf sla gla halloc archCtx = do
 
   let entryLoc = Conf.entryLoc progConfg
   entryNm <-
-    getAnalysisLocSymbol SyntaxProgWithEntrypointAddr $ entryAnalysisLoc entryLoc
+    getAnalysisLocSymbol SyntaxProgWithEntrypointAddr $ SAL.entryAnalysisLoc entryLoc
 
   targetNm <-
-    getAnalysisLocSymbol SyntaxProgWithTargetAddr $ targetAnalysisLoc $ Conf.targetLoc conf
-  let resolvedTargetLoc = ResolvedTargetLocSymbol targetNm Nothing
+    getAnalysisLocSymbol SyntaxProgWithTargetAddr $ GAL.targetAnalysisLoc $ Conf.targetLoc conf
+  let resolvedTargetLoc = GAL.ResolvedTargetLocSymbol targetNm Nothing
 
   entryRegCfg <-
     case Map.lookup (WFN.functionName entryNm) (Syntax.parsedProgramCfgMap prog) of
@@ -597,7 +566,7 @@ analyzeSyntax conf sla gla halloc archCtx = do
             Left e@GE.StartupOvCFGNotFound{} -> usrErr e
             Right startupOv -> pure startupOv
       )
-      (entryStartupOvPath entryLoc)
+      (SAL.entryStartupOvPath entryLoc)
   let entryCfgs_ =
         GE.EntrypointCfgs
           { GE.entrypointStartupOv = mbEntryStartupOv
@@ -640,12 +609,12 @@ analyzeSyntax conf sla gla halloc archCtx = do
   getAnalysisLocSymbol ::
     -- \| The exception to throw if an address was given.
     (Word64 -> UserError) ->
-    AnalysisLoc ->
+    GAL.AnalysisLoc ->
     IO WFN.FunctionName
   getAnalysisLocSymbol addrEx loc =
     case loc of
-      AnalysisLocSymbol name -> pure name
-      AnalysisLocAddress addr -> throw $ addrEx addr
+      GAL.AnalysisLocSymbol name -> pure name
+      GAL.AnalysisLocAddress addr -> throw $ addrEx addr
 
 loadElfFromConfig ::
   ( arch ~ MX86.X86_64
@@ -660,7 +629,7 @@ loadElfFromConfig ::
   IO LoadedELF
 loadElfFromConfig conf sla gla _archCtx = do
   let entryLoc = Conf.entryLoc conf
-  let entrypointList = [entryLocToGreaseEntrypoint entryLoc]
+  let entrypointList = [SAL.entryLocToGreaseEntrypoint entryLoc]
   (perms, elfBinary) <- readElfBinary conf
   let elf = elfBinaryHeaderInfo elfBinary
   -- TODO: PLT stubs option support? (instead of [])
@@ -715,7 +684,7 @@ loadElfFromConfig conf sla gla _archCtx = do
             ecfsPltStubs
         pure $ Map.fromList resolvedEcfsPltStubs
 
-  let entry = entryLocToGreaseEntrypoint entryLoc
+  let entry = SAL.entryLocToGreaseEntrypoint entryLoc
   entryAddr <-
     case Map.lookup entry entrypointAddrs of
       Just entryAddr -> pure entryAddr
@@ -740,35 +709,12 @@ loadElfFromConfig conf sla gla _archCtx = do
       , isECFS = isEcfs
       }
 
-resolveAnalysisLoc ::
-  LC.LoadOptions ->
-  MM.Memory 64 ->
-  Map.Map (MM.MemSegmentOff 64) BS.ByteString ->
-  AnalysisLoc ->
-  ResolvedTargetLoc 64
-resolveAnalysisLoc loadOpts mem symMap loc =
-  let symMapUtf8 = fmap (WFN.functionNameFromText . Text.decodeUtf8Lenient) symMap
-      revSymMap = Map.fromList $ fmap Tuple.swap $ Map.toList symMapUtf8
-      loadOffset = fromMaybe 0 (LC.loadOffset loadOpts)
-   in case loc of
-        AnalysisLocAddress addr ->
-          let targetAddr = MC.memWord @64 $ addr + loadOffset
-              nearestFun = resolveNearestFunction mem symMapUtf8 targetAddr
-           in ResolvedTargetLocAddress targetAddr nearestFun
-        AnalysisLocSymbol name ->
-          case Map.lookup name revSymMap of
-            Just segOff ->
-              let targetAddr = GU.segoffToAbsoluteAddr mem segOff
-               in ResolvedTargetLocSymbol name (Just targetAddr)
-            Nothing ->
-              ResolvedTargetLocSymbol name Nothing
-
 containingFunctionFromRloc ::
-  (MonadFail m) => ResolvedTargetLoc 64 -> Maybe Word64 -> m (MM.MemWord 64)
+  (MonadFail m) => GAL.ResolvedTargetLoc 64 -> Maybe Word64 -> m (MM.MemWord 64)
 containingFunctionFromRloc rloc def =
   case (rloc, def) of
     (_, Just container) -> pure (MM.memWord @64 container)
-    (ResolvedTargetLocSymbol _ (Just addr), _) -> pure addr
+    (GAL.ResolvedTargetLocSymbol _ (Just addr), _) -> pure addr
     _ -> throw TargetAddressWithoutContainingFunction
 
 -- | Default prioritization function that assigns no priority.
@@ -786,7 +732,7 @@ withPrioritizationFunction ::
   GreaseLogAction ->
   LoadedELF ->
   CFH.HandleAllocator ->
-  ResolvedTargetLoc 64 ->
+  GAL.ResolvedTargetLoc 64 ->
   ( ( forall p sym rtp.
       ( SDSE.HasDistancesState p
       , RR.HasRecordState p p sym ext rtp
@@ -846,7 +792,7 @@ withPrioritizationFunction conf avoidList archCtx cfgCache sla gla elf halloc re
           , WI.IsExprBuilder sym
           ) =>
           Sched.PrioritizationFunction p sym ext rtp
-        cgPfunc = case SAL.resolvedTargetAddr resolvedTargetLoc of
+        cgPfunc = case GAL.resolvedTargetAddr resolvedTargetLoc of
           Just targetAddr -> pfuncFromTargetAddr targetAddr
           _ -> defaultPrioritizationFunction
       k cgPfunc
@@ -861,7 +807,7 @@ loadAddrOvs ::
   CFH.HandleAllocator ->
   LC.LoadOptions ->
   MM.Memory (MC.ArchAddrWidth arch) ->
-  ResolvedTargetLoc 64 ->
+  GAL.ResolvedTargetLoc 64 ->
   IO (GMOA.AddressOverrides arch)
 loadAddrOvs archCtx conf halloc loadOpts mem rtLoc = do
   let regTys = archCtx ^. Arch.archRegStructType
@@ -875,7 +821,7 @@ loadAddrOvs archCtx conf halloc loadOpts mem rtLoc = do
     case Conf.targetOverride conf of
       Nothing -> pure addrOvs_
       Just path ->
-        case SAL.resolvedTargetAddr rtLoc of
+        case GAL.resolvedTargetAddr rtLoc of
           Just addr_ ->
             let addr = word64ToInteger (MM.memWordValue addr_)
              in pure ((addr, path) : addrOvs_)
@@ -886,15 +832,14 @@ loadAddrOvs archCtx conf halloc loadOpts mem rtLoc = do
     Right addrOvs -> pure addrOvs
 
 analysisLocToAddr ::
-  LC.LoadOptions ->
   MM.Memory 64 ->
-  Map.Map (MM.MemSegmentOff 64) BS.ByteString ->
-  AnalysisLoc ->
+  GL.BinMd MX86.X86_64 ->
+  GAL.AnalysisLoc ->
   IO (MM.MemWord 64)
-analysisLocToAddr load mem symMap loc = case resolveAnalysisLoc load mem symMap loc of
-  ResolvedTargetLocAddress addr _ -> pure addr
-  ResolvedTargetLocSymbol _ (Just addr) -> pure addr
-  ResolvedTargetLocSymbol nm Nothing -> throw $ AvoidSymbolDidNotResolve nm
+analysisLocToAddr mem binMd loc = case GAL.resolveTargetLoc mem binMd loc of
+  GAL.ResolvedTargetLocAddress addr _ -> pure addr
+  GAL.ResolvedTargetLocSymbol _ (Just addr) -> pure addr
+  GAL.ResolvedTargetLocSymbol nm Nothing -> throw $ AvoidSymbolDidNotResolve nm
 
 -- The code that is invoked in the body of the refinement loop,
 -- regardless of whether path-based exploration is used or not.
@@ -925,11 +870,11 @@ initCFG ::
   ArchContext arch ->
   -- | The target address to stop execution at if no
   -- goal override is present
-  Maybe (GE.TargetAddress 64) ->
+  Maybe (GGE.TargetAddress 64) ->
   Maybe (CCC.SomeCFG ext args ret) ->
   -- | The target location of the goal
   -- for printing results
-  ResolvedTargetLoc 64 ->
+  GAL.ResolvedTargetLoc 64 ->
   CS.GlobalVar CLM.Mem ->
   GM.SetupHook sym arch ->
   GMSH.ExecutingAddressAction arch ->
@@ -957,9 +902,6 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
             argNames = archCtx ^. Arch.archValueNames
             regTypes = archCtx ^. Arch.archRegTypes
         let loadOpts = GL.binLoadOptions binMd
-            symMap = GL.binSymMap binMd
-            pltStubs = GL.binPltStubs binMd
-            dynFunMap = GL.binDynFunMap binMd
             relocs = GL.binRelocs binMd
         let sym = CB.backendGetSym bak
         GR.ErrorCallbacks
@@ -1003,7 +945,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
 
         let userOvPaths = Conf.overrides conf
         let ovs =
-              SF.customScreachOverrides sla
+              reachabilityBuiltinOverrides gla
                 <> builtinStubsOverrides
                   memVar
                   memCfg0
@@ -1068,18 +1010,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
                       cOpts
                       lfhd
                 }
-        evalFn <- MS.withArchEval @MS.LLVMMemory @MX86.X86_64 (archCtx ^. Arch.archVals) sym pure
-        let macawExtImpl = MS.macawExtensions evalFn memVar memCfg
-        let extImpl =
-              -- We omit the goal evaluator in the case that we have a target
-              -- override because the target override determines when we have
-              -- truly reached the goal (by calling the `@reached` built-in).
-              case mbTargetAddr of
-                Just targetAddr
-                  | Nothing <- Conf.targetOverride conf ->
-                      GE.goalEvaluatorMacawExtension macawExtImpl sla bak mem rtLoc targetAddr
-                _ ->
-                  macawExtImpl
+        extImpl <- GM.buildMacawExtImpl (archCtx ^. Arch.archVals) sym memVar memCfg gla bak mem (Just rtLoc) (Conf.targetOverride conf)
         (toConcVar, globals1) <- liftIO $ ToConc.newToConcretize halloc globals0
         -- NB: We intentionally exclude `mustFailHeuristics` here. This is
         -- primarily because must-fail would incorrectly deem targets that are
@@ -1088,7 +1019,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
         -- a bug-finding mechanism), so it shouldn't impact screach's
         -- reachability results.
         let heuristics =
-              reachedHeuristic
+              GH.reachedTargetHeuristic
                 : if Conf.noHeuristics conf
                   then []
                   else GH.macawHeuristics gla rNames
@@ -1179,7 +1110,6 @@ analyzeElf conf sla gla halloc archCtx = do
   let loadedProg_ = loadedProgram elf
   let entryAddr = entrypointAddr elf
   let mem = Loader.memoryImage (GL.progLoadedBinary loadedProg_)
-  let symMap = GL.binSymMap (GL.progBinMd loadedProg_)
   let loadOpts = GL.binLoadOptions (GL.progBinMd loadedProg_)
   withMaybeFile (Conf.simDumpCoverage conf) WriteMode $ \mbCovHandle -> do
     let secsJson = GL.dumpSections mem
@@ -1197,9 +1127,9 @@ analyzeElf conf sla gla halloc archCtx = do
               Left e@GE.StartupOvCFGNotFound{} -> usrErr e
               Right startupOv -> pure startupOv
         )
-        (entryStartupOvPath entryLoc)
+        (SAL.entryStartupOvPath entryLoc)
     let resolvedTargetLoc =
-          resolveAnalysisLoc loadOpts mem symMap (targetAnalysisLoc $ Conf.targetLoc conf)
+          GAL.resolveTargetLoc mem (GL.progBinMd loadedProg_) (GAL.targetAnalysisLoc $ Conf.targetLoc conf)
     addrOvs <- loadAddrOvs archCtx conf halloc loadOpts mem resolvedTargetLoc
     let setupHook :: forall sym. GM.SetupHook sym arch
         setupHook = GM.SetupHook $ \bak funOvs ->
@@ -1224,7 +1154,7 @@ analyzeElf conf sla gla halloc archCtx = do
       addressHandle =
         GMSH.ExecutingAddressAction $ Maybe.maybe (\_ -> pure ()) (addressCallBack @arch Proxy) mbCovHandle
     cfgCache <- IORef.newIORef Map.empty
-    avoidAddrs <- Monad.forM (Conf.avoidedLocations conf) $ analysisLocToAddr loadOpts mem symMap
+    avoidAddrs <- Monad.forM (Conf.avoidedLocations conf) $ analysisLocToAddr mem (GL.progBinMd loadedProg_)
     let isLocAvoidAddr loc =
           let l = CG.locToAddressMaybe @64 loc
            in maybe False (`elem` avoidAddrs) l
@@ -1275,7 +1205,7 @@ handleTarget archCtx _ sla initArgs st =
   let argNames = archCtx ^. Arch.archValueNames
       pers = CS.execResultContext st ^. CS.cruciblePersonality
    in case pers ^. SP.refineResult of
-        Just (RFT.RefineResult bid cData) | isReachedBug bid -> do
+        Just (RFT.RefineResult bid cData) | Bug.bugType bid == Bug.ReachedTarget -> do
           let addrWidth = archCtx ^. Arch.archInfo . to MAI.archAddrWidth
           let interestingShapes = interestingConcretizedShapes argNames initArgs (Conc.concArgs cData)
           let prettyData = Conc.printConcData addrWidth argNames interestingShapes cData
@@ -1300,7 +1230,7 @@ initialArgs ::
   GreaseLogAction ->
   Conf.Config ->
   MM.Memory (MC.ArchAddrWidth arch) ->
-  Maybe (GE.TargetAddress (MC.ArchAddrWidth arch)) ->
+  Maybe (GGE.TargetAddress (MC.ArchAddrWidth arch)) ->
   bak ->
   ArchContext arch ->
   Maybe (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch)) ->
@@ -1311,7 +1241,7 @@ initialArgs sla gla conf mem mbTargetAddr bak archCtx mbEhi = do
     case GO.initPrecondPath opts of
       Nothing -> pure Nothing
       Just path -> Just <$> loadInitialPreconditions sla path
-  let mbAddr = MM.resolveAbsoluteAddr mem . GE.getTargetAddress =<< mbTargetAddr
+  let mbAddr = MM.resolveAbsoluteAddr mem . GGE.getTargetAddress =<< mbTargetAddr
   r <- GMShp.macawInitArgShapes gla bak archCtx opts parsed mbEhi mem mbAddr
   case r of
     Left err -> userError sla (PP.pretty err)
@@ -1337,7 +1267,7 @@ analyzeCfg ::
   -- S-expression programs.
   Maybe LoadedELF ->
   (forall sym. GM.SetupHook sym arch) ->
-  ResolvedTargetLoc (MC.ArchAddrWidth arch) ->
+  GAL.ResolvedTargetLoc (MC.ArchAddrWidth arch) ->
   GMSH.ExecutingAddressAction arch ->
   GMOA.AddressOverrides arch ->
   GE.EntrypointCfgs (CCR.SomeCFG ext args ret) ->
@@ -1409,13 +1339,13 @@ analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction ad
     --   disambiguation mechanism instead.
     let (mbTargetAddr, mbTargetSymbol) =
           case rtLoc of
-            ResolvedTargetLocAddress addr mbResolvedAddrAndSymbolName ->
-              ( Just $ GE.TargetAddress addr
-              , fmap (GE.TargetFunctionName . snd) mbResolvedAddrAndSymbolName
+            GAL.ResolvedTargetLocAddress addr mbResolvedAddrAndSymbolName ->
+              ( Just $ GGE.TargetAddress addr
+              , fmap (GGE.TargetFunctionName . snd) mbResolvedAddrAndSymbolName
               )
-            ResolvedTargetLocSymbol name mbAddr ->
-              ( GE.TargetAddress <$> mbAddr
-              , Just $ GE.TargetFunctionName name
+            GAL.ResolvedTargetLocSymbol name mbAddr ->
+              ( GGE.TargetAddress <$> mbAddr
+              , Just $ GGE.TargetFunctionName name
               )
     initArgs <-
       initialArgs sla gla conf mem mbTargetAddr bak archCtx mbEhi
@@ -1428,7 +1358,7 @@ analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction ad
             Just _ ->
               Nothing
             Nothing ->
-              GE.goalEvaluatorExecFeature sla bak rtLoc <$> mbTargetSymbol
+              GGE.goalEvaluatorExecFeature gla bak rtLoc <$> mbTargetSymbol
     -- Call GREASE's refinement loop
     let boundsOpts = Conf.boundsOpts conf
     memVar <- liftIO (CLM.mkMemVar "screach:mem" halloc)
@@ -1490,7 +1420,10 @@ analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction ad
     _result <- CS.executeCrucible startFeats firstState
     refineResults <- IORef.readIORef savedRef
     doLog sla $ Diag.RefinementResultCount $ length refineResults
-    verifyReachable sla gla bak initShape genericExecFeats refineResults
+    GRV.verifyReachable gla
+      (List.map CS.genericToExecutionFeature genericExecFeats)
+      initShape
+      (map RFT.refineResultConcData refineResults)
  where
   setupAssertThenAssume bak = do
     let sym = CB.backendGetSym bak
@@ -1502,59 +1435,6 @@ analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction ad
     case warns of
       [] -> pure ()
       _else -> panic "setupAssertThenAssume" (List.map show warns)
-
-verifyReachable ::
-  ( p ~ SP.ScreachSimulatorState p0 sym bak ext arch t ret tys w
-  , TFC.TraversableFC (Shape.ExtShape ext 'Shape.Precond)
-  , CCE.IsSyntaxExtension ext
-  , GU.OnlineSolverAndBackend solver sym bak t st fm
-  , 16 CT.<= w
-  , CLM.HasPtrWidth w
-  , ToConc.HasToConcretize p
-  , ?memOpts :: CLM.MemOptions
-  , Shape.ExtShape ext ~ Shape.PtrShape ext w
-  , ext ~ MS.MacawExt arch
-  , ret ~ MS.ArchRegStruct arch
-  , MC.MemWidth w
-  ) =>
-  ScreachLogAction ->
-  GreaseLogAction ->
-  bak ->
-  (Shape.ArgShapes ext Shape.NoTag tys -> IO (CS.ExecState p sym ext (CS.RegEntry sym ret))) ->
-  [CS.GenericExecutionFeature sym] ->
-  [RFT.RefineResult sym ext tys] ->
-  IO ()
-verifyReachable la gla bak initShape genericExecFeats refineResults = do
-  Monad.forM_ (zip [1 ..] refineResults) $ \(no, rr) -> do
-    doLog la (Diag.VerifyReachable (length refineResults) no)
-    let cData = RFT.refineResultConcData rr
-        concArgShapes = Conc.concArgsShapes (Conc.concArgs cData)
-        untagArgs = TFC.fmapFC (TFC.fmapFC (const Shape.NoTag)) concArgShapes
-    -- TODO(internal#144): Incorporate the concretized filesystem.
-    st <- initShape (Shape.ArgShapes untagArgs)
-
-    let trace = Conc.concTrace (RFT.refineResultConcData rr)
-    let st' =
-          st
-            & Sched.execStateContextLens
-              . CS.cruciblePersonality
-              . SP.replayState
-              . SR.initialTrace
-              .~ trace
-    let execFeats = List.map CS.genericToExecutionFeature genericExecFeats
-    let replay = SR.replayFeature True
-    result' <- CS.executeCrucible (replay : SR.recordFeature : execFeats) st'
-
-    let ctx = CSE.execResultContext result'
-    let pers = ctx ^. CS.cruciblePersonality
-    let refineData = pers ^. GP.personality . GP.pRefinementData
-    obls <- CB.getProofObligations bak
-    refResult <- GR.proveAndRefine bak result' gla refineData obls
-    case refResult of
-      GR.ProveBug bugInstance _
-        | isReachedBug bugInstance ->
-            doLog la Diag.VerifySuccess
-      _ -> doLog la Diag.VerifyFailure
 
 runScreach :: Conf.Config -> ScreachLogAction -> IO ()
 runScreach conf sla = do
