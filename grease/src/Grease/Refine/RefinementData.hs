@@ -25,7 +25,7 @@ import Grease.Shape (ArgShapes)
 import Grease.Shape.NoTag (NoTag)
 import Grease.Solver (Solver)
 import Grease.ValueName (ValueName)
-import Lang.Crucible.Types qualified as C
+import Lang.Crucible.Types qualified as CT
 import Lang.Crucible.Utils.Timeout qualified as C
 
 -- | The caller-provided inputs to the refinement process: the things that are
@@ -37,11 +37,13 @@ import Lang.Crucible.Utils.Timeout qualified as C
 -- - @bak@: the symbolic backend type
 -- - @ext@: the Crucible language extension
 -- - @argTys@: Crucible argument types for the target function
-type RefinementInputs :: Type -> Type -> Type -> Ctx.Ctx C.CrucibleType -> Type
+type RefinementInputs :: Type -> Type -> Type -> Ctx.Ctx CT.CrucibleType -> Type
 data RefinementInputs sym bak ext argTys
   = RefinementInputs
   { refineInputArgNames :: Ctx.Assignment ValueName argTys
   -- ^ Names of the function arguments.
+  , refineInputArgTypes :: Ctx.Assignment CT.TypeRepr argTys
+  -- ^ Crucible type representations of the function arguments.
   , refineInputArgShapes :: ArgShapes ext NoTag argTys
   -- ^ Current argument shapes being refined.
   , refineInputHeuristics :: [RefineHeuristic sym bak ext argTys]
@@ -60,12 +62,12 @@ data RefinementInputs sym bak ext argTys
 -- - @ext@: the Crucible language extension
 -- - @argTys@: Crucible argument types for the target function
 -- - @wptr@: pointer width
-type RefinementData :: Type -> Type -> Type -> Type -> Ctx.Ctx C.CrucibleType -> Natural -> Type
+type RefinementData :: Type -> Type -> Type -> Type -> Ctx.Ctx CT.CrucibleType -> Natural -> Type
 data RefinementData sym bak t ext argTys wptr
   = RefinementData
   { refineInputs :: RefinementInputs sym bak ext argTys
   , refineAnns :: Anns.Annotations sym ext argTys
   , refineInitState :: Conc.InitialState sym ext argTys wptr
   , refineSolverTimeout :: C.Timeout
-  , refineErrMap :: IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym))
+  , refineErrMap :: IORef (Map.Map (Nonce t CT.BaseBoolType) (ErrorDescription sym))
   }
