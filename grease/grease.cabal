@@ -261,6 +261,7 @@ library
     Grease.Pretty
     Grease.Refine
     Grease.Refine.Diagnostic
+    Grease.Refine.ErrorCallbacks
     Grease.Refine.RefinementData
     Grease.Scheduler
     Grease.Setup

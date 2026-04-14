@@ -76,6 +76,7 @@ module Grease.Refine (
   refinementLoop,
   buildErrMaps,
   ErrorCallbacks (..),
+  withErrorCallbacks,
   -- The following are used by a downstream project
 
   -- * Implementation details
@@ -90,7 +91,7 @@ import Control.Lens ((^.))
 import Control.Monad qualified as Monad
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.IORef (IORef, modifyIORef, readIORef)
+import Data.IORef (readIORef)
 import Data.IORef qualified as IORef
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
@@ -105,7 +106,6 @@ import Data.Proxy (Proxy (Proxy))
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
-import GHC.IORef (newIORef)
 import Grease.Bug qualified as Bug
 import Grease.Concretize (ConcretizedData)
 import Grease.Concretize qualified as Conc
@@ -113,7 +113,7 @@ import Grease.Concretize.ToConcretize qualified as ToConc
 import Grease.Cursor qualified as Cursor
 import Grease.Cursor.Pointer qualified as PtrCursor
 import Grease.Diagnostic (Diagnostic (RefineDiagnostic), GreaseLogAction)
-import Grease.ErrorDescription (ErrorDescription (CrucibleLLVMError, MacawMemError))
+import Grease.ErrorDescription (ErrorDescription)
 import Grease.ExecutionFeatures (boundedExecFeats)
 import Grease.Heuristic (HeuristicResult (CantRefine, PossibleBug, RefinedPrecondition, Unknown), OnlineSolverAndBackend, RefineHeuristic)
 import Grease.Heuristic.Result (CantRefine (Exhausted, Exit, MissingFunc, MissingSemantics, MutableGlobal, SolverTimeout, SolverUnknown, Timeout, Unsupported))
@@ -121,6 +121,8 @@ import Grease.Options (BoundsOpts)
 import Grease.Options qualified as Opts
 import Grease.Personality qualified as GP
 import Grease.Refine.Diagnostic qualified as Diag
+import Grease.Refine.ErrorCallbacks (ErrorCallbacks (ErrorCallbacks, errorMap, llvmErrCallback, macawAssertionCallback), buildErrMaps, withErrorCallbacks)
+import Grease.Refine.ErrorCallbacks qualified as EC
 import Grease.Refine.RefinementData qualified as RD
 import Grease.Scheduler qualified as Sched
 import Grease.Setup (InitialMem)
@@ -138,9 +140,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Extension qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.DataLayout (DataLayout)
-import Lang.Crucible.LLVM.Errors qualified as CLLVM
 import Lang.Crucible.LLVM.MemModel qualified as CLM
-import Lang.Crucible.LLVM.MemModel.CallStack qualified as LLCS
 import Lang.Crucible.LLVM.MemModel.Partial qualified as Mem
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
@@ -240,41 +240,6 @@ combiner = C.Combiner $ \mr1 mr2 -> do
         ProveSuccess -> pure r1
         ProveNoHeuristic errs2 ->
           pure (failed (ProveNoHeuristic (errs1 <> errs2)))
-
-data ErrorCallbacks sym t
-  = ErrorCallbacks
-  { llvmErrCallback :: LLCS.CallStack -> Mem.BoolAnn sym -> CLLVM.BadBehavior sym -> IO ()
-  , macawAssertionCallback :: sym -> WI.Pred sym -> MSM.MacawError sym -> IO (WI.Pred sym)
-  , errorMap :: IORef (Map.Map (Nonce t C.BaseBoolType) (ErrorDescription sym))
-  }
-
--- | Builds a mapping from assertions to errors if those assertions are unprovable
---
--- There are two types of errors 'CLLVM.BadBehavior' which
--- describes errors emitted from the llvm memory model/semantics
--- and 'MSM.MacawError' which is emitted from Macaw specific errors.
--- The LLVM callback is intended to be passed to 'recordLLVMAnnotation'
--- and the Macaw callback is intended to be passed to 'processMacawAssert'.
--- In this configuration, Macaw and Crucible-LLVM will record errors
--- to the 'errorMap' as an 'ErrorDescription'
-buildErrMaps ::
-  sym ~ WE.ExprBuilder t st fs =>
-  IO (ErrorCallbacks sym t)
-buildErrMaps = do
-  bbMapRef <- newIORef Map.empty
-  let recordLLVMAnnotation callStack (Mem.BoolAnn ann) bb =
-        modifyIORef bbMapRef $
-          Map.insert ann (CrucibleLLVMError bb callStack)
-  let processMacawAssert sym p err = do
-        (ann, p') <- WI.annotateTerm sym p
-        _ <- modifyIORef bbMapRef $ Map.insert ann (MacawMemError err)
-        pure p'
-  pure
-    ErrorCallbacks
-      { errorMap = bbMapRef
-      , llvmErrCallback = recordLLVMAnnotation
-      , macawAssertionCallback = processMacawAssert
-      }
 
 -- | Look up error information for a goal from its annotations. Not exported.
 lookupErrorInfo ::
@@ -613,34 +578,28 @@ setupRefinement ::
 setupRefinement la fsOpts solverTimeout halloc bak dl valueNames argTys initMem inputs mkResult = do
   let argShapes = RD.refineInputArgShapes inputs
   let sym = CB.backendGetSym bak
-  ErrorCallbacks
-    { errorMap = bbMapRef
-    , llvmErrCallback = recordLLVMAnnotation
-    , macawAssertionCallback = processMacawAssert
-    } <-
-    buildErrMaps
-  let ?recordLLVMAnnotation = recordLLVMAnnotation
-  let ?processMacawAssert = processMacawAssert
-  (args, setupMem, setupAnns) <-
-    Setup.setup la bak dl valueNames argTys argShapes initMem
-  initFs_ <- GSIO.initialLlvmFileSystem halloc sym fsOpts
-  (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
-  let initFs = initFs_{GSIO.initFsGlobals = globals1}
-  let concInitState =
-        Conc.InitialState
-          { Conc.initStateArgs = args
-          , Conc.initStateFs = GSIO.initFsContents initFs
-          , Conc.initStateMem = initMem
-          }
-  let refineData =
-        RD.RefinementData
-          { RD.refineInputs = inputs
-          , RD.refineAnns = setupAnns
-          , RD.refineInitState = concInitState
-          , RD.refineSolverTimeout = solverTimeout
-          , RD.refineErrMap = bbMapRef
-          }
-  mkResult refineData toConc setupMem initFs args
+  callbacks <- EC.buildErrMaps
+  EC.withErrorCallbacks callbacks $ do
+    (args, setupMem, setupAnns) <-
+      Setup.setup la bak dl valueNames argTys argShapes initMem
+    initFs_ <- GSIO.initialLlvmFileSystem halloc sym fsOpts
+    (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
+    let initFs = initFs_{GSIO.initFsGlobals = globals1}
+    let concInitState =
+          Conc.InitialState
+            { Conc.initStateArgs = args
+            , Conc.initStateFs = GSIO.initFsContents initFs
+            , Conc.initStateMem = initMem
+            }
+    let refineData =
+          RD.RefinementData
+            { RD.refineInputs = inputs
+            , RD.refineAnns = setupAnns
+            , RD.refineInitState = concInitState
+            , RD.refineSolverTimeout = solverTimeout
+            , RD.refineErrMap = EC.errorMap callbacks
+            }
+    mkResult refineData toConc setupMem initFs args
 
 -- | Run 'Setup.setup' then 'execAndRefine'. Usually passed to 'refinementLoop'.
 refineOnce ::
