@@ -71,6 +71,7 @@ module Grease.Refine (
   ExecData (..),
   refineOnce,
   setupRefinement,
+  RefinementSetup (..),
   execAndRefine,
   RefinementSummary (..),
   refinementLoop,
@@ -540,11 +541,26 @@ shortResult =
     ProveCantRefine (Timeout{}) -> "symex timeout"
     ProveCantRefine (Unsupported{}) -> "unsupported feature"
 
+-- | The result of 'setupRefinement': all data needed to build the initial
+-- Crucible exec state and drive refinement.
+data RefinementSetup sym bak t ext argTys wptr
+  = RefinementSetup
+  { setupRefinementData :: RD.RefinementData sym bak t ext argTys wptr
+  , setupToConcretize :: C.GlobalVar ToConc.ToConcretizeType
+  , setupSetupMem :: Setup.SetupMem sym
+  , setupInitializedFs :: GSIO.InitializedFs sym wptr
+  , setupArgs :: Setup.Args sym ext argTys wptr
+  , setupErrorCallbacks :: EC.ErrorCallbacks sym t
+  }
+
 -- | Set up the initial state for use in 'refineOnce' or trace replay.
 -- Handles error-callback setup, argument allocation, and filesystem
--- initialization, then delegates to @mkResult@ to produce some result @r@.
--- Returns the result together with the 'RD.RefinementData' so that callers
--- which also need to call 'proveAndRefine' (e.g., 'refineOnce') can do so.
+-- initialization. Returns a 'RefinementSetup' containing all the data
+-- needed to build the initial Crucible state.
+--
+-- Use 'withErrorCallbacks' with the 'setupErrorCallbacks' field to install
+-- the implicit parameters @?recordLLVMAnnotation@ and @?processMacawAssert@
+-- before creating memory configurations or other objects that capture them.
 setupRefinement ::
   ( CLM.HasPtrWidth wptr
   , C.IsSyntaxExtension ext
@@ -560,23 +576,13 @@ setupRefinement ::
   C.HandleAllocator ->
   bak ->
   DataLayout ->
-  Ctx.Assignment ValueName argTys ->
-  Ctx.Assignment C.TypeRepr argTys ->
   InitialMem sym ->
   RD.RefinementInputs sym bak ext argTys ->
-  ( ( MSM.MacawProcessAssertion sym
-    , Mem.HasLLVMAnn sym
-    ) =>
-    RD.RefinementData sym bak t ext argTys wptr ->
-    C.GlobalVar ToConc.ToConcretizeType ->
-    Setup.SetupMem sym ->
-    GSIO.InitializedFs sym wptr ->
-    Setup.Args sym ext argTys wptr ->
-    IO r
-  ) ->
-  IO r
-setupRefinement la fsOpts solverTimeout halloc bak dl valueNames argTys initMem inputs mkResult = do
+  IO (RefinementSetup sym bak t ext argTys wptr)
+setupRefinement la fsOpts solverTimeout halloc bak dl initMem inputs = do
   let argShapes = RD.refineInputArgShapes inputs
+  let valueNames = RD.refineInputArgNames inputs
+  let argTys = RD.refineInputArgTypes inputs
   let sym = CB.backendGetSym bak
   callbacks <- EC.buildErrMaps
   EC.withErrorCallbacks callbacks $ do
@@ -599,7 +605,15 @@ setupRefinement la fsOpts solverTimeout halloc bak dl valueNames argTys initMem 
             , RD.refineSolverTimeout = solverTimeout
             , RD.refineErrMap = EC.errorMap callbacks
             }
-    mkResult refineData toConc setupMem initFs args
+    pure
+      RefinementSetup
+        { setupRefinementData = refineData
+        , setupToConcretize = toConc
+        , setupSetupMem = setupMem
+        , setupInitializedFs = initFs
+        , setupArgs = args
+        , setupErrorCallbacks = callbacks
+        }
 
 -- | Run 'Setup.setup' then 'execAndRefine'. Usually passed to 'refinementLoop'.
 refineOnce ::
@@ -619,24 +633,18 @@ refineOnce ::
   bak ->
   W4FM.FloatModeRepr fm ->
   DataLayout ->
-  Ctx.Assignment ValueName argTys ->
-  Ctx.Assignment C.TypeRepr argTys ->
   InitialMem sym ->
   RD.RefinementInputs sym bak ext argTys ->
   [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
   ( ( MSM.MacawProcessAssertion sym
     , Mem.HasLLVMAnn sym
     ) =>
-    RD.RefinementData sym bak t ext argTys wptr ->
-    C.GlobalVar ToConc.ToConcretizeType ->
-    Setup.SetupMem sym ->
-    GSIO.InitializedFs sym wptr ->
-    Setup.Args sym ext argTys wptr ->
+    RefinementSetup sym bak t ext argTys wptr ->
     IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
   ) ->
   IO (ProveRefineResult sym ext argTys)
-refineOnce la simOpts halloc bak fm dl valueNames argTys initMem inputs execFeats mkInitState = do
-  st <-
+refineOnce la simOpts halloc bak fm dl initMem inputs execFeats mkInitState = do
+  setup <-
     setupRefinement
       la
       (Opts.simFsOpts simOpts)
@@ -644,11 +652,9 @@ refineOnce la simOpts halloc bak fm dl valueNames argTys initMem inputs execFeat
       halloc
       bak
       dl
-      valueNames
-      argTys
       initMem
       inputs
-      mkInitState
+  st <- EC.withErrorCallbacks (setupErrorCallbacks setup) (mkInitState setup)
   boundsFeats_ <- boundedExecFeats (Opts.simBoundsOpts simOpts)
   let boundsFeats = List.map CS.genericToExecutionFeature boundsFeats_
   let execData =

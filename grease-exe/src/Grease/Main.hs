@@ -752,13 +752,16 @@ macawInitState ::
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
-  GRef.RefinementData sym bak scope ext argTys wptr ->
-  C.GlobalVar ToConc.ToConcretizeType ->
-  GSetup.SetupMem sym ->
-  GSIO.InitializedFs sym wptr ->
-  GSetup.Args sym ext (Symbolic.MacawCrucibleRegTypes arch) wptr ->
+  GRef.RefinementSetup sym bak scope ext argTys wptr ->
   IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
-macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa refineData toConcVar setupMem initFs args = do
+macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa setup = do
+  let GRef.RefinementSetup
+        { GRef.setupRefinementData = refineData
+        , GRef.setupToConcretize = toConcVar
+        , GRef.setupSetupMem = setupMem
+        , GRef.setupInitializedFs = initFs
+        , GRef.setupArgs = args
+        } = setup
   let sym = CB.backendGetSym bak
   regs <- liftIO (overrideRegs archCtx sym (GSetup.argVals args))
   EP.EntrypointCfgs
@@ -833,9 +836,7 @@ macawRefineOnce ::
   Maybe (MC.ArchSegmentOff arch) ->
   EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
   IO (GRef.ProveRefineResult sym ext argTys)
-macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm initMem memVar inputs execFeats mbCfgAddr entrypointCfgsSsa = do
-  let argNames = archCtx ^. Arch.archValueNames
-      regTypes = archCtx ^. Arch.archRegTypes
+macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm initMem memVar inputs execFeats mbCfgAddr entrypointCfgsSsa =
   GRef.refineOnce
     la
     simOpts
@@ -843,8 +844,6 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallbac
     bak
     fm
     (macawDataLayout archCtx)
-    argNames
-    regTypes
     initMem
     inputs
     execFeats
@@ -948,6 +947,7 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
     let inputs =
           GRef.RefinementInputs
             { GRef.refineInputArgNames = argNames
+            , GRef.refineInputArgTypes = regTypes
             , GRef.refineInputArgShapes = argShapes
             , GRef.refineInputHeuristics = heuristics
             , GRef.refineInputSolver = GO.simSolver simOpts
@@ -1373,7 +1373,6 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
   let ?recordLLVMAnnotation = \_ _ _ -> pure ()
   let bounds = GO.simBoundsOpts simOpts
   result <- withMemOptions simOpts $ do
-    let valueNames = Ctx.generate (Ctx.size argTys) (\i -> ValueName ("arg" <> show i))
     let typeCtx = llvmCtx ^. CLT.llvmTypeCtx
     let dl = CLTC.llvmDataLayout typeCtx
     -- See comment above on heuristics in 'simulateMacawCfg'
@@ -1385,6 +1384,7 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
       let inputs =
             GRef.RefinementInputs
               { GRef.refineInputArgNames = argNames
+              , GRef.refineInputArgTypes = argTys
               , GRef.refineInputArgShapes = argShapes
               , GRef.refineInputHeuristics = heuristics
               , GRef.refineInputSolver = GO.simSolver simOpts
@@ -1396,12 +1396,17 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
         bak
         fm
         dl
-        valueNames
-        argTys
         initMem
         inputs
         execFeats
-        $ \refineData toConc setupMem initFs args -> do
+        $ \setup -> do
+          let GRef.RefinementSetup
+                { GRef.setupRefinementData = refineData
+                , GRef.setupToConcretize = toConc
+                , GRef.setupSetupMem = setupMem
+                , GRef.setupInitializedFs = initFs
+                , GRef.setupArgs = args
+                } = setup
           let llvmPers = GP.mkPersonality memVar dbgCtx toConc refineData
           let p =
                 GLP.mkGreaseLLVMPersonality llvmPers recState repState
