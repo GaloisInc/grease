@@ -969,14 +969,12 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
               GO.Symbolic -> pure MSML.SymbolicMutable
               GO.Uninitialized ->
                 unsupported sla "Macaw does not support uninitialized globals (macaw#372)"
-          (mem0, ptrTable) <-
-            GM.emptyMacawMem
-              bak
-              archCtx
-              mem
-              memModelContents
-              relocs
-          pure (mem0, ptrTable)
+          GM.emptyMacawMem
+            bak
+            archCtx
+            mem
+            memModelContents
+            relocs
         let skipRelocs = GO.SkipUnsupportedRelocs False
         -- NB: We intentionally exclude `mustFailHeuristics` here. This is
         -- primarily because must-fail would incorrectly deem targets that are
@@ -1010,11 +1008,16 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
             initMem
             inputs
         GR.withErrorCallbacks (GR.setupErrorCallbacks setup) $ do
-          let refineData = GR.setupRefinementData setup
-              toConc = GR.setupToConcretize setup
-              setupMem = GR.setupSetupMem setup
-              initFs = GR.setupInitializedFs setup
-              args = GR.setupArgs setup
+          let GR.RefinementSetup
+                { GR.setupRefinementData = refineData
+                , GR.setupToConcretize = toConc
+                , GR.setupSetupMem = setupMem
+                , GR.setupInitializedFs = initFs
+                , GR.setupArgs = args
+                } = setup
+          -- TODO: When adding support for AArch32 and PPC, override the link
+          -- registers like GREASE does, probably should refactor that in GREASE
+          -- to make it easier to use here - part of ArchCtx?
           let memCfg0 = GM.memConfigInitial bak archCtx ptrTable skipRelocs relocs
           let sym = CB.backendGetSym bak
           let fs = GSIO.initFs initFs
