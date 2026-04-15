@@ -64,7 +64,7 @@ verifyReachable la gla bak initShape execFeats cDataList =
     doLog la (Diag.VerifyReachable (length cDataList) no)
     let concArgShapes = Conc.concArgsShapes (Conc.concArgs cData)
         untagArgs = TFC.fmapFC (TFC.fmapFC (const Shape.NoTag)) concArgShapes
-    -- TODO(#640): Incorporate the concretized filesystem.
+    -- TODO(#639): Incorporate the concretized filesystem.
     st <- initShape (Shape.ArgShapes untagArgs)
     let trace = Conc.concTrace cData
         st' =
