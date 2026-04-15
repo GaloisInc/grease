@@ -2007,6 +2007,9 @@ simulateFile opts la =
               | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32Raw opts la
               | ".x64.elf" `List.isSuffixOf` path -> simulateX86Raw opts la
               | otherwise -> userErr la "Unsupported file suffix for raw binary mode"
+        -- TODO(#562): Implement ECFS (process snapshot) support
+        | ".x64.ecfs" `List.isSuffixOf` path -> unsupported la "ECFS (process snapshot) files are not yet supported"
+        | ".ecfs" `List.isSuffixOf` path -> unsupported la "ECFS (process snapshot) files are not yet supported"
         | ".armv7l.elf" `List.isSuffixOf` path -> simulateARM opts la
         | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32 opts la
         | ".ppc64.elf" `List.isSuffixOf` path -> simulatePPC64 opts la
