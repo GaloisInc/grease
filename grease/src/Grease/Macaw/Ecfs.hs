@@ -9,6 +9,7 @@
 module Grease.Macaw.Ecfs (
   hasEcfsMagic,
   findEcfsPltStubs,
+  findEcfsDynFunAddrs,
   EcfsError (..),
 ) where
 
@@ -18,6 +19,7 @@ import Data.ElfEdit qualified as Elf
 import Data.ElfEdit.Ecfs qualified as Ecfs
 import Data.Macaw.Memory.LoadCommon qualified as MML
 import Data.Maybe (fromMaybe)
+import Data.Text (Text)
 import Data.Text.Encoding qualified as Text
 import Data.Vector qualified as Vec
 import Data.Word (Word64)
@@ -100,3 +102,38 @@ findEcfsPltStubs loadOpts ecfs =
               (Text.decodeUtf8Lenient (Elf.steName pltDynsymEntry))
           Nothing ->
             X.throw $ UnknownPltStub loadedPltEntryAddr loadedPltShlAddr
+
+-- | Find the shared library function addresses for all PLT stubs in an ECFS
+-- file. Returns a list of @(function name, shared library virtual address)@
+-- pairs. The shared library virtual address is the runtime address of the
+-- function in its shared library (not the PLT stub address in the main binary).
+--
+-- This is needed to populate 'binDynFunMap' for ECFS coredumps. Unlike raw ELF
+-- binaries, imported function symbols in an ECFS @.dynsym@ have
+-- @SHN_UNDEF@ section indices but non-zero @steValue@ fields (set to the
+-- runtime addresses). The normal 'dynamicFunAddrs' filter excludes
+-- @SHN_UNDEF@ symbols, so we use the ECFS PLT/GOT metadata instead.
+--
+-- If an ECFS file lacks PLT information or a dynamic symbol table, returns
+-- an empty list.
+findEcfsDynFunAddrs :: forall w. MML.LoadOptions -> Ecfs.Ecfs w -> [(Text, Word64)]
+findEcfsDynFunAddrs loadOpts ecfs =
+  case (Ecfs.decodePltGotInfo ecfs, Ecfs.ecfsDynsym ecfs) of
+    (Just pltGotInfos, Just dynsym) ->
+      Vec.toList $ Vec.mapMaybe (lookupShlDynsym dynsym) pltGotInfos
+    _ ->
+      []
+ where
+  ehi = Ecfs.ecfsElfHeaderInfo ecfs
+  cl = Elf.headerClass (Elf.header ehi)
+  loadOffset = fromMaybe 0 (MML.loadOffset loadOpts)
+
+  lookupShlDynsym :: Elf.Symtab w -> Ecfs.PltGotInfo -> Maybe (Text, Word64)
+  lookupShlDynsym dynsym pltGotInfo =
+    let shlAddr = Ecfs.shlEntryVirtAddr pltGotInfo + loadOffset
+        mbEntry =
+          Elf.elfClassInstances cl $
+            Vec.find
+              (\e -> fromIntegral @(Elf.ElfWordType w) @Word64 (Elf.steValue e) == shlAddr)
+              (Elf.symtabEntries dynsym)
+     in fmap (\e -> (Text.decodeUtf8Lenient (Elf.steName e), shlAddr)) mbEntry

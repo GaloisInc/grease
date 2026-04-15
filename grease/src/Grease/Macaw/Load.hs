@@ -381,7 +381,29 @@ loadEcfs la userEntrypoints perms ecfs = runExceptT $ do
       )
       ecfsPltStubList
   let ecfsPltMap = Map.fromList resolvedPltStubs
-  let updatedBinMd = (progBinMd lp){binPltStubs = ecfsPltMap}
+  -- Build binDynFunMap from ECFS PLT/GOT info. The ECFS .dynsym has imported
+  -- function symbols with SHN_UNDEF but non-zero steValue (runtime addresses),
+  -- which the normal dynamicFunAddrs filter excludes. We use the ECFS PLT/GOT
+  -- metadata to recover these addresses.
+  let ecfsDynFunList = GME.findEcfsDynFunAddrs loadOpts ecfs
+  ecfsDynFunPairs <-
+    fmap (mapMaybe id) $
+      mapM
+        ( \(name, shlAddr) ->
+            case Loader.resolveAbsoluteAddress mem (MM.memWord shlAddr) of
+              Just so -> pure $ Just (WFN.functionNameFromText name, so)
+              Nothing -> pure Nothing
+        )
+        ecfsDynFunList
+  let ecfsDynFunMap =
+        Map.union
+          (Map.fromList ecfsDynFunPairs)
+          (binDynFunMap (progBinMd lp))
+  let updatedBinMd =
+        (progBinMd lp)
+          { binPltStubs = ecfsPltMap
+          , binDynFunMap = ecfsDynFunMap
+          }
   return lp{progBinMd = updatedBinMd}
 
 -- Helper, not exported
