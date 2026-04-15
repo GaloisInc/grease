@@ -1,14 +1,19 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- TODO(internal#141): Switch from `X.throw` to `Either`
-{- HLINT ignore "Use Either" -}
-
-module Screach.Ecfs (
+-- |
+-- Copyright        : (c) Galois, Inc. 2026
+-- Maintainer       : GREASE Maintainers <grease@galois.com>
+--
+-- Support for ECFS (Extended Core File Snapshot) coredump files
+module Grease.Macaw.Ecfs (
+  hasEcfsMagic,
   findEcfsPltStubs,
+  EcfsError (..),
 ) where
 
 import Control.Exception qualified as X
+import Data.ByteString qualified as BS
 import Data.ElfEdit qualified as Elf
 import Data.ElfEdit.Ecfs qualified as Ecfs
 import Data.Macaw.Memory.LoadCommon qualified as MML
@@ -20,6 +25,13 @@ import Grease.Macaw.PLT qualified as GMP
 import Numeric (showHex)
 import Prettyprinter qualified as PP
 
+-- | Check whether a 'BS.ByteString' has the ECFS magic bytes at the @EI_PAD@
+-- offset (9) in the ELF header. This is a cheap O(1) check that does not do
+-- a full parse, suitable for dispatch before committing to a decode path.
+hasEcfsMagic :: BS.ByteString -> Bool
+hasEcfsMagic bs = BS.take 4 (BS.drop 9 bs) == "ECFS"
+
+-- | Error type for ECFS PLT stub discovery
 data EcfsError
   = UnknownPltStub
       Word64 -- The PLT stub's address
