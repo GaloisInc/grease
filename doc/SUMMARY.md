@@ -11,6 +11,7 @@
 - [Ghidra batch plugin](./ghidra-batch-plugin.md)
 - [Overrides](./overrides.md)
 - [The S-expression language](./sexp.md)
+- [Debugging](./debug.md)
 
 # Reference
 
