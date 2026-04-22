@@ -1346,7 +1346,6 @@ analyzeCfg ::
   ) ->
   IO ()
 analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction addrOvs entryCfgs pFunc = do
-  let isEcfs = maybe False isECFS mbLoadedElf
   let mbEhi = loadedElf <$> mbLoadedElf
   let mem =
         maybe
