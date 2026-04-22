@@ -662,15 +662,22 @@ loadElfFromConfig conf sla gla _archCtx = do
   let entrypointList = [entryLocToGreaseEntrypoint entryLoc]
   (perms, elfBinary) <- readElfBinary conf
   let elf = elfBinaryHeaderInfo elfBinary
-  -- TODO: PLT stubs option support? (instead of [])
+  -- For ECFS binaries, we skip grease's PLT stub heuristics. We handle these
+  -- specially below.
+  let isEcfs = case elfBinary of
+        EcfsBinary{} -> True
+        RawElfBinary{} -> False
+  let relocSupported = if isEcfs then const Nothing else x64RelocSupported
+  let mbPltStubInfo = if isEcfs then Nothing else Just MX86.x86_64PLTStubInfo
+  -- TODO: Support user-specified PLT stubs (instead of [])
   loadResult <-
     GL.load @MX86.X86_64
       gla
       entrypointList
       perms
       elf
-      x64RelocSupported
-      (Just MX86.x86_64PLTStubInfo)
+      relocSupported
+      mbPltStubInfo
       (Conf.confProgram conf)
       []
   let usrErr = userError sla . PP.pretty
@@ -724,9 +731,6 @@ loadElfFromConfig conf sla gla _archCtx = do
           [ "entrypoint not in progEntrypointAddrs"
           , show (PP.pretty entry)
           ]
-  let isEcfs = case elfBinary of
-        EcfsBinary{} -> True
-        RawElfBinary{} -> False
   let loadedProg_ =
         loadedProg
           { GL.progBinMd = (GL.progBinMd loadedProg){GL.binPltStubs = pltStubs}
