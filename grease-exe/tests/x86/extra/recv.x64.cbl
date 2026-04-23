@@ -1,35 +1,16 @@
-; Override for `recv` that uses `fresh-bytes`.
+; Override for `recv` that uses `fresh-bytes` + `write-byte-vec`.
 ;
 ; Ignores `socket` and `flags`, always reads exactly `length` bytes.
 ;
 ; Appears in the docs in `doc/sexp.md`.
 
 (declare @fresh-bytes ((name (String Unicode)) (num (Bitvector 64))) (Vector (Bitvector 8)))
+(declare @write-byte-vec ((dest (Ptr 64)) (src (Vector (Bitvector 8)))) Unit)
 
 ; `man 2 recv`: ssize_t recv(int socket, void *buffer, size_t length, int flags)
 (defun @recv ((socket (Ptr 64)) (buffer (Ptr 64)) (length (Ptr 64)) (flags (Ptr 64))) (Ptr 64)
-  ; This is a bit more awkward than it needs to be, because there are no
-  ; pointer<->integer<->nat conversions in crucible-syntax.
-  (registers
-    ($ctr (Bitvector 64))  ; loop counter (going down)
-    ($idx Nat)             ; index into vector of bytes
-    ($ptr (Ptr 64)))       ; pointer to write the next byte into
   (start start:
     (let length-bv (pointer-to-bits length))
     (let bytes (funcall @fresh-bytes "recv" length-bv))
-
-    (set-register! $ctr length-bv)
-    (set-register! $idx 0)
-    (set-register! $ptr buffer)
-    (jump loop:))
-  (defblock loop:
-    (let byte (vector-get bytes $idx))
-    (pointer-write (Bitvector 8) le $ptr byte)
-
-    (set-register! $ctr (- $ctr (bv 64 1)))
-    (set-register! $idx (+ $idx 1))
-    (let ptr (pointer-add $ptr (bv 64 1)))
-    (set-register! $ptr ptr)
-    (branch (equal? $ctr (bv 64 0)) end: loop:))
-  (defblock end:
+    (funcall @write-byte-vec buffer bytes)
     (return length)))

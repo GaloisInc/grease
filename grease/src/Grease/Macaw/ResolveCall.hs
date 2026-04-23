@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -71,6 +72,7 @@ import Grease.Macaw.SkippedCall (
  )
 import Grease.Macaw.Syscall (macawSyscallOverride)
 import Grease.Options qualified as Opts
+import Grease.Personality qualified as GP
 import Grease.Syntax (ResolvedOverridesYaml, getResolvedOverridesYaml)
 import Grease.Utility (OnlineSolverAndBackend, segoffToAbsoluteAddr)
 import Lang.Crucible.Analysis.Postdom qualified as C
@@ -154,6 +156,7 @@ defaultLookupFunctionHandleDispatch ::
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , HasToConcretize p
   , HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   GreaseLogAction ->
@@ -623,6 +626,9 @@ useMacawSExpOverride ::
   , bak ~ C.OnlineBackend solver scope st fs
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , HasToConcretize p
+  , GP.HasMemVar p
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   GreaseLogAction ->
@@ -668,6 +674,9 @@ extendHandleMap ::
   , bak ~ C.OnlineBackend solver scope st fs
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , HasToConcretize p
+  , GP.HasMemVar p
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   -- | Map of names of overridden functions to their implementations

@@ -264,6 +264,8 @@ registerMacawOvForwardDeclarations ::
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
   , GP.HasMemVar p
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   -- | The map of public function names to their overrides.
@@ -284,6 +286,8 @@ registerMacawForwardDeclarations ::
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
   , GP.HasMemVar p
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   -- | The map of public function names to their overrides.
@@ -305,6 +309,9 @@ registerMacawForwardDeclaration ::
   ( OnlineSolverAndBackend solver sym bak scope st fs
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   -- | The map of public function names to their overrides.
@@ -331,6 +338,9 @@ lookupMacawForwardDeclarationOverride ::
   ( OnlineSolverAndBackend solver sym bak scope st fs
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
+  , GP.HasMemVar p
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   -- | The map of public function names to their overrides.
@@ -348,6 +358,10 @@ lookupMacawForwardDeclarationOverride bak funOvs decName hdl =
       case decName of
         "fresh-bytes" -> do
           let ov = SExp.freshBytesOverride @_ @p @sym @(Symbolic.MacawExt arch) ?ptrWidth
+          (C.Refl, C.Refl) <- SExp.checkTypedOverrideHandleCompat hdl ov
+          Just (CS.runTypedOverride (C.handleName hdl) ov)
+        "write-byte-vec" -> do
+          let ov = SExp.writeByteVecOverride @_ @sym @p @(Symbolic.MacawExt arch)
           (C.Refl, C.Refl) <- SExp.checkTypedOverrideHandleCompat hdl ov
           Just (CS.runTypedOverride (C.handleName hdl) ov)
         "conc-bv-8" -> Conc.tryConcBvOverride bak (C.knownNat @8) hdl
