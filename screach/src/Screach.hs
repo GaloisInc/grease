@@ -534,6 +534,8 @@ setupHookCommon ::
   , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
   , ToConc.HasToConcretize p
   , GP.HasMemVar p
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   ScreachLogAction ->
   bak ->

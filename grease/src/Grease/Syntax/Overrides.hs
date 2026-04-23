@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ImplicitParams #-}
 
 -- |
 -- Copyright        : (c) Galois, Inc. 2025
@@ -9,8 +10,10 @@ module Grease.Syntax.Overrides (
   checkTypedOverrideHandleCompat,
   tryBindTypedOverride,
   freshBytesOverride,
+  writeByteVecOverride,
 ) where
 
+import Control.Lens ((^.))
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.BitVector.Sized qualified as BV
@@ -22,8 +25,11 @@ import Data.Type.Equality (testEquality, (:~:) (Refl))
 import Data.Type.Ord (type (<=))
 import Data.Vector qualified as Vec
 import Grease.Concretize.ToConcretize qualified as ToConc
+import Grease.Personality qualified as GP
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.FunctionHandle qualified as LCF
+import Lang.Crucible.LLVM.DataLayout qualified as CLD
+import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as LCT
 import What4.Interface qualified as WI
@@ -119,3 +125,49 @@ doFreshBytes name len =
     ToConc.addToConcretize name entry
 
     pure v
+
+---------------------------------------------------------------------
+
+-- | Override for @write-byte-vec@.
+--
+-- Writes the bytes from the vector to the given buffer pointer without adding
+-- any null terminator. Can be combined with @fresh-bytes@ to write fresh
+-- symbolic bytes to a buffer.
+writeByteVecOverride ::
+  ( CLM.HasPtrWidth w
+  , CLM.HasLLVMAnn sym
+  , GP.HasMemVar p
+  , ?memOpts :: CLM.MemOptions
+  ) =>
+  CS.TypedOverride
+    p
+    sym
+    ext
+    (Ctx.EmptyCtx Ctx.::> CLM.LLVMPointerType w Ctx.::> LCT.VectorType (LCT.BVType 8))
+    LCT.UnitType
+writeByteVecOverride =
+  WI.withKnownNat ?ptrWidth $
+    CS.typedOverride (Ctx.uncurryAssignment writeByteVecImpl)
+
+-- | Implementation of the @write-byte-vec@ override.
+writeByteVecImpl ::
+  ( CLM.HasPtrWidth w
+  , CLM.HasLLVMAnn sym
+  , GP.HasMemVar p
+  , ?memOpts :: CLM.MemOptions
+  ) =>
+  CS.RegValue' sym (CLM.LLVMPointerType w) ->
+  CS.RegValue' sym (LCT.VectorType (LCT.BVType 8)) ->
+  CS.OverrideSim p sym ext r args ret ()
+writeByteVecImpl ptr bytes = do
+  ctx <- CS.getContext
+  let mvar = GP.getMemVar (ctx ^. CS.cruciblePersonality)
+  CS.ovrWithBackend $ \bak -> do
+    let sym = CB.backendGetSym bak
+    CS.modifyGlobal mvar $ \mem -> do
+      zeroNat <- liftIO $ WI.natLit sym 0
+      let llvmVals = Vec.map (CLM.LLVMValInt zeroNat) (CS.unRV bytes)
+      let val = CLM.LLVMValArray (CLM.bitvectorType 1) llvmVals
+      let storTy = CLM.llvmValStorableType val
+      mem' <- liftIO $ CLM.storeRaw bak mem (CS.unRV ptr) storTy CLD.noAlignment val
+      pure ((), mem')

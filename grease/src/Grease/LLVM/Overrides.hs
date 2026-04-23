@@ -35,7 +35,7 @@ import Grease.LLVM.Overrides.SExp qualified as GLOS
 import Grease.Overrides (CantResolveOverrideCallback (CantResolveOverrideCallback))
 import Grease.Personality qualified as GP
 import Grease.Skip (declSkipOverride, registerSkipOverride)
-import Grease.Syntax.Overrides (freshBytesOverride, tryBindTypedOverride)
+import Grease.Syntax.Overrides (freshBytesOverride, tryBindTypedOverride, writeByteVecOverride)
 import Grease.Syntax.Overrides.Concretize qualified as Conc
 import Grease.Utility (OnlineSolverAndBackend, llvmOverrideName)
 import Lang.Crucible.Backend qualified as CB
@@ -544,6 +544,9 @@ registerLLVMForwardDeclarations bak funOvs errCb fwdDecs = do
             unless ok (cannotResolve fwdDecName hdl)
           "write-bytes" -> do
             ok <- tryBindTypedOverride hdl (StrOv.writeBytesOverride mvar)
+            unless ok (cannotResolve fwdDecName hdl)
+          "write-byte-vec" -> do
+            ok <- tryBindTypedOverride hdl writeByteVecOverride
             unless ok (cannotResolve fwdDecName hdl)
           "write-c-string" -> do
             ok <- tryBindTypedOverride hdl (StrOv.writeCStringOverride mvar)

@@ -262,6 +262,8 @@ registerAddressOverrideForwardDeclarations ::
   , bak ~ LCBO.OnlineBackend solver scope st fs
   , HasToConcretize p
   , GP.HasMemVar p
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   -- | What to do when a forward declaration cannot be resolved.
@@ -298,6 +300,8 @@ registerAddressOverrideHandles ::
   , bak ~ LCBO.OnlineBackend solver scope st fs
   , HasToConcretize p
   , GP.HasMemVar p
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   -- | What to do when a forward declaration cannot be resolved.

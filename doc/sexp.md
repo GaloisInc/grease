@@ -103,13 +103,15 @@ These overrides check if all elements of the vector have unique concrete values
 across all satisfying models. If all elements are uniquely determined, returns
 the concrete vector; otherwise returns the symbolic vector unchanged.
 
-### `@fresh-bytes`
+### `@fresh-bytes` and `@write-byte-vec`
 
-The bytes created using `fresh-bytes` will be concretized and printed to the
-terminal if GREASE finds a possible bug.
+The bytes created using `fresh-bytes` will be concretized and printed to
+the terminal if GREASE finds a possible bug. In contrast to `@write-bytes`,
+`@write-byte-vec` does *not* add a null terminator.
 
-`fresh-bytes` can be used to create overrides for functions that do I/O, such
-as the following basic override for `recv`, shown for x86_64 and LLVM:
+`fresh-bytes` and `write-byte-vec` can be combined to create overrides for
+functions that do I/O, such as the following basic override for `recv`, shown
+for x86_64 and LLVM:
 
 ```
 ; Basic x86_64 override for `recv`.
@@ -117,31 +119,14 @@ as the following basic override for `recv`, shown for x86_64 and LLVM:
 ; Ignores `socket` and `flags`, always reads exactly `length` bytes.
 
 (declare @fresh-bytes ((name (String Unicode)) (num (Bitvector 64))) (Vector (Bitvector 8)))
+(declare @write-byte-vec ((dest (Ptr 64)) (src (Vector (Bitvector 8)))) Unit)
 
 ; `man 2 recv`: ssize_t recv(int socket, void *buffer, size_t length, int flags)
 (defun @recv ((socket (Ptr 64)) (buffer (Ptr 64)) (length (Ptr 64)) (flags (Ptr 64))) (Ptr 64)
-  (registers
-    ($ctr (Bitvector 64))  ; loop counter (going down)
-    ($idx Nat)             ; index into vector of bytes
-    ($ptr (Ptr 64)))       ; pointer to write the next byte into
   (start start:
     (let length-bv (pointer-to-bits length))
     (let bytes (funcall @fresh-bytes "recv" length-bv))
-
-    (set-register! $ctr length-bv)
-    (set-register! $idx 0)
-    (set-register! $ptr buffer)
-    (jump loop:))
-  (defblock loop:
-    (let byte (vector-get bytes $idx))
-    (pointer-write (Bitvector 8) le $ptr byte)
-
-    (set-register! $ctr (- $ctr (bv 64 1)))
-    (set-register! $idx (+ $idx 1))
-    (let ptr (pointer-add $ptr (bv 64 1)))
-    (set-register! $ptr ptr)
-    (branch (equal? $ctr (bv 64 0)) end: loop:))
-  (defblock end:
+    (funcall @write-byte-vec buffer bytes)
     (return length)))
 ```
 ```
@@ -150,42 +135,28 @@ as the following basic override for `recv`, shown for x86_64 and LLVM:
 ; Ignores `socket` and `flags`. Always reads exactly `length` bytes.
 
 (declare @fresh-bytes ((name (String Unicode)) (num (Bitvector 64))) (Vector (Bitvector 8)))
+(declare @write-byte-vec ((dest (Ptr 64)) (src (Vector (Bitvector 8)))) Unit)
 
 ; `man 2 recv`: ssize_t recv(int socket, void *buffer, size_t length, int flags)
 (defun @recv ((socket (Ptr 32)) (buffer (Ptr 64)) (length (Ptr 64)) (flags (Ptr 32))) (Ptr 64)
-  (registers
-    ($ctr (Bitvector 64))  ; loop counter (going down)
-    ($idx Nat)             ; index into vector of bytes
-    ($ptr (Ptr 64)))       ; pointer to write the next byte into
   (start start:
     (let length-bv (ptr-offset 64 length))
     (let bytes (funcall @fresh-bytes "recv" length-bv))
-
-    (set-register! $ctr length-bv)
-    (set-register! $idx 0)
-    (set-register! $ptr buffer)
-    (jump loop:))
-  (defblock loop:
-    (let byte (vector-get bytes $idx))
-    (let byte-ptr (ptr 8 0 byte))
-    (store none i8 $ptr byte-ptr)
-
-    (set-register! $ctr (- $ctr (bv 64 1)))
-    (set-register! $idx (+ $idx 1))
-    (let ptr (ptr-add-offset $ptr (bv 64 1)))
-    (set-register! $ptr ptr)
-    (branch (equal? $ctr (bv 64 0)) end: loop:))
-  (defblock end:
+    (funcall @write-byte-vec buffer bytes)
     (return length)))
 ```
+
+`fresh-bytes` returns the bytes as a `Vector (Bitvector 8)`, which can be
+inspected or manipulated before being passed to `write-byte-vec`.
 
 ### LLVM-specific overrides
 
 For LLVM S-expression files (programs or overrides), the following overrides are also available:
 ```
 (declare @read-bytes ((x (Ptr 64))) (Vector (Bitvector 8)))
-(declare @read-c-string ((x (Ptr 64))) (String Unicode))
-(declare @write-bytes ((dest (Ptr 64)) (src (Vector (Bitvector 8)))) Unit)
+(declare @read-c-string ((x (Ptr 64))) (String Unicode)) (declare @write-bytes
+((dest (Ptr 64)) (src (Vector (Bitvector 8)))) Unit)`@write-byte-vec` does *not*
+add a null terminator.
 (declare @write-c-string ((dst (Ptr 64)) (src (String Unicode))) Unit)
 ```
 

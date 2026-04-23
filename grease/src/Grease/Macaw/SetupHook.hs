@@ -65,6 +65,7 @@ newtype SetupHook sym arch
         , CLM.HasLLVMAnn sym
         , HasGreaseSimulatorState p sym bak t cExt arch ret argTys wptr
         , HasToConcretize p
+        , ?memOpts :: CLM.MemOptions
         ) =>
         bak ->
         -- Map of names of overridden functions to their implementations
@@ -96,6 +97,8 @@ registerOverrideForwardDeclarations ::
   , bak ~ LCB.OnlineBackend solver scope st fs
   , HasToConcretize p
   , GP.HasMemVar p
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   -- | What to do when a forward declaration cannot be resolved.
@@ -123,6 +126,8 @@ registerOverrideHandles ::
   , bak ~ LCB.OnlineBackend solver scope st fs
   , HasToConcretize p
   , GP.HasMemVar p
+  , CLM.HasLLVMAnn sym
+  , ?memOpts :: CLM.MemOptions
   ) =>
   bak ->
   -- | What to do when a forward declaration cannot be resolved.

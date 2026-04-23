@@ -236,6 +236,7 @@ See [The S-expression language](sexp.md) for more details.
 (declare @unique-conc-vector-bv-32 ((v (Vector (Bitvector 32)))) (Vector (Bitvector 32)))
 (declare @unique-conc-vector-bv-64 ((v (Vector (Bitvector 64)))) (Vector (Bitvector 64)))
 (declare @fresh-bytes ((name (String Unicode)) (num (Bitvector w))) (Vector (Bitvector 8)))
+(declare @write-byte-vec ((dest (Ptr w)) (src (Vector (Bitvector 8)))) Unit)
 ```
 
 For LLVM S-expression files (programs or overrides), the following overrides are also available:
@@ -251,7 +252,7 @@ For LLVM S-expression files (programs or overrides), the following overrides are
 The following overrides merit a bit of discussion:
 
 - `accept`, `bind`, `connect`, `listen`, `recv`, `send`, and `socket`: see
-  [I/O](io.md)>
+  [I/O](io.md)
 
 - `abort`
 
