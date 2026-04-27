@@ -44,7 +44,7 @@ jobs:
         uses: langston-barrett/mdlynx/.github/actions/mdlynx@v0.3.0
 
       # action was added more recently than most recent release, so just pin with SHA
-      - uses: langston-barrett/ttlint/.github/actions/install-ttlint@b48db6ca1232a19182cd83af7ff7f0f4520b3ba1
+      - uses: langston-barrett/ttlint/.github/actions/install-ttlint@e36e382d32c983ab2ba3195ec0f52559b543aaa3
         with:
           version: "0.1.0"
 
