@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2025 */
 
+// CFLAGS: $SHARED_LIB -gdwarf-5
+
 // Tests that heuristics are unneeded when using dwarf populated shapes
 // to initialize a tree. The tree has an implicit invariant that if next != null then both 
 // lhs and rhs are initialized.
