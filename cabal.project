@@ -30,7 +30,6 @@ packages:
   deps/macaw/symbolic/
   deps/macaw/symbolic-syntax/
   deps/semmc/semmc/
-  deps/semmc/semmc-arm/
   deps/semmc/semmc-aarch32/
   deps/semmc/semmc-ppc/
   deps/semmc/semmc-synthesis/
