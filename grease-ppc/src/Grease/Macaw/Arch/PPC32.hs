@@ -22,7 +22,7 @@ import Data.Parameterized.NatRepr (knownNat)
 import Data.Parameterized.Some qualified as Some
 import Data.Proxy (Proxy (Proxy))
 import Data.Word (Word32)
-import Dismantle.PPC qualified as D
+import Dismantle.PPC.Operands qualified as D
 import Grease.Macaw.Arch (ArchReloc, defaultPCFixup)
 import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Load.Relocation (RelocType (RelativeReloc, SymbolReloc))
