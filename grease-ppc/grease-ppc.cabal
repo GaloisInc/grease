@@ -1,4 +1,4 @@
-cabal-version: 2.4
+cabal-version: 3.0
 name: grease-ppc
 version: 0.1.0.0
 author: Galois, Inc.
@@ -142,7 +142,7 @@ library
 
     , containers
     , safe-exceptions
-    , dismantle-ppc
+    , dismantle-ppc:opcodes
     , bv-sized
     , crucible
     , crucible-llvm
