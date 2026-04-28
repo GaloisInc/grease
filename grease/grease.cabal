@@ -179,6 +179,7 @@ library
     , crucible-syntax
     , elf-edit
     , elf-edit-core-dump
+    , elf-edit-ecfs
     , llvm-pretty
     , llvm-pretty-bc-parser
     , macaw-base
@@ -228,6 +229,7 @@ library
     Grease.Macaw.Discovery
     Grease.Macaw.Dwarf
     Grease.Macaw.Dwarf.Diagnostic
+    Grease.Macaw.Ecfs
     Grease.Macaw.Entrypoint
     Grease.Macaw.Load
     Grease.Macaw.Load.Diagnostic

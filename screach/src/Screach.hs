@@ -79,6 +79,7 @@ import Grease.Macaw.Arch (ArchContext, ArchReloc)
 import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Arch.X86 (x64RelocSupported, x86Ctx)
 import Grease.Macaw.Discovery qualified as GMD
+import Grease.Macaw.Ecfs qualified as GMEC
 import Grease.Macaw.Entrypoint qualified as GME
 import Grease.Macaw.Load qualified as GL
 import Grease.Macaw.Overrides qualified as GMO
@@ -144,7 +145,6 @@ import Screach.Config qualified as Conf
 import Screach.Diagnostic (Diagnostic (RunDiagnostic), ScreachLogAction)
 import Screach.Diagnostic qualified as SD
 import Screach.Distance qualified as Dist
-import Screach.Ecfs qualified as SE
 import Screach.FunctionOverride qualified as SF
 import Screach.GoalEvaluator qualified as GE
 import Screach.Heuristic (isReachedBug, reachedHeuristic)
@@ -694,6 +694,8 @@ loadElfFromConfig conf sla gla _archCtx = do
       Left e@GL.CoreDumpNoEntrypoint{} -> badElf e
       Left e@GL.RelocationMapError{} -> badElf e
       Left e@GL.PltStubResolutionError{} -> badElf e
+      Left e@GL.EcfsDecodeError{} -> badElf e
+      Left e@GL.EcfsPltStubError{} -> badElf e
       Right prog -> pure prog
   let loadOpts = GL.binLoadOptions (GL.progBinMd loadedProg)
   let loadOffset = fromMaybe 0 (LC.loadOffset loadOpts)
@@ -705,7 +707,7 @@ loadElfFromConfig conf sla gla _archCtx = do
     case elfBinary of
       RawElfBinary _ -> pure $ GL.binPltStubs (GL.progBinMd loadedProg)
       EcfsBinary ecfs -> do
-        let ecfsPltStubs = SE.findEcfsPltStubs loadOpts ecfs
+        let ecfsPltStubs = GMEC.findEcfsPltStubs loadOpts ecfs
         resolvedEcfsPltStubs <-
           traverse
             ( \(GMP.PltStub addr name) ->

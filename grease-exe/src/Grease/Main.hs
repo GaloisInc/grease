@@ -36,6 +36,7 @@ import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString qualified as BS
 import Data.ElfEdit qualified as Elf
+import Data.ElfEdit.Ecfs qualified as Ecfs
 import Data.Foldable (traverse_)
 import Data.Function ((&))
 import Data.Functor ((<&>))
@@ -114,6 +115,7 @@ import Grease.Macaw.Arch.PPC32 (ppc32Ctx, ppc32RelocSupported)
 import Grease.Macaw.Arch.PPC64 (ppc64Ctx, ppc64RelocSupported)
 import Grease.Macaw.Arch.X86 (x64RelocSupported, x86Ctx)
 import Grease.Macaw.Discovery (discoverFunction)
+import Grease.Macaw.Ecfs qualified as GMEcfs
 import Grease.Macaw.Entrypoint (checkMacawEntrypointCfgsSignatures)
 import Grease.Macaw.Entrypoint qualified as GME
 import Grease.Macaw.Load qualified as Load
@@ -268,6 +270,33 @@ readElfHeaderInfo la _proxy path =
           _ -> panic "readElfHeaderInfo" ["Bad pointer width"]
       Left _ ->
         liftIO (userErr la ("expected AArch32, PowerPC, or x86_64 ELF binary, but found non-ELF file at " <> PP.pretty path))
+
+-- Helper, not exported
+--
+-- Read an ECFS file and extract its header information.
+readEcfsHeaderInfo ::
+  ( MonadIO m
+  , MonadThrow m
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
+  ) =>
+  GDiag.GreaseLogAction ->
+  proxy arch ->
+  FilePath ->
+  m (Permissions, Ecfs.Ecfs (MC.ArchAddrWidth arch))
+readEcfsHeaderInfo la _proxy path = do
+  perms <- liftIO $ getPermissions path
+  bs <- liftIO $ BS.readFile path
+  case Ecfs.decodeEcfs bs of
+    Right (Elf.SomeElf ecfs) ->
+      case ( Elf.headerClass (Elf.header (Ecfs.ecfsElfHeaderInfo ecfs))
+           , C.testEquality ?ptrWidth (knownNat @32)
+           , C.testEquality ?ptrWidth (knownNat @64)
+           ) of
+        (Elf.ELFCLASS32, Just Refl, Nothing) -> pure (perms, ecfs)
+        (Elf.ELFCLASS64, Nothing, Just Refl) -> pure (perms, ecfs)
+        _ -> panic "readEcfsHeaderInfo" ["Bad pointer width"]
+    Left err ->
+      liftIO (malformedElf la (PP.pretty err))
 
 -- Helper, not exported
 --
@@ -1845,6 +1874,50 @@ doLoad la entries perms elf relocSupported mbPltStubInfo path userPltStubs = do
       Left e@Load.CoreDumpNoEntrypoint{} -> badElf e
       Left e@Load.RelocationMapError{} -> badElf e
       Left e@Load.PltStubResolutionError{} -> badElf e
+      Left e@Load.EcfsDecodeError{} -> badElf e
+      Left e@Load.EcfsPltStubError{} -> badElf e
+
+-- Helper, not exported
+--
+-- Load an ECFS coredump file for analysis
+doLoadEcfs ::
+  ( 16 C.<= MC.ArchAddrWidth arch
+  , Symbolic.SymArchConstraints arch
+  , Loader.BinaryLoader arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
+  , Elf.IsRelocationType (Arch.ArchReloc arch)
+  , Elf.RelocationWidth (Arch.ArchReloc arch) ~ MC.ArchAddrWidth arch
+  , ?memOpts :: CLM.MemOptions
+  , CLM.HasPtrWidth (MC.ArchAddrWidth arch)
+  ) =>
+  GDiag.GreaseLogAction ->
+  proxy arch ->
+  [EP.Entrypoint] ->
+  Permissions ->
+  Ecfs.Ecfs (MC.ArchAddrWidth arch) ->
+  IO (Load.LoadedProgram arch)
+doLoadEcfs la _proxy entries perms ecfs = do
+  let usrErr = userErr la . PP.pretty
+  let badElf = malformedElf la . PP.pretty
+  Load.loadEcfs la entries perms ecfs
+    >>= \case
+      Right ok -> pure ok
+      -- See Note [Explicitly listed errors]
+      -- User errors
+      Left e@Load.UnsupportedObjectFile{} -> usrErr e
+      Left e@Load.EntrypointNotFound{} -> usrErr e
+      Left e@Load.InvalidEntrypointAddress{} -> usrErr e
+      -- Bad inputs
+      Left e@Load.ElfParseError{} -> badElf e
+      Left e@Load.DynamicFunctionAddressUnresolvable{} -> badElf e
+      Left e@Load.CoreDumpClassMismatch{} -> badElf e
+      Left e@Load.CoreDumpNotesError{} -> badElf e
+      Left e@Load.CoreDumpPcError{} -> badElf e
+      Left e@Load.CoreDumpAddressUnresolvable{} -> badElf e
+      Left e@Load.CoreDumpNoEntrypoint{} -> badElf e
+      Left e@Load.RelocationMapError{} -> badElf e
+      Left e@Load.PltStubResolutionError{} -> badElf e
+      Left e@Load.EcfsDecodeError{} -> badElf e
+      Left e@Load.EcfsPltStubError{} -> badElf e
 
 simulateARM :: GO.SimOpts -> GDiag.GreaseLogAction -> IO Results
 simulateARM simOpts la = do
@@ -1959,19 +2032,39 @@ simulateX86 :: GO.SimOpts -> GDiag.GreaseLogAction -> IO Results
 simulateX86 simOpts la = do
   let ?ptrWidth = knownNat @64
   let proxy = Proxy @X86.X86_64
-  (perms, elf) <- readElfHeaderInfo la proxy (GO.simProgPath simOpts)
+  bs <- liftIO $ BS.readFile (GO.simProgPath simOpts)
+  if GMEcfs.hasEcfsMagic bs
+    then simulateX86Ecfs simOpts la
+    else do
+      (perms, elf) <- readElfHeaderInfo la proxy (GO.simProgPath simOpts)
+      halloc <- C.newHandleAllocator
+      withMemOptions simOpts $ do
+        loadedProg <-
+          doLoad
+            la
+            (GO.simEntryPoints simOpts)
+            perms
+            elf
+            x64RelocSupported
+            (Just X86.x86_64PLTStubInfo)
+            (GO.simProgPath simOpts)
+            (GO.simPltStubs simOpts)
+        -- Use the start of .text as the return address on the stack.
+        startText <- textStart la (Load.binLoadOptions (Load.progBinMd loadedProg)) elf
+        archCtx <- x86Ctx halloc (Just startText) (GO.simStackArgumentSlots simOpts)
+        simulateMacaw la halloc elf loadedProg archCtx simOpts X86Syn.x86ParserHooks
+
+-- | Simulate an x86_64 ECFS coredump file
+-- Note: ECFS only supports x86 architectures (32-bit and 64-bit)
+simulateX86Ecfs :: GO.SimOpts -> GDiag.GreaseLogAction -> IO Results
+simulateX86Ecfs simOpts la = do
+  let ?ptrWidth = knownNat @64
+  let proxy = Proxy @X86.X86_64
+  (perms, ecfs) <- readEcfsHeaderInfo la proxy (GO.simProgPath simOpts)
+  let elf = Ecfs.ecfsElfHeaderInfo ecfs
   halloc <- C.newHandleAllocator
   withMemOptions simOpts $ do
-    loadedProg <-
-      doLoad
-        la
-        (GO.simEntryPoints simOpts)
-        perms
-        elf
-        x64RelocSupported
-        (Just X86.x86_64PLTStubInfo)
-        (GO.simProgPath simOpts)
-        (GO.simPltStubs simOpts)
+    loadedProg <- doLoadEcfs la proxy (GO.simEntryPoints simOpts) perms ecfs
     -- Use the start of .text as the return address on the stack.
     startText <- textStart la (Load.binLoadOptions (Load.progBinMd loadedProg)) elf
     archCtx <- x86Ctx halloc (Just startText) (GO.simStackArgumentSlots simOpts)
@@ -1983,15 +2076,21 @@ simulateElf ::
   IO Results
 simulateElf simOpts la = do
   bs <- liftIO $ BS.readFile (GO.simProgPath simOpts)
+  let isEcfs = GMEcfs.hasEcfsMagic bs
   case Elf.decodeElfHeaderInfo bs of
     Right (Elf.SomeElf hdr) ->
       case (Elf.headerClass (Elf.header hdr), Elf.headerMachine (Elf.header hdr)) of
+        (Elf.ELFCLASS64, Elf.EM_X86_64)
+          | isEcfs -> simulateX86Ecfs simOpts la
+          | otherwise -> simulateX86 simOpts la
         (Elf.ELFCLASS32, Elf.EM_ARM) -> simulateARM simOpts la
         (Elf.ELFCLASS32, Elf.EM_PPC) -> simulatePPC32 simOpts la
         (Elf.ELFCLASS64, Elf.EM_PPC64) -> simulatePPC64 simOpts la
-        (Elf.ELFCLASS64, Elf.EM_X86_64) -> simulateX86 simOpts la
-        (_, mach) -> unsupported la ("unsupported ELF architecture: " <> PP.viaShow mach)
-    Left _ -> userErr la ("User error: expected ELF binary, but found non-ELF file at " <> PP.pretty (GO.simProgPath simOpts))
+        (_, mach)
+          | isEcfs -> unsupported la ("unsupported ECFS architecture: " <> PP.viaShow mach)
+          | otherwise -> unsupported la ("unsupported ELF architecture: " <> PP.viaShow mach)
+    Left (_, err) ->
+      userErr la ("expected AArch32, PowerPC, or x86_64 ELF binary, but found non-ELF file at " <> PP.pretty (GO.simProgPath simOpts) <> ". Error: " <> PP.pretty err)
 
 simulateFile ::
   GO.SimOpts ->
@@ -2007,6 +2106,8 @@ simulateFile opts la =
               | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32Raw opts la
               | ".x64.elf" `List.isSuffixOf` path -> simulateX86Raw opts la
               | otherwise -> userErr la "Unsupported file suffix for raw binary mode"
+        | ".x64.ecfs" `List.isSuffixOf` path -> simulateX86Ecfs opts la
+        | ".ecfs" `List.isSuffixOf` path -> simulateX86Ecfs opts la
         | ".armv7l.elf" `List.isSuffixOf` path -> simulateARM opts la
         | ".ppc32.elf" `List.isSuffixOf` path -> simulatePPC32 opts la
         | ".ppc64.elf" `List.isSuffixOf` path -> simulatePPC64 opts la
