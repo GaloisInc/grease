@@ -219,12 +219,13 @@ jobs:
       # identifiers from library dependencies. Since we are only building
       # Haddocks to ensure well-formedness, we consider this an acceptable
       # tradeoff.
-      run: cabal haddock --disable-documentation pkg:grease pkg:grease-cli pkg:grease-exe pkg:elf-edit-core-dump
+      run: cabal haddock --disable-documentation pkg:grease pkg:grease-cli pkg:grease-exe pkg:grease-llvm pkg:elf-edit-core-dump
 
     - name: Check .cabal files
       run: |
         (cd grease && cabal check)
         (cd grease-aarch32 && cabal check)
+        (cd grease-llvm && cabal check)
         (cd grease-ppc && cabal check)
         (cd grease-x86 && cabal check)
         (cd grease-cli && cabal check)

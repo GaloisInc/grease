@@ -51,7 +51,7 @@ The repo is already formatted with fourmolu so new formatting changes should be 
 We treat a small number of hlint warnings as errors in CI. To run hlint locally, try:
 
 ```sh
-hlint grease{,-aarch32,-ppc,-x86}/src grease-cli/src grease-exe/{main,src,tests}
+hlint grease{,-aarch32,-llvm,-ppc,-x86}/src grease-cli/src grease-exe/{main,src,tests}
 ```
 
 ## mdlynx

@@ -11,10 +11,8 @@ module Grease.Main.Diagnostic (
   severity,
 ) where
 
-import Data.LLVM.BitCode (ParseWarning, ppParseWarnings)
 import Data.Macaw.Memory qualified as MM
 import Data.Parameterized.Context qualified as Ctx
-import Data.Sequence (Seq)
 import Data.Void (Void, absurd)
 import Grease.Diagnostic.Severity (Severity (Debug, Error, Info, Warn))
 import Grease.Entrypoint (Entrypoint, EntrypointLocation)
@@ -40,7 +38,7 @@ data Diagnostic where
     Int ->
     Diagnostic
   BitcodeParseWarnings ::
-    Seq ParseWarning -> Diagnostic
+    PP.Doc Void -> Diagnostic
   DebuggerOutput ::
     PP.Doc Void -> Diagnostic
   Exception ::
@@ -90,7 +88,7 @@ instance PP.Pretty Diagnostic where
           , PP.hcat [PP.pretty (idx + 1), "/", PP.pretty total] <> ","
           , PP.pretty entry
           ]
-      BitcodeParseWarnings warns -> PP.viaShow (ppParseWarnings warns)
+      BitcodeParseWarnings doc -> fmap absurd doc
       DebuggerOutput out -> fmap absurd out
       Exception err ->
         "Exception:" PP.<+> fmap absurd err
