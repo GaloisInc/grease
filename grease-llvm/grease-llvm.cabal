@@ -1,5 +1,5 @@
 cabal-version: 3.0
-name: grease
+name: grease-llvm
 version: 0.1.0.0
 author: Galois, Inc.
 maintainer: grease@galois.com
@@ -7,20 +7,18 @@ copyright: Galois, Inc. 2024
 license: BSD-3-Clause
 license-file: LICENSE
 synopsis:
-  Checks properties about binaries using under-constrained symbolic execution
+  Extends @grease@ with LLVM-specific reasoning
 description:
-  @grease@ is a tool that checks properties about binaries using
-  under-constrained symbolic execution.
+  @grease-llvm@ is a library that extends @grease@ with the ability to reason
+  about LLVM bitcode.
 extra-doc-files:
   README.md
-extra-source-files:
-  grease.buildinfo.json
 category: Static Analysis
 
 source-repository head
   type: git
   location: https://github.com/GaloisInc/grease
-  subdir: grease
+  subdir: grease-llvm
 
 common shared
   default-language: GHC2021
@@ -47,7 +45,7 @@ common shared
   --
   -- A list of warnings and the GHC version in which they were introduced is
   -- available here:
-  -- https://ghc.gitlab.haskell.org/ghc/doc/users_guide/using-warnings.html
+  -- https://ghc.gitlab.haskell.org/users_guide/using-warnings.html
 
   -- Since GHC 9.6 or earlier:
   ghc-options:
@@ -140,32 +138,21 @@ library
   import: shared
   hs-source-dirs: src
   build-depends:
+      grease
+
     -- Hackage dependencies
-      aeson ^>= 2.2
-    , attoparsec ^>= 0.14
     , bv-sized ^>= 1.0.6
     , bytestring ^>= { 0.11.5, 0.12.1 }
     , containers ^>= { 0.6.7, 0.7 }
-    , directory ^>= 1.3.7.1
-    , exceptions ^>= 0.10.5
-    , file-embed ^>= 0.0.16
     , filepath ^>= { 1.4.2.2, 1.5.4.0 }
-    , githash ^>=0.1.7.0
     , lens ^>= 5.3
-    , libBF ^>= 0.6.8
     , lumberjack ^>= 1.0
-    , megaparsec ^>= 9.6
-    , mtl ^>= { 2.3.1, 2.2.2 }
-    , panic ^>= 0.4
     , parameterized-utils ^>= 2.1.10
     , prettyprinter ^>= 1.7.1
-    , psqueues ^>= 0.2.8
     , safe-exceptions ^>= 0.1.7.4
     , text ^>= { 2.0, 2.1 }
-    , time ^>= { 1.12.2 }
     , transformers ^>= { 0.5.6.2, 0.6.1 }
     , vector ^>= 0.13.2
-    , yaml ^>= 0.11
 
     -- Submodules
     --
@@ -174,114 +161,22 @@ library
     , crucible
     , crucible-debug
     , crucible-llvm
+    , crucible-llvm-syntax
     , crucible-symio
     , crucible-syntax
-    , elf-edit
-    , elf-edit-core-dump
     , llvm-pretty
-    , macaw-base
-    , macaw-loader
-    , macaw-symbolic
-    , macaw-symbolic-syntax
     , stubs-common
     , stubs-wrapper
-    , galois-dwarf
     , what4
 
   exposed-modules:
-    Grease.BranchTracer
-    Grease.BranchTracer.Diagnostic
-    Grease.Bug
-    Grease.Bug.UndefinedBehavior
-    Grease.Concretize
-    Grease.Concretize.JSON
-    Grease.Concretize.ToConcretize
-    Grease.Cursor
-    Grease.Cursor.List
-    Grease.Cursor.Pointer
-    Grease.Diagnostic
-    Grease.Diagnostic.Severity
-    Grease.Entrypoint
-    Grease.ErrorDescription
-    Grease.ExecutionFeatures
-    Grease.Heuristic
-    Grease.Heuristic.Diagnostic
-    Grease.Heuristic.Result
-    Grease.Internal
-    Grease.LLVM.Overrides.Diagnostic
-    Grease.LLVM.SetupHook.Diagnostic
-    Grease.LLVM.SimulatorHooks.Diagnostic
-    Grease.Macaw
-    Grease.Macaw.Arch
-    Grease.Macaw.Discovery
-    Grease.Macaw.Dwarf
-    Grease.Macaw.Dwarf.Diagnostic
-    Grease.Macaw.Entrypoint
-    Grease.Macaw.Load
-    Grease.Macaw.Load.Diagnostic
-    Grease.Macaw.Load.Relocation
-    Grease.Macaw.Memory
-    Grease.Macaw.Overrides
-    Grease.Macaw.Overrides.Address
-    Grease.Macaw.Overrides.Builtin
-    Grease.Macaw.Overrides.Networking
-    Grease.Macaw.Overrides.Sscanf
-    Grease.Macaw.Overrides.SExp
-    Grease.Macaw.PLT
-    Grease.Macaw.RegName
-    Grease.Macaw.ResolveCall
-    Grease.Macaw.ResolveCall.Diagnostic
-    Grease.Macaw.SetupHook
-    Grease.Macaw.SetupHook.Diagnostic
-    Grease.Macaw.Shapes
-    Grease.Macaw.SimulatorHooks
-    Grease.Macaw.SimulatorHooks.Diagnostic
-    Grease.Macaw.SimulatorState
-    Grease.Macaw.SkippedCall
-    Grease.Macaw.Syscall
-    Grease.Main.Diagnostic
-    Grease.MustFail
-    Grease.Options
-    Grease.Output
-    Grease.Overrides
-    Grease.Overrides.Libc
-    Grease.Overrides.Networking
-    Grease.Panic
-    Grease.Personality
-    Grease.Pretty
-    Grease.Refine
-    Grease.Refine.Diagnostic
-    Grease.Refine.ErrorCallbacks
-    Grease.Refine.RefinementData
-    Grease.Scheduler
-    Grease.Setup
-    Grease.Setup.Annotations
-    Grease.Setup.Diagnostic
-    Grease.Shape
-    Grease.Shape.Concretize
-    Grease.Shape.NoTag
-    Grease.Shape.Parse
-    Grease.Shape.Pointer
-    Grease.Shape.Print
-    Grease.Shape.Selector
-    Grease.Shape.Simple
-    Grease.SimulatorState.Networking
-    Grease.Skip
-    Grease.Skip.Diagnostic
-    Grease.Solver
-    Grease.SymIO
-    Grease.Syntax
-    Grease.Syntax.Overrides
-    Grease.Syntax.Overrides.Concretize
-    Grease.Syscall
-    Grease.Time
-    Grease.Utility
-    Grease.ValueName
-    Grease.Version
-
-  autogen-modules:
-    Paths_grease
-  other-modules:
-    Grease.GitRev
-    Grease.Macaw.Overrides.Defs
-    Paths_grease
+    Grease.LLVM
+    Grease.LLVM.DebugInfo
+    Grease.LLVM.Overrides
+    Grease.LLVM.Overrides.Builtin
+    Grease.LLVM.Overrides.Networking
+    Grease.LLVM.Overrides.SExp
+    Grease.LLVM.Personality
+    Grease.LLVM.SetupHook
+    Grease.LLVM.Shapes
+    Grease.LLVM.SimulatorHooks

@@ -21,11 +21,11 @@ import Data.Parameterized.TraversableFC (fmapFC)
 import Data.Sequence qualified as Seq
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Grease.LLVM.Overrides.Builtin (libcOverrides)
 import Grease.Macaw.Overrides.Defs (customStubsOverrides)
 import Grease.Macaw.Overrides.Networking (networkOverrides)
 import Grease.Macaw.Overrides.Sscanf (sscanfFamilyOverrides)
 import Grease.Macaw.SimulatorState (HasGreaseSimulatorState)
+import Grease.Overrides.Libc (libcOverrides)
 import Grease.Utility (llvmOverrideName)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.CFG.Core qualified as C

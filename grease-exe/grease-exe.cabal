@@ -143,6 +143,7 @@ library
     , grease
     , grease-aarch32
     , grease-cli
+    , grease-llvm
     , grease-ppc
     , grease-x86
 

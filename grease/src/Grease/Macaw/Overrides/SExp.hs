@@ -10,6 +10,7 @@ module Grease.Macaw.Overrides.SExp (
   loadOverrides,
 ) where
 
+import Control.Applicative (empty)
 import Control.Exception qualified as X
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Syntax (machineCodeParserHooks)
@@ -18,7 +19,6 @@ import Data.Sequence qualified as Seq
 import Grease.Macaw.SimulatorState (MacawFnHandle, MacawOverride)
 import Grease.Syntax (ParseProgramError, parseProgram)
 import Lang.Crucible.FunctionHandle qualified as C
-import Lang.Crucible.LLVM.Syntax (emptyParserHooks)
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
 import Prettyprinter qualified as PP
@@ -47,6 +47,11 @@ data MacawSExpOverride p sym arch
 data MacawSExpOverrideError
   = MacawSExpOverrideParseError ParseProgramError
   | MacawSExpOverrideLoaderError StubsExn.StubsLoaderException
+
+-- | A 'CSyn.ParserHooks' with no extensions, polymorphic in the syntax
+-- extension type. c.f. 'Lang.Crucible.LLVM.Syntax.emptyParserHooks'.
+emptyMacawParserHooks :: CSyn.ParserHooks ext
+emptyMacawParserHooks = CSyn.ParserHooks empty empty
 
 instance PP.Pretty MacawSExpOverrideError where
   pretty =
@@ -81,7 +86,7 @@ loadOverride ::
   C.HandleAllocator ->
   IO (Either MacawSExpOverrideError (Stubs.SomeFunctionOverride p sym arch))
 loadOverride path halloc = do
-  let ?parserHooks = machineCodeParserHooks Proxy emptyParserHooks
+  let ?parserHooks = machineCodeParserHooks (Proxy @arch) emptyMacawParserHooks
   progResult <- parseProgram halloc path
   case progResult of
     Left err -> pure $ Left $ MacawSExpOverrideParseError err

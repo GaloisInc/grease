@@ -2,6 +2,7 @@ packages:
   grease/grease.cabal
   grease-cli/grease-cli.cabal
   grease-exe/grease-exe.cabal
+  grease-llvm/grease-llvm.cabal
   grease-aarch32/grease-aarch32.cabal
   grease-ppc/grease-ppc.cabal
   grease-x86/grease-x86.cabal
@@ -68,6 +69,10 @@ package crucible-llvm
 
 -- See Note [Asserts] in grease
 package grease
+  ghc-options: -fno-ignore-asserts
+
+-- See Note [Asserts] in grease
+package grease-llvm
   ghc-options: -fno-ignore-asserts
 
 -- See Note [Asserts] in what4

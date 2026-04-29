@@ -41,7 +41,7 @@ import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.Functor.Const (Const (Const), getConst)
 import Data.IntMap qualified as IntMap
-import Data.LLVM.BitCode (formatError, parseBitCodeFromFileWithWarnings)
+import Data.LLVM.BitCode (formatError, parseBitCodeFromFileWithWarnings, ppParseWarnings)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Macaw.AArch32.Symbolic qualified as AArch32Symbolic
@@ -1555,7 +1555,7 @@ parseBitcode la path =
       malformedLlvm la (PP.pretty (formatError err))
     Right (m, warns) -> do
       Monad.unless (Seq.null warns) $
-        doLog la (Diag.BitcodeParseWarnings warns)
+        doLog la (Diag.BitcodeParseWarnings (PP.viaShow (ppParseWarnings warns)))
       pure m
 
 simulateLlvm ::
