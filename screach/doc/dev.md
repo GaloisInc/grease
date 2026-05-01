@@ -27,6 +27,17 @@ cabal build screach
 
 See [Test suite](tests.md) for how to run the tests.
 
+## Docker
+
+Screach also offers a nightly Docker image that gets built after each commit to
+the `main` branch. To run Screach on an input using Docker, run the following:
+
+```sh
+docker run ghcr.io/galoisinc/screach:nightly <input>
+```
+
+The Docker image is available for both `amd64` and `arm64` architectures.
+
 ## Documentation
 
 Documentation is built with [mdBook]. Install with `cargo` (or with a package

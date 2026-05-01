@@ -1,13 +1,37 @@
 # Usage
 
-## Prerequisites
+## Running the Docker image
+
+To run Screach from the Docker image:
+
+```sh
+docker run screach:latest <args>
+```
+
+For `<args>`, see below.
+
+Some helpful Docker flags:
+
+- `--rm`: Delete the container after it exits
+- `-v "$PWD:$PWD" -w "$PWD"`: Mount your current directory into the Docker image
+  and set it as the working directory
+
+All together:
+
+```sh
+docker run --rm -v "$PWD:$PWD" -w "$PWD" screach:latest <args>
+```
+
+## Running a standalone binary
+
+### Prerequisites
 
 Screach requires a recent version of one of the following SMT solvers at
 run-time: `cvc4`, `cvc5`, `yices`, or `z3`. Screach is currently tested against
 `yices` version 2.6.2 in CI. Screach will default to using `yices` unless you
 manually specify a solver using the `--solver` option.
 
-## Running Screach
+### Running Screach
 
 A minimal invocation of `screach` at the command line looks like the following:
 

@@ -15,6 +15,7 @@ run it.
 
 GREASE publishes Docker images built from the `main` branch to the GitHub
 container registry. You can pull the latest image with:
+
 ```
 docker pull ghcr.io/galoisinc/grease:nightly
 docker tag ghcr.io/galoisinc/grease:nightly grease:latest
@@ -23,12 +24,15 @@ docker tag ghcr.io/galoisinc/grease:nightly grease:latest
 ### Building an image from source
 
 First, fetch the source:
+
 ```sh
 git clone https://github.com/GaloisInc/grease
 cd grease
 git submodule update --init
 ```
+
 Then, build the image:
+
 ```sh
 docker build . --tag grease:latest
 ```

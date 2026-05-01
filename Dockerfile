@@ -71,14 +71,16 @@ COPY . /home/src
 WORKDIR /home/src
 RUN cabal configure -w "ghc-${GHC_VER}" --enable-tests --semaphore && \
     cat cabal/release.cabal.project >> cabal.project.local && \
-    cabal build pkg:grease-exe
+    cabal build pkg:grease-exe pkg:screach
 RUN cabal test pkg:grease-exe
+RUN cabal test pkg:screach
 
 RUN cp $(cabal list-bin -v0 exe:grease)        /usr/local/bin/grease && \
     cp $(cabal list-bin -v0 test:grease-tests) /usr/local/bin/grease-tests && \
+    cp $(cabal list-bin -v0 exe:screach)       /usr/local/bin/screach && \
     rm -rf dist-newstyle/
 
-FROM ubuntu:24.04
+FROM ubuntu:24.04 AS grease
 
 USER root
 RUN apt-get update && \
@@ -104,3 +106,29 @@ COPY --from=build \
 COPY --from=build /home/src/grease-exe/tests /tests
 
 ENTRYPOINT ["/usr/local/bin/grease"]
+
+FROM ubuntu:24.04 AS screach
+
+USER root
+RUN apt-get update && \
+    apt-get install -y \
+      libgmp10 zlib1g unzip locales
+
+# Support Unicode via UTF-8
+RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
+
+COPY --from=build \
+  /usr/local/bin/screach \
+  /usr/local/bin/bitwuzla \
+  /usr/local/bin/cvc4 \
+  /usr/local/bin/cvc5 \
+  /usr/local/bin/yices \
+  /usr/local/bin/z3 \
+  /usr/local/bin/
+COPY --from=build /home/src/screach/test-data /test-data
+
+ENTRYPOINT ["/usr/local/bin/screach"]
