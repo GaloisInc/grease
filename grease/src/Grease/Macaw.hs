@@ -32,6 +32,7 @@ import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader qualified as EL
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Backend qualified as Symbolic
+import Data.Macaw.Symbolic.Concretize qualified as MSC
 import Data.Macaw.Symbolic.Memory qualified as MSM
 import Data.Macaw.Symbolic.Memory.Lazy qualified as Symbolic
 import Data.Macaw.Types qualified as MT
@@ -342,6 +343,26 @@ minimalArgShapes _bak arch mbEntryAddr = do
                 ]
           pure shape
 
+-- | Resolve an 'CLM.LLVMPtr' using the SMT solver if and only if its offset's
+-- abstract domain is fully unconstrained. When the abstract domain already
+-- carries bounds information, concretization is skipped to avoid the overhead
+-- of an SMT query. See gitlab#143 for broader context.
+resolvePointerIfUnconstrained ::
+  forall sym bak solver scope st fs w.
+  ( CB.IsSymBackend sym bak
+  , sym ~ WEB.ExprBuilder scope st fs
+  , WPO.OnlineSolver solver
+  , bak ~ CB.OnlineBackend solver scope st fs
+  , 1 C.<= w
+  ) =>
+  bak ->
+  CLM.LLVMPtr sym w ->
+  IO (CLM.LLVMPtr sym w)
+resolvePointerIfUnconstrained bak ptr@(CLM.LLVMPointer _base off) =
+  case WI.unsignedBVBounds off of
+    Just (lo, hi) | lo /= 0 || hi /= WI.maxUnsigned (WI.bvWidth off) -> pure ptr
+    _ -> MSC.resolveLLVMPtr bak ptr
+
 -- | Produce an initial 'Symbolic.MemModelConfig' value that can do everything
 -- @grease@'s Macaw backend needs, with the exception of looking up function or
 -- syscall handles. ('memConfigWithHandles' does that part—see its Haddocks for
@@ -373,10 +394,7 @@ memConfigInitial ::
   Symbolic.MemModelConfig p sym arch CLM.Mem
 memConfigInitial bak arch ptrTable skipUnsupportedRelocs relocs =
   lazyMemModelConfig
-    { -- We deviate from the lazy macaw-symbolic memory model's settings and opt
-      -- \*not* to concretize pointers before reads or writes. See gitlab#143 for
-      -- further discussion on this point.
-      Symbolic.resolvePointer = pure
+    { Symbolic.resolvePointer = resolvePointerIfUnconstrained bak
     , -- Upon each read, we assert that we are not reading from an unsupported
       -- relocation type, throwing a helpful error message otherwise. The
       -- concreteUnmutatedGlobalRead field of MemModelConfig gives us a convenient
