@@ -10,9 +10,6 @@ on:
     - '**.md'
   workflow_dispatch:
 
-env:
-  DOCKER_IMAGE: ghcr.io/galoisinc/grease
-
 jobs:
   build-image:
     runs-on: ${{ matrix.os }}
@@ -24,6 +21,11 @@ jobs:
       matrix:
         # Cover both x86-64 and ARM64.
         os: [ubuntu-24.04, ubuntu-24.04-arm]
+        image:
+          - name: grease
+            repo: ghcr.io/galoisinc/grease
+          - name: screach
+            repo: ghcr.io/galoisinc/screach
     # The default is 360 (i.e., 6 hours), which can be wasteful. See:
     # https://github.com/Cambridge-ICCS/green-ci/blob/b9e942d81e4d6536d69f3cfbffe28fa14b8ae381/README.md#time-limits
     timeout-minutes: 120
@@ -45,7 +47,7 @@ jobs:
         uses: docker/metadata-action@v6
         id: meta
         with:
-          images: ${{ env.DOCKER_IMAGE }}
+          images: ${{ matrix.image.repo }}
         env:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,manifest-descriptor
 
@@ -61,7 +63,8 @@ jobs:
         id: build
         with:
           context: .
-          tags: ${{ env.DOCKER_IMAGE }}
+          target: ${{ matrix.image.name }}
+          tags: ${{ matrix.image.repo }}
           annotations: ${{ steps.meta.outputs.annotations }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
@@ -70,14 +73,14 @@ jobs:
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          mkdir -p ${{ runner.temp }}/digests
-          touch "${{ runner.temp }}/digests/${DIGEST#sha256:}"
+          mkdir -p ${{ runner.temp }}/digests/${{ matrix.image.name }}
+          touch "${{ runner.temp }}/digests/${{ matrix.image.name }}/${DIGEST#sha256:}"
 
       - name: Upload digest
         uses: actions/upload-artifact@v7
         with:
-          name: digests-${{ runner.arch }}
-          path: ${{ runner.temp }}/digests/*
+          name: digests-${{ matrix.image.name }}-${{ runner.arch }}
+          path: ${{ runner.temp }}/digests/${{ matrix.image.name }}/*
           if-no-files-found: error
           retention-days: 1
 
@@ -89,6 +92,12 @@ jobs:
         github.repository_owner == 'GaloisInc'
     strategy:
       fail-fast: false
+      matrix:
+        image:
+          - name: grease
+            repo: ghcr.io/galoisinc/grease
+          - name: screach
+            repo: ghcr.io/galoisinc/screach
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
@@ -100,8 +109,8 @@ jobs:
       - name: Download digests
         uses: actions/download-artifact@v8
         with:
-          path: ${{ runner.temp }}/digests
-          pattern: digests-*
+          path: ${{ runner.temp }}/digests/${{ matrix.image.name }}
+          pattern: digests-${{ matrix.image.name }}-*
           merge-multiple: true
 
       - name: Log in to ghcr.io
@@ -118,23 +127,23 @@ jobs:
         uses: docker/metadata-action@v6
         id: meta
         with:
-          images: ${{ env.DOCKER_IMAGE }}
+          images: ${{ matrix.image.repo }}
           tags: |
             type=raw,value=nightly,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
         env:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: index
 
       - name: Create manifest list and push
-        working-directory: ${{ runner.temp }}/digests
+        working-directory: ${{ runner.temp }}/digests/${{ matrix.image.name }}
         # Build and run a complex command line with eval to avoid wrong word splitting on spaces in the annotations.
         run: |
           eval "docker buildx imagetools create ${ANNOTATIONS} \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(jq -cr '.annotations | map("--annotation \"" + . + "\"") | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)"
+            $(printf '${{ matrix.image.repo }}@sha256:%s ' *)"
 
       - name: Inspect image
         env:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
-          docker buildx imagetools inspect ${{ env.DOCKER_IMAGE }}:${VERSION}
+          docker buildx imagetools inspect ${{ matrix.image.repo }}:${VERSION}
