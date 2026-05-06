@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 -- |
 -- Copyright        : (c) Galois, Inc. 2024
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
@@ -13,7 +15,10 @@ import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Discovery qualified as Discovery
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Utils.IncComp qualified as IncComp
+import Data.Map qualified as Map
 import Data.Parameterized.Some (Some (Some))
+import Data.Set qualified as Set
+import Data.Text qualified as Text
 import Grease.Diagnostic (Diagnostic (LoadDiagnostic))
 import Grease.Macaw.Arch (ArchContext, ArchRegCFG)
 import Grease.Macaw.Arch qualified as Arch
@@ -22,6 +27,7 @@ import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Utility (functionNameFromByteString, tshow)
 import Lang.Crucible.FunctionHandle qualified as C
 import Lumberjack qualified as LJ
+import What4.FunctionName qualified as WFN
 import What4.ProgramLoc qualified as WPL
 
 -- | We pass this log function to @macaw@ to wrap discovery events in a custom
@@ -69,7 +75,7 @@ discoverFunction logAction halloc arch binMd mem addr = do
   let archInf = arch ^. Arch.archInfo
   -- Mark the PLT stubs as trusted function entry points.
   -- See Note [Mark PLT stubs as trusted function entry points].
-  let pltEntryPoints = Discovery.MayReturnFun <$ pltStubs
+  let pltEntryPoints = Map.map pltStubReturnStatus pltStubs
   let s0 =
         Discovery.emptyDiscoveryState mem symMap archInf
           & Discovery.trustedFunctionEntryPoints .~ pltEntryPoints
@@ -110,7 +116,41 @@ code discovery. This is sufficient to make code discovery go the extra mile to
 analyze each PLT stub and mark them as functions, ensuring that tail calls into
 these PLT stubs will work as expected.
 
+PLT stubs for known noreturn functions (exit, abort, etc.) are marked as
+'NoReturnFun' so that macaw does not include unreachable code after calls to
+these functions. This is important for distance-guided exploration (SDSE),
+which otherwise assigns finite distance to dead-end paths through noreturn
+calls.
+
 If macaw improved its global fixed-point analysis, we might not need this
 workaround. See <https://github.com/GaloisInc/macaw/issues/298> for more
 details.
 -}
+
+pltStubReturnStatus :: WFN.FunctionName -> Discovery.NoReturnFunStatus
+pltStubReturnStatus name
+  | Set.member (WFN.functionName name) noReturnFunctionNames = Discovery.NoReturnFun
+  | otherwise = Discovery.MayReturnFun
+
+noReturnFunctionNames :: Set.Set Text.Text
+noReturnFunctionNames =
+  Set.fromList
+    [ "exit"
+    , "_exit"
+    , "_Exit"
+    , "abort"
+    , "__assert_fail"
+    , "__assert_perror_fail"
+    , "__stack_chk_fail"
+    , "longjmp"
+    , "__longjmp_chk"
+    , "siglongjmp"
+    , "pthread_exit"
+    , "thrd_exit"
+    , "err"
+    , "errx"
+    , "verr"
+    , "verrx"
+    , "__cxa_throw"
+    , "__cxa_rethrow"
+    ]
