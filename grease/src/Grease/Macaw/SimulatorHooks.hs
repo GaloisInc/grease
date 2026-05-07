@@ -226,6 +226,12 @@ extensionExec archCtx bak la insnAct tgtOvs archStruct baseExt stmt crucState = 
               Lens.& CS.stateGlobals
                 Lens.%~ updateRegsInGlobals
        in pure ((), newState)
+    Symbolic.MacawBlockRegState _ (CS.RegEntry _ regs) ->
+      let newState =
+            crucState
+              Lens.& CS.stateGlobals
+                Lens.%~ CS.insertGlobal archStruct regs
+       in pure ((), newState)
     _ -> defaultExec
  where
   defaultExec = CS.extensionExec baseExt stmt crucState
