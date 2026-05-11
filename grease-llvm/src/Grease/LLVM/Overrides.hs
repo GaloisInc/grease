@@ -15,7 +15,6 @@ module Grease.LLVM.Overrides (
   registerLLVMSexpProgForwardDeclarations,
 ) where
 
-import Control.Lens ((^.))
 import Control.Monad (forM, unless)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Foldable qualified as Foldable
@@ -54,6 +53,7 @@ import Lang.Crucible.LLVM.Translation qualified as CLT
 import Lang.Crucible.LLVM.TypeContext (TypeContext)
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
+import Lens.Micro ((^.))
 import Lumberjack qualified as LJ
 import Text.LLVM.AST qualified as L
 import What4.Expr.Builder qualified as WEB

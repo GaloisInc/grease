@@ -145,8 +145,9 @@ library
     , bytestring ^>= { 0.11.5, 0.12.1 }
     , containers ^>= { 0.6.7, 0.7 }
     , filepath ^>= { 1.4.2.2, 1.5.4.0 }
-    , lens ^>= 5.3
     , lumberjack ^>= 1.0
+    , microlens
+    , microlens-th
     , parameterized-utils ^>= { 2.1.10, 2.2, 2.3 }
     , prettyprinter ^>= 1.7.1
     , safe-exceptions ^>= 0.1.7.4

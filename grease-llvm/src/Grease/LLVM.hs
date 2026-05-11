@@ -10,7 +10,6 @@ module Grease.LLVM (
 ) where
 
 import Control.Exception.Safe (MonadThrow)
-import Control.Lens ((^.))
 import Control.Monad.IO.Class (MonadIO)
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
@@ -34,6 +33,7 @@ import Lang.Crucible.LLVM.Translation qualified as CLT
 import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.GlobalState qualified as CS
+import Lens.Micro ((^.))
 import What4.Expr.Builder qualified as WEB
 import What4.FloatMode qualified as W4FM
 

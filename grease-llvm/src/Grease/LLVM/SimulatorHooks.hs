@@ -10,7 +10,6 @@ module Grease.LLVM.SimulatorHooks (
   greaseLlvmExtImpl,
 ) where
 
-import Control.Lens (set, (^.))
 import Control.Monad.IO.Class (MonadIO)
 import Data.Parameterized.NatRepr qualified as NatRepr
 import Data.Type.Equality (testEquality, (:~:) (Refl))
@@ -30,6 +29,7 @@ import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.ExecutionTree (stateGlobals, stateSymInterface)
 import Lang.Crucible.Simulator.GlobalState qualified as CGS
+import Lens.Micro (set, (^.))
 import Lumberjack qualified as LJ
 import What4.FunctionName qualified as WFN
 

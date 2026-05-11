@@ -10,7 +10,6 @@ module Grease.LLVM.SetupHook (
   moduleSetupHook,
 ) where
 
-import Control.Lens ((^.))
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO)
 import Data.Map (Map)
@@ -44,6 +43,7 @@ import Lang.Crucible.LLVM.Translation qualified as CLT
 import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
+import Lens.Micro ((^.))
 import Lumberjack qualified as LJ
 import What4.Expr.Builder qualified as WEB
 import What4.FloatMode qualified as W4FM
