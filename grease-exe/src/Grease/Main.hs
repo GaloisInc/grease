@@ -30,7 +30,6 @@ module Grease.Main (
 import Control.Concurrent.Async (Async, cancel)
 import Control.Exception.Safe (MonadThrow)
 import Control.Exception.Safe qualified as X
-import Control.Lens (to, (.~), (^.))
 import Control.Monad (forM, forM_, when)
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -178,6 +177,7 @@ import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
+import Lens.Micro (to, (.~), (^.))
 import Lumberjack qualified as LJ
 import Numeric (showHex)
 import Panic qualified
