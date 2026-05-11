@@ -141,7 +141,7 @@ library
     , grease
 
     , containers
-    , lens
+    , microlens
     , safe-exceptions
 
     , bv-sized
