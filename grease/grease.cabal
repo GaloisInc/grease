@@ -157,7 +157,7 @@ library
     , megaparsec ^>= 9.6
     , mtl ^>= { 2.3.1, 2.2.2 }
     , panic ^>= 0.4
-    , parameterized-utils ^>= 2.1.10
+    , parameterized-utils ^>= { 2.1.10, 2.2, 2.3 }
     , prettyprinter ^>= 1.7.1
     , psqueues ^>= 0.2.8
     , safe-exceptions ^>= 0.1.7.4
