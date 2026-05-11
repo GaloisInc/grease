@@ -147,7 +147,7 @@ library
     , filepath ^>= { 1.4.2.2, 1.5.4.0 }
     , lens ^>= 5.3
     , lumberjack ^>= 1.0
-    , parameterized-utils ^>= 2.1.10
+    , parameterized-utils ^>= { 2.1.10, 2.2, 2.3 }
     , prettyprinter ^>= 1.7.1
     , safe-exceptions ^>= 0.1.7.4
     , text ^>= { 2.0, 2.1 }
