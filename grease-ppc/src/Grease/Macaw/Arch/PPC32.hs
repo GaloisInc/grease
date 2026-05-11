@@ -10,7 +10,6 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Arch.PPC32 (ppc32Ctx, ppc32RelocSupported) where
 
-import Control.Lens ((^.))
 import Data.BitVector.Sized qualified as BV
 import Data.ElfEdit qualified as EE
 import Data.Macaw.PPC qualified as PPC
@@ -33,6 +32,7 @@ import Grease.Shape.Pointer (ppcStackPtrShape)
 import Grease.Utility (bytes32LE)
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator.RegValue qualified as C
+import Lens.Micro ((^.))
 import Stubs.FunctionOverride.PPC.Linux qualified as Stubs
 import Stubs.Memory.PPC.Linux qualified as Stubs
 import Stubs.Syscall.Names.PPC32.Linux qualified as Stubs
