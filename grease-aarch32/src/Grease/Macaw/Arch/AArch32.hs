@@ -10,7 +10,6 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Arch.AArch32 (armCtx, armRelocSupported) where
 
-import Control.Lens ((^.))
 import Data.BitVector.Sized qualified as BV
 import Data.ElfEdit qualified as EE
 import Data.Macaw.AArch32.Symbolic.Regs qualified as ARM.Symbolic.Regs
@@ -42,6 +41,7 @@ import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.RegValue qualified as C
+import Lens.Micro ((^.))
 import Stubs.FunctionOverride.AArch32.Linux qualified as Stubs
 import Stubs.Memory.AArch32.Linux qualified as Stubs
 import Stubs.Syscall.AArch32.Linux qualified as Stubs
