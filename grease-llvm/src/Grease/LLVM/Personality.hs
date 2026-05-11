@@ -19,9 +19,6 @@ module Grease.LLVM.Personality (
   llvmReplayState,
 ) where
 
-import Control.Lens (Lens')
-import Control.Lens qualified as Lens
-import Control.Lens.TH (makeLenses)
 import Data.Kind (Type)
 import GHC.TypeLits (type Natural)
 import Grease.Concretize.ToConcretize qualified as ToConc
@@ -33,6 +30,9 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Types (CrucibleType)
 import Lang.Crucible.Types qualified as CT (Ctx)
+import Lens.Micro (Lens')
+import Lens.Micro.Extras qualified as Lens
+import Lens.Micro.TH (makeLenses)
 
 -- | The Crucible state extension for holding LLVM-specific @grease@ state.
 type GreaseLLVMPersonality ::
