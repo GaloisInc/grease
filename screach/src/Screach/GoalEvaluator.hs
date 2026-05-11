@@ -12,7 +12,6 @@ module Screach.GoalEvaluator (
   deemPotentiallyReachable,
 ) where
 
-import Control.Lens qualified as Lens
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO)
 import Data.Foldable (traverse_)
@@ -28,6 +27,7 @@ import Lang.Crucible.Simulator.EvalStmt qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
 import Lang.Crucible.Simulator.Operations qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
+import Lens.Micro qualified as Lens
 import Lumberjack qualified as LJ
 import Screach.AnalysisLoc (ResolvedTargetLoc)
 import Screach.Diagnostic (Diagnostic (GoalEvaluatorDiagnostic), ScreachLogAction)

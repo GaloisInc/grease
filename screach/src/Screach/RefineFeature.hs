@@ -15,8 +15,6 @@ module Screach.RefineFeature (
   sdseExecFeatures,
 ) where
 
-import Control.Lens ((&), (.~), (?~), (^.))
-import Control.Lens qualified as Lens
 import Control.Monad.IO.Class (MonadIO)
 import Data.Data (Proxy (Proxy))
 import Data.IORef (IORef, modifyIORef', newIORef)
@@ -46,6 +44,8 @@ import Lang.Crucible.Simulator.EvalStmt qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
 import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Types qualified as CT
+import Lens.Micro ((&), (.~), (?~), (^.))
+import Lens.Micro qualified as Lens
 import Lumberjack qualified as LJ
 import Screach.Diagnostic (ScreachLogAction)
 import Screach.Diagnostic qualified as Diag

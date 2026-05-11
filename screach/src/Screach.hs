@@ -18,7 +18,6 @@ module Screach (
 
 import Control.Exception (throw)
 import Control.Exception qualified as X
-import Control.Lens (to, (&), (.~), (^.))
 import Control.Monad qualified as Monad
 import Control.Monad.Catch (MonadThrow)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -126,6 +125,7 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.RecordAndReplay qualified as RR
 import Lang.Crucible.Simulator.RecordAndReplay qualified as SR
 import Lang.Crucible.Syntax.Concrete qualified as CSC
+import Lens.Micro (to, (&), (.~), (^.))
 import Lumberjack qualified as LJ
 import Numeric (showHex)
 import Numeric.Natural (Natural)
@@ -1117,7 +1117,8 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
           let gssPers = GP.mkPersonality memVar dbgCtx toConc refineData
           let greaseSimState =
                 GMSS.mkGreaseSimulatorState gssPers gssRecState gssRepState
-                  & GMSS.discoveredFnHandles .~ discoveredHdls
+                  & GMSS.discoveredFnHandles
+                    .~ discoveredHdls
           personality <-
             SP.mkScreachSimulatorState
               sym

@@ -11,7 +11,6 @@
 module Screach.ShortestDistanceScheduler (sdsePrioritizationFunction, HasDistancesState (..)) where
 
 import Control.Applicative ((<|>))
-import Control.Lens ((^.))
 import Control.Monad (forM)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (MonadIO (liftIO), MonadTrans (lift), StateT, runStateT)
@@ -33,6 +32,7 @@ import Lang.Crucible.FunctionHandle qualified as CFH
 import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
 import Lang.Crucible.Simulator.RecordAndReplay qualified as RR
+import Lens.Micro ((^.))
 import Lumberjack qualified as LJ
 import Numeric.Natural (Natural)
 import Safe (tailMay)

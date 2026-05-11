@@ -5,7 +5,6 @@
 -- | Reachability verification
 module Screach.Verify (verifyReachable) where
 
-import Control.Lens ((&), (.~))
 import Control.Monad qualified as Monad
 import Data.Macaw.CFG qualified as MC
 import Data.Parameterized.TraversableFC qualified as TFC
@@ -25,6 +24,7 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Types qualified as CT
+import Lens.Micro ((&), (.~))
 import Lumberjack qualified as LJ
 import Screach.Diagnostic (Diagnostic (VerifyDiagnostic), ScreachLogAction)
 import Screach.Heuristic (isReachedBug)

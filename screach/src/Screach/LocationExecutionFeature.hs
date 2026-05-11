@@ -2,10 +2,10 @@
 
 module Screach.LocationExecutionFeature (loggingFeature, frameLocFromSimState, getFrameLoc) where
 
-import Control.Lens ((^.))
 import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.EvalStmt qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
+import Lens.Micro ((^.))
 import Lumberjack qualified as LJ
 import Screach.Diagnostic qualified as Diag
 import What4.ProgramLoc qualified as WPL
