@@ -22,9 +22,6 @@ module Grease.Setup (
 ) where
 
 import Control.Exception.Safe (MonadCatch)
-import Control.Lens (use, (%~), (.=), (^.))
-import Control.Lens.TH (makeLenses)
-import Control.Lens.Zoom (zoom)
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.State (StateT, evalStateT, runStateT)
@@ -85,6 +82,9 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as C
+import Lens.Micro ((%~), (^.))
+import Lens.Micro.Mtl (use, zoom, (.=))
+import Lens.Micro.TH (makeLenses)
 import Lumberjack qualified as LJ
 import What4.Interface qualified as WI
 

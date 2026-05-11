@@ -19,7 +19,6 @@ module Grease.Macaw.Overrides.Address (
 ) where
 
 import Control.Applicative (empty)
-import Control.Lens qualified as Lens
 import Control.Monad qualified as Monad
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
@@ -54,6 +53,8 @@ import Lang.Crucible.Simulator.ExecutionTree qualified as C
 import Lang.Crucible.Simulator.GlobalState qualified as C
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
 import Lang.Crucible.Syntax.Prog qualified as CSyn
+import Lens.Micro qualified as Lens
+import Lens.Micro.Extras qualified as Lens
 import Prettyprinter qualified as PP
 import System.FilePath qualified as FilePath
 import Text.Megaparsec qualified as TM

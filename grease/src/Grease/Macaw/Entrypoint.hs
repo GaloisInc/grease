@@ -12,7 +12,6 @@ module Grease.Macaw.Entrypoint (
 )
 where
 
-import Control.Lens ((^.))
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Some (Some (Some))
@@ -25,6 +24,7 @@ import Grease.Macaw.Arch qualified as Arch
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Types qualified as CT
+import Lens.Micro ((^.))
 import Prettyprinter qualified as PP
 import What4.FunctionName qualified as WFN
 

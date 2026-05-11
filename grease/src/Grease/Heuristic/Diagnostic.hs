@@ -10,13 +10,13 @@ module Grease.Heuristic.Diagnostic (
   severity,
 ) where
 
-import Control.Lens ((^.))
 import Data.Macaw.CFG qualified as MC
 import Grease.Cursor (CursorExt, ppCursor)
 import Grease.Cursor.Pointer (Dereference, ppDereference)
 import Grease.Diagnostic.Severity (Severity (Debug, Info))
 import Grease.Shape.Pointer (KnownPtrMode, PtrTarget)
 import Grease.Shape.Selector (ArgSelector, argSelectorPath)
+import Lens.Micro ((^.))
 import Prettyprinter qualified as PP
 
 data Diagnostic where

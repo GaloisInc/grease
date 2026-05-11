@@ -49,7 +49,6 @@ module Grease.Shape.Pointer (
   modifyPtrTarget,
 ) where
 
-import Control.Lens qualified as Lens
 import Data.Aeson ((.:))
 import Data.Aeson.KeyMap qualified as Aeson
 import Data.Aeson.Types qualified as Aeson
@@ -80,6 +79,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (Bytes (Bytes))
 import Lang.Crucible.LLVM.Bytes qualified as CLB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
+import Lens.Micro qualified as Lens
 import Prettyprinter qualified as PP
 
 -- | Allocate this many pointer-sized stack slots beyond the return address,

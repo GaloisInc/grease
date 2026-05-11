@@ -41,8 +41,6 @@ module Grease.Shape (
   parseJsonShapes,
 ) where
 
-import Control.Lens qualified as Lens
-import Control.Lens.TH (makeLenses)
 import Data.Aeson ((.:))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Aeson
@@ -75,6 +73,9 @@ import Lang.Crucible.LLVM.Extension (LLVM)
 import Lang.Crucible.LLVM.MemModel (HasPtrWidth)
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Types qualified as CT
+import Lens.Micro qualified as Lens
+import Lens.Micro.Extras qualified as Lens
+import Lens.Micro.TH (makeLenses)
 import Prettyprinter qualified as PP
 import Text.Show qualified as Show
 

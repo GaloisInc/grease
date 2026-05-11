@@ -52,7 +52,6 @@ module Grease.Scheduler (
   execStateContextLens,
 ) where
 
-import Control.Lens (Lens', lens, (&), (.~), (^.))
 import Control.Monad.Reader (runReaderT)
 import Data.IORef (IORef)
 import Data.IORef qualified as IORef
@@ -65,6 +64,7 @@ import Lang.Crucible.Backend.Online qualified as CBO
 import Lang.Crucible.Simulator.EvalStmt qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
 import Lang.Crucible.Simulator.Operations qualified as C
+import Lens.Micro (Lens', lens, (&), (.~), (^.))
 import What4.Interface qualified as WI
 import What4.ProgramLoc qualified as WPL
 

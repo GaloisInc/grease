@@ -11,7 +11,6 @@ module Grease.Refine.Diagnostic (
   severity,
 ) where
 
-import Control.Lens ((^.))
 import Data.Macaw.Memory qualified as MM
 import Data.Parameterized.Context qualified as Ctx
 import Data.Text (Text)
@@ -26,6 +25,7 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.ExecutionTree qualified as ET
 import Lang.Crucible.Simulator.GlobalState qualified as GS
+import Lens.Micro ((^.))
 import Prettyprinter qualified as PP
 import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4

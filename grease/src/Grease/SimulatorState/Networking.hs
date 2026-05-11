@@ -26,13 +26,13 @@ module Grease.SimulatorState.Networking (
   HasServerSocketFds (..),
 ) where
 
-import Control.Lens (Lens')
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BSC
 import Data.Kind (Type)
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Some (Some (Some))
 import Data.Word (Word16)
+import Lens.Micro (Lens')
 import Prettyprinter qualified as PP
 import System.FilePath qualified as FilePath
 

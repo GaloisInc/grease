@@ -13,8 +13,6 @@ module Grease.Output (
   renderJSON,
 ) where
 
-import Control.Lens ((^.))
-import Control.Lens.TH (makeLenses)
 import Data.Aeson (ToJSON)
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as BSL
@@ -27,6 +25,8 @@ import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Grease.Bug qualified as Bug
 import Grease.Heuristic.Result (CantRefine)
+import Lens.Micro ((^.))
+import Lens.Micro.TH (makeLenses)
 import Prettyprinter qualified as PP
 
 type Location = Text

@@ -13,7 +13,6 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Dwarf (loadDwarfPreconditions, UseConservativeDebugShapes (..)) where
 
-import Control.Lens qualified as Lens
 import Control.Monad (foldM, join)
 import Control.Monad.Except (runExceptT, withExceptT)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -56,6 +55,8 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.Bytes (toBytes)
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Types qualified as CT
+import Lens.Micro qualified as Lens
+import Lens.Micro.Extras qualified as Lens
 import Lumberjack qualified as LJ
 
 -- | Wether to use conservative shapes that do not initialize pointers (allowing for null)

@@ -6,8 +6,6 @@ module Grease.MustFail (
   checkOneMustFail,
 ) where
 
-import Control.Lens ((^.))
-import Control.Lens qualified as Lens
 import Control.Monad qualified as Monad
 import Data.Function qualified as Function
 import Data.List qualified as List
@@ -21,6 +19,8 @@ import Lang.Crucible.Backend.Simple (Flags)
 import Lang.Crucible.LLVM.Errors qualified as Mem
 import Lang.Crucible.LLVM.Errors.MemoryError qualified as Mem
 import Lang.Crucible.Simulator.SimError qualified as C
+import Lens.Micro ((^.))
+import Lens.Micro qualified as Lens
 import What4.Expr.Builder qualified as WEB
 import What4.Interface qualified as WI
 import What4.LabeledPred qualified as W4

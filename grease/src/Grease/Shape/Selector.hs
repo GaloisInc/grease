@@ -22,13 +22,13 @@ module Grease.Shape.Selector (
   ppSelector,
 ) where
 
-import Control.Lens (Lens, lens, (.~))
-import Control.Lens.TH (makeLenses)
 import Data.Function ((&))
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Parameterized.Context qualified as Ctx
 import Grease.Cursor (Cursor, CursorExt, ppCursor)
 import Grease.Cursor.Pointer (ppDereference)
+import Lens.Micro (Lens, lens, (.~))
+import Lens.Micro.TH (makeLenses)
 import Prettyprinter qualified as PP
 import What4.FunctionName qualified as WFN
 

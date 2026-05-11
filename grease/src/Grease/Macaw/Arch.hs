@@ -39,7 +39,6 @@ module Grease.Macaw.Arch (
   archRegArgCtx,
 ) where
 
-import Control.Lens.TH (makeLenses)
 import Data.BitVector.Sized qualified as BV
 import Data.Data (Proxy)
 import Data.Functor.Const (Const (Const))
@@ -65,6 +64,7 @@ import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.CFG.Reg qualified as C.Reg
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
+import Lens.Micro.TH (makeLenses)
 import Stubs.Common qualified as Stubs
 import Stubs.FunctionOverride qualified as Stubs
 import What4.Expr qualified as WE

@@ -12,8 +12,6 @@ module Grease.Macaw.SimulatorHooks (
   ExecutingAddressAction (..),
 ) where
 
-import Control.Lens ((^.))
-import Control.Lens qualified as Lens
 import Control.Monad.IO.Class (MonadIO)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
@@ -37,6 +35,8 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.Evaluation qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as CS
 import Lang.Crucible.Simulator.GlobalState qualified as CS
+import Lens.Micro ((^.))
+import Lens.Micro qualified as Lens
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import What4.Expr.Builder qualified as WEB

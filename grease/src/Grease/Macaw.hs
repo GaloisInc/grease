@@ -18,7 +18,6 @@ module Grease.Macaw (
 ) where
 
 import Control.Exception.Safe (MonadThrow)
-import Control.Lens (to, (^.))
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.BitVector.Sized qualified as BV
@@ -77,6 +76,7 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO qualified as CLSIO
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.GlobalState qualified as CS
+import Lens.Micro (to, (^.))
 import Stubs.Common qualified as Stubs
 import Stubs.Syscall qualified as Stubs
 import What4.Expr.Builder qualified as WEB

@@ -21,8 +21,6 @@ module Grease.Setup.Annotations (
 ) where
 
 import Control.Applicative ((<|>))
-import Control.Lens ((%=), (^.))
-import Control.Lens.TH (makeLenses)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State.Class (MonadState)
 import Data.IntMap.Strict (IntMap)
@@ -40,6 +38,9 @@ import Grease.Shape.Selector (Selector, selectorPath)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Types qualified as C
+import Lens.Micro ((^.))
+import Lens.Micro.Mtl ((%=))
+import Lens.Micro.TH (makeLenses)
 import What4.Expr.Builder qualified as WEB
 import What4.Interface qualified as WI
 

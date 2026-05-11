@@ -34,7 +34,6 @@ module Grease.Overrides.Networking (
   NetworkFunctionArgument (..),
 ) where
 
-import Control.Lens (use, (%=))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.BitVector.Sized qualified as BV
 import Data.ByteString qualified as BS
@@ -55,6 +54,7 @@ import Lang.Crucible.LLVM.SymIO qualified as CLSIO
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.SymIO qualified as CSymIo
 import Lang.Crucible.Types qualified as CT
+import Lens.Micro.Mtl (use, (%=))
 import Prettyprinter qualified as PP
 import Stubs.Override qualified as StubsO
 import What4.Expr qualified as WE
@@ -206,7 +206,9 @@ callAccept bak fs sockfd _addr _addrlen = do
             Left CSymIo.FileNotFound -> returnIOError
             Right fileHandle -> do
               let sockNextConn = GSN.serverSocketNextConnection ssi
-              CS.stateContext . CS.cruciblePersonality . GSN.serverSocketFdsL
+              CS.stateContext
+                . CS.cruciblePersonality
+                . GSN.serverSocketFdsL
                 %= Map.insert sockfdInt (Some (ssi{GSN.serverSocketNextConnection = sockNextConn + 1}))
               CLSIO.allocateFileDescriptor fs fileHandle
       _ -> returnIOError
@@ -270,7 +272,9 @@ callBind bak memVar loadUnixPath sockfd addr _addrlen = do
     CS.OverrideSim p sym ext r args ret ()
   bindUnix sockfdInt ssi = do
     portPath <- loadUnixPath $ CS.regValue addr
-    CS.stateContext . CS.cruciblePersonality . GSN.serverSocketFdsL
+    CS.stateContext
+      . CS.cruciblePersonality
+      . GSN.serverSocketFdsL
       %= Map.insert sockfdInt (Some (ssi{GSN.serverSocketAddress = Just portPath}))
 
   -- For AF_INET(6) sockets, we bind the socket to a port number.
@@ -287,7 +291,9 @@ callBind bak memVar loadUnixPath sockfd addr _addrlen = do
       liftIO $
         fmap BV.asUnsigned $
           networkConstantBv bak "bind" PortArgument (WI.knownNat @16) portBV
-    CS.stateContext . CS.cruciblePersonality . GSN.serverSocketFdsL
+    CS.stateContext
+      . CS.cruciblePersonality
+      . GSN.serverSocketFdsL
       %= Map.insert sockfdInt (Some (ssi{GSN.serverSocketAddress = Just (fromInteger portInt)}))
 
 -- | Override for the @connect(2)@ function.
@@ -462,7 +468,9 @@ callSocket bak fs domainReg typeReg _protocol = do
             panic
               "callSocket"
               ["allocateFileDescriptor should return a concrete FD"]
-        CS.stateContext . CS.cruciblePersonality . GSN.serverSocketFdsL
+        CS.stateContext
+          . CS.cruciblePersonality
+          . GSN.serverSocketFdsL
           %= Map.insert (BV.asUnsigned fdBV) (Some ssi)
         pure fd
   fdPtr <- liftIO $ CLM.llvmPointer_bv sym fd

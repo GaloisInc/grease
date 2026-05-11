@@ -7,7 +7,6 @@ module Grease.Macaw.Discovery (
   discoverFunction,
 ) where
 
-import Control.Lens (to, (.~), (^.))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Function ((&))
 import Data.Macaw.Architecture.Info qualified as MI
@@ -26,6 +25,7 @@ import Grease.Macaw.Load (BinMd (binPltStubs, binSymMap))
 import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Utility (functionNameFromByteString, tshow)
 import Lang.Crucible.FunctionHandle qualified as C
+import Lens.Micro (to, (.~), (^.))
 import Lumberjack qualified as LJ
 import What4.FunctionName qualified as WFN
 import What4.ProgramLoc qualified as WPL
