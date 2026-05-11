@@ -24,8 +24,6 @@ module Screach.Explore (
   getObligations,
 ) where
 
-import Control.Lens ((^.))
-import Control.Lens qualified as Lens
 import Control.Monad.Reader (runReaderT)
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef, writeIORef)
 import Data.Sequence (Seq)
@@ -35,6 +33,9 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.EvalStmt qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
 import Lang.Crucible.Simulator.Operations qualified as C
+import Lens.Micro ((^.))
+import Lens.Micro qualified as Lens
+import Lens.Micro.TH qualified as Lens
 import What4.Interface qualified as WI
 import What4.ProgramLoc qualified as WPL
 

@@ -14,8 +14,6 @@ module Screach.Personality (
   mkScreachSimulatorState,
 ) where
 
-import Control.Lens (makeLenses)
-import Control.Lens qualified as Lens
 import Data.IORef (IORef)
 import Data.IORef qualified as IORef
 import Data.Kind (Type)
@@ -33,6 +31,9 @@ import Lang.Crucible.FunctionHandle (HandleAllocator)
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.RecordAndReplay qualified as CSR
 import Lang.Crucible.Types qualified as CT
+import Lens.Micro qualified as Lens
+import Lens.Micro.Extras qualified as Lens
+import Lens.Micro.TH (makeLenses)
 import Screach.Distance qualified as Dist
 import Screach.RefineFeature qualified as RFT
 import Screach.ShortestDistanceScheduler qualified as ShortDistSched

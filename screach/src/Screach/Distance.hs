@@ -28,10 +28,6 @@ module Screach.Distance (
   DistanceMonad,
 ) where
 
-import Control.Lens (Zoom (zoom), makeLenses, over)
-import Control.Lens.Combinators (Lens')
-import Control.Lens.Getter (view)
-import Control.Lens.Setter ((%=))
 import Control.Monad (forM, forM_)
 import Control.Monad qualified as Monad
 import Control.Monad.Reader (ReaderT)
@@ -54,6 +50,10 @@ import Data.Word (Word64)
 import Lang.Crucible.CFG.Core qualified as CCC
 import Lang.Crucible.FunctionHandle qualified as CFH
 import Lang.Crucible.Simulator.CallFrame qualified as C
+import Lens.Micro (Lens', over)
+import Lens.Micro.Extras (view)
+import Lens.Micro.Mtl (zoom, (%=))
+import Lens.Micro.TH (makeLenses)
 import Lumberjack qualified as LJ
 import Prettyprinter qualified as PP
 import Safe (minimumMay)

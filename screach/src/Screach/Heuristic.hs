@@ -5,7 +5,6 @@ module Screach.Heuristic (
   isReachedBug,
 ) where
 
-import Control.Lens (to, (^.))
 import Data.Parameterized.Context qualified as Ctx
 import Data.Text qualified as Text
 import Grease.Bug qualified as Bug
@@ -16,6 +15,7 @@ import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag qualified as Shape
 import Grease.ValueName (ValueName)
 import Lang.Crucible.Backend qualified as CB
+import Lens.Micro (to, (^.))
 import Screach.GoalEvaluator qualified as SGE
 import What4.LabeledPred as WLP
 
