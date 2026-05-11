@@ -24,7 +24,6 @@ module Grease.Concretize.ToConcretize (
   addToConcretize,
 ) where
 
-import Control.Lens qualified as Lens
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State.Class qualified as State
 import Data.Maybe qualified as Maybe
@@ -39,6 +38,8 @@ import Lang.Crucible.Simulator.ExecutionTree qualified as LCSE
 import Lang.Crucible.Simulator.GlobalState qualified as LCSG
 import Lang.Crucible.Simulator.SymSequence qualified as LCSS
 import Lang.Crucible.Types qualified as LCT
+import Lens.Micro qualified as Lens
+import Lens.Micro.Extras qualified as Lens
 import What4.Expr.Builder qualified as WEB
 import What4.Expr.GroundEval qualified as WEG
 import What4.Interface qualified as WI

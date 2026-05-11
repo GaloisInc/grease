@@ -25,7 +25,6 @@ module Grease.Heuristic (
 
 import Control.Applicative (Alternative ((<|>)))
 import Control.Exception.Safe (MonadThrow)
-import Control.Lens (Lens', (.~), (^.))
 import Data.BitVector.Sized qualified as BV
 import Data.Bool qualified as Bool
 import Data.Function ((&))
@@ -76,6 +75,7 @@ import Lang.Crucible.LLVM.MemModel.Generic qualified as Mem
 import Lang.Crucible.LLVM.MemModel.Pointer qualified as CLMP
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.SimError qualified as CS
+import Lens.Micro (Lens', (.~), (^.))
 import Lumberjack qualified as LJ
 import Numeric.Natural (Natural)
 import Prettyprinter qualified as PP

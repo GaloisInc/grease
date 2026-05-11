@@ -13,7 +13,6 @@ module Grease.Syntax.Overrides (
   writeByteVecOverride,
 ) where
 
-import Control.Lens ((^.))
 import Control.Monad qualified as Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.BitVector.Sized qualified as BV
@@ -32,6 +31,7 @@ import Lang.Crucible.LLVM.DataLayout qualified as CLD
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as LCT
+import Lens.Micro ((^.))
 import What4.Interface qualified as WI
 
 -- | Check if a 'CS.TypedOverride' is compatible with a 'LCF.FnHandle'

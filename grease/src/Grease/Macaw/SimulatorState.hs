@@ -30,9 +30,6 @@ module Grease.Macaw.SimulatorState (
   MacawOverride,
 ) where
 
-import Control.Lens (Lens')
-import Control.Lens qualified as Lens
-import Control.Lens.TH (makeLenses)
 import Data.Kind (Type)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
@@ -48,6 +45,9 @@ import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Types qualified as CT
+import Lens.Micro (Lens')
+import Lens.Micro.Extras qualified as Lens
+import Lens.Micro.TH (makeLenses)
 import Stubs.Syscall qualified as Stubs
 
 -- | The Crucible state extension for holding @grease@-specific state.

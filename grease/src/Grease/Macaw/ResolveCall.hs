@@ -25,7 +25,6 @@ module Grease.Macaw.ResolveCall (
   discoverFuncAddr,
 ) where
 
-import Control.Lens ((%~), (.~), (^.))
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (MonadIO)
 import Data.BitVector.Sized qualified as BV
@@ -84,6 +83,7 @@ import Lang.Crucible.CFG.SSAConversion qualified as C
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
+import Lens.Micro ((%~), (.~), (^.))
 import Lumberjack qualified as LJ
 import Stubs.FunctionOverride qualified as Stubs
 import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs

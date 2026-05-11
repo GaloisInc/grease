@@ -10,13 +10,13 @@ module Grease.BranchTracer (
   greaseBranchTracerFeature,
 ) where
 
-import Control.Lens ((^.))
 import Control.Monad.IO.Class (MonadIO)
 import Grease.BranchTracer.Diagnostic qualified as Diag
 import Grease.Diagnostic (Diagnostic (BranchTracerDiagnostic), GreaseLogAction)
 import Lang.Crucible.Simulator.CallFrame qualified as C
 import Lang.Crucible.Simulator.EvalStmt qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
+import Lens.Micro ((^.))
 import Lumberjack qualified as LJ
 import What4.Interface qualified as WI
 

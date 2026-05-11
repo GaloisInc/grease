@@ -10,7 +10,6 @@ module Grease.Skip (
   registerSkipOverride,
 ) where
 
-import Control.Lens (to, (^.))
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Text qualified as Text
 import Grease.Cursor qualified as Cursor
@@ -41,6 +40,7 @@ import Lang.Crucible.LLVM.Translation qualified as CLT
 import Lang.Crucible.LLVM.TypeContext qualified as CLTC
 import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Types qualified as C
+import Lens.Micro (to, (^.))
 import Lumberjack qualified as LJ
 import Text.LLVM.AST qualified as L
 import What4.FunctionName qualified as WFN

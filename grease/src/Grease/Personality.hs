@@ -29,9 +29,6 @@ module Grease.Personality (
   pRefinementData,
 ) where
 
-import Control.Lens (Lens', (^.))
-import Control.Lens qualified as Lens
-import Control.Lens.TH (makeLenses)
 import Data.Kind (Type)
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.Some (Some)
@@ -45,6 +42,9 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.ExecutionTree qualified as ET
 import Lang.Crucible.Types (CrucibleType)
 import Lang.Crucible.Types qualified as CT (Ctx)
+import Lens.Micro (Lens', (^.))
+import Lens.Micro.Extras qualified as Lens
+import Lens.Micro.TH (makeLenses)
 
 -- | The shared personality core for @grease@.
 --

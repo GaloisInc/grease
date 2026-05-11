@@ -88,7 +88,6 @@ module Grease.Refine (
 
 import Control.Applicative ((<|>))
 import Control.Exception.Safe qualified as X
-import Control.Lens ((^.))
 import Control.Monad qualified as Monad
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -147,6 +146,7 @@ import Lang.Crucible.Simulator qualified as CS
 import Lang.Crucible.Simulator.RecordAndReplay qualified as CR
 import Lang.Crucible.Simulator.SimError qualified as C
 import Lang.Crucible.Utils.Timeout qualified as C
+import Lens.Micro ((^.))
 import Lumberjack qualified as LJ
 import System.Exit qualified as Exit
 import What4.Expr qualified as WE

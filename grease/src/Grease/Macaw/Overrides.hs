@@ -23,7 +23,6 @@ module Grease.Macaw.Overrides (
   lookupMacawForwardDeclarationOverride,
 ) where
 
-import Control.Lens (to, (^.))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Foldable qualified as Foldable
 import Data.List.NonEmpty qualified as NE
@@ -57,6 +56,7 @@ import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.LLVM.SymIO (LLVMFileSystem)
 import Lang.Crucible.LLVM.TypeContext (TypeContext)
 import Lang.Crucible.Simulator qualified as CS
+import Lens.Micro (to, (^.))
 import Stubs.FunctionOverride qualified as Stubs
 import Stubs.FunctionOverride.ForwardDeclarations qualified as Stubs
 import What4.Expr.Builder qualified as WEB

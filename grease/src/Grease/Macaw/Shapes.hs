@@ -4,7 +4,6 @@ module Grease.Macaw.Shapes (
   macawInitArgShapes,
 ) where
 
-import Control.Lens ((^.))
 import Control.Monad.Trans.Maybe qualified as MaybeT
 import Data.ElfEdit qualified as Elf
 import Data.Macaw.CFG qualified as MC
@@ -25,6 +24,7 @@ import Grease.Utility (segoffToAbsoluteAddr)
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Syntax.Concrete qualified as CSyn
+import Lens.Micro ((^.))
 
 -- | Compute the initial 'ArgShapes' for a Macaw CFG.
 --
