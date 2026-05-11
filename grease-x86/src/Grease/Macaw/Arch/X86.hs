@@ -10,7 +10,6 @@
 -- Maintainer       : GREASE Maintainers <grease@galois.com>
 module Grease.Macaw.Arch.X86 (x86Ctx, x64RelocSupported) where
 
-import Control.Lens ((.~), (^.))
 import Control.Monad.IO.Class (liftIO)
 import Data.BitVector.Sized qualified as BV
 import Data.ElfEdit qualified as EE
@@ -35,6 +34,7 @@ import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.FunctionHandle qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lang.Crucible.Simulator qualified as CS
+import Lens.Micro ((.~), (^.))
 import Stubs.FunctionOverride.X86_64.Linux qualified as Stubs
 import Stubs.Memory.X86_64.Linux qualified as Stubs
 import Stubs.Syscall.Names.X86_64.Linux qualified as Stubs

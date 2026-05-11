@@ -148,10 +148,10 @@ library
     , crucible
     , crucible-llvm
     , elf-edit
-    , lens
     , macaw-symbolic
     , macaw-x86
     , macaw-x86-symbolic
+    , microlens
     , parameterized-utils
     , stubs-common-x86
     , what4
