@@ -68,6 +68,10 @@ package crucible-llvm
   ghc-options: -fno-ignore-asserts
 
 -- See Note [Asserts] in grease
+package flexdis86
+  ghc-options: -fno-ignore-asserts
+
+-- See Note [Asserts] in grease
 package grease
   ghc-options: -fno-ignore-asserts
 
