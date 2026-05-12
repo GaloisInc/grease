@@ -12,6 +12,8 @@ description:
   CLI for grease-exe.
 extra-doc-files:
   README.md
+extra-source-files:
+  grease.buildinfo.json
 category: Static Analysis
 
 source-repository head
@@ -140,7 +142,11 @@ library
     , grease
 
     -- Hackage dependencies
+    , aeson ^>= 2.2
+    , bytestring ^>= { 0.11.5, 0.12.1 }
     , containers ^>= { 0.6.7, 0.7 }
+    , file-embed ^>= 0.0.16
+    , githash ^>=0.1.7.0
     , megaparsec ^>= 9.6
     , optparse-applicative ^>= 0.19.0.0
     , text ^>= { 2.0, 2.1 }
@@ -155,3 +161,10 @@ library
   exposed-modules:
     Grease.Cli
     Grease.Cli.Enum
+    Grease.Version
+
+  autogen-modules:
+    Paths_grease_cli
+  other-modules:
+    Grease.GitRev
+    Paths_grease_cli
