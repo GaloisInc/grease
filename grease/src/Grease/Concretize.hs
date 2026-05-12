@@ -13,6 +13,7 @@ module Grease.Concretize (
 
   -- * Concretization
   ConcMem (..),
+  ConcFs (..),
   ConcArgs (..),
   ConcretizedData (..),
   SomeConcretizedValue (..),

@@ -939,6 +939,10 @@ initCFG ::
   GM.SetupHook sym arch ->
   GMSH.ExecutingAddressAction arch ->
   GMOA.AddressOverrides arch ->
+  -- | Filesystem source: use 'Just' to seed from a 'Conc.ConcFs' (e.g., for
+  -- verification replay), or 'Nothing' to initialize a fresh filesystem from
+  -- the 'Conf.Config' filesystem options.
+  Maybe Conc.ConcFs ->
   Shape.ArgShapes
     ext
     Shape.NoTag
@@ -949,7 +953,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
   let mbEntryAddr = entrypointAddr <$> mbLoadedElf
       isEcfs = maybe False isECFS mbLoadedElf
       discoveredHdls = Maybe.maybe Map.empty (`Map.singleton` CCC.cfgHandle entryRegSsaCfg) mbEntryAddr
-   in \bak gla sla halloc conf archCtx mbTargetAddr mbStartupOvSomeSsaCfg rtLoc memVar setupHook execAction addrOvs argShapes -> do
+   in \bak gla sla halloc conf archCtx mbTargetAddr mbStartupOvSomeSsaCfg rtLoc memVar setupHook execAction addrOvs mbConcFs argShapes -> do
         let (binMd, mem) =
               maybe
                 ( GL.emptyBinMd
@@ -1003,10 +1007,11 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
                 , GR.refineInputHeuristics = heuristics
                 , GR.refineInputSolver = Conf.solver conf
                 }
+        let fsSource = maybe (Right (Conf.fsOpts conf)) Left mbConcFs
         setup <-
           GR.setupRefinement
             gla
-            (Conf.fsOpts conf)
+            fsSource
             (GO.simSolverTimeout boundsOpts)
             halloc
             bak
@@ -1466,7 +1471,7 @@ analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction ad
         sla
         gla
         (Conf.refineReplay conf)
-        initShape
+        (initShape Nothing)
         pFunc
         (handleTarget archCtx Proxy sla (initArgs ^. Shape.argShapes))
         (Conf.allSolutions conf)
@@ -1482,7 +1487,7 @@ analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction ad
             ]
 
     setupAssertThenAssume bak
-    firstState <- initShape initArgs
+    firstState <- initShape Nothing initArgs
     _result <- CS.executeCrucible startFeats firstState
     refineResults <- IORef.readIORef savedRef
     doLog sla $ Diag.RefinementResultCount $ length refineResults
@@ -1490,7 +1495,7 @@ analyzeCfg conf sla gla halloc archCtx mbLoadedElf setupHook rtLoc execAction ad
       sla
       gla
       bak
-      initShape
+      (initShape . Just)
       (List.map CS.genericToExecutionFeature genericExecFeats)
       (map RFT.refineResultConcData refineResults)
  where
