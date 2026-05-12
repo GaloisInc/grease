@@ -35,8 +35,8 @@ doLog :: ScreachLogAction -> Diag.Diagnostic -> IO ()
 doLog la diag = LJ.writeLog la (VerifyDiagnostic diag)
 
 -- | Re-run simulation for each 'Conc.ConcretizedData', using the concrete
--- argument shapes and the recorded trace to confirm the target is reachable.
--- Logs verification outcome.
+-- argument shapes, the concretized filesystem, and the recorded trace to
+-- confirm the target is reachable. Logs verification outcome.
 verifyReachable ::
   forall p sym bak cExt ext t ret tys w solver st fm.
   ( TFC.TraversableFC (Shape.ExtShape ext 'Shape.Precond)
@@ -55,7 +55,7 @@ verifyReachable ::
   ScreachLogAction ->
   GreaseLogAction ->
   bak ->
-  (Shape.ArgShapes ext Shape.NoTag tys -> IO (CS.ExecState p sym ext (CS.RegEntry sym ret))) ->
+  (Conc.ConcFs -> Shape.ArgShapes ext Shape.NoTag tys -> IO (CS.ExecState p sym ext (CS.RegEntry sym ret))) ->
   [CS.ExecutionFeature p sym ext (CS.RegEntry sym ret)] ->
   [Conc.ConcretizedData sym ext tys] ->
   IO ()
@@ -64,8 +64,7 @@ verifyReachable la gla bak initShape execFeats cDataList =
     doLog la (Diag.VerifyReachable (length cDataList) no)
     let concArgShapes = Conc.concArgsShapes (Conc.concArgs cData)
         untagArgs = TFC.fmapFC (TFC.fmapFC (const Shape.NoTag)) concArgShapes
-    -- TODO(#639): Incorporate the concretized filesystem.
-    st <- initShape (Shape.ArgShapes untagArgs)
+    st <- initShape (Conc.concFs cData) (Shape.ArgShapes untagArgs)
     let trace = Conc.concTrace cData
         st' =
           st

@@ -571,7 +571,10 @@ setupRefinement ::
   , Cursor.CursorExt ext ~ PtrCursor.Dereference ext wptr
   ) =>
   GreaseLogAction ->
-  Opts.FsOpts ->
+  -- | Filesystem source: use 'Left' to seed from a 'Conc.ConcFs' (e.g., for
+  -- verification replay), or 'Right' to initialize a fresh filesystem from
+  -- 'Opts.FsOpts' (normal analysis).
+  Either Conc.ConcFs Opts.FsOpts ->
   C.Timeout ->
   C.HandleAllocator ->
   bak ->
@@ -579,7 +582,7 @@ setupRefinement ::
   InitialMem sym ->
   RD.RefinementInputs sym bak ext argTys ->
   IO (RefinementSetup sym bak t ext argTys wptr)
-setupRefinement la fsOpts solverTimeout halloc bak dl initMem inputs = do
+setupRefinement la fsSource solverTimeout halloc bak dl initMem inputs = do
   let argShapes = RD.refineInputArgShapes inputs
   let valueNames = RD.refineInputArgNames inputs
   let argTys = RD.refineInputArgTypes inputs
@@ -588,7 +591,9 @@ setupRefinement la fsOpts solverTimeout halloc bak dl initMem inputs = do
   EC.withErrorCallbacks callbacks $ do
     (args, setupMem, setupAnns) <-
       Setup.setup la bak dl valueNames argTys argShapes initMem
-    initFs_ <- GSIO.initialLlvmFileSystem halloc sym fsOpts
+    initFs_ <- case fsSource of
+      Left concFs -> GSIO.initialLlvmFileSystemFromConcFs halloc sym concFs
+      Right fsOpts -> GSIO.initialLlvmFileSystem halloc sym fsOpts
     (toConc, globals1) <- liftIO $ ToConc.newToConcretize halloc (GSIO.initFsGlobals initFs_)
     let initFs = initFs_{GSIO.initFsGlobals = globals1}
     let concInitState =
@@ -647,7 +652,7 @@ refineOnce la simOpts halloc bak fm dl initMem inputs execFeats mkInitState = do
   setup <-
     setupRefinement
       la
-      (Opts.simFsOpts simOpts)
+      (Right (Opts.simFsOpts simOpts))
       (Opts.simSolverTimeout (Opts.simBoundsOpts simOpts))
       halloc
       bak

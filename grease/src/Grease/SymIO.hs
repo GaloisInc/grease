@@ -7,12 +7,15 @@
 module Grease.SymIO (
   InitializedFs (..),
   initialLlvmFileSystem,
+  initialLlvmFileSystemFromConcFs,
 ) where
 
 import Control.Monad qualified as Monad
+import Data.ByteString qualified as BS
 import Data.Map.Strict qualified as Map
 import Data.Parameterized.NatRepr (knownNat)
 import Data.Text qualified as Text
+import Grease.Concretize (ConcFs (ConcFs))
 import Grease.Options qualified as GO
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.FunctionHandle qualified as C
@@ -83,3 +86,38 @@ initialLlvmFileSystem halloc sym fsOpts = do
     let symFiles_ = SymIO.symbolicFiles fs
     let symFiles = Map.insert SymIO.StdinTarget symStdin symFiles_
     pure (fs{SymIO.symbolicFiles = symFiles})
+
+-- | Initialize the symbolic file system from a 'ConcFs', using the concretized
+-- file contents as concrete initial file contents.
+initialLlvmFileSystemFromConcFs ::
+  ( CB.IsSymInterface sym
+  , CLM.HasPtrWidth ptrW
+  ) =>
+  C.HandleAllocator ->
+  sym ->
+  ConcFs ->
+  IO (InitializedFs sym ptrW)
+initialLlvmFileSystemFromConcFs halloc sym (ConcFs concFilesMap) = do
+  let fileContents =
+        SymIO.InitialFileSystemContents
+          { SymIO.concreteFiles = Map.map BS.pack concFilesMap
+          , SymIO.symbolicFiles = Map.empty
+          , SymIO.useStdout = False
+          , SymIO.useStderr = False
+          }
+  let mirroredOutputs = []
+  (fs, gs, ov) <-
+    CLSIO.initialLLVMFileSystem
+      halloc
+      sym
+      ?ptrWidth
+      fileContents
+      mirroredOutputs
+      CS.emptyGlobals
+  pure $
+    InitializedFs
+      { initFsContents = fileContents
+      , initFs = fs
+      , initFsGlobals = gs
+      , initFsOverride = ov
+      }
