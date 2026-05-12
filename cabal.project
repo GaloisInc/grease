@@ -75,6 +75,18 @@ package grease
 package grease-llvm
   ghc-options: -fno-ignore-asserts
 
+-- See Note [Asserts] in macaw
+package macaw-base
+  ghc-options: -fno-ignore-asserts
+
+-- See Note [Asserts] in macaw
+package macaw-symbolic
+  ghc-options: -fno-ignore-asserts
+
+-- See Note [Asserts] in macaw
+package macaw-x86
+  ghc-options: -fno-ignore-asserts
+
 -- See Note [Asserts] in what4
 package what4
   ghc-options: -fno-ignore-asserts
