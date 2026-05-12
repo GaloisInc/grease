@@ -8,7 +8,7 @@ module DistCLI (cli, DisttestConfig (..), runDistTest) where
 import Control.Applicative ((<|>))
 import Control.Monad qualified
 import Control.Monad.Reader (ReaderT (runReaderT))
-import Control.Monad.State.Lazy (evalStateT)
+import Control.Monad.State.Strict (evalStateT)
 import Data.ByteString qualified as BS
 import Data.IORef qualified as IORef
 import Data.List qualified as List
