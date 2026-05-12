@@ -13,7 +13,7 @@ module Screach.ShortestDistanceScheduler (sdsePrioritizationFunction, HasDistanc
 import Control.Applicative ((<|>))
 import Control.Monad (forM)
 import Control.Monad.Reader (ReaderT (runReaderT))
-import Control.Monad.State (MonadIO (liftIO), MonadTrans (lift), StateT, runStateT)
+import Control.Monad.State.Strict (MonadIO (liftIO), MonadTrans (lift), StateT, runStateT)
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
 import Data.IORef (IORef)
 import Data.IORef qualified as IORef

@@ -32,7 +32,7 @@ import Control.Monad (forM, forM_)
 import Control.Monad qualified as Monad
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.Reader qualified as Reader
-import Control.Monad.State.Lazy (MonadIO (liftIO), MonadState (get, put), StateT, modify, runStateT)
+import Control.Monad.State.Strict (MonadIO (liftIO), MonadState (get, put), StateT, modify, runStateT)
 import Control.Monad.Trans.Class (MonadTrans (lift))
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader (mapReaderT)
