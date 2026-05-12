@@ -13,8 +13,6 @@ description:
   under-constrained symbolic execution.
 extra-doc-files:
   README.md
-extra-source-files:
-  grease.buildinfo.json
 category: Static Analysis
 
 source-repository head
@@ -148,9 +146,7 @@ library
     , containers ^>= { 0.6.7, 0.7 }
     , directory ^>= 1.3.7.1
     , exceptions ^>= 0.10.5
-    , file-embed ^>= 0.0.16
     , filepath ^>= { 1.4.2.2, 1.5.4.0 }
-    , githash ^>=0.1.7.0
     , libBF ^>= 0.6.8
     , lumberjack ^>= 1.0
     , megaparsec ^>= 9.6
@@ -279,11 +275,6 @@ library
     Grease.Time
     Grease.Utility
     Grease.ValueName
-    Grease.Version
 
-  autogen-modules:
-    Paths_grease
   other-modules:
-    Grease.GitRev
     Grease.Macaw.Overrides.Defs
-    Paths_grease

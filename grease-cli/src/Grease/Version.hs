@@ -14,7 +14,7 @@ import Data.List (intersperse)
 import Data.Text qualified as Text
 import Data.Version (showVersion)
 import Grease.GitRev qualified as GitRev
-import Paths_grease (version)
+import Paths_grease_cli (version)
 
 -- | The GREASE version and @git@ commit, formatted for displaying with the
 -- @--version@ flag.
