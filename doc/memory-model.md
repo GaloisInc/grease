@@ -54,6 +54,8 @@ Mutable global variables are tricky:
   analysis or its callees) will fail. As mutable global variables are pervasive,
   this would lead to a significant lack of coverage.
 
+<!-- [tag:globals_flag] -->
+
 GREASE's behavior in this regard is controlled via the `--globals` flag. The
 possible values are:
 
@@ -65,6 +67,8 @@ possible values are:
   globals will fail, causing GREASE to be unable to proceed with analysis.
 
 ## The stack
+
+<!-- [tag:stack] -->
 
 GREASE represents the stack as a separate Crucible-LLVM allocation. Before
 symbolically executing the target function, the stack pointer is initialized to

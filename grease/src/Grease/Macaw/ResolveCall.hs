@@ -244,7 +244,7 @@ data LookupFunctionHandleResult p sym arch where
 
 -- | Attempt to look up a function handle.
 --
--- The behavior of this function is documented in @doc/function-calls.md@.
+-- The behavior of this function is documented at @[ref:function_calls]@.
 lookupFunctionHandleResult ::
   forall arch sym bak solver scope st fs p rtp blocks r ctx cExt ret t argTys wptr.
   ( OnlineSolverAndBackend solver sym bak scope st fs

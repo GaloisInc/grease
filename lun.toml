@@ -73,6 +73,9 @@ args = "all"
 files = ["**/Makefile", "*.cabal", "*.md", "*.mk", "*.project", "*.py", "*.scala", "*.sh"]
 
 [[tool]]
+name = "tagref"
+
+[[tool]]
 name = "ttlint"
 # some of these have significant trailing whitespace
 ignore = ["grease-exe/tests/**/*"]

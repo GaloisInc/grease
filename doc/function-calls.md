@@ -1,5 +1,7 @@
 # Function calls
 
+<!-- [tag: function_calls] -->
+
 GREASE's algorithm for handling function calls is as follows:
 
 - If the call is through a symbolic function pointer, then:

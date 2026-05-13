@@ -284,6 +284,7 @@ fsRootParser =
         )
     )
 
+-- [ref:globals_flag]
 globalsParser :: Opt.Parser GO.MutableGlobalState
 globalsParser =
   GCE.enumParserDefault

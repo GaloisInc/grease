@@ -80,6 +80,34 @@ git ls-files -z --exclude-standard '*.py' | xargs -0 ruff check
 
 See the [Ghidra batch plugin docs](../ghidra-batch-plugin.md).
 
+## tagref
+
+We lint cross-references in code with [tagref].
+
+```sh
+tagref
+```
+
+tagref verifies that every reference refers to an existing tag, and that there
+are no duplicate tags. The following is the syntax of tags and references:
+
+- Tags: `[tag:snake_case_tag_name]`
+- References: `[ref:snake_case_tag_name]`
+
+tagref can also verify file and directory references (`file:` and `dir:`).
+
+We often `tag:` the documentation for a feature, and then use `ref:`erences in
+places in the code that have behavior described in the documentation. This helps
+us remember to update documentation when we update code, and signals to readers
+of the code that higher-level documentation that can provide valuable context is
+available elsewhere.
+
+We highly encourage extensive cross-referencing. It helps us keep documentation
+and code in sync, and reminds us what needs to be updated in other parts of the
+codebase when making changes.
+
+[tagref]: https://github.com/stepchowfun/tagref
+
 ## ttlint
 
 We lint text files with [ttlint].

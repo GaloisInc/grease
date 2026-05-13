@@ -163,6 +163,7 @@ library
     Grease.Cli.Enum
     Grease.Version
 
+  -- For Paths_*, see [ref:grease_buildinfo_json]
   autogen-modules:
     Paths_grease_cli
   other-modules:

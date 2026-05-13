@@ -39,7 +39,7 @@ commitHash :: String
 commitHash
   | hash /= unknown =
       hash
-  -- See Note [grease.buildinfo.json]
+  -- See [ref:grease_buildinfo_json]
   | Just buildinfoVal <- Aeson.decodeStrict buildinfo
   , Just (Aeson.String buildinfoHash) <- KeyMap.lookup "hash" buildinfoVal =
       Text.unpack buildinfoHash
@@ -53,7 +53,7 @@ commitBranch :: String
 commitBranch
   | branch /= unknown =
       branch
-  -- See Note [grease.buildinfo.json]
+  -- See [ref:grease_buildinfo_json]
   | Just buildinfoVal <- Aeson.decodeStrict buildinfo
   , Just (Aeson.String buildinfoCommit) <- KeyMap.lookup "branch" buildinfoVal =
       Text.unpack buildinfoCommit
@@ -67,7 +67,7 @@ commitDirty :: Bool
 commitDirty
   | dirty =
       dirty
-  -- See Note [grease.buildinfo.json]
+  -- See [ref:grease_buildinfo_json]
   | Just buildinfoVal <- Aeson.decodeStrict buildinfo
   , Just (Aeson.Bool buildinfoDirty) <- KeyMap.lookup "dirty" buildinfoVal =
       buildinfoDirty
@@ -85,12 +85,12 @@ unknown = "UNKNOWN"
 
 -- Helper, not exported
 --
--- See Note [grease.buildinfo.json]
+-- See [ref:grease_buildinfo_json]
 buildinfo :: BS.ByteString
 buildinfo = $(embedFileRelative "grease.buildinfo.json")
 
 {-
-Note [grease.buildinfo.json]
+[tag:grease_buildinfo_json]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 By default, we determine the git commit hash, branch, and dirty information
 using the gitrev library, which invokes git at compile time to query the
