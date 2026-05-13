@@ -779,6 +779,8 @@ parseJsonPtrShape parseTag =
 --
 -- * A number of pointer-sized stack slocks, which are reserved for
 --   stack-spilled arguments.
+--
+-- This is documented at @[ref:stack]@.
 x64StackPtrShape ::
   -- | Initialize the end of the stack to a concrete sequence of bytes if the
   -- value is @Just@, otherwise initialize the end of the stack to 8 fresh,
@@ -808,6 +810,8 @@ x64StackPtrShape returnAddrBytes stackArgSlots =
 --
 -- * A number of pointer-sized stack slocks, which are reserved for
 --   stack-spilled arguments.
+--
+-- This is documented at @[ref:stack]@.
 ppcStackPtrShape ::
   CLM.HasPtrWidth wptr =>
   -- | Initialize the end of the stack to a concrete sequence of bytes if the
@@ -837,6 +841,8 @@ ppcStackPtrShape returnAddrBytes stackArgSlots =
 --
 -- Unlike the stack pointer in x86_64 and PowerPC, the AArch32 stack pointer
 -- does /not/ store the return address on the stack.
+--
+-- This is documented at @[ref:stack]@.
 armStackPtrShape ::
   ExtraStackSlots ->
   PtrShape ext wptr 'Precond NoTag (CLM.LLVMPointerType wptr)

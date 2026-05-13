@@ -10,7 +10,7 @@ BIN=${PWD}/bin
 is_exe() { [[ -x "$1/$2$EXT" ]] || command -v "$2" > /dev/null 2>&1; }
 
 # Create a grease.buildinfo.json file for the benefit of the Docker image.
-# (See Note [grease.buildinfo.json] in grease-cli/src/Grease/Version.hs.)
+# (See [ref:grease_buildinfo_json].)
 #
 # The first argument is the git commit, and the second argument is the git
 # branch name.
