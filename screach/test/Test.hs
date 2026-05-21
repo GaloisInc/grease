@@ -65,7 +65,9 @@ go prog = do
   Lua.newtable
   Lua.setglobal argsGlobal
 
-  opts <- liftIO (Cli.cliFromList (prog : strOpts))
+  -- Enable abstract value checking by default in tests
+  let testOpts = ["--check-abs-values"]
+  opts <- liftIO (Cli.cliFromList (prog : testOpts List.++ strOpts))
   let action = withCapturedLogs (Screach.runScreach opts)
   logTxt <-
     liftIO $
