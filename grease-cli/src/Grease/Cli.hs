@@ -169,6 +169,11 @@ boundsOptsParser = Opt.parserOptionGroup "Bounds, limits, and timeouts" $ do
             <> Opt.showDefault
             <> Opt.value GO.defaultSolverTimeout
         )
+  simCheckAbsValues <-
+    Opt.switch
+      ( Opt.long "check-abs-values"
+          <> Opt.help "Perform additional safety checks on static analysis soundness"
+      )
   pure GO.BoundsOpts{..}
 
 initPrecondOptsParser :: Opt.Parser GO.InitialPreconditionOpts

@@ -156,6 +156,9 @@ data BoundsOpts
   -- ^ Timeout (implemented using 'timeout')
   , simSolverTimeout :: Timeout
   -- ^ Solver timeout (in seconds)
+  , simCheckAbsValues :: Bool
+  -- ^ Add proof obligations for narrowing of abstract values (i.e., use
+  -- 'Data.Macaw.Symbolic.MemOps.narrowBVDomainChecked')
   }
   deriving Show
 

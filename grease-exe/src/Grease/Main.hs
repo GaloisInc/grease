@@ -797,7 +797,8 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
 
   let globals = GSIO.initFsGlobals initFs
   let initFsOv = GSIO.initFsOverride initFs
-  GM.initState bak la macawExtImpl execCallback halloc setupMem globals initFsOv archCtx setupHook addrOvs personality regs fnOvsMap mbStartupOvSsaCfg ssa
+  let checkAbsValues = GO.simCheckAbsValues (GO.simBoundsOpts simOpts)
+  GM.initState bak la macawExtImpl execCallback halloc setupMem globals initFsOv archCtx setupHook addrOvs checkAbsValues personality regs fnOvsMap mbStartupOvSsaCfg ssa
 
 macawRefineOnce ::
   ( CB.IsSymBackend sym bak
