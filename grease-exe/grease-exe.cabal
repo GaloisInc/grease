@@ -154,7 +154,7 @@ library
     , containers ^>= { 0.6.7, 0.7 }
     , directory ^>= 1.3.7.1
     , file-embed ^>= 0.0.16
-    , filepath ^>= { 1.4.2.2, 1.5.4.0 }
+    , filepath ^>= { 1.4.2.2, 1.5.2.0 }
     , indexed-traversable ^>= { 0.1.4 }
     , lumberjack ^>= 1.0
     , microlens
@@ -233,7 +233,7 @@ test-suite grease-tests
     , containers ^>= { 0.6.7, 0.7 }
     , directory ^>= 1.3.7.1
     , file-embed ^>= 0.0.16
-    , filepath ^>= { 1.4.2.2, 1.5.4.0 }
+    , filepath ^>= { 1.4.2.2, 1.5.2.0 }
     , hedgehog ^>= 1.5
     , hslua ^>= 2.3.1
     , lumberjack ^>= 1.0
