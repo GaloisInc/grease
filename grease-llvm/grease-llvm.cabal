@@ -144,7 +144,7 @@ library
     , bv-sized ^>= 1.0.6
     , bytestring ^>= { 0.11.5, 0.12.1 }
     , containers ^>= { 0.6.7, 0.7 }
-    , filepath ^>= { 1.4.2.2, 1.5.4.0 }
+    , filepath ^>= { 1.4.2.2, 1.5.2.0 }
     , lumberjack ^>= 1.0
     , microlens
     , microlens-th

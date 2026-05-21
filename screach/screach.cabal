@@ -262,7 +262,7 @@ test-suite screach-dist-test
       screach
     build-depends:
         directory,
-        filepath ^>= { 1.4, 1.5.4.0 },
+        filepath ^>= { 1.4, 1.5.2.0 },
         file-embed ^>= 0.0.16,
         hslua ^>= 2.3.1,
         lumberjack,
@@ -286,7 +286,7 @@ test-suite screach-test
         screach-cli,
     build-depends:
         directory,
-        filepath ^>= { 1.4, 1.5.4.0 },
+        filepath ^>= { 1.4, 1.5.2.0 },
         file-embed ^>= 0.0.16,
         hslua ^>= 2.3.1,
         lumberjack,
