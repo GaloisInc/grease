@@ -15,9 +15,11 @@ module Grease.Macaw.SimulatorHooks (
 import Control.Monad.IO.Class (MonadIO)
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Symbolic (MacawExprExtension (MacawNarrowBVDomain))
 import Data.Macaw.Symbolic qualified as MC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Macaw.Symbolic.Backend qualified as Symbolic
+import Data.Macaw.Symbolic.MemOps qualified as MSMO
 import Data.Parameterized.Context qualified as Ctx
 import Data.Parameterized.Map qualified as MapF
 import Grease.Diagnostic (Diagnostic (SimulatorHooksDiagnostic), GreaseLogAction)
@@ -78,28 +80,38 @@ greaseMacawExtImpl ::
   ExecutingAddressAction arch ->
   AddressOverrides arch ->
   CS.GlobalVar (MC.ArchRegStruct arch) ->
+  -- | Add proof obligations for narrowing of abstract values (i.e., use
+  -- 'Data.Macaw.Symbolic.MemOps.narrowBVDomainChecked')
+  Bool ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch)
-greaseMacawExtImpl archCtx bak la execCallback tgtOvs archStruct macawExtImpl =
+greaseMacawExtImpl archCtx bak la execCallback tgtOvs archStruct checkAbsValues macawExtImpl =
   macawExtImpl
-    { CS.extensionEval = extensionEval macawExtImpl
+    { CS.extensionEval = extensionEval checkAbsValues macawExtImpl
     , CS.extensionExec = extensionExec archCtx bak la execCallback tgtOvs archStruct macawExtImpl
     }
 
 -- | This evaluates a Macaw statement extension in the simulator.
 extensionEval ::
   CB.IsSymBackend sym bak =>
+  -- | Add proof obligations for narrowing of abstract values (i.e., use
+  -- 'Data.Macaw.Symbolic.MemOps.narrowBVDomainChecked')
+  Bool ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   bak ->
   CS.IntrinsicTypes sym ->
   (Int -> String -> IO ()) ->
   CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
   C.EvalAppFunc sym (C.ExprExtension (Symbolic.MacawExt arch))
-extensionEval baseExt bak iTypes logFn cst evalFn =
+extensionEval checkAbsValues baseExt bak iTypes logFn cst evalFn =
   \case
     Symbolic.PtrToBits _w ptr -> do
       CLM.LLVMPointer _blk off <- evalFn ptr
       pure off
+    MacawNarrowBVDomain w dom xExpr
+      | checkAbsValues -> do
+          ptr <- evalFn xExpr
+          MSMO.narrowBVDomainChecked bak w dom ptr
     e -> defaultExec e
  where
   defaultExec = CS.extensionEval baseExt bak iTypes logFn cst evalFn
