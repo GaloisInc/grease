@@ -1103,6 +1103,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
                   }
           evalFn <- MS.withArchEval @MS.LLVMMemory @MX86.X86_64 (archCtx ^. Arch.archVals) sym pure
           let macawExtImpl = MS.macawExtensions evalFn memVar memCfg
+          let checkAbsValues = GO.simCheckAbsValues boundsOpts
           let extImpl =
                 -- We omit the goal evaluator in the case that we have a target
                 -- override because the target override determines when we have
@@ -1110,7 +1111,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
                 case mbTargetAddr of
                   Just targetAddr
                     | Nothing <- Conf.targetOverride conf ->
-                        GE.goalEvaluatorMacawExtension macawExtImpl sla bak mem rtLoc targetAddr
+                        GE.goalEvaluatorMacawExtension macawExtImpl sla bak mem rtLoc targetAddr checkAbsValues
                   _ ->
                     macawExtImpl
           let dbgOpts = Conf.debugOpts conf
@@ -1141,6 +1142,7 @@ initCFG (CCC.SomeCFG entryRegSsaCfg) mbLoadedElf =
             archCtx
             setupHook
             addrOvs
+            checkAbsValues
             personality
             (GS.argVals args)
             fnOvsMap
