@@ -15,6 +15,7 @@ module Grease.Macaw.Load (
   LoadedProgram (..),
   LoadError (..),
   load,
+  loadEcfs,
   dumpSections,
   memSegOffToJson,
 ) where
@@ -27,6 +28,7 @@ import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString qualified as BS
 import Data.ElfEdit qualified as Elf
 import Data.ElfEdit.CoreDump qualified as CoreDump
+import Data.ElfEdit.Ecfs qualified as Ecfs
 import Data.Function ((&))
 import Data.List qualified as List
 import Data.Macaw.BinaryLoader qualified as Loader
@@ -49,6 +51,7 @@ import Data.Word (Word64)
 import Grease.Diagnostic (Diagnostic (LoadDiagnostic), GreaseLogAction)
 import Grease.Entrypoint (Entrypoint, EntrypointLocation (EntrypointAddress, EntrypointCoreDump, EntrypointSymbolName), entrypointLocation)
 import Grease.Macaw.Arch qualified as Arch
+import Grease.Macaw.Ecfs qualified as GME
 import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Macaw.Load.Relocation (RelocType (SymbolReloc))
 import Grease.Macaw.Load.Relocation qualified as Reloc
@@ -57,6 +60,7 @@ import Grease.Utility (functionNameFromByteString, tshow)
 import Lang.Crucible.CFG.Core qualified as C
 import Lang.Crucible.LLVM.MemModel qualified as CLM
 import Lumberjack qualified as LJ
+import Numeric (showHex)
 import Prettyprinter qualified as PP
 import System.Directory (Permissions)
 import Text.Read (readMaybe)
@@ -67,8 +71,7 @@ doLog la diag = LJ.writeLog la (LoadDiagnostic diag)
 
 -- | Binary metadata: all per-binary maps and settings, but not memory
 -- (which can be recovered via 'Loader.memoryImage' from 'LoadedProgram').
-data BinMd arch
-  = BinMd
+data BinMd arch = BinMd
   { binLoadOptions :: LC.LoadOptions
   -- ^ The load options used to load addresses in the binary.
   , binSymMap :: Map.Map (MC.ArchSegmentOff arch) BS.ByteString
@@ -101,8 +104,7 @@ emptyBinMd =
     , binEntrypointAddrs = Map.empty
     }
 
-data LoadedProgram arch
-  = LoadedProgram
+data LoadedProgram arch = LoadedProgram
   { progLoadedBinary :: Loader.LoadedBinary arch (Elf.ElfHeaderInfo (MC.ArchAddrWidth arch))
   -- ^ The loaded binary image (use 'Loader.memoryImage' to get memory).
   , progBinMd :: BinMd arch
@@ -125,6 +127,8 @@ data LoadError
   | CoreDumpNoEntrypoint
   | RelocationMapError Reloc.RelocationError
   | PltStubResolutionError GPLT.CouldNotResolvePltStub
+  | EcfsDecodeError Text.Text
+  | EcfsPltStubError Text.Text
 
 instance PP.Pretty LoadError where
   pretty =
@@ -159,6 +163,10 @@ instance PP.Pretty LoadError where
         PP.pretty err
       PltStubResolutionError err ->
         PP.pretty err
+      EcfsDecodeError err ->
+        "Failed to decode ECFS file:" PP.<+> PP.pretty err
+      EcfsPltStubError msg ->
+        "ECFS PLT stub error:" PP.<+> PP.pretty msg
 
 -- | Compute the 'LC.LoadOptions' for the binary being analyzed. Note that we do
 -- different things depending on whether the binary is a position-independent
@@ -182,7 +190,8 @@ loadOptions pie =
     { LC.loadOffset = if pie then Just 0x10000000 else Nothing
     }
 
-load ::
+-- | Internal helper that loads either a raw ELF or ECFS binary.
+loadWithBinaryType ::
   forall arch.
   ( 16 C.<= MC.ArchAddrWidth arch
   , Symbolic.SymArchConstraints arch
@@ -204,8 +213,8 @@ load ::
   FilePath ->
   -- | User-specified PLT stubs.
   [GPLT.PltStub] ->
-  IO (Either LoadError (LoadedProgram arch))
-load la userEntrypoints perms elf relocSupported mbPltStubInfo path userPltStubs = runExceptT $ do
+  ExceptT LoadError IO (LoadedProgram arch)
+loadWithBinaryType la userEntrypoints perms elf relocSupported mbPltStubInfo path userPltStubs = do
   let loadOpts = loadOptions (Elf.elfIsPie perms elf)
   loaded <- liftIO $ Loader.loadBinary @arch loadOpts elf
   let mem = Loader.memoryImage loaded
@@ -307,6 +316,95 @@ load la userEntrypoints perms elf relocSupported mbPltStubInfo path userPltStubs
             , binEntrypointAddrs = entryAddrMap
             }
       }
+
+load ::
+  forall arch.
+  ( 16 C.<= MC.ArchAddrWidth arch
+  , Symbolic.SymArchConstraints arch
+  , Loader.BinaryLoader arch (Elf.ElfHeaderInfo (MC.RegAddrWidth (MC.ArchReg arch)))
+  , Elf.IsRelocationType (Arch.ArchReloc arch)
+  , Elf.RelocationWidth (Arch.ArchReloc arch) ~ MC.ArchAddrWidth arch
+  , ?memOpts :: CLM.MemOptions
+  ) =>
+  GreaseLogAction ->
+  [Entrypoint] ->
+  Permissions ->
+  Elf.ElfHeaderInfo (MC.RegAddrWidth (MC.ArchReg arch)) ->
+  -- | Check if a relocation type is supported and what kind it is.
+  (Arch.ArchReloc arch -> Maybe Reloc.RelocType) ->
+  -- | PLT stub heuristics, or 'Nothing' if PLT stubs cannot be found for
+  -- this architecture.
+  Maybe (PLT.PLTStubInfo (Arch.ArchReloc arch)) ->
+  -- | Path to the binary (for error messages).
+  FilePath ->
+  -- | User-specified PLT stubs.
+  [GPLT.PltStub] ->
+  IO (Either LoadError (LoadedProgram arch))
+load la userEntrypoints perms elf relocSupported mbPltStubInfo path userPltStubs =
+  runExceptT $ loadWithBinaryType la userEntrypoints perms elf relocSupported mbPltStubInfo path userPltStubs
+
+-- | Load an ECFS coredump file for analysis. This is similar to 'load', but
+-- extracts PLT stub information from ECFS metadata rather than relying on
+-- heuristics.
+loadEcfs ::
+  forall arch.
+  ( 16 C.<= MC.ArchAddrWidth arch
+  , Symbolic.SymArchConstraints arch
+  , Loader.BinaryLoader arch (Elf.ElfHeaderInfo (MC.RegAddrWidth (MC.ArchReg arch)))
+  , Elf.IsRelocationType (Arch.ArchReloc arch)
+  , Elf.RelocationWidth (Arch.ArchReloc arch) ~ MC.ArchAddrWidth arch
+  , ?memOpts :: CLM.MemOptions
+  ) =>
+  GreaseLogAction ->
+  [Entrypoint] ->
+  Permissions ->
+  Ecfs.Ecfs (MC.RegAddrWidth (MC.ArchReg arch)) ->
+  IO (Either LoadError (LoadedProgram arch))
+loadEcfs la userEntrypoints perms ecfs = runExceptT $ do
+  let elf = Ecfs.ecfsElfHeaderInfo ecfs
+  lp <- loadWithBinaryType la userEntrypoints perms elf (\_ -> Nothing) Nothing "" []
+  let loadOpts = binLoadOptions (progBinMd lp)
+  let ecfsPltStubList = GME.findEcfsPltStubs loadOpts ecfs
+  let mem = Loader.memoryImage (progLoadedBinary lp)
+  let loadOffset = fromMaybe 0 (LC.loadOffset loadOpts)
+  resolvedPltStubs <-
+    mapM
+      ( \(GPLT.PltStub addr name) ->
+          case Loader.resolveAbsoluteAddress mem (MM.memWord (addr + loadOffset)) of
+            Just so -> pure (so, WFN.functionNameFromText name)
+            Nothing ->
+              throwE $
+                EcfsPltStubError
+                  ( "Cannot resolve ECFS PLT stub at address: "
+                      <> Text.pack (showHex addr "")
+                  )
+      )
+      ecfsPltStubList
+  let ecfsPltMap = Map.fromList resolvedPltStubs
+  -- Build binDynFunMap from ECFS PLT/GOT info. The ECFS .dynsym has imported
+  -- function symbols with SHN_UNDEF but non-zero steValue (runtime addresses),
+  -- which the normal dynamicFunAddrs filter excludes. We use the ECFS PLT/GOT
+  -- metadata to recover these addresses.
+  let ecfsDynFunList = GME.findEcfsDynFunAddrs loadOpts ecfs
+  ecfsDynFunPairs <-
+    fmap (mapMaybe id) $
+      mapM
+        ( \(name, shlAddr) ->
+            case Loader.resolveAbsoluteAddress mem (MM.memWord shlAddr) of
+              Just so -> pure $ Just (WFN.functionNameFromText name, so)
+              Nothing -> pure Nothing
+        )
+        ecfsDynFunList
+  let ecfsDynFunMap =
+        Map.union
+          (Map.fromList ecfsDynFunPairs)
+          (binDynFunMap (progBinMd lp))
+  let updatedBinMd =
+        (progBinMd lp)
+          { binPltStubs = ecfsPltMap
+          , binDynFunMap = ecfsDynFunMap
+          }
+  return lp{progBinMd = updatedBinMd}
 
 -- Helper, not exported
 --

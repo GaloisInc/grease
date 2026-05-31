@@ -292,6 +292,7 @@ fileTest d f =
   case FilePath.takeExtension f of
     ".bc" -> [oughtaBc d f]
     ".cbl" -> [oughtaSexp d f]
+    ".ecfs" -> [oughtaBin d f]
     ".elf" -> [oughtaBin d f]
     ".lua" -> [oughtaLua d f]
     _ -> []

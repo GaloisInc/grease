@@ -1,0 +1,4 @@
+ecfs/
+test
+*.so
+*.o
