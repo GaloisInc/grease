@@ -1,3 +1,5 @@
+// CFLAGS: $SHARED_LIB
+
 // A regression test for gitlab#249. What makes this test unique is that this
 // is compiled to a shared library rather than a standalone executable, and as
 // a result, most compilers will compile the call to `deref` in `test` to a PLT

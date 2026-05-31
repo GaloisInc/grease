@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// CFLAGS: $COMMON -no-pie
+
 // all: flags {"--symbol", "test"}
 // all: go(prog)
 

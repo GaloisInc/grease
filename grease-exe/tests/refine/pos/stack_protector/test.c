@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// CFLAGS: $STATIC -fstack-protector-all
+
 // A test case for gitlab#132. This doesn't really do anything interesting on
 // its own. Instead, the interesting part is compiling this program with
 // -fstack-protector-all, which causes the generated assembly code to emit

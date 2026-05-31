@@ -7,7 +7,8 @@ PPC32CC = powerpc-linux-musl-gcc
 # A reasonable default set of CC flags that aims to make binaries as small as
 # possible. It is possible that this default will not work for all test cases,
 # however. If you want to add a test case that changes one or more of these
-# flags, consider splitting it out into its own variable.
+# flags, embed the desired flags in the test file using a // CFLAGS: directive
+# (see doc/dev/tests.md and extract-cflags.py).
 #
 # Explanations for additional flags:
 # -static: Generally, we prefer self-contained test binaries.
@@ -50,12 +51,12 @@ DYNAMIC_DIRS = \
 DYNAMIC_ARM_EXES   = $(addsuffix /test.armv7l.elf,$(DYNAMIC_DIRS))
 DYNAMIC_PPC32_EXES = $(addsuffix /test.ppc32.elf,$(DYNAMIC_DIRS))
 
-# This test case requires the use of position-independent executables.
+# These test cases require the use of position-independent executables.
 DYNAMIC_PIE_DIRS = refine/bug/null_ptr_deref_pie refine/pos/pie
 DYNAMIC_PIE_ARM_EXES   = $(addsuffix /test.armv7l.elf,$(DYNAMIC_PIE_DIRS))
 DYNAMIC_PIE_PPC32_EXES = $(addsuffix /test.ppc32.elf,$(DYNAMIC_PIE_DIRS))
 
-# This test case requires the use of stripped binaries.
+# These test cases require the use of stripped binaries.
 STRIPPED_STATIC_DIRS = refine/pos/stripped refine/pos/stripped_with_overrides
 STRIPPED_STATIC_ARM_EXES   = $(addsuffix /test.armv7l.elf,$(STRIPPED_STATIC_DIRS))
 STRIPPED_STATIC_X64_EXES   = $(addsuffix /test.x64.elf,$(STRIPPED_STATIC_DIRS))
@@ -80,6 +81,7 @@ STATIC_WITH_LIBS_PPC32_EXES = $(addsuffix /test.ppc32.elf,$(STATIC_WITH_LIBS_DIR
 #
 # Sadly, clang will balk if you attempt to combine -fstack-protector-all with
 # -nostartfiles, so this test case must be compiled with startup code bloat.
+# See the $STACK_PROTECTOR group in extract-cflags.py.
 STACK_PROTECTOR_DIRS = refine/pos/stack_protector
 STACK_PROTECTOR_ARM_EXES = $(addsuffix /test.armv7l.elf,$(STACK_PROTECTOR_DIRS))
 STACK_PROTECTOR_X64_EXES = $(addsuffix /test.x64.elf,$(STACK_PROTECTOR_DIRS))
@@ -175,50 +177,26 @@ all: $(EXES) $(SOS) $(BCS) $(STANDALONE_BCS)
 fmt:
 	clang-format -i $(DIRS:=/test.c)
 
-$(STATIC_ARM_EXES): %/test.armv7l.elf: %/test.c
-	$(ARMCC) $(CFLAGS) -o $@ $<
+%/test.armv7l.elf: %/test.c
+	$(ARMCC) $(or $(shell ./extract-cflags.py $<),$(CFLAGS)) -o $@ $<
 
-$(STATIC_X64_EXES): %/test.x64.elf: %/test.c
-	$(X64CC) $(CFLAGS) -o $@ $<
+%/test.x64.elf: %/test.c
+	$(X64CC) $(or $(shell ./extract-cflags.py $<),$(CFLAGS)) -o $@ $<
 
-$(STATIC_PPC32_EXES): %/test.ppc32.elf: %/test.c
-	$(PPC32CC) $(CFLAGS) -o $@ $<
+%/test.ppc32.elf: %/test.c
+	$(PPC32CC) $(or $(shell ./extract-cflags.py $<),$(CFLAGS)) -o $@ $<
 
 $(STRIPPED_STATIC_ARM_EXES): %/test.armv7l.elf: %/test.c
-	$(ARMCC) $(CFLAGS) -o $@ $<
+	$(ARMCC) $(or $(shell ./extract-cflags.py $<),$(CFLAGS)) -o $@ $<
 	armv7l-linux-musleabi-strip $@
 
 $(STRIPPED_STATIC_X64_EXES): %/test.x64.elf: %/test.c
-	$(X64CC) $(CFLAGS) -o $@ $<
+	$(X64CC) $(or $(shell ./extract-cflags.py $<),$(CFLAGS)) -o $@ $<
 	strip $@
 
 $(STRIPPED_STATIC_PPC32_EXES): %/test.ppc32.elf: %/test.c
-	$(PPC32CC) $(CFLAGS) -o $@ $<
+	$(PPC32CC) $(or $(shell ./extract-cflags.py $<),$(CFLAGS)) -o $@ $<
 	powerpc-linux-musl-strip $@
-
-$(STATIC_WITH_LIBS_ARM_EXES): %/test.armv7l.elf: %/test.c
-	$(ARMCC) $(CFLAGS_COMMON) $(CFLAGS_STATIC) -o $@ $<
-
-$(STATIC_WITH_LIBS_PPC32_EXES): %/test.ppc32.elf: %/test.c
-	$(PPC32CC) $(CFLAGS_COMMON) $(CFLAGS_STATIC) -o $@ $<
-
-$(STACK_PROTECTOR_ARM_EXES): %/test.armv7l.elf: %/test.c
-	$(ARMCC) -fstack-protector-all $(CFLAGS_STATIC) -o $@ $<
-
-$(STACK_PROTECTOR_X64_EXES): %/test.x64.elf: %/test.c
-	$(X64CC) -fstack-protector-all $(CFLAGS_STATIC) -o $@ $<
-
-$(DYNAMIC_ARM_EXES): %/test.armv7l.elf: %/test.c
-	$(ARMCC) $(CFLAGS_COMMON) -no-pie -o $@ $<
-
-$(DYNAMIC_PPC32_EXES): %/test.ppc32.elf: %/test.c
-	$(PPC32CC) $(CFLAGS_COMMON) -no-pie -o $@ $<
-
-$(DYNAMIC_PIE_ARM_EXES): %/test.armv7l.elf: %/test.c
-	$(ARMCC) $(CFLAGS_COMMON) -fpic -o $@ $<
-
-$(DYNAMIC_PIE_PPC32_EXES): %/test.ppc32.elf: %/test.c
-	$(PPC32CC) $(CFLAGS_COMMON) -fpic -o $@ $<
 
 $(SHARED_LIBRARY_ARM_SOS): %/libaux.armv7l.so: %/aux.c
 	$(ARMCC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -o $@
@@ -238,26 +216,19 @@ $(SHARED_LIBRARY_PPC32_SOS): %/libaux.ppc32.so: %/aux.c
 $(SHARED_LIBRARY_PPC32_EXES): %/test.ppc32.elf: %/test.c %/libaux.ppc32.so
 	$(PPC32CC) $(CFLAGS_COMMON) -nostartfiles -fpic -L$(dir $@) $< -laux.ppc32 -o $@
 
-$(STANDALONE_SHARED_LIBRARY_ARM_SOS): %/test.armv7l.elf: %/test.c
-	$(ARMCC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -o $@
-
-$(STANDALONE_SHARED_LIBRARY_X64_SOS): %/test.x64.elf: %/test.c
-	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -o $@
-
-$(STANDALONE_SHARED_LIBRARY_PPC32_SOS): %/test.ppc32.elf: %/test.c
-	$(PPC32CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -fpic -shared $< -o $@
-
-$(SHARED_LIBARY_DWARFV4_X64_SOS): %/test.x64.elf: %/test.c
-	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -gdwarf-4 -fpic -shared $< -o $@
-
-$(SHARED_LIBARY_DWARFV5_X64_SOS): %/test.x64.elf: %/test.c
-	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -gdwarf-5 -fpic -shared $< -o $@
-
 $(ASSEMBLY_ARM_EXES): %/extra/test.armv7l.elf: %/test.S
 	$(ARMCC) $(CFLAGS) $< -o $@
 
  $(ASSEMBLY_SHARED_LIBRARY_X64_SOS): %/extra/test.x64.elf: %/test.S
 	$(X64CC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) -shared $< -o $@
+
+# libpng uses $STATIC_WITH_LIBS for ARM/PPC32 but full $(CFLAGS) for x64
+# (the x64 exe falls through to the generic rule above).
+refine/neg/libpng-cve-2018-13785/test.armv7l.elf: refine/neg/libpng-cve-2018-13785/test.c
+	$(ARMCC) $(CFLAGS_COMMON) $(CFLAGS_STATIC) -o $@ $<
+
+refine/neg/libpng-cve-2018-13785/test.ppc32.elf: refine/neg/libpng-cve-2018-13785/test.c
+	$(PPC32CC) $(CFLAGS_COMMON) $(CFLAGS_STATIC) -o $@ $<
 
 $(RAW_BINARY_EXES): %/test.armv7l.elf: %/test.c
 	$(ARMCC) $(CFLAGS_COMMON) $(CFLAGS_NO_LIBS) $(CFLAGS_STATIC) -c $< -o  $*/test.o

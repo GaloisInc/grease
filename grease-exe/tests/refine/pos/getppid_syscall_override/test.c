@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// CFLAGS: $STATIC_WITH_LIBS
+
 // all: flags {"--symbol", "test"}
 // all: go(prog)
 

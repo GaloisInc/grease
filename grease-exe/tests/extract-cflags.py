@@ -10,7 +10,21 @@ from sys import exit, stderr
 
 COMMENT = "// CFLAGS: "
 
-GROUPS = {"LLVM": ["-emit-llvm", "-frecord-command-line"]}
+_COMMON = [
+    "-fno-stack-protector",
+    "-Wl,--unresolved-symbols=ignore-all",
+    "-nostartfiles",
+]
+_NO_LIBS = ["-nodefaultlibs", "-nolibc", "-nostdlib"]
+_STATIC = ["-static", "-no-pie"]
+
+GROUPS = {
+    "LLVM": ["-emit-llvm", "-frecord-command-line"],
+    "COMMON": _COMMON,
+    "STATIC": _STATIC,
+    "STATIC_WITH_LIBS": _COMMON + _STATIC,
+    "SHARED_LIB": _COMMON + _NO_LIBS + ["-fpic", "-shared"],
+}
 
 
 def eprint(*args, **kwargs):
