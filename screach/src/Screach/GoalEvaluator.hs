@@ -18,12 +18,17 @@ import Data.Foldable (traverse_)
 import Data.List qualified as List
 import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Symbolic (MacawExprExtension (MacawNarrowBVDomain))
 import Data.Macaw.Symbolic qualified as MS
+import Data.Macaw.Symbolic.MemOps qualified as MSMO
 import Grease.Utility qualified as GU
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as CBO
 import Lang.Crucible.CFG.Core qualified as CCC
+import Lang.Crucible.CFG.Extension qualified as C
+import Lang.Crucible.Simulator qualified as C
 import Lang.Crucible.Simulator.EvalStmt qualified as C
+import Lang.Crucible.Simulator.Evaluation qualified as C
 import Lang.Crucible.Simulator.ExecutionTree qualified as C
 import Lang.Crucible.Simulator.Operations qualified as C
 import Lang.Crucible.Simulator.SimError qualified as C
@@ -106,12 +111,37 @@ goalEvaluatorMacawExtension ::
   MC.Memory w ->
   ResolvedTargetLoc w ->
   TargetAddress w ->
+  -- | Add proof obligations for narrowing of abstract values (i.e., use
+  -- 'Data.Macaw.Symbolic.MemOps.narrowBVDomainChecked')
+  Bool ->
   C.ExtensionImpl p sym (MS.MacawExt arch)
-goalEvaluatorMacawExtension ext la bak mem rtLoc tgtAddr =
+goalEvaluatorMacawExtension ext la bak mem rtLoc tgtAddr checkAbsValues =
   C.ExtensionImpl
-    { C.extensionEval = C.extensionEval ext
+    { C.extensionEval = goalEvaluatorExtensionEval checkAbsValues ext
     , C.extensionExec = goalEvaluatorExtensionExec (C.extensionExec ext) la bak mem rtLoc tgtAddr
     }
+
+-- | See the Haddocks for 'goalEvaluatorMacawExtension'.
+goalEvaluatorExtensionEval ::
+  CB.IsSymBackend sym bak =>
+  -- | Add proof obligations for narrowing of abstract values (i.e., use
+  -- 'Data.Macaw.Symbolic.MemOps.narrowBVDomainChecked')
+  Bool ->
+  C.ExtensionImpl p sym (MS.MacawExt arch) ->
+  bak ->
+  C.IntrinsicTypes sym ->
+  (Int -> String -> IO ()) ->
+  C.CrucibleState p sym (MS.MacawExt arch) rtp blocks r ctx ->
+  C.EvalAppFunc sym (C.ExprExtension (MS.MacawExt arch))
+goalEvaluatorExtensionEval checkAbsValues inner bak iTypes logFn cst evalFn =
+  \case
+    MacawNarrowBVDomain w dom xExpr
+      | checkAbsValues -> do
+          ptr <- evalFn xExpr
+          MSMO.narrowBVDomainChecked bak w dom ptr
+    e -> defaultExec e
+ where
+  defaultExec = C.extensionEval inner bak iTypes logFn cst evalFn
 
 -- | See the Haddocks for 'goalEvaluatorMacawExtension'.
 goalEvaluatorExtensionExec ::

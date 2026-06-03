@@ -107,10 +107,11 @@ go logRef flagsRef prog = do
   let solverOpts = case maybeSolver of
         Just solver -> ["--solver", solver]
         Nothing -> []
-  let cliOpts = solverOpts List.++ strOpts List.++ ["--", prog]
+  let testOpts = ["--check-abs-values"]
+  let cliOpts = solverOpts List.++ testOpts List.++ strOpts List.++ ["--", prog]
   liftIO (IORef.writeIORef flagsRef cliOpts)
 
-  opts <- liftIO (optsSimOpts <$> optsFromList (prog : solverOpts List.++ strOpts))
+  opts <- liftIO (optsSimOpts <$> optsFromList (prog : solverOpts List.++ testOpts List.++ strOpts))
   logTxt <-
     liftIO $
       withCapturedLogs $ \la' -> do
