@@ -46,6 +46,23 @@ fourmolu --mode inplace $(git ls-files '*.hs')
 One can configure [auto-format on save](https://code.visualstudio.com/docs/editing/codebasics#_formatting) to avoid formatting issues.
 The repo is already formatted with fourmolu so new formatting changes should be localized to behavioral changes. Further discussion of the rationale for the enforcement of a fourmolu style and commit hygiene is available in this [formatting discussion](./formatting.md).
 
+## google-java-format / Checkstyle
+
+The Screach Ghidra plugin's Java sources are formatted with
+[google-java-format] (AOSP style) and linted with [Checkstyle]. Both run via
+`screach/ghidra/scripts/java-lint.sh`:
+
+```sh
+(cd screach/ghidra && ./scripts/java-lint.sh)          # check (CI mode)
+(cd screach/ghidra && ./scripts/java-lint.sh format)   # apply formatting
+```
+
+The plugin's Nix shell (`screach/ghidra/shell.nix`) provides both tools. See the
+plugin's [README](../../screach/ghidra/README.md) for details.
+
+[google-java-format]: https://github.com/google/google-java-format
+[Checkstyle]: https://checkstyle.org/
+
 ## hlint
 
 We treat a small number of hlint warnings as errors in CI. To run hlint locally, try:
@@ -120,11 +137,11 @@ git ls-files -z --exclude-standard '*.cabal' '*.hs' '*.md' '*.py' '*.scala' | xa
 
 ## typos
 
-We run [typos] on `doc/` to spell-check the documentation. To run it locally,
-try:
+We run [typos] on `doc/` and the Ghidra help HTML directories. To run it
+locally, try:
 
 ```bash
-typos doc/
+typos doc/ ghidra-plugin/src/main/help/ screach/ghidra/src/main/help/
 ```
 
 [typos]: https://github.com/crate-ci/typos

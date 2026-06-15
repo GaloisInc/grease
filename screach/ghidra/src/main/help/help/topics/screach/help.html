@@ -1,0 +1,83 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<HTML>
+  <HEAD>
+    <META http-equiv="Content-Language" content="en-us">
+    <META http-equiv="Content-Type" content="text/html; charset=windows-1252">
+
+    <TITLE>Screach</TITLE>
+    <LINK rel="stylesheet" type="text/css" href="help/shared/DefaultStyle.css">
+  </HEAD>
+
+  <BODY>
+    <H1><a name="Screach"></a>Screach</H1>
+
+    <P>The Screach plugin drives the
+    <a href="https://github.com/GaloisInc/grease/tree/main/screach">Screach</a>
+    reachability analyzer from within Ghidra. You mark an entry (source) address
+    and a target address in the Listing, run Screach, and view its results in a
+    docked window. Screach determines whether the target is reachable from the
+    entry using symbolic execution.</P>
+
+    <H2><a name="set_entry"></a>Setting the Entry Address</H2>
+    <!-- [ref:screach_menu_entry] -->
+    <P>Right-click an instruction in the Listing and choose
+    <B>Screach &rarr; Set as Screach Entry (Source) Address</B>.
+    </P>
+
+    <H2><a name="set_target"></a>Setting the Target Address</H2>
+    <!-- [ref:screach_menu_target] -->
+    <P>Right-click an instruction and choose
+    <B>Screach &rarr; Set as Screach Target Address</B>. This is the location
+    Screach will try to reach.</P>
+
+    <H2><a name="add_avoid"></a>Adding Avoid Addresses</H2>
+    <!-- [ref:screach_menu_avoid] -->
+    <P>Right-click and choose <B>Screach &rarr; Add Screach Avoid Address</B> to
+    tell Screach to schedule any path through that instruction last
+    (<code>--avoid-addr</code>). You may add several.</P>
+
+    <!-- [tag:screach_help_clear_avoid] -->
+    <H2><a name="clear_avoid"></a>Clearing Avoid Addresses</H2>
+    <!-- [ref:screach_menu_clear_avoid] -->
+    <P>The entry and target addresses are each replaced whenever you set a new
+    one, but avoid addresses accumulate. To discard all of them, choose
+    <B>Screach &rarr; Clear Screach Avoid Addresses</B> from the menu bar. (The
+    item is disabled when no avoid addresses are set.)</P>
+
+    <!-- [tag:screach_help_run] -->
+    <H2><a name="run"></a>Running Screach</H2>
+    <!-- [ref:screach_menu_run] -->
+    <P>Choose <B>Screach &rarr; Run Screach</B> from the menu bar, or press
+    <B>Ctrl+Alt+R</B> (rebindable in the Key Bindings options). Both an entry and
+    a target address must be set. Screach runs as an external process off the UI
+    thread and can be cancelled from the task dialog.</P>
+
+    <!-- [tag:screach_help_results] -->
+    <H2><a name="results"></a>Results Window</H2>
+    <P>The Screach window streams the command output and shows a colored banner:
+    green when the target was reached, amber when it was not, and red on error.
+    Toolbar buttons let you clear the log, navigate to the last address reported,
+    and locate the coverage file.</P>
+
+    <!-- [tag:screach_help_options] -->
+    <H2><a name="options"></a>Options</H2>
+    <P>Configure the plugin under <B>Edit &rarr; Tool Options &rarr; Screach</B>:</P>
+    <UL>
+      <LI><B>Use Docker</B> &ndash; run Screach via a Docker image instead of a
+      local binary.</LI>
+      <LI><B>Binary Path</B> &ndash; path to the <code>screach</code> executable
+      (when <I>Use Docker</I> is off).</LI>
+      <LI><B>Docker Image</B> / <B>Docker Run Args</B> &ndash; image name and extra
+      <code>docker run</code> arguments (when <I>Use Docker</I> is on). The binary's
+      directory is mounted and used as the working directory automatically.</LI>
+      <LI><B>Extra CLI Args</B> &ndash; arguments appended to every invocation.</LI>
+      <!-- [ref:grease_solvers] -->
+      <LI><B>Solver</B> &ndash; value for <code>--solver</code> (bitwuzla, cvc4, cvc5, yices, z3).</LI>
+      <LI><B>Dump Coverage</B> &ndash; pass <code>--dump-coverage</code> to produce a
+      <code>.greasecov</code> file. Load it in
+      <a href="https://github.com/GaloisInc/grease-cartographer">grease-cartographer</a>
+      via <B>Tools &rarr; Code Coverage &rarr; Load Code Coverage File(s)&hellip;</B></LI>
+    </UL>
+  </BODY>
+</HTML>

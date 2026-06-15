@@ -36,9 +36,27 @@ jobs:
       - name: Setup Ghidra
         uses: ./.github/actions/ghidra-install
 
-      - name: Lint Ghidra plugin Scala
+      - name: Lint GREASE Ghidra plugin Scala
         shell: bash
         run: cd ghidra-plugin && ./gradlew spotlessCheck
+
+      - name: Lint Screach Ghidra plugin Java
+        shell: bash
+        # [ref:screach_java_lint_versions]
+        env:
+          GJF_VERSION: "1.25.2"
+          CHECKSTYLE_VERSION: "10.21.1"
+        run: |
+          curl --fail --location --proto '=https' --show-error --silent --tlsv1.2 \
+            --output /tmp/google-java-format.jar \
+            "https://github.com/google/google-java-format/releases/download/v${GJF_VERSION}/google-java-format-${GJF_VERSION}-all-deps.jar"
+          curl --fail --location --proto '=https' --show-error --silent --tlsv1.2 \
+            --output /tmp/checkstyle.jar \
+            "https://github.com/checkstyle/checkstyle/releases/download/checkstyle-${CHECKSTYLE_VERSION}/checkstyle-${CHECKSTYLE_VERSION}-all.jar"
+          cd screach/ghidra
+          GOOGLE_JAVA_FORMAT_JAR=/tmp/google-java-format.jar \
+            CHECKSTYLE_JAR=/tmp/checkstyle.jar \
+            ./scripts/java-lint.sh check
 
       - name: Check for broken links
         uses: langston-barrett/mdlynx/.github/actions/mdlynx@v0.3.0
@@ -72,12 +90,15 @@ jobs:
             tar xzf - hlint-3.8/hlint
           ./hlint-3.8/hlint grease{,-aarch32,-llvm,-ppc,-x86}/src grease-cli/src grease-exe/{main,src,tests}
 
-      - name: Spell check docs
+      - name: Spell check
         # We pin a specific version because updates can come with additional
         # typo fixes. These could break CI unexpectedly if we just pinned @v1.
         uses: crate-ci/typos@v1.47.2
         with:
-          files: doc/
+          files: |
+            doc/
+            ghidra-plugin/src/main/help/
+            screach/ghidra/src/main/help/
 
       - name: Check cross-references with tagref
         run: |

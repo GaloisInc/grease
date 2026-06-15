@@ -20,6 +20,8 @@ import What4.ProblemFeatures qualified as W4
 import What4.Protocol.Online qualified as WPO
 import What4.Solver qualified as W4
 
+-- [ref:grease_solvers]
+
 -- | The SMT solver to use for solving proof goals.
 data Solver
   = Bitwuzla

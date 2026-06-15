@@ -179,7 +179,8 @@ loadOptions ::
   LC.LoadOptions
 loadOptions pie =
   LC.LoadOptions
-    { LC.loadOffset = if pie then Just 0x10000000 else Nothing
+    { -- [tag:pie_load_offset]
+      LC.loadOffset = if pie then Just 0x10000000 else Nothing
     }
 
 load ::
