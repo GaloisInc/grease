@@ -204,8 +204,13 @@ jobs:
     - name: Setup Ghidra
       uses: ./.github/actions/ghidra-install
 
-    - name: Test Ghidra plugin
+    - name: Test GREASE Ghidra plugin
       run: cd ghidra-plugin && ./gradlew installExtension && ./gradlew test
+
+    - name: Build and test Screach Ghidra plugin
+      # Reuse the checked-in Gradle wrapper from ghidra-plugin (the screach
+      # plugin has no wrapper of its own).
+      run: ./ghidra-plugin/gradlew -p screach/ghidra buildExtension test
 
     - name: Haddock
       if: ${{ matrix.haddock }}

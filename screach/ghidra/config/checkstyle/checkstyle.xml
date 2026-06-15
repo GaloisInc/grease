@@ -1,0 +1,90 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+  Checkstyle configuration for the Screach Ghidra plugin.
+
+  google-java-format already enforces layout, so Checkstyle focuses on
+  correctness bugs and hygiene issues a formatter cannot catch.
+-->
+<module name="Checker">
+  <property name="charset" value="UTF-8"/>
+  <property name="severity" value="error"/>
+  <property name="fileExtensions" value="java"/>
+
+  <!-- No trailing whitespace. -->
+  <module name="RegexpSingleline">
+    <property name="format" value="\s+$"/>
+    <property name="message" value="Line has trailing whitespace."/>
+  </module>
+
+  <module name="TreeWalker">
+    <!-- Imports. -->
+    <module name="UnusedImports">
+      <property name="processJavadoc" value="true"/>
+    </module>
+    <module name="RedundantImport"/>
+    <module name="AvoidStarImport">
+      <property name="allowClassImports" value="false"/>
+      <property name="allowStaticMemberImports" value="false"/>
+    </module>
+
+    <!-- Correctness: equality and contracts. -->
+    <module name="EqualsHashCode"/>
+    <module name="CovariantEquals"/>
+    <module name="StringLiteralEquality"/>
+    <module name="EqualsAvoidNull"/>
+    <module name="SuperClone"/>
+    <module name="SuperFinalize"/>
+    <module name="NoFinalizer"/>
+
+    <!-- Correctness: control flow. -->
+    <module name="MissingSwitchDefault"/>
+    <module name="DefaultComesLast"/>
+    <module name="FallThrough"/>
+    <module name="ModifiedControlVariable"/>
+    <module name="InnerAssignment"/>
+    <module name="SimplifyBooleanExpression"/>
+    <module name="SimplifyBooleanReturn"/>
+
+    <!-- Correctness: declarations and scoping. -->
+    <module name="HiddenField">
+      <property name="ignoreConstructorParameter" value="true"/>
+      <property name="ignoreSetter" value="true"/>
+    </module>
+    <module name="MultipleVariableDeclarations"/>
+    <module name="OneStatementPerLine"/>
+    <module name="PackageDeclaration"/>
+    <module name="MutableException"/>
+
+    <!-- Correctness: dangerous patterns. -->
+    <module name="IllegalCatch">
+      <property name="illegalClassNames" value="java.lang.Throwable, java.lang.Error"/>
+    </module>
+    <module name="IllegalThrows">
+      <property name="illegalClassNames" value="java.lang.Throwable, java.lang.Error"/>
+    </module>
+    <module name="IllegalInstantiation">
+      <property name="classes" value="java.lang.Boolean"/>
+    </module>
+    <module name="AvoidDoubleBraceInitialization"/>
+
+    <!-- Correctness: empty/missing bodies. -->
+    <module name="EmptyBlock">
+      <property name="option" value="text"/>
+      <property name="tokens" value="LITERAL_TRY, LITERAL_CATCH, LITERAL_FINALLY,
+        LITERAL_IF, LITERAL_ELSE, LITERAL_FOR, LITERAL_WHILE, LITERAL_DO"/>
+    </module>
+    <module name="NeedBraces"/>
+
+    <!-- Style: unambiguous literals and types. -->
+    <module name="UpperEll"/>
+    <module name="ArrayTypeStyle"/>
+    <module name="UnnecessarySemicolonAfterOuterTypeDeclaration"/>
+    <module name="UnnecessarySemicolonAfterTypeMemberDeclaration"/>
+    <module name="UnnecessarySemicolonInEnumeration"/>
+    <module name="UnnecessarySemicolonInTryWithResources"/>
+  </module>
+</module>

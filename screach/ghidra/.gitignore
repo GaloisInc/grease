@@ -1,0 +1,12 @@
+.bloop
+.gradle
+.metals
+.vscode
+bin
+build
+lib/*.jar
+dist
+
+# The repo-root .gitignore ignores *.html (hpc coverage reports), but the
+# plugin's help topics are real source that must be committed.
+!src/main/help/**/*.html
