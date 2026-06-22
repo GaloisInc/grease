@@ -14,20 +14,6 @@
  * limitations under the License.
  */
 // Builds a Ghidra Extension for a given Ghidra installation.
-//
-// An absolute path to the Ghidra installation directory must be supplied either by setting the
-// GHIDRA_INSTALL_DIR environment variable or Gradle project property:
-//
-//     > export GHIDRA_INSTALL_DIR=<Absolute path to Ghidra>
-//     > gradle
-//
-//         or
-//
-//     > gradle -PGHIDRA_INSTALL_DIR=<Absolute path to Ghidra>
-//
-// Gradle should be invoked from the directory of the project to build.  Please see the
-// application.gradle.version property in <GHIDRA_INSTALL_DIR>/Ghidra/application.properties
-// for the correction version of Gradle to use for the Ghidra installation you specify.
 
 plugins {
 	id "checkstyle"
@@ -46,7 +32,8 @@ repositories {
 // import groups, and exposes no option to disable that. Calling the CLI jar
 // keeps formatting identical to upstream.
 //
-// Keep these versions aligned with [ref:ghidra_java_lint_versions].
+// [tag:ghidra_java_lint_versions] These pinned tool versions are the single
+// source of truth; the Nix shells carry [ref:ghidra_java_lint_versions].
 configurations {
 	googleJavaFormat {
 		// google-java-format pulls in Guava, which publishes Gradle Module
@@ -98,7 +85,7 @@ task googleJavaFormatApply(type: JavaExec) {
 
 // The Checkstyle config is shared across the GREASE Ghidra extensions; point at
 // the common copy directly rather than vendoring a per-extension symlink.
-def checkstyleConfig = file("../../ghidra-common/config/checkstyle/checkstyle.xml")
+def checkstyleConfig = file("../ghidra-common/config/checkstyle/checkstyle.xml")
 
 checkstyle {
 	toolVersion = "10.21.1"
@@ -136,9 +123,6 @@ task formatJava {
 // installation. Everything that needs it lives in this guarded block so the lint
 // and format tasks above can run standalone. A build/test task requested without
 // GHIDRA_INSTALL_DIR fails below with a clear message instead of silently no-op'ing.
-//
-// Adapted from Ghidra's generated "DO NOT MODIFY" section to make the Ghidra
-// requirement lazy; the resolution logic itself is unchanged.
 def ghidraInstallDir
 
 if (System.env.GHIDRA_INSTALL_DIR) {
@@ -149,15 +133,23 @@ else if (project.hasProperty("GHIDRA_INSTALL_DIR")) {
 }
 
 if (ghidraInstallDir) {
-	task distributeExtension {
-		group = "Ghidra"
-
-		apply from: new File(ghidraInstallDir).getCanonicalPath() + "/support/buildExtension.gradle"
-		dependsOn ':buildExtension'
-	}
+	apply from: new File(ghidraInstallDir).getCanonicalPath() + "/support/buildExtension.gradle"
 
 	dependencies {
 		testImplementation 'junit:junit:4.13.2'
+	}
+
+	task installExtension(type: Copy) {
+		def dirName = buildExtension.destinationDirectory.get()
+		def archiveName = buildExtension.archiveBaseName.get()
+		def archiveExt = buildExtension.archiveExtension.get()
+
+		def zipFile = file("${dirName}/${archiveName}.${archiveExt}")
+
+		from zipTree(zipFile)
+		into file("${ghidraInstallDir}/Ghidra/Extensions/")
+
+		dependsOn buildExtension
 	}
 
 	test {
@@ -168,13 +160,13 @@ if (ghidraInstallDir) {
 			'--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED'
 	}
 
-	// Exclude additional files from the built extension
-	// Ex: buildExtension.exclude '.idea/**'
+	buildExtension.exclude '.gradle/**'
+	buildExtension.exclude '.gradle-user/**'
 }
 else {
 	// Fail only when a Ghidra-dependent task is actually requested.
 	gradle.taskGraph.whenReady { graph ->
-		def ghidraTasks = ["buildExtension", "distributeExtension", "test", "compileJava",
+		def ghidraTasks = ["buildExtension", "installExtension", "test", "compileJava",
 			"compileTestJava", "build", "assemble"]
 		if (graph.allTasks.any { ghidraTasks.contains(it.name) }) {
 			throw new GradleException("GHIDRA_INSTALL_DIR is not defined!")

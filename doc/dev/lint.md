@@ -48,17 +48,24 @@ The repo is already formatted with fourmolu so new formatting changes should be 
 
 ## google-java-format / Checkstyle
 
-The Screach Ghidra plugin's Java sources are formatted with
-[google-java-format] (AOSP style) and linted with [Checkstyle]. Both run via
-`screach/ghidra/scripts/java-lint.sh`:
+<!-- [tag:ghidra_java_lint] -->
+The Ghidra extensions' Java sources are formatted with [google-java-format]
+(AOSP style) and linted with [Checkstyle] (via Gradle's built-in `checkstyle`
+plugin). Both run through Gradle and do not require `GHIDRA_INSTALL_DIR`:
 
 ```sh
-(cd screach/ghidra && ./scripts/java-lint.sh)          # check (CI mode)
-(cd screach/ghidra && ./scripts/java-lint.sh format)   # apply formatting
+(cd ghidra-ecfs && gradle lintJava)        # check formatting + Checkstyle
+(cd ghidra-ecfs && gradle formatJava)      # apply formatting
+
+(cd screach/ghidra && gradle lintJava)     # check formatting + Checkstyle
+(cd screach/ghidra && gradle formatJava)   # apply formatting
 ```
 
-The plugin's Nix shell (`screach/ghidra/shell.nix`) provides both tools. See the
-plugin's [README](../../screach/ghidra/README.md) for details.
+The pinned tool versions live in each extension's `build.gradle`
+([ref:ghidra_java_lint_versions]); the shared Checkstyle config is
+`ghidra-common/config/checkstyle/checkstyle.xml`. Each extension's Nix shell
+provides both tools. See [ghidra-ecfs/README.md](../../ghidra-ecfs/README.md)
+and [screach/ghidra/README.md](../../screach/ghidra/README.md) for details.
 
 [google-java-format]: https://github.com/google/google-java-format
 [Checkstyle]: https://checkstyle.org/

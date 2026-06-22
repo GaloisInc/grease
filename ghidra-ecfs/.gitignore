@@ -1,0 +1,8 @@
+.bloop
+.gradle
+.gradle-user
+.metals
+.vscode
+bin
+build
+dist

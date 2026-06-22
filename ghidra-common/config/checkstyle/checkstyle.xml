@@ -4,7 +4,7 @@
     "https://checkstyle.org/dtds/configuration_1_3.dtd">
 
 <!--
-  Checkstyle configuration for the Screach Ghidra plugin.
+  Shared Checkstyle configuration for GREASE Ghidra extensions.
 
   google-java-format already enforces layout, so Checkstyle focuses on
   correctness bugs and hygiene issues a formatter cannot catch.
@@ -88,3 +88,4 @@
     <module name="UnnecessarySemicolonInTryWithResources"/>
   </module>
 </module>
+

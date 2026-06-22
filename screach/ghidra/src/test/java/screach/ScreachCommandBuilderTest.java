@@ -2,12 +2,12 @@ package screach;
 
 import static org.junit.Assert.assertEquals;
 
-import java.util.Collections;
-import java.util.List;
+import ghidra.test.AbstractGhidraHeadlessIntegrationTest;
 
 import org.junit.Test;
 
-import ghidra.test.AbstractGhidraHeadlessIntegrationTest;
+import java.util.Collections;
+import java.util.List;
 
 public class ScreachCommandBuilderTest extends AbstractGhidraHeadlessIntegrationTest {
 
@@ -26,8 +26,7 @@ public class ScreachCommandBuilderTest extends AbstractGhidraHeadlessIntegration
     @Test
     public void tokenizeMultipleTokens() {
         assertEquals(
-                List.of("--foo", "bar", "baz"),
-                ScreachCommandBuilder.tokenize("--foo bar baz"));
+                List.of("--foo", "bar", "baz"), ScreachCommandBuilder.tokenize("--foo bar baz"));
     }
 
     @Test
@@ -38,8 +37,7 @@ public class ScreachCommandBuilderTest extends AbstractGhidraHeadlessIntegration
     @Test
     public void tokenizeQuotedString() {
         assertEquals(
-                List.of("--flag", "a b c"),
-                ScreachCommandBuilder.tokenize("--flag \"a b c\""));
+                List.of("--flag", "a b c"), ScreachCommandBuilder.tokenize("--flag \"a b c\""));
     }
 
     @Test

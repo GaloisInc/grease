@@ -7,9 +7,9 @@ pkgs.mkShell {
     ghidra
     gradle
     jdk21
-    # Java formatter + linter, used by [file:screach/ghidra/scripts/java-lint.sh].
-    # nixpkgs pins the versions; keep them aligned with the pinned versions at
-    # [ref:screach_java_lint_versions].
+    # Java formatter + linter. These are run via Gradle (google-java-format and
+    # the checkstyle plugin, see [file:screach/ghidra/build.gradle]); nixpkgs is
+    # only a convenience here. Keep aligned with the pinned [ref:ghidra_java_lint_versions].
     google-java-format
     checkstyle
   ];
@@ -21,8 +21,8 @@ pkgs.mkShell {
     echo ""
     echo "Available commands:"
     echo "  gradle distributeExtension - Build the extension"
-    echo "  ./scripts/java-lint.sh        - Check Java formatting + lint"
-    echo "  ./scripts/java-lint.sh format - Apply Java formatting"
+    echo "  gradle lintJava            - Check Java formatting + lint"
+    echo "  gradle formatJava          - Apply Java formatting"
     echo "  ghidra - Launch Ghidra"
   '';
 }
