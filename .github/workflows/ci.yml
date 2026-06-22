@@ -212,6 +212,11 @@ jobs:
       # plugin has no wrapper of its own).
       run: ./ghidra-plugin/gradlew -p screach/ghidra buildExtension test
 
+    - name: Build and test ECFS Ghidra extension
+      # Reuse the checked-in Gradle wrapper from ghidra-plugin (ghidra-ecfs has
+      # no wrapper of its own).
+      run: ./ghidra-plugin/gradlew -p ghidra-ecfs buildExtension test
+
     - name: Haddock
       if: ${{ matrix.haddock }}
       # Build the Haddocks to ensure that they are well formed. Somewhat

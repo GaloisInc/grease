@@ -40,23 +40,19 @@ jobs:
         shell: bash
         run: cd ghidra-plugin && ./gradlew spotlessCheck
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # Ghidra 11.4.2 requires Gradle >= 8.5; match the ghidra-plugin wrapper.
+          gradle-version: "8.13"
+
       - name: Lint Screach Ghidra plugin Java
         shell: bash
-        # [ref:screach_java_lint_versions]
-        env:
-          GJF_VERSION: "1.25.2"
-          CHECKSTYLE_VERSION: "10.21.1"
-        run: |
-          curl --fail --location --proto '=https' --show-error --silent --tlsv1.2 \
-            --output /tmp/google-java-format.jar \
-            "https://github.com/google/google-java-format/releases/download/v${GJF_VERSION}/google-java-format-${GJF_VERSION}-all-deps.jar"
-          curl --fail --location --proto '=https' --show-error --silent --tlsv1.2 \
-            --output /tmp/checkstyle.jar \
-            "https://github.com/checkstyle/checkstyle/releases/download/checkstyle-${CHECKSTYLE_VERSION}/checkstyle-${CHECKSTYLE_VERSION}-all.jar"
-          cd screach/ghidra
-          GOOGLE_JAVA_FORMAT_JAR=/tmp/google-java-format.jar \
-            CHECKSTYLE_JAR=/tmp/checkstyle.jar \
-            ./scripts/java-lint.sh check
+        run: cd screach/ghidra && gradle lintJava
+
+      - name: Lint ECFS Ghidra extension Java
+        shell: bash
+        run: cd ghidra-ecfs && gradle lintJava
 
       - name: Check for broken links
         uses: langston-barrett/mdlynx/.github/actions/mdlynx@v0.3.0

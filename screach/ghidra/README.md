@@ -82,6 +82,7 @@ built against.
 
 ## Development
 
+<!-- [file:doc/dev/lint.md] -->
 See [doc/dev/lint.md](../../doc/dev/lint.md) for formatting and linting setup.
 
 ## Installing
