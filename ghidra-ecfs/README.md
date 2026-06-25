@@ -14,6 +14,9 @@ This Ghidra extension teaches Ghidra how to recognize and load
   `ECFS::Symbols::<table>`
 - Annotates thread PCs from `.prstatus` with comments and analysis bookmarks
 
+After importing an ECFS coredump, you can tell that the plug-in has worked by
+checking for the `ECFS prstatus` bookmark (type: "Analysis").
+
 ## Building
 
 Set `GHIDRA_INSTALL_DIR` to your local Ghidra checkout or install directory and
@@ -21,20 +24,23 @@ run Gradle from this directory:
 
 ```sh
 export GHIDRA_INSTALL_DIR=/path/to/ghidra
-gradle buildExtension
+../ghidra-plugin/gradlew -p ../ghidra-ecfs buildExtension
 ```
+
+(If you already have Gradle installed you can simply run `gradle
+buildExtension`.)
 
 To install the built extension directly into that Ghidra installation:
 
 ```sh
 export GHIDRA_INSTALL_DIR=/path/to/ghidra
-gradle installExtension
+../ghidra-plugin/gradlew -p ../ghidra-ecfs installExtension
 ```
 
 The extension zip will be written to `dist/`.
 
-If Gradle is not already installed and you use Nix, you can build in a Nix
-shell instead:
+If you prefer to use Nix to install Gradle, you can build in a Nix shell
+instead:
 
 ```sh
 nix-shell --run 'gradle buildExtension'
