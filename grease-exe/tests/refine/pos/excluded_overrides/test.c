@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// CFLAGS: $COMMON -no-pie
+
 // A regression test for gitlab#226, which ensures that we do not convert LLVM
 // overrides to Macaw overrides that do not work well with macaw-symbolic's
 // lazy memory model.

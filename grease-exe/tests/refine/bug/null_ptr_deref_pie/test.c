@@ -1,3 +1,5 @@
+// CFLAGS: $COMMON -fpic
+
 // A regression test for gitlab#254 and gitlab#255. This ensures that
 // dereferencing a null pointer will be flagged as a possible bug even when
 // analyzing a position-independent executable (PIE). In PIE binaries, it is

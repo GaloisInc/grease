@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2025 */
 
+// CFLAGS: $SHARED_LIB -gdwarf-5
+
 // Tests that we log a failure to parse for an unsupported dwarf type (Unions)
 // See issue #262
 

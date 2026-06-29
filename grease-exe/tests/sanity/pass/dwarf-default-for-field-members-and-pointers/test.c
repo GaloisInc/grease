@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2025 */
 
+// CFLAGS: $SHARED_LIB -gdwarf-5
+
 // Tests that we can still succeed without heuristics to load fields prior to a
 // failure and after a function pointer
 

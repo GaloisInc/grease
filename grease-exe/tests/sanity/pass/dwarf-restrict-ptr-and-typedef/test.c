@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2025 */
 
+// CFLAGS: $SHARED_LIB -gdwarf-5
+
 // Tests that heuristics are unneeded when using dwarf populated shapes to
 // create a memory precondition that allows foo to execute. Uses a typedef
 // and restrict, shows that GREASE parses through these DWARF tags.

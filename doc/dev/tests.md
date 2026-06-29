@@ -105,12 +105,15 @@ void test(/* ... */) { /* ... */ }
 
 ## Embedded C compiler flags
 
-Tests in the `llvm-bc/` directory may embed additional flags to pass to the C
-compiler using the special comment syntax `// CFLAGS: `, e.g., `// CFLAGS: -g`.
+Binary executable tests (`.armv7l.elf`, `.x64.elf`, `.ppc32.elf`) and tests in
+the `llvm-bc/` directory may embed additional flags to pass to the C compiler
+using the special comment syntax `// CFLAGS: `, e.g., `// CFLAGS: -g`.
 
-The script that extracts these flags also supports flag *groups*, which start
-with `$`. The only flag group currently supported is `$LLVM`, which expands to
-`-emit-llvm -frecord-command-line`.
+Binary tests default to `$(CFLAGS)` (static, no-pie, no-libs) when no
+`// CFLAGS:` directive is present.
+
+The script also supports flag *groups* (e.g., `$LLVM`, `$DYNAMIC`); see
+`grease-exe/tests/extract-cflags.py` for the full list.
 
 ## Writing good tests
 

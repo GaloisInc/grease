@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2025 */
 
+// CFLAGS: $SHARED_LIB -gdwarf-5
+
 // Tests that with a conservative shape we a. dont try to parse a union
 // b. dont attempt to make separate fields for bar
 

@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// CFLAGS: $COMMON -no-pie
+
 // A variant of the malloc-free test case that dynamically links against libc
 // instead of redefining malloc and free. This ensures that the calls to malloc
 // and free come from an external shared library, which requires a different

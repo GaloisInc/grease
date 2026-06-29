@@ -1,5 +1,7 @@
 /* Copyright (c) Galois, Inc. 2024 */
 
+// CFLAGS: $STATIC_WITH_LIBS
+
 // A simple test that does nothing but call alarm(), which performs a syscall.
 // Currently, GREASE will treat all syscalls as no-ops.
 
