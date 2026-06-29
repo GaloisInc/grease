@@ -527,9 +527,7 @@ initState ::
   ArchContext arch ->
   SetupHook sym arch ->
   AddressOverrides arch ->
-  -- | Add proof obligations for narrowing of abstract values (i.e., use
-  -- 'Data.Macaw.Symbolic.MemOps.narrowBVDomainChecked')
-  Bool ->
+  Opts.CheckAbsValues ->
   -- | The initial personality, see
   -- 'Lang.Crucible.Simulator.ExecutionTree.cruciblePersonality'
   p ->
