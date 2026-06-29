@@ -100,7 +100,7 @@ jobs:
         cabal-version: ${{ matrix.cabal }}
 
     - name: Restore cabal store cache
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@v5.0.5
       id: cache
       with:
         path: |
@@ -244,7 +244,7 @@ jobs:
         (cd elf-edit-core-dump && cabal check)
 
     - name: Save cache store cache
-      uses: actions/cache/save@v5
+      uses: actions/cache/save@v5.0.5
       if: always()
       with:
         path: |
