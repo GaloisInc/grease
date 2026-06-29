@@ -6,25 +6,18 @@
 local ecfs = "../ghidra-ecfs/src/test/resources/ecfs/test.x64.elf"
 
 -- Reach a shared-library function via --target-symbol.
---
--- TODO: binSymMap is not populated with ECFS dynamic symbols yet, so the
--- "Searching" log line does not include the resolved address in brackets.
--- Once that is fixed this check should be updated to:
---   checkln "Searching for target function 'add_numbers' [address "
 flags {"--entry-symbol", "main"}
 flags {"--target-symbol", "add_numbers"}
 go(ecfs)
-checkln "Searching for target function 'add_numbers'"
+-- add_numbers is in binSymMap (from ecfsDynsym), so the resolved address
+-- appears in brackets on the "Searching" line.
+check "Searching for target function 'add_numbers' [address "
 reached "add_numbers"
 verified()
 
 -- Reach the same function via its raw virtual address.
---
--- TODO: the address-based goal evaluator never fires because
--- greaseMacawExtImpl's extensionExec short-circuits for MacawInstructionStart
--- without calling through to the wrapped extension.  Once that is fixed this
--- check should be updated to assert REACHED instead.
 flags {"--entry-symbol", "main"}
 flags {"--target-addr", "0x707981bcc0f9"}
 go(ecfs)
-check "Failed to reach target!"
+check "Reached target address 0x707981bcc0f9 [in function 'add_numbers'"
+verified()
