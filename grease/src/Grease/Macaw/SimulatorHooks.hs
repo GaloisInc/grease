@@ -212,7 +212,9 @@ extensionExec archCtx bak la insnAct tgtOvs archStruct baseExt stmt crucState = 
           doLog la (Diag.ExecutingInstruction (PP.pretty segOff) dis)
           executeInsnAct segOff
           maybeRunAddressOverride archCtx archStruct crucState segOff tgtOvs
-          pure ((), crucState)
+          -- Call through to the wrapped extension so any outer wrappers
+          -- (e.g. the screach goal evaluator) also see MacawInstructionStart.
+          CS.extensionExec baseExt stmt crucState
         Nothing ->
           panic
             "extensionExec"

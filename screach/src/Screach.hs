@@ -60,6 +60,7 @@ import Data.Time.Clock qualified as Time
 import Data.Time.Format qualified as Time
 import Data.Tuple qualified as Tuple
 import Data.Type.Equality (testEquality)
+import Data.Vector qualified as Vec
 import Data.Void (Void, absurd)
 import Data.Word (Word64)
 import GHC.IO.Handle (Handle)
@@ -733,9 +734,38 @@ loadElfFromConfig conf sla gla _archCtx = do
           [ "entrypoint not in progEntrypointAddrs"
           , show (PP.pretty entry)
           ]
+  -- For ECFS binaries, augment binSymMap with function symbols from the
+  -- dynamic symbol table so that shared-library targets can be resolved by
+  -- --target-symbol.
+  ecfsSymMapExtra <-
+    case elfBinary of
+      RawElfBinary _ -> pure Map.empty
+      EcfsBinary ecfs ->
+        case Ecfs.ecfsDynsym ecfs of
+          Nothing -> pure Map.empty
+          Just dynsym ->
+            pure
+              $ Elf.elfClassInstances (Elf.headerClass (Elf.header (Ecfs.ecfsElfHeaderInfo ecfs)))
+              $ Map.fromList
+              $ Maybe.mapMaybe
+                ( \symEntry ->
+                    let addrW = fromIntegral @(Elf.ElfWordType 64) @Word64 (Elf.steValue symEntry) + loadOffset
+                     in case MBLE.resolveAbsoluteAddress mem (MC.memWord addrW) of
+                          Nothing -> Nothing
+                          Just segOff -> Just (segOff, Elf.steName symEntry)
+                )
+                . Vec.toList
+                . Elf.symtabEntries
+              $ dynsym
+  let binMd0 = GL.progBinMd loadedProg
+  let symMapAugmented = Map.unionWith (\_ old -> old) ecfsSymMapExtra (GL.binSymMap binMd0)
   let loadedProg_ =
         loadedProg
-          { GL.progBinMd = (GL.progBinMd loadedProg){GL.binPltStubs = pltStubs}
+          { GL.progBinMd =
+              binMd0
+                { GL.binPltStubs = pltStubs
+                , GL.binSymMap = symMapAugmented
+                }
           }
   pure $
     LoadedELF
