@@ -18,6 +18,7 @@ module Grease.Options (
   ErrorSymbolicSyscalls (..),
   SkipInvalidCallAddrs (..),
   SkipUnsupportedRelocs (..),
+  CheckAbsValues (..),
   BoundsOpts (..),
   DebugOpts (..),
   FsOpts (..),
@@ -109,6 +110,33 @@ newtype ErrorSymbolicSyscalls
   -- See Note [Derive Read/Show instances the with newtype strategy]
   deriving newtype (Enum, Eq, Ord, Read, Show)
 
+-- | If 'True', add SMT proof obligations when Macaw\'s abstract interpreter
+-- narrows the domain of a bitvector (i.e., use
+-- 'Data.Macaw.Symbolic.MemOps.narrowBVDomainChecked' instead of
+-- 'Data.Macaw.Symbolic.MemOps.narrowBVDomain').
+--
+-- Macaw uses abstract interpretation to compute an over-approximation of the
+-- possible values of registers and memory at each program point, represented as
+-- bitvector domains. When translating machine code to Crucible, it emits
+-- @MacawNarrowBVDomain@ statements that restrict (\"narrow\") a symbolic
+-- bitvector to the abstract domain computed at that point, giving the SMT
+-- solver tighter bounds on symbolic values.
+--
+-- If Macaw\'s abstract interpreter has a soundness bug, the abstract domain
+-- might be too narrow, causing 'Data.Macaw.Symbolic.MemOps.narrowBVDomain' to
+-- silently assert an incorrect constraint and potentially mask real bugs in the
+-- analyzed binary. When 'CheckAbsValues' is 'True', the checked variant adds
+-- an SMT proof obligation that the concrete value lies within the abstract
+-- domain before narrowing. A failing obligation therefore indicates unsoundness
+-- in Macaw\'s abstract interpreter, not a bug in the binary under analysis.
+--
+-- Off by default: the extra proof obligations add overhead and are only useful
+-- when auditing Macaw itself rather than analyzing a binary.
+newtype CheckAbsValues
+  = CheckAbsValues {getCheckAbsValues :: Bool}
+  -- See Note [Derive Read/Show instances the with newtype strategy]
+  deriving newtype (Enum, Eq, Ord, Read, Show)
+
 data UseDebugInfoShapes = NoDebugInfoShapes | ConservativeDebugInfoShapes | PreciseDebugInfoShapes
   deriving (Bounded, Enum, Show)
 
@@ -156,9 +184,8 @@ data BoundsOpts
   -- ^ Timeout (implemented using 'timeout')
   , simSolverTimeout :: Timeout
   -- ^ Solver timeout (in seconds)
-  , simCheckAbsValues :: Bool
-  -- ^ Add proof obligations for narrowing of abstract values (i.e., use
-  -- 'Data.Macaw.Symbolic.MemOps.narrowBVDomainChecked')
+  , simCheckAbsValues :: CheckAbsValues
+  -- ^ See 'CheckAbsValues'.
   }
   deriving Show
 

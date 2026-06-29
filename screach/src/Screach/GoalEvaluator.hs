@@ -21,6 +21,7 @@ import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Symbolic (MacawExprExtension (MacawNarrowBVDomain))
 import Data.Macaw.Symbolic qualified as MS
 import Data.Macaw.Symbolic.MemOps qualified as MSMO
+import Grease.Options (CheckAbsValues (CheckAbsValues))
 import Grease.Utility qualified as GU
 import Lang.Crucible.Backend qualified as CB
 import Lang.Crucible.Backend.Online qualified as CBO
@@ -111,9 +112,7 @@ goalEvaluatorMacawExtension ::
   MC.Memory w ->
   ResolvedTargetLoc w ->
   TargetAddress w ->
-  -- | Add proof obligations for narrowing of abstract values (i.e., use
-  -- 'Data.Macaw.Symbolic.MemOps.narrowBVDomainChecked')
-  Bool ->
+  CheckAbsValues ->
   C.ExtensionImpl p sym (MS.MacawExt arch)
 goalEvaluatorMacawExtension ext la bak mem rtLoc tgtAddr checkAbsValues =
   C.ExtensionImpl
@@ -124,22 +123,21 @@ goalEvaluatorMacawExtension ext la bak mem rtLoc tgtAddr checkAbsValues =
 -- | See the Haddocks for 'goalEvaluatorMacawExtension'.
 goalEvaluatorExtensionEval ::
   CB.IsSymBackend sym bak =>
-  -- | Add proof obligations for narrowing of abstract values (i.e., use
-  -- 'Data.Macaw.Symbolic.MemOps.narrowBVDomainChecked')
-  Bool ->
+  CheckAbsValues ->
   C.ExtensionImpl p sym (MS.MacawExt arch) ->
   bak ->
   C.IntrinsicTypes sym ->
   (Int -> String -> IO ()) ->
   C.CrucibleState p sym (MS.MacawExt arch) rtp blocks r ctx ->
   C.EvalAppFunc sym (C.ExprExtension (MS.MacawExt arch))
-goalEvaluatorExtensionEval checkAbsValues inner bak iTypes logFn cst evalFn =
-  \case
-    MacawNarrowBVDomain w dom xExpr
-      | checkAbsValues -> do
-          ptr <- evalFn xExpr
-          MSMO.narrowBVDomainChecked bak w dom ptr
-    e -> defaultExec e
+goalEvaluatorExtensionEval cav inner bak iTypes logFn cst evalFn =
+  let CheckAbsValues checkAbsValues = cav
+   in \case
+        MacawNarrowBVDomain w dom xExpr
+          | checkAbsValues -> do
+              ptr <- evalFn xExpr
+              MSMO.narrowBVDomainChecked bak w dom ptr
+        e -> defaultExec e
  where
   defaultExec = C.extensionEval inner bak iTypes logFn cst evalFn
 

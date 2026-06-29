@@ -27,6 +27,7 @@ import Grease.Macaw.Arch (ArchContext)
 import Grease.Macaw.Arch qualified as Arch
 import Grease.Macaw.Overrides.Address (AddressOverrides, maybeRunAddressOverride)
 import Grease.Macaw.SimulatorHooks.Diagnostic qualified as Diag
+import Grease.Options (CheckAbsValues (CheckAbsValues))
 import Grease.Panic (panic)
 import Grease.Personality qualified as GP
 import Lang.Crucible.Backend qualified as CB
@@ -80,9 +81,7 @@ greaseMacawExtImpl ::
   ExecutingAddressAction arch ->
   AddressOverrides arch ->
   CS.GlobalVar (MC.ArchRegStruct arch) ->
-  -- | Add proof obligations for narrowing of abstract values (i.e., use
-  -- 'Data.Macaw.Symbolic.MemOps.narrowBVDomainChecked')
-  Bool ->
+  CheckAbsValues ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch)
 greaseMacawExtImpl archCtx bak la execCallback tgtOvs archStruct checkAbsValues macawExtImpl =
@@ -94,25 +93,24 @@ greaseMacawExtImpl archCtx bak la execCallback tgtOvs archStruct checkAbsValues 
 -- | This evaluates a Macaw statement extension in the simulator.
 extensionEval ::
   CB.IsSymBackend sym bak =>
-  -- | Add proof obligations for narrowing of abstract values (i.e., use
-  -- 'Data.Macaw.Symbolic.MemOps.narrowBVDomainChecked')
-  Bool ->
+  CheckAbsValues ->
   CS.ExtensionImpl p sym (Symbolic.MacawExt arch) ->
   bak ->
   CS.IntrinsicTypes sym ->
   (Int -> String -> IO ()) ->
   CS.CrucibleState p sym (Symbolic.MacawExt arch) rtp blocks r ctx ->
   C.EvalAppFunc sym (C.ExprExtension (Symbolic.MacawExt arch))
-extensionEval checkAbsValues baseExt bak iTypes logFn cst evalFn =
-  \case
-    Symbolic.PtrToBits _w ptr -> do
-      CLM.LLVMPointer _blk off <- evalFn ptr
-      pure off
-    MacawNarrowBVDomain w dom xExpr
-      | checkAbsValues -> do
-          ptr <- evalFn xExpr
-          MSMO.narrowBVDomainChecked bak w dom ptr
-    e -> defaultExec e
+extensionEval cav baseExt bak iTypes logFn cst evalFn =
+  let CheckAbsValues checkAbsValues = cav
+   in \case
+        Symbolic.PtrToBits _w ptr -> do
+          CLM.LLVMPointer _blk off <- evalFn ptr
+          pure off
+        MacawNarrowBVDomain w dom xExpr
+          | checkAbsValues -> do
+              ptr <- evalFn xExpr
+              MSMO.narrowBVDomainChecked bak w dom ptr
+        e -> defaultExec e
  where
   defaultExec = CS.extensionEval baseExt bak iTypes logFn cst evalFn
 
