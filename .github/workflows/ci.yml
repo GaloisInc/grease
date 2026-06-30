@@ -209,8 +209,12 @@ jobs:
 
     - name: Build and test Screach Ghidra plugin
       # Reuse the checked-in Gradle wrapper from ghidra-plugin (the screach
-      # plugin has no wrapper of its own).
-      run: ./ghidra-plugin/gradlew -p screach/ghidra buildExtension test
+      # plugin has no wrapper of its own). Pass the screach binary path so the
+      # integration test can find it without relying on PATH.
+      run: |
+        SCREACH_BIN=$(cabal list-bin exe:screach)
+        ./ghidra-plugin/gradlew -p screach/ghidra buildExtension test \
+          -Pscreach.test.binaryPath="$SCREACH_BIN"
 
     - name: Build and test ECFS Ghidra extension
       # Reuse the checked-in Gradle wrapper from ghidra-plugin (ghidra-ecfs has

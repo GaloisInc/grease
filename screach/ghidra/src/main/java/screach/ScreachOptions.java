@@ -13,7 +13,7 @@ class ScreachOptions {
     static final String OPTIONS_NAME = "Screach";
 
     private static final String USE_DOCKER = "Use Docker";
-    private static final String BINARY_PATH = "Binary Path";
+    static final String BINARY_PATH = "Binary Path";
     private static final String DOCKER_IMAGE = "Docker Image";
     private static final String DOCKER_RUN_ARGS = "Docker Run Args";
     private static final String EXTRA_ARGS = "Extra CLI Args";
@@ -38,7 +38,12 @@ class ScreachOptions {
     private final ToolOptions options;
 
     ScreachOptions(PluginTool tool) {
-        options = tool.getOptions(OPTIONS_NAME);
+        this(tool.getOptions(OPTIONS_NAME));
+    }
+
+    /** Constructor for use in tests: accepts a pre-built {@link ToolOptions} directly. */
+    ScreachOptions(ToolOptions options) {
+        this.options = options;
         // [ref:screach_help_options]
         HelpLocation help = new HelpLocation(ScreachPlugin.HELP_TOPIC, "options");
 

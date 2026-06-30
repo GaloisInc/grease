@@ -158,6 +158,7 @@ if (ghidraInstallDir) {
 
 	dependencies {
 		testImplementation 'junit:junit:4.13.2'
+		testImplementation 'com.galois.grease:ghidra-ecfs'
 	}
 
 	test {
@@ -166,6 +167,13 @@ if (ghidraInstallDir) {
 			'--add-opens=java.desktop/java.awt=ALL-UNNAMED',
 			'--add-opens=java.desktop/javax.swing=ALL-UNNAMED',
 			'--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED'
+
+		def ecfsFixture = rootProject.file(
+			'../../ghidra-ecfs/src/test/resources/ecfs/test.x64.elf').absolutePath
+		systemProperty 'screach.test.ecfsFixture', ecfsFixture
+		if (project.hasProperty('screach.test.binaryPath')) {
+			systemProperty 'screach.test.binaryPath', project.getProperty('screach.test.binaryPath')
+		}
 	}
 
 	// Exclude additional files from the built extension
