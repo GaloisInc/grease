@@ -70,6 +70,15 @@ class ScreachState {
         fireChanged();
     }
 
+    /** Returns a point-in-time copy of this state. */
+    ScreachState snapshot() {
+        ScreachState s = new ScreachState();
+        s.entry = this.entry;
+        s.target = this.target;
+        s.avoid.addAll(this.avoid);
+        return s;
+    }
+
     /** True when both an entry and a target have been set. */
     boolean isReadyToRun() {
         return entry != null && target != null;
