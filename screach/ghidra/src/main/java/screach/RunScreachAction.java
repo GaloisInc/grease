@@ -13,7 +13,6 @@ import ghidra.util.task.TaskLauncher;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.io.File;
-import java.util.List;
 
 /**
  * Menu item (top-level <i>Screach</i> menu) and keyboard shortcut (Ctrl+Alt+R) that runs Screach
@@ -73,14 +72,9 @@ class RunScreachAction extends DockingAction {
             return;
         }
 
-        String entry = AddressTranslator.formatForCli(program, state.getEntry());
-        String target = AddressTranslator.formatForCli(program, state.getTarget());
-        List<String> avoid = ScreachRunnerTask.formatAvoid(program, state.getAvoid());
-
         plugin.getProvider().setVisible(true);
 
-        ScreachRunnerTask task =
-                new ScreachRunnerTask(plugin, program, programPath, entry, target, avoid);
+        ScreachRunnerTask task = new ScreachRunnerTask(plugin, program, state.snapshot());
         TaskLauncher.launch(task);
     }
 }

@@ -22,25 +22,13 @@ class ScreachRunnerTask extends Task {
 
     private final ScreachPlugin plugin;
     private final Program program;
-    private final String programPath;
-    private final String entryAddr;
-    private final String targetAddr;
-    private final List<String> avoidAddrs;
+    private final ScreachState state;
 
-    ScreachRunnerTask(
-            ScreachPlugin plugin,
-            Program program,
-            String programPath,
-            String entryAddr,
-            String targetAddr,
-            List<String> avoidAddrs) {
+    ScreachRunnerTask(ScreachPlugin plugin, Program program, ScreachState state) {
         super("Run Screach", true /* canCancel */, false /* hasProgress */, false /* isModal */);
         this.plugin = plugin;
         this.program = program;
-        this.programPath = programPath;
-        this.entryAddr = entryAddr;
-        this.targetAddr = targetAddr;
-        this.avoidAddrs = avoidAddrs;
+        this.state = state;
     }
 
     @Override
@@ -53,15 +41,13 @@ class ScreachRunnerTask extends Task {
             coverageFile = coverageFilePath();
         }
 
-        List<String> command =
-                ScreachCommandBuilder.build(
-                        options, programPath, entryAddr, targetAddr, avoidAddrs, coverageFile);
+        List<String> command = buildCommand(options, program, state, coverageFile);
 
         provider.startRun(String.join(" ", command));
         monitor.setMessage("Running Screach...");
 
         ProcessBuilder pb = new ProcessBuilder(command);
-        pb.directory(new File(ScreachCommandBuilder.parentDir(programPath)));
+        pb.directory(new File(ScreachCommandBuilder.parentDir(program.getExecutablePath())));
         pb.redirectErrorStream(false);
 
         Process process;
@@ -120,8 +106,22 @@ class ScreachRunnerTask extends Task {
         provider.finishRun(result);
     }
 
+    static List<String> buildCommand(
+            ScreachOptions options, Program program, ScreachState state, String coverageFile) {
+        String programPath = program.getExecutablePath();
+        String entryAddr = AddressTranslator.formatForCli(program, state.getEntry());
+        String targetAddr = AddressTranslator.formatForCli(program, state.getTarget());
+        List<String> avoidAddrs = new ArrayList<>();
+        for (Address addr : state.getAvoid()) {
+            avoidAddrs.add(AddressTranslator.formatForCli(program, addr));
+        }
+        return ScreachCommandBuilder.build(
+                options, programPath, entryAddr, targetAddr, avoidAddrs, coverageFile);
+    }
+
     /** Build a temp coverage file next to the binary so Docker can write it too. */
     private String coverageFilePath() {
+        String programPath = program.getExecutablePath();
         File dir = new File(ScreachCommandBuilder.parentDir(programPath));
         String base = new File(programPath).getName();
         return new File(dir, base + ".greasecov").getAbsolutePath();
@@ -167,13 +167,5 @@ class ScreachRunnerTask extends Task {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-    }
-
-    static List<String> formatAvoid(Program program, List<Address> avoid) {
-        List<String> formatted = new ArrayList<>();
-        for (Address a : avoid) {
-            formatted.add(AddressTranslator.formatForCli(program, a));
-        }
-        return formatted;
     }
 }
