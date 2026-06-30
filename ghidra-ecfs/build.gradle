@@ -19,6 +19,8 @@ plugins {
 	id "checkstyle"
 }
 
+group = "com.galois.grease"
+
 repositories {
 	mavenCentral()
 }
@@ -36,6 +38,11 @@ repositories {
 // source of truth; the Nix shells carry [ref:ghidra_java_lint_versions].
 configurations {
 	googleJavaFormat {
+		// This configuration is only used to resolve google-java-format for local
+		// Gradle tasks (formatting/lint). Mark it non-consumable so that composite
+		// builds depending on this project do not see it as an ambiguous variant.
+		canBeConsumed = false
+		canBeResolved = true
 		// google-java-format pulls in Guava, which publishes Gradle Module
 		// Metadata with multiple JVM-environment variants; declare the standard
 		// JVM environment so resolution picks the `jre` variant.

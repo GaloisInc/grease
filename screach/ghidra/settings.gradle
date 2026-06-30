@@ -1,1 +1,3 @@
 rootProject.name = 'screach-ghidra'
+
+includeBuild '../../ghidra-ecfs'
