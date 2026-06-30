@@ -140,6 +140,7 @@ import Grease.Profiler.Feature (greaseProfilerFeature)
 import Grease.Refine qualified as GRef
 import Grease.Refine.RefinementData qualified as GRef
 import Grease.Setup qualified as GSetup
+import Grease.ShadowStack qualified as SS
 import Grease.Shape (ArgShapes, ExtShape)
 import Grease.Shape qualified as Shape
 import Grease.Shape.NoTag (NoTag)
@@ -752,9 +753,10 @@ macawInitState ::
   -- entrypoint function. Otherwise, this is 'Nothing'.
   Maybe (MC.ArchSegmentOff arch) ->
   EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
+  SS.ShadowStack wptr ->
   GRef.RefinementSetup sym bak scope ext argTys wptr ->
   IO (CS.ExecState p sym ext (CS.RegEntry sym ret))
-macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa setup = do
+macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa ss setup = do
   let GRef.RefinementSetup
         { GRef.setupRefinementData = refineData
         , GRef.setupToConcretize = toConcVar
@@ -764,6 +766,12 @@ macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable e
         } = setup
   let sym = CB.backendGetSym bak
   regs <- liftIO (overrideRegs archCtx sym (GSetup.argVals args))
+  -- Seed the shadow stack with the entry function's return address; the feature
+  -- resets the live stack to this seed at each 'CS.InitialState'. The initial
+  -- memory at [RSP] may not be readable, in which case 'SS.setInitialReturnAddr'
+  -- records 'Nothing' (without leaking a proof obligation).
+  let mem0 = GSetup.getSetupMem setupMem
+  SS.setInitialReturnAddr bak archCtx ss WFN.startFunctionName regs mem0
   EP.EntrypointCfgs
     { EP.entrypointStartupOv = mbStartupOvSsa
     , EP.entrypointCfg = ssa@(C.SomeCFG ssaCfg)
@@ -837,7 +845,24 @@ macawRefineOnce ::
   Maybe (MC.ArchSegmentOff arch) ->
   EP.EntrypointCfgs (C.SomeCFG ext (Ctx.EmptyCtx Ctx.::> Symbolic.ArchRegStruct arch) ret) ->
   IO (GRef.ProveRefineResult sym ext argTys)
-macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm initMem memVar inputs execFeats mbCfgAddr entrypointCfgsSsa =
+macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallback setupHook addrOvs bak fm initMem memVar inputs execFeats mbCfgAddr entrypointCfgsSsa = do
+  ss <- SS.newShadowStack
+  -- Absolute addresses of PLT stub jump targets: the resolved functions that
+  -- discovered PLT stubs dispatch to. Macaw models a stub's tail call as a
+  -- return whose IP is this resolved address, and the shadow stack skips the
+  -- check in that case. See @Note [PLT stubs and the shadow stack]@ in
+  -- "Grease.ShadowStack". 'Load.binPltStubs' maps each stub address to its
+  -- name, and 'Load.binDynFunMap' maps that name to the resolved address.
+  let memory = mcMemory macawCfgConfig
+  let binMd = mcBinMd macawCfgConfig
+  let dynFunMap = Load.binDynFunMap binMd
+  let pltTargets =
+        Set.fromList
+          [ GUtil.segoffToAbsoluteAddr memory tgt
+          | name <- Map.elems (Load.binPltStubs binMd)
+          , Just tgt <- [Map.lookup name dynFunMap]
+          ]
+  ssFeat <- SS.shadowStackFeature bak archCtx memVar pltTargets ss
   GRef.refineOnce
     la
     simOpts
@@ -847,8 +872,8 @@ macawRefineOnce la archCtx simOpts halloc macawCfgConfig memPtrTable execCallbac
     (macawDataLayout archCtx)
     initMem
     inputs
-    execFeats
-    (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa)
+    (ssFeat : execFeats)
+    (macawInitState la archCtx halloc macawCfgConfig simOpts bak memVar memPtrTable execCallback setupHook addrOvs mbCfgAddr entrypointCfgsSsa ss)
     `X.catches` [ X.Handler $ \(ex :: X86Symbolic.MissingSemantics) ->
                     pure $ GRef.ProveCantRefine $ H.MissingSemantics $ GUtil.pshow ex
                 , X.Handler
@@ -942,8 +967,8 @@ simulateMacawCfg la bak fm halloc macawCfgConfig archCtx simOpts execCallback se
   -- preconditions.)
   let heuristics =
         if GO.simNoHeuristics simOpts
-          then [H.mustFailHeuristic]
-          else H.macawHeuristics la rNames List.++ [H.mustFailHeuristic]
+          then [H.shadowStackHeuristic, H.mustFailHeuristic]
+          else H.macawHeuristics la rNames List.++ [H.shadowStackHeuristic, H.mustFailHeuristic]
   result <- GRef.refinementLoop la bounds argNames initArgShapes $ \argShapes -> do
     let inputs =
           GRef.RefinementInputs
@@ -1379,8 +1404,8 @@ simulateLlvmCfg la simOpts bak fm halloc llvmCtx llvmMod initMem setupHook mbSta
     -- See comment above on heuristics in 'simulateMacawCfg'
     let heuristics =
           if GO.simNoHeuristics simOpts
-            then [H.mustFailHeuristic]
-            else H.llvmHeuristics la List.++ [H.mustFailHeuristic]
+            then [H.shadowStackHeuristic, H.mustFailHeuristic]
+            else H.llvmHeuristics la List.++ [H.shadowStackHeuristic, H.mustFailHeuristic]
     GRef.refinementLoop la bounds argNames initArgShapes $ \argShapes -> do
       let inputs =
             GRef.RefinementInputs

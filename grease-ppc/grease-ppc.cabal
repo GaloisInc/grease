@@ -147,6 +147,7 @@ library
     , crucible
     , crucible-llvm
     , elf-edit
+    , macaw-base
     , macaw-loader
     , macaw-ppc
     , macaw-ppc-symbolic
@@ -154,6 +155,7 @@ library
     , microlens
     , parameterized-utils
     , stubs-common-ppc
+    , what4
 
   exposed-modules:
     Grease.Macaw.Arch.PPC32

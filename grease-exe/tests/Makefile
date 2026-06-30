@@ -33,7 +33,7 @@ CFLAGS_STATIC = -static -no-pie
 
 DIRS = \
   $(shell find feat/ -mindepth 1 -maxdepth 1 -type d) \
-  $(shell feat/ refine/ sanity/ -mindepth 2 -maxdepth 2 -type d)
+  $(shell find feat/ refine/ sanity/ -mindepth 2 -maxdepth 2 -type d)
 
 # These test cases must dynamically link against libc, so we avoid passing
 # CFLAGS_NO_LIBS when compiling them. Sadly, clang will not compile something with
