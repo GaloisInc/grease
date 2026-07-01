@@ -1,0 +1,55 @@
+
+- readecfs output for file ../ghidra-ecfs/src/test/resources/ecfs/test.x64.elf
+- Executable path (.exepath): /work/test/test
+- Command line: ./test
+- Dynamic Symbol section -
+.dynsym:	 -	 70798199f000
+.dynsym:	__libc_start_main -	 7079819c8dc0
+.dynsym:	_ITM_deregisterTMCloneTable -	 707981bcb000
+.dynsym:	add_numbers -	 707981bcc0f9
+.dynsym:	__gmon_start__ -	 707981bcb000
+.dynsym:	_ITM_registerTMCloneTable -	 707981bcb000
+.dynsym:	sleep -	 707981a89570
+.dynsym:	__cxa_finalize -	 7079819e49a0
+
+- Symbol Table section -
+.symtab:	  -	 0
+.symtab:	 Scrt1.o -	 0
+.symtab:	 __abi_tag -	 63fde698138c
+.symtab:	 crtstuff.c -	 0
+.symtab:	 deregister_tm_clones -	 63fde69820b0
+.symtab:	 register_tm_clones -	 63fde69820e0
+.symtab:	 __do_global_dtors_aux -	 63fde6982120
+.symtab:	 completed.0 -	 63fde6985010
+.symtab:	 __do_global_dtors_aux_fini_array_entry -	 63fde6984d98
+.symtab:	 frame_dummy -	 63fde6982160
+.symtab:	 __frame_dummy_init_array_entry -	 63fde6984d90
+.symtab:	 test.c -	 0
+.symtab:	 crtstuff.c -	 0
+.symtab:	 __FRAME_END__ -	 63fde6983108
+.symtab:	  -	 0
+.symtab:	 _DYNAMIC -	 63fde6984da0
+.symtab:	 __GNU_EH_FRAME_HDR -	 63fde6983004
+.symtab:	 _GLOBAL_OFFSET_TABLE_ -	 63fde6984fb0
+.symtab:	 __libc_start_main@GLIBC_2.34 -	 0
+.symtab:	 _ITM_deregisterTMCloneTable -	 0
+.symtab:	 data_start -	 63fde6985000
+.symtab:	 _edata -	 63fde6985010
+.symtab:	 _fini -	 63fde69821b4
+.symtab:	 __data_start -	 63fde6985000
+.symtab:	 add_numbers -	 0
+.symtab:	 __gmon_start__ -	 0
+.symtab:	 __dso_handle -	 63fde6985008
+.symtab:	 _IO_stdin_used -	 63fde6983000
+.symtab:	 _end -	 63fde6985018
+.symtab:	 _start -	 63fde6982080
+.symtab:	 __bss_start -	 63fde6985010
+.symtab:	 main -	 63fde698218c
+.symtab:	 __TMC_END__ -	 63fde6985010
+.symtab:	 _ITM_registerTMCloneTable -	 0
+.symtab:	 sleep@GLIBC_2.2.5 -	 0
+.symtab:	 __cxa_finalize@GLIBC_2.2.5 -	 0
+.symtab:	 _init -	 63fde6982000
+.symtab:	 test -	 63fde6982169
+
+

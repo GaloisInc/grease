@@ -1,0 +1,12 @@
+
+- readecfs output for file ../ghidra-ecfs/src/test/resources/ecfs/test.x64.elf
+- Executable path (.exepath): /work/test/test
+- Command line: ./test
+- Personality
+	dynamically linked: yes
+	compiled as PIE: yes
+	local symtab reconstruction: no
+	malware heuristics: no
+	original bin had stripped section headers: no
+
+

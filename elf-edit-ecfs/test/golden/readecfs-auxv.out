@@ -1,0 +1,16 @@
+
+- readecfs output for file ../ghidra-ecfs/src/test/resources/ecfs/test.x64.elf
+- Executable path (.exepath): /work/test/test
+- Command line: ./test
+- Printing auxiliary vector (.auxilliary):
+AT_PAGESZ:	 0x1000
+AT_PHDR:	 0x63fde6981040
+AT_PHENT:	 0x38
+AT_PHNUM:	 0xd
+AT_BASE:	 0x707981bda000
+AT_FLAGS:	 0x0
+AT_ENTRY:	 0x63fde6982080
+AT_UID:	 0x0
+AT_EUID:	 0x0
+AT_GID:	 0x0
+
