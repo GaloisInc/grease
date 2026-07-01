@@ -24,6 +24,9 @@ module Data.ElfEdit.Ecfs (
   FdInfo (..),
   decodeFdInfo,
   decodePrStatuses,
+  decodePrPid,
+  SigInfo (..),
+  decodeSigInfo,
   EcfsDecodeError (..),
   partitionEcfsParseErrors,
   pattern SHT_INJECTED,
@@ -497,6 +500,42 @@ decodePrStatuses ecfs =
          in case Elf.CoreDump.decodePrStatus cl d m entryBuf of
               Left err -> Left $ NoteDecodeError err
               Right prStatus -> Right prStatus
+
+-- | Extract @pr_pid@ from a raw @.prstatus@ section entry.  @pr_pid@ sits at
+-- byte offset 32 in the x86-64 @elf_prstatus@ struct.
+decodePrPid :: BS.ByteString -> Maybe Int
+decodePrPid bs =
+  case strictRunGetOrFail getPrPid bs of
+    Left _ -> Nothing
+    Right (_, _, pid) -> Just pid
+ where
+  getPrPid :: Get.Get Int
+  getPrPid = do
+    Get.skip 32
+    fromIntegral <$> Get.getInt32le
+
+-- | Signal information decoded from an ECFS file's @.siginfo@ section.
+data SigInfo = SigInfo
+  { sigInfoSigno :: !Int
+  -- ^ Signal number (@si_signo@).
+  , sigInfoAddr :: !Word64
+  -- ^ Fault address (@si_addr@), if applicable.
+  }
+
+-- | Decode 'SigInfo' from a raw @.siginfo@ section entry.
+decodeSigInfo :: BS.ByteString -> Maybe SigInfo
+decodeSigInfo bs =
+  case strictRunGetOrFail getSigInfo bs of
+    Left _ -> Nothing
+    Right (_, _, r) -> Just r
+ where
+  getSigInfo :: Get.Get SigInfo
+  getSigInfo = do
+    signo <- fromIntegral <$> Get.getInt32le
+    Get.skip 8 -- si_errno + si_code
+    Get.skip 4 -- padding before si_addr
+    addr <- Get.getWord64le
+    pure SigInfo{sigInfoSigno = signo, sigInfoAddr = addr}
 
 -- | Given a list of 'Elf.ElfParseError's that arise when parsing an ECFS file,
 -- categorize them into @(warns, errs)@, where @warns@ are non-fatal
