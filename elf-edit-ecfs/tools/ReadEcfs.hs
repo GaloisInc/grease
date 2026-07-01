@@ -20,6 +20,7 @@ module Main (main) where
 
 import Control.Applicative ((<**>))
 import Control.Monad (unless, when)
+import qualified Data.Binary.Get as Get
 import Data.Bits (Bits (..))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
@@ -139,6 +140,34 @@ printRegisters prStatus =
     Elf.CoreDump.Ppc64UserRegSet{} ->
       fail "PowerPC not currently supported"
 
+-- | Extract @pr_pid@ from a raw @.prstatus@ section entry.  @pr_pid@ sits at
+-- byte offset 32 in the x86-64 @elf_prstatus@ struct.
+decodePrPid :: BS.ByteString -> Maybe Int
+decodePrPid bs =
+  case Get.runGetOrFail getPrPid (BS.fromStrict bs) of
+    Left _ -> Nothing
+    Right (_, _, pid) -> Just pid
+ where
+  getPrPid :: Get.Get Int
+  getPrPid = do
+    Get.skip 32
+    fromIntegral <$> Get.getInt32le
+
+-- | Extract @si_signo@ and @si_addr@ from a raw @.siginfo@ section entry.
+decodeSigInfo :: BS.ByteString -> Maybe (Int, Word64)
+decodeSigInfo bs =
+  case Get.runGetOrFail getSigInfo (BS.fromStrict bs) of
+    Left _ -> Nothing
+    Right (_, _, r) -> Just r
+ where
+  getSigInfo :: Get.Get (Int, Word64)
+  getSigInfo = do
+    signo <- fromIntegral <$> Get.getInt32le
+    Get.skip 8 -- si_errno + si_code
+    Get.skip 4 -- padding before si_addr
+    addr <- Get.getWord64le
+    pure (signo, addr)
+
 -- | Converts a host address to a representation-independent IPv4 quadruple.
 -- For example for @127.0.0.1@ the function will return @(0x7f, 0, 0, 1)@
 -- regardless of host endianness.
@@ -195,13 +224,27 @@ readEcfs opts = do
         printf "\tmalware heuristics: %s\n" $ if Ecfs.hasMalwareHeuristics personality then "yes" else "no"
         printf "\toriginal bin had stripped section headers: %s\n" $
           if Ecfs.hasStrippedShdrs personality then "yes" else "no"
+        putStrLn ""
 
       when (printAll opts || printEcfsStuff opts) $ do
-        -- printf "- Fault location: 0x%lx\n" fault
+        let sigInfoRaw =
+              fmap (Elf.shdrData ehi) $
+                Vec.find (\s -> Elf.shdrName s == BSC.pack ".siginfo") (Ecfs.ecfsShstrtab ecfs)
+        let mbSigInfo = sigInfoRaw >>= decodeSigInfo
+        printf "- Fault location: 0x%lx\n" (maybe 0 snd mbSigInfo :: Word64)
         for_ (Ecfs.decodeThreadCount ecfs) $ \threadCount ->
           printf "- Thread count (.prstatus): %d\n" threadCount
-        -- putStrLn "- Thread info (.prstatus)"
-        -- putStrLn ""
+        putStrLn "- Thread info (.prstatus)"
+        let prstatusRaw =
+              fmap (Elf.shdrData ehi) $
+                Vec.find (\s -> Elf.shdrName s == BSC.pack ".prstatus") (Ecfs.ecfsShstrtab ecfs)
+        for_ prstatusRaw $ \raw ->
+          for_ (Ecfs.decodeThreadCount ecfs) $ \n ->
+            let entSize = BS.length raw `quot` n
+             in for_ [0 .. n - 1] $ \i ->
+                  let entry = BS.take entSize (BS.drop (i * entSize) raw)
+                   in printf "\t[thread[%d] pid: %d\n" (i + 1 :: Int) (maybe 0 id (decodePrPid entry) :: Int)
+        putStrLn ""
         putStrLn "- Register values"
         for_ (Ecfs.decodePrStatuses ecfs) $
           \case
@@ -209,7 +252,7 @@ readEcfs opts = do
             Right prStatuses -> do
               traverse_ printRegisters prStatuses
               putStrLn ""
-        -- printf "- Exited on signal (.siginfo): %d\n" signo
+        printf "- Exited on signal (.siginfo): %d\n" (maybe 0 fst mbSigInfo :: Int)
         putStrLn "- files/pipes/sockets (.fdinfo):"
         for_ (Ecfs.decodeFdInfo ecfs) $
           \case
@@ -292,7 +335,7 @@ readEcfs opts = do
           putStrLn ""
 
       when (printAll opts || printEcfsStuff opts || printAuxv opts) $ do
-        putStrLn "- Printing auxiliary vector (.auxvector):"
+        putStrLn "- Printing auxiliary vector (.auxilliary):"
         for_ (Ecfs.decodeAuxiliaryVector ecfs) $
           \case
             Left err -> fail $ show err

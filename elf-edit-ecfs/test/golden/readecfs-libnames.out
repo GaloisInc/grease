@@ -1,0 +1,23 @@
+
+- readecfs output for file ../ghidra-ecfs/src/test/resources/ecfs/test.x64.elf
+- Executable path (.exepath): /work/test/test
+- Command line: ./test
+- Printing shared library mappings:
+shlib:	libc.so.6.relro
+shlib:	libc.so.6.text
+shlib:	libc.so.6.relro
+shlib:	libc.so.6.undef
+shlib:	libc.so.6.relro
+shlib:	libc.so.6.data
+shlib:	libmath.so.relro
+shlib:	libmath.so.text
+shlib:	libmath.so.relro
+shlib:	libmath.so.relro
+shlib:	libmath.so.data
+shlib:	ld-linux-x86-64.so.2.relro
+shlib:	ld-linux-x86-64.so.2.text
+shlib:	ld-linux-x86-64.so.2.relro
+shlib:	ld-linux-x86-64.so.2.relro
+shlib:	ld-linux-x86-64.so.2.data
+
+

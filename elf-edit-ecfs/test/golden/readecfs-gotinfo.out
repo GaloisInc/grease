@@ -1,0 +1,10 @@
+
+- readecfs output for file ../ghidra-ecfs/src/test/resources/ecfs/test.x64.elf
+- Executable path (.exepath): /work/test/test
+- Command line: ./test
+- Printing out GOT/PLT characteristics (pltgot_info_t):
+gotsite            gotvalue          gotshlib          pltval              symbol
+0x3fc8             0x707981bcc0f9     0x707981bcc0f9     0x63fde6982060     add_numbers
+0x3fd0             0x707981a89570     0x707981a89570     0x63fde6982070     sleep
+
+

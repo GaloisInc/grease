@@ -53,6 +53,7 @@ executable readecfs
     import: shared
     main-is: ReadEcfs.hs
     build-depends:
+      binary,
       bytestring,
       elf-edit,
       elf-edit-core-dump,
@@ -72,3 +73,19 @@ executable et-flip
       mmap,
       optparse-applicative,
     hs-source-dirs: tools
+
+test-suite golden
+    import: shared
+    type: exitcode-stdio-1.0
+    main-is: Golden.hs
+    build-depends:
+      bytestring,
+      elf-edit-ecfs,
+      filepath,
+      process,
+      tasty,
+      tasty-golden,
+      tasty-hunit,
+      text,
+    build-tool-depends: elf-edit-ecfs:readecfs
+    hs-source-dirs: test

@@ -1,0 +1,13 @@
+
+- readecfs output for file ../ghidra-ecfs/src/test/resources/ecfs/test.x64.elf
+- Executable path (.exepath): /work/test/test
+- Command line: ./test
+
+- Displaying ELF header:
+e_entry:	0x0
+e_phnum:	28
+e_shnum:	59
+e_shoff:	0x29e1a5
+e_phoff:	0x40
+e_shstrndx:	58
+
