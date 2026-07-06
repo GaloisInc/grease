@@ -152,3 +152,14 @@ typos doc/ ghidra-plugin/src/main/help/ screach/ghidra/src/main/help/
 ```
 
 [typos]: https://github.com/crate-ci/typos
+
+## zizmor
+
+We lint our GitHub Actions workflows and composite actions for security issues
+with [zizmor]. To run it locally, download a release binary and run:
+
+```sh
+zizmor .github/workflows/ .github/actions/
+```
+
+[zizmor]: https://github.com/zizmorcore/zizmor

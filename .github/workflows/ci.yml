@@ -83,7 +83,7 @@ jobs:
     timeout-minutes: 120
     steps:
     - name: Checkout
-      uses: actions/checkout@v7
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       with:
         # https://github.com/actions/checkout/issues/485
         persist-credentials: false
@@ -93,14 +93,14 @@ jobs:
       run: ${{ matrix.pre-hook }}
 
     - name: Setup Haskell
-      uses: haskell-actions/setup@v2
+      uses: haskell-actions/setup@cd0d9bdd65b20557f41bea4dbe43d0b5fbbfe553 # v2
       id: setup-haskell
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: ${{ matrix.cabal }}
 
     - name: Restore cabal store cache
-      uses: actions/cache/restore@v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       id: cache
       with:
         path: |
@@ -192,7 +192,7 @@ jobs:
     - name: Create coverage report artifact
       # See above `if:` for coverage.
       if: ${{ strategy.job-index == 0 }}
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: coverage-report-${{ matrix.ghc }}-${{ matrix.cache-key-prefix }}
         path: coverage-report/
@@ -202,15 +202,20 @@ jobs:
       run: cabal run exe:grease-diagrams -- --output doc/mem.svg --width 400 --height 400
 
     - name: Setup Ghidra
+      id: ghidra
       uses: ./.github/actions/ghidra-install
 
     - name: Test GREASE Ghidra plugin
+      env:
+        GHIDRA_INSTALL_DIR: ${{ steps.ghidra.outputs.ghidra-install-dir }}
       run: cd ghidra-plugin && ./gradlew installExtension && ./gradlew test
 
     - name: Build and test Screach Ghidra plugin
       # Reuse the checked-in Gradle wrapper from ghidra-plugin (the screach
       # plugin has no wrapper of its own). Pass the screach binary path so the
       # integration test can find it without relying on PATH.
+      env:
+        GHIDRA_INSTALL_DIR: ${{ steps.ghidra.outputs.ghidra-install-dir }}
       run: |
         SCREACH_BIN=$(cabal list-bin exe:screach)
         ./ghidra-plugin/gradlew -p screach/ghidra buildExtension test \
@@ -219,6 +224,8 @@ jobs:
     - name: Build and test ECFS Ghidra extension
       # Reuse the checked-in Gradle wrapper from ghidra-plugin (ghidra-ecfs has
       # no wrapper of its own).
+      env:
+        GHIDRA_INSTALL_DIR: ${{ steps.ghidra.outputs.ghidra-install-dir }}
       run: ./ghidra-plugin/gradlew -p ghidra-ecfs buildExtension test
 
     - name: Haddock
@@ -248,7 +255,7 @@ jobs:
         (cd elf-edit-core-dump && cabal check)
 
     - name: Save cache store cache
-      uses: actions/cache/save@v6
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       if: always()
       with:
         path: |

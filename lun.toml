@@ -1,6 +1,16 @@
 ignore = ["./deps/**/*", "*.bat", "*.bc", "*.elf", "*.exe"]
 
 # ---------------------------------------------------------
+# github actions
+
+[[tool]]
+name = "zizmor"
+# we don't have a zizmor.yml/zizmor.yaml config file
+configs = []
+# the default only covers *.yml under .github/, but our composite action uses .yaml
+files = ["./.github/workflows/**/*.yml", "./.github/actions/**/*.yaml"]
+
+# ---------------------------------------------------------
 # haskell
 
 [[formatter]]
