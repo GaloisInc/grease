@@ -65,7 +65,7 @@ jobs:
       - run: git ls-files -z --exclude-standard '*.cabal' '*.hs' '*.md' '*.py' '*.scala' | xargs -0 ttlint
 
       - name: Install ruff
-        uses: astral-sh/ruff-action@v3
+        uses: astral-sh/ruff-action@v4.0.0
 
       - name: Ensure python files are formatted
         run: ruff format --check --diff $(git ls-files '*.py')
