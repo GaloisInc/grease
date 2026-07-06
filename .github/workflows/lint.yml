@@ -22,40 +22,53 @@ jobs:
     # https://github.com/Cambridge-ICCS/green-ci/blob/b9e942d81e4d6536d69f3cfbffe28fa14b8ae381/README.md#time-limits
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           # https://github.com/actions/checkout/issues/485
           persist-credentials: false
           submodules: false
 
-      - uses: haskell-actions/run-fourmolu@v12
+      - uses: haskell-actions/run-fourmolu@015e6ed9db2b3f344482792d42b7317c764eb30f # v12
         name: Check formatting with fourmolu
         with:
           version: "0.19.0.0"
 
+      - name: Lint GitHub Actions workflows with zizmor
+        uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa # v0.5.7
+        with:
+          version: "1.26.1"
+          advanced-security: false
+
       - name: Setup Ghidra
+        id: ghidra
         uses: ./.github/actions/ghidra-install
 
       - name: Lint GREASE Ghidra plugin Scala
         shell: bash
+        env:
+          GHIDRA_INSTALL_DIR: ${{ steps.ghidra.outputs.ghidra-install-dir }}
         run: cd ghidra-plugin && ./gradlew spotlessCheck
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
         with:
           # Ghidra 11.4.2 requires Gradle >= 8.5; match the ghidra-plugin wrapper.
           gradle-version: "8.13"
 
       - name: Lint Screach Ghidra plugin Java
         shell: bash
+        env:
+          GHIDRA_INSTALL_DIR: ${{ steps.ghidra.outputs.ghidra-install-dir }}
         run: cd screach/ghidra && gradle lintJava
 
       - name: Lint ECFS Ghidra extension Java
         shell: bash
+        env:
+          GHIDRA_INSTALL_DIR: ${{ steps.ghidra.outputs.ghidra-install-dir }}
         run: cd ghidra-ecfs && gradle lintJava
 
       - name: Check for broken links
-        uses: langston-barrett/mdlynx/.github/actions/mdlynx@v0.3.0
+        uses: langston-barrett/mdlynx/.github/actions/mdlynx@52be75d5b84891e3ef1f507d6c8c25d0fbfc10b8 # v0.3.0
 
       # action was added more recently than most recent release, so just pin with SHA
       - uses: langston-barrett/ttlint/.github/actions/install-ttlint@c2bbaaf50b2223554d14eef175224cd76d0e228f
@@ -65,7 +78,7 @@ jobs:
       - run: git ls-files -z --exclude-standard '*.cabal' '*.hs' '*.md' '*.py' '*.scala' | xargs -0 ttlint
 
       - name: Install ruff
-        uses: astral-sh/ruff-action@v4.0.0
+        uses: astral-sh/ruff-action@0ce1b0bf8b818ef400413f810f8a11cdbda0034b # v4.0.0
 
       - name: Ensure python files are formatted
         run: ruff format --check --diff $(git ls-files '*.py')
@@ -89,7 +102,7 @@ jobs:
       - name: Spell check
         # We pin a specific version because updates can come with additional
         # typo fixes. These could break CI unexpectedly if we just pinned @v1.
-        uses: crate-ci/typos@v1.47.2
+        uses: crate-ci/typos@37bb98842b0d8c4ffebdb75301a13db0267cef89 # v1.47.2
         with:
           files: |
             doc/

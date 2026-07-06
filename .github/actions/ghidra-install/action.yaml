@@ -1,14 +1,19 @@
 name: "Install Ghidra"
+outputs:
+  ghidra-install-dir:
+    description: "Path to the extracted Ghidra installation"
+    value: ${{ steps.fetch.outputs.ghidra-install-dir }}
 runs:
   using: "composite"
   steps:
     - name: Setup java
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
       with:
         distribution: 'temurin'
         java-version: '21'
 
     - name: Fetch Ghidra
+      id: fetch
       shell: bash
       run: |
         curl \
@@ -21,5 +26,4 @@ runs:
             --output ~/ghidra.zip \
             https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.4.2_build/ghidra_11.4.2_PUBLIC_20250826.zip
         cd ~/ && unzip -x ghidra.zip
-        echo "GHIDRA_INSTALL_DIR=$(realpath ~/)/ghidra_11.4.2_PUBLIC"
-        echo "GHIDRA_INSTALL_DIR=$(realpath ~/)/ghidra_11.4.2_PUBLIC" >> $GITHUB_ENV
+        echo "ghidra-install-dir=$(realpath ~/)/ghidra_11.4.2_PUBLIC" >> "$GITHUB_OUTPUT"

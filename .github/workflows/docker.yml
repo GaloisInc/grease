@@ -10,12 +10,17 @@ on:
     - '**.md'
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   build-image:
     runs-on: ${{ matrix.os }}
     if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') &&
         github.event.pull_request.head.repo.fork == false &&
         github.repository_owner == 'GaloisInc'
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -30,7 +35,7 @@ jobs:
     # https://github.com/Cambridge-ICCS/green-ci/blob/b9e942d81e4d6536d69f3cfbffe28fa14b8ae381/README.md#time-limits
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           # https://github.com/actions/checkout/issues/485
           persist-credentials: false
@@ -41,10 +46,10 @@ jobs:
         run: .github/ci.sh generate_buildinfo "${{ github.sha }}" main
 
       - name: Set up Docker
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Docker metadata
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         id: meta
         with:
           images: ${{ matrix.image.repo }}
@@ -52,14 +57,14 @@ jobs:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,manifest-descriptor
 
       - name: Log in to ghcr.io
-        uses: docker/login-action@v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push by digest
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         id: build
         with:
           context: .
@@ -77,7 +82,7 @@ jobs:
           touch "${{ runner.temp }}/digests/${{ matrix.image.name }}/${DIGEST#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: digests-${{ matrix.image.name }}-${{ runner.arch }}
           path: ${{ runner.temp }}/digests/${{ matrix.image.name }}/*
@@ -90,6 +95,9 @@ jobs:
     if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') &&
         github.event.pull_request.head.repo.fork == false &&
         github.repository_owner == 'GaloisInc'
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -100,36 +108,36 @@ jobs:
             repo: ghcr.io/galoisinc/screach
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           # https://github.com/actions/checkout/issues/485
           persist-credentials: false
           submodules: true
 
       - name: Download digests
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: ${{ runner.temp }}/digests/${{ matrix.image.name }}
           pattern: digests-${{ matrix.image.name }}-*
           merge-multiple: true
 
       - name: Log in to ghcr.io
-        uses: docker/login-action@v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Docker metadata
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         id: meta
         with:
           images: ${{ matrix.image.repo }}
           tags: |
-            type=raw,value=nightly,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=raw,value=nightly,enable=${{ github.ref == 'refs/heads/main' }}
         env:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: index
 
