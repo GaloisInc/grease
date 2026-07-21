@@ -39,14 +39,14 @@ jobs:
     # https://github.com/Cambridge-ICCS/green-ci/blob/b9e942d81e4d6536d69f3cfbffe28fa14b8ae381/README.md#time-limits
     timeout-minutes: 30
     steps:
-    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         # https://github.com/actions/checkout/issues/485
         persist-credentials: false
         submodules: false
 
     - name: Setup mdBook
-      uses: peaceiris/actions-mdbook@ee69d230fe19748b7abf22df32acaa93833fad08 # v2
+      uses: peaceiris/actions-mdbook@ee69d230fe19748b7abf22df32acaa93833fad08 # v2.0.0
       with:
         mdbook-version: '0.4.24'
 
@@ -55,7 +55,7 @@ jobs:
       run: mdbook build
 
     - name: Upload docs artifact to GitHub Pages
-      uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+      uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
       if: github.ref == 'refs/heads/main' &&
           github.event.pull_request.head.repo.fork == false &&
           github.repository_owner == 'GaloisInc'
@@ -63,7 +63,7 @@ jobs:
         path: doc/book/
 
     - name: Deploy docs to GitHub Pages
-      uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5
+      uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
       if: github.ref == 'refs/heads/main' &&
           github.event.pull_request.head.repo.fork == false &&
           github.repository_owner == 'GaloisInc'
