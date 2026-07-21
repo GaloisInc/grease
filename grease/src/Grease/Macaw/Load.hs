@@ -35,6 +35,7 @@ import Data.Macaw.CFG qualified as MC
 import Data.Macaw.Memory qualified as MM
 import Data.Macaw.Memory.ElfLoader qualified as EL
 import Data.Macaw.Memory.ElfLoader.PLTStubs qualified as PLT
+import Data.Macaw.Memory.LLVMJumpTableSizes qualified as JT
 import Data.Macaw.Memory.LoadCommon qualified as LC
 import Data.Macaw.Symbolic qualified as Symbolic
 import Data.Map.Strict (Map)
@@ -83,6 +84,11 @@ data BinMd arch
   -- their corresponding function addresses.
   , binRelocs :: Map.Map (MM.MemWord (MC.ArchAddrWidth arch)) (Arch.ArchReloc arch)
   -- ^ Map of relocation addresses to their types.
+  , binLLVMJumpTableSizes ::
+      Map.Map
+        (MC.ArchSegmentOff arch)
+        (JT.JumpTableSize (MC.ArchAddrWidth arch))
+  -- ^ Map of LLVM-recorded jump-table addresses to their entry counts.
   , binEntrypointAddrs :: Map Entrypoint (MC.ArchSegmentOff arch)
   -- ^ The entrypoint addresses after resolving the user-supplied
   -- 'Entrypoint'.
@@ -98,6 +104,7 @@ emptyBinMd =
     , binPltStubs = Map.empty
     , binDynFunMap = Map.empty
     , binRelocs = Map.empty
+    , binLLVMJumpTableSizes = Map.empty
     , binEntrypointAddrs = Map.empty
     }
 
@@ -305,6 +312,7 @@ load la userEntrypoints perms elf relocSupported mbPltStubInfo path userPltStubs
             , binPltStubs = pltStubs
             , binDynFunMap = dynFunMap
             , binRelocs = Map.map fst relocs
+            , binLLVMJumpTableSizes = Map.empty
             , binEntrypointAddrs = entryAddrMap
             }
       }

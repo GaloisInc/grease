@@ -21,7 +21,7 @@ import Data.Text qualified as Text
 import Grease.Diagnostic (Diagnostic (LoadDiagnostic))
 import Grease.Macaw.Arch (ArchContext, ArchRegCFG)
 import Grease.Macaw.Arch qualified as Arch
-import Grease.Macaw.Load (BinMd (binPltStubs, binSymMap))
+import Grease.Macaw.Load (BinMd (binLLVMJumpTableSizes, binPltStubs, binSymMap))
 import Grease.Macaw.Load.Diagnostic qualified as Diag
 import Grease.Utility (functionNameFromByteString, tshow)
 import Lang.Crucible.FunctionHandle qualified as C
@@ -72,6 +72,7 @@ discoverFunction ::
 discoverFunction logAction halloc arch binMd mem addr = do
   let symMap = binSymMap binMd
   let pltStubs = binPltStubs binMd
+  let llvmJumpTableSizes = binLLVMJumpTableSizes binMd
   let archInf = arch ^. Arch.archInfo
   -- Mark the PLT stubs as trusted function entry points.
   -- See Note [Mark PLT stubs as trusted function entry points].
@@ -79,6 +80,7 @@ discoverFunction logAction halloc arch binMd mem addr = do
   let s0 =
         Discovery.emptyDiscoveryState mem symMap archInf
           & Discovery.trustedFunctionEntryPoints .~ pltEntryPoints
+          & Discovery.llvmJumpTableSizes .~ llvmJumpTableSizes
   MI.withArchConstraints archInf $ do
     (_state, Some funInfo) <-
       IncComp.processIncCompLogs (logDiscoveryEvent logAction symMap) $ IncComp.runIncCompM $ do
