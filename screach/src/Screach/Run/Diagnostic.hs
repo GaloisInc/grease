@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -7,9 +8,10 @@ module Screach.Run.Diagnostic (
 ) where
 
 import Data.Macaw.Memory qualified as MM
+import Data.Macaw.Memory.LLVMJumpTableSizes qualified as JT
 import Data.Text (Text)
 import Data.Void (Void, absurd)
-import Grease.Diagnostic.Severity (Severity (Error, Info))
+import Grease.Diagnostic.Severity (Severity (Error, Info, Warn))
 import Prettyprinter qualified as PP
 import Screach.AnalysisLoc (ResolvedTargetLoc)
 
@@ -19,6 +21,9 @@ data Diagnostic where
     Diagnostic
   MalformedElf ::
     PP.Doc Void ->
+    Diagnostic
+  LLVMJumpTableSizeWarning ::
+    JT.UnresolvableAddress 64 ->
     Diagnostic
   SearchingForTarget ::
     MM.MemWidth w =>
@@ -60,6 +65,7 @@ instance PP.Pretty Diagnostic where
     \case
       DebuggerOutput out -> fmap absurd out
       MalformedElf e -> "Malformed ELF file: " <> fmap absurd e
+      LLVMJumpTableSizeWarning warning -> PP.pretty warning
       SearchingForTarget rtLoc ->
         "Searching for target" PP.<+> PP.pretty rtLoc
       RefinementReach prettyArgs ->
@@ -94,6 +100,7 @@ severity =
   \case
     DebuggerOutput{} -> Info
     MalformedElf{} -> Error
+    LLVMJumpTableSizeWarning{} -> Warn
     SearchingForTarget{} -> Info
     RefinementReach{} -> Info
     RefinementSuccess{} -> Info

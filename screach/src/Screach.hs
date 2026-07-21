@@ -77,7 +77,8 @@ import Grease.Heuristic qualified as GH
 import Grease.Macaw qualified as GM
 import Grease.Macaw.Arch (ArchContext, ArchReloc)
 import Grease.Macaw.Arch qualified as Arch
-import Grease.Macaw.Arch.X86 (x64RelocSupported, x86Ctx)
+import Grease.Macaw.Arch.X86 qualified as GX86
+import Grease.Macaw.Arch.X86.LLVMJumpTableSizes qualified as GX86JT
 import Grease.Macaw.Discovery qualified as GMD
 import Grease.Macaw.Entrypoint qualified as GME
 import Grease.Macaw.Load qualified as GL
@@ -670,7 +671,7 @@ loadElfFromConfig conf sla gla _archCtx = do
   let isEcfs = case elfBinary of
         EcfsBinary{} -> True
         RawElfBinary{} -> False
-  let relocSupported = if isEcfs then const Nothing else x64RelocSupported
+  let relocSupported = if isEcfs then const Nothing else GX86.x64RelocSupported
   let mbPltStubInfo = if isEcfs then Nothing else Just MX86.x86_64PLTStubInfo
   -- TODO: Support user-specified PLT stubs (instead of [])
   loadResult <-
@@ -707,6 +708,11 @@ loadElfFromConfig conf sla gla _archCtx = do
   let loadOffset = fromMaybe 0 (LC.loadOffset loadOpts)
   let mem = Loader.memoryImage (GL.progLoadedBinary loadedProg)
   let entrypointAddrs = GL.binEntrypointAddrs (GL.progBinMd loadedProg)
+  (jtWarnings, jtSizes) <-
+    case GX86JT.x86_64LLVMJumpTableSizesFromElf loadOpts elf mem of
+      Left err -> malformedElf sla (PP.pretty err)
+      Right result -> pure result
+  Monad.forM_ jtWarnings $ doLog sla . Diag.LLVMJumpTableSizeWarning
 
   -- For ECFS binaries, override PLT stubs with ECFS-specific resolution.
   pltStubs <-
@@ -765,6 +771,7 @@ loadElfFromConfig conf sla gla _archCtx = do
               binMd0
                 { GL.binPltStubs = pltStubs
                 , GL.binSymMap = symMapAugmented
+                , GL.binLLVMJumpTableSizes = jtSizes
                 }
           }
   pure $
@@ -1558,6 +1565,6 @@ runScreach conf sla = do
   archCtx <- do
     let retAddr = Nothing -- TODO
     let slots = Conf.stackArgumentSlots progConf
-    x86Ctx halloc retAddr slots
+    GX86.x86Ctx halloc retAddr slots
 
   analyzeFile conf sla gla halloc archCtx

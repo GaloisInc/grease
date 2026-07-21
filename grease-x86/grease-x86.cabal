@@ -13,6 +13,9 @@ description:
   about x86-64 binaries.
 extra-doc-files:
   README.md
+extra-source-files:
+  test-data/*.elf
+  test-data/*.s
 category: Static Analysis
 
 source-repository head
@@ -140,7 +143,9 @@ library
   build-depends:
     , grease
 
+    , bytestring
     , containers
+    , prettyprinter
     , safe-exceptions
     , text
 
@@ -148,6 +153,7 @@ library
     , crucible
     , crucible-llvm
     , elf-edit
+    , macaw-base
     , macaw-symbolic
     , macaw-x86
     , macaw-x86-symbolic
@@ -158,3 +164,20 @@ library
 
   exposed-modules:
     Grease.Macaw.Arch.X86
+    Grease.Macaw.Arch.X86.LLVMJumpTableSizes
+
+test-suite grease-x86-test
+  import: shared
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Main.hs
+  build-depends:
+    , grease-x86
+
+    , bytestring
+    , containers
+    , elf-edit
+    , file-embed
+    , macaw-base
+    , tasty
+    , tasty-hunit
