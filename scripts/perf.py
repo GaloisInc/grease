@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Collect and analyze deterministic performance metrics from GHC RTS output."""
 
-from dataclasses import dataclass
-from typing import Optional
 import re
 import subprocess
 import sys
 from argparse import ArgumentParser
+from dataclasses import dataclass
 
 
 @dataclass
@@ -90,12 +89,12 @@ def parse_rts_output(stderr: str) -> RTSStats:
     gen1_match = re.search(r"Gen\s+1\s+(\d+) colls", stderr)
     productivity_match = re.search(r"Productivity\s+([\d.]+)%", stderr)
 
-    def parse_number(match: Optional[re.Match]) -> int:
+    def parse_number(match: re.Match | None) -> int:
         if match is None:
             return 0
         return int(match.group(1).replace(",", ""))
 
-    def parse_float(match: Optional[re.Match]) -> float:
+    def parse_float(match: re.Match | None) -> float:
         if match is None:
             return 0.0
         return float(match.group(1))
@@ -135,7 +134,7 @@ def get_current_commit_info() -> tuple[str, str]:
     return ref, get_commit_sha()
 
 
-def checkout_ref(ref: Optional[str]) -> tuple[str, str]:
+def checkout_ref(ref: str | None) -> tuple[str, str]:
     """Checkout a git ref if specified, otherwise use current HEAD."""
     if ref is None:
         return get_current_commit_info()
@@ -159,6 +158,7 @@ def run_with_cabal(package: str, args: list[str]) -> tuple[str, int]:
     result = subprocess.run(
         cmd,
         capture_output=True,
+        check=False,
         text=True,
     )
 

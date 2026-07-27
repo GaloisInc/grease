@@ -1,0 +1,15 @@
+[lint]
+ignore = [
+    # Ghidra type stubs intentionally use a star import to describe script globals.
+    "F403",
+    # Ghidra injects these globals when it executes the script at runtime.
+    "F405",
+    # Ghidra's default Script Manager provider is Jython 2.7, which cannot parse f-strings.
+    "UP032",
+    # Omitting `object` would create an old-style class under Jython 2.7.
+    "UP004",
+    # Zero-argument `super()` is unsupported by Jython 2.7.
+    "UP008",
+    # Jython 2.7's math.ceil returns a float, so the int conversion is required.
+    "RUF046",
+]
