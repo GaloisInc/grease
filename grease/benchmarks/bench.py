@@ -56,6 +56,7 @@ def _run_benchmark(c_file: Path, elf_path: str) -> None:
         ]
         + grease_str.split(),
         capture_output=True,
+        check=False,
         text=True,
     )
     print(result.stdout, end="")

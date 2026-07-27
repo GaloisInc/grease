@@ -1,0 +1,5 @@
+[lint]
+ignore = [
+    # Ghidra modules are available only after pyghidra.start() initializes the JVM.
+    "E402",
+]

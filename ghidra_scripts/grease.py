@@ -22,20 +22,12 @@
 # @menupath Tools.GREASE Analysis
 # @copyright Galois Inc. 2024
 
-# Many names are defined by Ghidra, but Ruff doesn't know that
-# Also allow star imports for builtin stubs
-# ruff: noqa: F821 F405 F403
-
-# This one is just too opinionated
-# ruff: noqa: E741
-
 import json
 import math
 import os
 import re
 import subprocess
 import tempfile
-
 
 try:
     import typing
@@ -54,11 +46,9 @@ if typing.TYPE_CHECKING:
     from ghidra.ghidra_builtins import *  # type: ignore
 
 
-from java.awt import Color
-
 from ghidra.app.plugin.core.analysis.rust.RustUtilities import isRustProgram
 from ghidra.app.util.opinion import ElfLoader
-
+from java.awt import Color
 
 ### CONSTANTS ###
 
@@ -168,7 +158,7 @@ def parseGreaseLocation(locationString):
 
 
 def indent(spaces, lines):
-    return "\n".join([" " * spaces + l for l in lines.strip().split("\n")])
+    return "\n".join([" " * spaces + line for line in lines.strip().split("\n")])
 
 
 ### PARSING GREASE RESULTS ###
@@ -399,7 +389,7 @@ def parseBatchBug(fnEntryPoint, greaseLoadOffset, batchBugJSON):
 
         # NOTE: we're explicitly encoding utf-8 here, as contents may include non-ascii characters.
         # TODO: how to handle this more generally?
-        if "bugUb" in bugDesc and bugDesc["bugUb"]:  # bugUb is nullable
+        if bugDesc.get("bugUb"):  # bugUb is nullable
             # Use a more specific bug type as the tag, if available
             tag = bugDesc["bugUb"]["ubType"]["tag"]
             details.extend(
@@ -489,7 +479,7 @@ def parseBatchCouldNotInfer(fnEntryPoint, greaseLoadOffset, failedPredicateJSONs
             location_addr = greaseOffsetToGhidraAddress(
                 greaseLoadOffset, parseGreaseLocation(p["_failedPredicateLocation"])
             )
-            location = location = "0x{:x}".format(location_addr.getOffset())
+            location = "0x{:x}".format(location_addr.getOffset())
             location_results.append(
                 GreaseInstructionResult(
                     "InferenceFailure", location_addr, p["_failedPredicateMessage"], []
@@ -681,14 +671,13 @@ def getGhidraInitialPrecondition(fn):
     )
 
     # Create initial preconditions file on disk & return filename
-    initial_precondition_file = tempfile.NamedTemporaryFile(delete=False)
-    print(
-        "Generating initial precondition file '{}' containing:\n{}".format(
-            initial_precondition_file.name, precondition_file_content
+    with tempfile.NamedTemporaryFile(delete=False) as initial_precondition_file:
+        print(
+            "Generating initial precondition file '{}' containing:\n{}".format(
+                initial_precondition_file.name, precondition_file_content
+            )
         )
-    )
-    initial_precondition_file.write(precondition_file_content)
-    initial_precondition_file.close()
+        initial_precondition_file.write(precondition_file_content)
     return initial_precondition_file.name
 
 

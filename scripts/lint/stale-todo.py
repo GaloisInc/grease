@@ -21,6 +21,7 @@ def status(no, /):
     result = run(
         ["gh", "issue", "view", no, "--json", "state", "--jq", ".state"],
         capture_output=True,
+        check=False,
         text=True,
     )
     out = result.stdout.strip()

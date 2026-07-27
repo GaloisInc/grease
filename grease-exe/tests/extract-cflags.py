@@ -7,7 +7,6 @@ from argparse import ArgumentParser
 from pathlib import Path
 from sys import exit, stderr
 
-
 COMMENT = "// CFLAGS: "
 
 GROUPS = {"LLVM": ["-emit-llvm", "-frecord-command-line"]}
