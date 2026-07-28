@@ -67,4 +67,6 @@ Some notes on the command-line options:
 If `PROG` is not an ECFS core dump, then Screach will lack access to code from
 shared libraries.
 
+<!-- TODO(#745): document --default_return_dist [tag:default_return_dist] -->
+
 [Crucible S-expression syntax]: https://github.com/GaloisInc/crucible/tree/master/crucible-syntax
