@@ -4,6 +4,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+-- | Screach implements \"shortest-distance symbolic execution\" (SDSE), a form
+-- of directed symbolic execution that prioritizes exploring states that are
+-- closer to the target program point. (See [file:screach/doc/overview.md] for
+-- more details). This module defines the relevant notion of "closeness", i.e.,
+-- 'Distance', and the algorithm for calculating it, 'computeDistance'.
 module Screach.Distance (
   FunctionEntry (..),
   Callsite (..),
@@ -11,18 +16,19 @@ module Screach.Distance (
   TargetType (..),
   CrucibleStmt,
   emptyDijkstraCaches,
-  StatementNode (..),
-  cfgEntrySnode,
+  StmtIdx (..),
+  LocalStmtId (..),
+  cfgEntryStmtId,
   Distance (..),
   DijkstraCaches,
-  computeMinDistanceTargetsFromStatmementExt,
+  computeDistance,
   ReturnResolutionInfo (..),
   ReturnHandler (..),
   AddressLocation (..),
-  allStatements,
+  allStmts,
   CallStack (..),
-  InterproceduralBlockID,
-  interBlockIDFromFrame,
+  GlobalStmtId,
+  globalStmtIdFromFrame,
   DefaultReturnDist (..),
   DistanceConfig (..),
   DistanceMonad,
@@ -63,10 +69,9 @@ import Screach.Distance.Diagnostic qualified as Diagnostic
 import Screach.Panic qualified as Scrch
 import What4.ProgramLoc qualified as WPL
 
-newtype FunctionEntry = FunctionEntry WPL.ProgramLoc deriving (Eq, Show, Ord)
-newtype Callsite = Callsite WPL.ProgramLoc deriving (Ord, Eq, Show)
-
-newtype Distance = Distance {distNumStatements :: Int} deriving (Eq, Show, Ord)
+-- | Distance between program points is defined as the number of Crucible
+-- statements on the shortest CFG path between them.
+newtype Distance = Distance {distNumStmts :: Int} deriving (Eq, Show, Ord)
 
 offsetDistance :: Distance -> Int -> Distance
 offsetDistance (Distance x) num = Distance $ x + num
@@ -76,18 +81,42 @@ addDistance (Distance x) (Distance y) = Distance $ x + y
 
 newtype CfgId = CfgId Word64 deriving (Eq, Show, Ord)
 
-cfgIDFromHandle :: CFH.FnHandle init ret -> CfgId
-cfgIDFromHandle = CfgId . Nonce.indexValue . CFH.handleID
+cfgIdFromHandle :: CFH.FnHandle init ret -> CfgId
+cfgIdFromHandle = CfgId . Nonce.indexValue . CFH.handleID
 
-data InterproceduralBlockID = InterproceduralBlockID
+-- | A zero-based statement index within a basic block.
+newtype StmtIdx = StmtIdx Int deriving (Eq, Show, Ord)
+
+-- | A CFG-local identifier for a statement (c.f. 'GlobalStmtId')
+data LocalStmtId = LocalStmtId {blockId :: Int, stmtIdx :: StmtIdx} deriving (Eq, Show, Ord)
+
+nextStmtId :: LocalStmtId -> LocalStmtId
+nextStmtId sId =
+  let StmtIdx idx = stmtIdx sId
+   in LocalStmtId{blockId = blockId sId, stmtIdx = StmtIdx (idx + 1)}
+
+firstLocalStmtIdOfBlock :: CCC.Block ext blocks ret ctx -> LocalStmtId
+firstLocalStmtIdOfBlock block =
+  LocalStmtId{blockId = (Ctx.indexVal . CCC.blockIDIndex . CCC.blockID) block, stmtIdx = StmtIdx 0}
+
+cfgEntryStmtId :: CCC.CFG x blocks init ret -> LocalStmtId
+cfgEntryStmtId cfg =
+  firstLocalStmtIdOfBlock $ CCC.getBlock (CCC.cfgEntryBlockID cfg) (CCC.cfgBlockMap cfg)
+
+-- | A global identifier for a statement (c.f. 'LocalStmtId')
+data GlobalStmtId = GlobalStmtId
   { cfgId :: CfgId
-  , statementNode :: StatementNode
+  , localStmtId :: LocalStmtId
   }
   deriving (Eq, Show, Ord)
 
--- | State holding already computed function return distances
--- assumes non overlapping function program locs which should be true
-type DistCache = Map.Map InterproceduralBlockID (Maybe Distance)
+-- | State holding already computed function return distances.
+--
+-- Assumes that 'WPL.ProgramLoc's of distinct functions are distinct.
+type DistCache = Map.Map GlobalStmtId (Maybe Distance)
+
+newtype FunctionEntry = FunctionEntry WPL.ProgramLoc deriving (Eq, Show, Ord)
+newtype Callsite = Callsite WPL.ProgramLoc deriving (Ord, Eq, Show)
 
 type ResolveCall = FunctionEntry -> Callsite -> IO [Some.Some CCC.AnyCFG]
 
@@ -97,7 +126,7 @@ data AddressLocation = AddressLocation {addrFunctionEntry :: WPL.ProgramLoc, add
 -- | Function we use to resolve a non searched return
 type ResolveReturn = FunctionEntry -> Callsite -> [AddressLocation]
 
-newtype CallStack = CallStack [InterproceduralBlockID] deriving (Show)
+newtype CallStack = CallStack [GlobalStmtId] deriving (Show)
 
 newtype CFGCache = CFGCache (Map.Map CfgId (Some.Some CCC.AnyCFG))
 
@@ -107,16 +136,22 @@ insertCFGIntoCache cid packedCfg (CFGCache mp) = CFGCache $ Map.insert cid packe
 type GetCFG = FunctionEntry -> IO (Maybe (Some.Some CCC.AnyCFG))
 
 data ExplorationTask = ExplorationTask
-  {expCfg :: Some.Some CCC.AnyCFG, expCallStack :: CallStack, expStatmentNode :: StatementNode}
+  {expCfg :: Some.Some CCC.AnyCFG, expCallStack :: CallStack, expStmtId :: LocalStmtId}
 
 instance Show ExplorationTask where
-  show ExplorationTask{expCfg = _, expCallStack = cs, expStatmentNode = snode} = "ExplorationTask" ++ "{" ++ show cs ++ "," ++ show snode ++ "}"
+  show ExplorationTask{expCfg = _, expCallStack = cs, expStmtId = sId} =
+    "ExplorationTask" ++ "{" ++ show cs ++ "," ++ show sId ++ "}"
 
 type IOState s a = StateT s IO a
 
--- | The default assumed return distance for a call that (for whatever reason) does not have a path to a return.
--- Thi can happen when a function has missing callsites in the callgraph. This distance is used when computing
---  the distance between a source and a target with an intervening call.
+-- | The default assumed return distance for a call that (for whatever reason)
+-- does not have a path to a return.
+--
+-- This can happen when a function has missing callsites in the callgraph. This
+-- distance is used when computing the distance between a source and a target
+-- with an intervening call.
+--
+-- [ref:default_return_dist]
 newtype DefaultReturnDist = DefaultReturnDist Int
 
 -- TODO(internal#104) we should instead parametrize the distance module over a width w for addresses
@@ -131,87 +166,82 @@ getCFG ent cfgGetter =
     mbCfg <- lift $ cfgGetter ent
     case mbCfg of
       Just pked@(Some.Some (CCC.AnyCFG cfg)) ->
-        let cid = cfgIDFromHandle $ CCC.cfgHandle cfg
+        let cid = cfgIdFromHandle $ CCC.cfgHandle cfg
          in modify $ insertCFGIntoCache cid pked
       Nothing -> pure ()
     pure mbCfg
 
-getCFGFromID :: CfgId -> IOState CFGCache (Maybe (Some.Some CCC.AnyCFG))
-getCFGFromID targetId = do
+cfgFromId :: CfgId -> IOState CFGCache (Maybe (Some.Some CCC.AnyCFG))
+cfgFromId targetId = do
   CFGCache mp <- get
   pure $ Map.lookup targetId mp
 
-firstStatementNodeOfBlock :: CCC.Block ext blocks ret ctx -> StatementNode
-firstStatementNodeOfBlock block = StatementNode{blockId = (Ctx.indexVal . CCC.blockIDIndex . CCC.blockID) block, statId = 0}
-
-cfgEntrySnode :: CCC.CFG x blocks init ret -> StatementNode
-cfgEntrySnode cfg = firstStatementNodeOfBlock $ CCC.getBlock (CCC.cfgEntryBlockID cfg) (CCC.cfgBlockMap cfg)
-
-allStatementsOfBlock ::
+allStmtsOfBlock ::
   forall m actext actblocks actinit actret args.
   (Monoid m) =>
   CCC.BlockID actblocks args ->
   CCC.CFG actext actblocks actinit actret ->
   ( forall blocks ext ret ctx ctx' ctx''.
-    StatementNode ->
+    LocalStmtId ->
     CCC.Block ext blocks ret ctx'' ->
     WPL.ProgramLoc ->
     CrucibleStmt blocks ext ret ctx ctx' ->
     m
   ) ->
   m
-allStatementsOfBlock bid cfg f =
+allStmtsOfBlock bid cfg f =
   let x = CCC.getBlock bid $ CCC.cfgBlockMap cfg
-      stats = view CCC.blockStmts x
-   in applyToStats x (firstStatementNodeOfBlock x) stats
+      stmts = view CCC.blockStmts x
+   in applyToStmts x (firstLocalStmtIdOfBlock x) stmts
  where
-  applyToStats ::
-    CCC.Block ext blocks ret ctx'' -> StatementNode -> CCC.StmtSeq ext blocks ret ctx -> m
-  applyToStats blk snode (CCC.TermStmt loc term) = f snode blk loc (Left term)
-  applyToStats blk snode (CCC.ConsStmt loc stmt rst) =
-    f snode blk loc (Right stmt)
-      <> applyToStats blk (StatementNode{blockId = blockId snode, statId = statId snode + 1}) rst
-allStatements ::
+  applyToStmts ::
+    CCC.Block ext blocks ret ctx'' -> LocalStmtId -> CCC.StmtSeq ext blocks ret ctx -> m
+  applyToStmts blk sId (CCC.TermStmt loc term) = f sId blk loc (Left term)
+  applyToStmts blk sId (CCC.ConsStmt loc stmt rst) =
+    f sId blk loc (Right stmt)
+      <> applyToStmts blk (nextStmtId sId) rst
+
+allStmts ::
   forall m.
   (Monoid m) =>
   Some.Some CCC.AnyCFG ->
   ( forall blocks ext ret ctx ctx' ctx''.
-    StatementNode ->
+    LocalStmtId ->
     CCC.Block ext blocks ret ctx'' ->
     WPL.ProgramLoc ->
     CrucibleStmt blocks ext ret ctx ctx' ->
     m
   ) ->
   m
-allStatements (Some.Some (CCC.AnyCFG cfg)) f =
+allStmts (Some.Some (CCC.AnyCFG cfg)) f =
   let blockMap = CCC.cfgBlockMap cfg
    in TFC.ifoldMapFC
         ( \i _ ->
-            allStatementsOfBlock (CCC.BlockID i) cfg f
+            allStmtsOfBlock (CCC.BlockID i) cfg f
         )
         blockMap
 
-allCallNodes :: Some.Some CCC.AnyCFG -> [StatementNode]
-allCallNodes cfg = allStatements cfg $ \snode _ _ stat ->
-  case stat of
-    Right CCC.CallHandle{} -> [snode]
+allCallIds :: Some.Some CCC.AnyCFG -> [LocalStmtId]
+allCallIds cfg = allStmts cfg $ \sId _ _ stmt ->
+  case stmt of
+    Right CCC.CallHandle{} -> [sId]
     _ -> []
 
-findInCFG :: Maybe WPL.ProgramLoc -> [StatementNode] -> Some.Some CCC.AnyCFG -> [StatementNode]
-findInCFG Nothing defaultNodes _ = defaultNodes
-findInCFG (Just loc) _ cfg = allStatements cfg $ \snode _ currLoc _ ->
+findInCFG :: Maybe WPL.ProgramLoc -> [LocalStmtId] -> Some.Some CCC.AnyCFG -> [LocalStmtId]
+findInCFG Nothing defaultIds _ = defaultIds
+findInCFG (Just loc) _ cfg = allStmts cfg $ \sId _ currLoc _ ->
   -- TODO(internal#104) fix this to compare addresses
-  ([snode | WPL.plSourceLoc currLoc == WPL.plSourceLoc loc])
+  ([sId | WPL.plSourceLoc currLoc == WPL.plSourceLoc loc])
 
 findCallingSites ::
-  AddressLocation -> GetCFG -> IOState CFGCache [(Some.Some CCC.AnyCFG, StatementNode)]
+  AddressLocation -> GetCFG -> IOState CFGCache [(Some.Some CCC.AnyCFG, LocalStmtId)]
 findCallingSites loc cfgGetter =
   do
     mbLst <-
       runMaybeT
         ( do
             cfg <- MaybeT $ getCFG (FunctionEntry $ addrFunctionEntry loc) cfgGetter
-            let lst = findInCFG (addrInsnLoc loc) (allCallNodes cfg) cfg
+            let lst = findInCFG (addrInsnLoc loc) (allCallIds cfg) cfg
             pure $ (cfg,) <$> lst
         )
     pure (Maybe.fromMaybe [] mbLst)
@@ -224,16 +254,16 @@ cfgFunctionEntry (Some.Some (CCC.AnyCFG cfg)) =
 collectReturnSite ::
   Some.Some CCC.AnyCFG ->
   CallStack ->
-  StatementNode ->
+  LocalStmtId ->
   ResolveReturn ->
   GetCFG ->
   IOState CFGCache [ExplorationTask]
-collectReturnSite cfg callstack snode rReturn cfgBuilder =
-  withStatement snode cfg $ \_ loc stat ->
-    case stat of
+collectReturnSite cfg callstack sId rReturn cfgBuilder =
+  withStatement sId cfg $ \_ loc stmt ->
+    case stmt of
       -- we should only return to callsites
       Right (CCC.CallHandle{}) ->
-        pure [ExplorationTask{expCfg = cfg, expCallStack = callstack, expStatmentNode = nextSnode snode}]
+        pure [ExplorationTask{expCfg = cfg, expCallStack = callstack, expStmtId = nextStmtId sId}]
       Left (CCC.TailCall{}) ->
         maybe
           (pure [])
@@ -246,7 +276,7 @@ findReturnSites ::
 findReturnSites aloc cfgGetter callstack rReturn =
   do
     lst <- findCallingSites aloc cfgGetter
-    List.concat <$> forM lst (\(cfg, snode) -> collectReturnSite cfg callstack snode rReturn cfgGetter)
+    List.concat <$> forM lst (\(cfg, sId) -> collectReturnSite cfg callstack sId rReturn cfgGetter)
 
 type CrucibleStmt blocks ext ret ctx' ctx'' =
   Either (CCC.TermStmt blocks ret ctx') (CCC.Stmt ext ctx' ctx'')
@@ -254,22 +284,22 @@ type CrucibleStmt blocks ext ret ctx' ctx'' =
 -- TODO(internal#105) dont do this, we shouldn't be iterating repeatedly through statements to get a statement index
 withStatementFromBlock ::
   forall ext blocks ret ctx r.
-  Int ->
+  StmtIdx ->
   CCC.Block ext blocks ret ctx ->
   (forall ctx' ctx''. WPL.ProgramLoc -> CrucibleStmt blocks ext ret ctx' ctx'' -> r) ->
   r
 withStatementFromBlock idx blk cont =
-  let stats = view CCC.blockStmts blk
-   in getInd idx stats
+  let stmts = view CCC.blockStmts blk
+   in getInd idx stmts
  where
-  getInd :: Int -> CCC.StmtSeq ext blocks ret someCtx -> r
-  getInd 0 (CCC.ConsStmt loc stmt _) = cont loc $ Right stmt
-  getInd 0 (CCC.TermStmt loc term) = cont loc $ Left term
-  getInd i (CCC.ConsStmt _ _ rst) = getInd (i - 1) rst
-  getInd _ ((CCC.TermStmt _ _)) = Scrch.panic "unreachable! out of bounds stat id" []
+  getInd :: StmtIdx -> CCC.StmtSeq ext blocks ret someCtx -> r
+  getInd (StmtIdx 0) (CCC.ConsStmt loc stmt _) = cont loc $ Right stmt
+  getInd (StmtIdx 0) (CCC.TermStmt loc term) = cont loc $ Left term
+  getInd (StmtIdx i) (CCC.ConsStmt _ _ rst) = getInd (StmtIdx (i - 1)) rst
+  getInd _ ((CCC.TermStmt _ _)) = Scrch.panic "unreachable! out of bounds stmt id" []
 
 withStatement ::
-  StatementNode ->
+  LocalStmtId ->
   Some.Some CCC.AnyCFG ->
   ( forall bctx tp ext blocks ret ctx ctx'.
     CCC.Block ext blocks tp bctx ->
@@ -278,15 +308,15 @@ withStatement ::
     r
   ) ->
   r
-withStatement sNode (Some.Some (CCC.AnyCFG cfg)) cont =
+withStatement sId (Some.Some (CCC.AnyCFG cfg)) cont =
   let bbMap = CCC.cfgBlockMap cfg
-      bidRaw = blockId sNode
+      bidRaw = blockId sId
       cid = Ctx.intIndex bidRaw (Ctx.size bbMap)
    in case cid of
         Just (Some.Some ind) ->
           let bid = CCC.BlockID ind
               blk = CCC.getBlock bid bbMap
-           in withStatementFromBlock (statId sNode) blk (cont blk)
+           in withStatementFromBlock (stmtIdx sId) blk (cont blk)
         _ -> Scrch.panic "unreachable! out of bounds block id" []
 applyReturn ::
   CallStack ->
@@ -296,25 +326,16 @@ applyReturn ::
   GetCFG ->
   IOState CFGCache [ExplorationTask]
 applyReturn (CallStack (x : rst)) _ _ _ _ = do
-  mbCfg <- getCFGFromID (cfgId x)
+  mbCfg <- cfgFromId (cfgId x)
   pure $
     maybe
       []
-      (\cfg -> [ExplorationTask{expCfg = cfg, expStatmentNode = statementNode x, expCallStack = CallStack rst}])
+      (\cfg -> [ExplorationTask{expCfg = cfg, expStmtId = localStmtId x, expCallStack = CallStack rst}])
       mbCfg
 applyReturn (CallStack []) fentry cs retResolve cfgGetter =
   let locs = retResolve fentry cs
    in List.concat
         <$> forM locs (\x -> findReturnSites x cfgGetter (CallStack []) retResolve)
-
--- | An identifier for a statement location
-data StatementNode = StatementNode {blockId :: Int, statId :: Int} deriving (Eq, Show, Ord)
-
-nextSnode :: StatementNode -> StatementNode
-nextSnode snode = StatementNode{blockId = blockId snode, statId = statId snode + 1}
-
-data InterNode = InterNode {stateNode :: StatementNode, funcEntry :: FunctionEntry}
-  deriving (Eq, Show, Ord)
 
 data DijkstraCaches = DijkstraCaches
   {_returnDistCache :: DistCache, _targetDistCache :: DistCache, _dijkstraCfgCache :: CFGCache}
@@ -328,10 +349,10 @@ emptyDijkstraCaches =
     , _dijkstraCfgCache = CFGCache Map.empty
     }
 
-type DijkstraQueue = OrdPSQ.OrdPSQ StatementNode Distance ()
+type DijkstraQueue = OrdPSQ.OrdPSQ LocalStmtId Distance ()
 data DijkstraState = DijkstraState
-  { _visitedNodeMinDist :: Map.Map StatementNode (Maybe Distance)
-  , _targetDistances :: Map.Map StatementNode (Maybe Distance)
+  { _visitedIdMinDist :: Map.Map LocalStmtId (Maybe Distance)
+  , _targetDistances :: Map.Map LocalStmtId (Maybe Distance)
   , _priorityQueue :: DijkstraQueue
   , _caches :: DijkstraCaches
   }
@@ -349,18 +370,18 @@ type CallDistanceResolver =
   FunctionEntry -> Callsite -> DistanceMonad DijkstraCaches (Maybe Distance)
 
 type InterTargetDistanceResolver =
-  FunctionEntry -> StatementNode -> DistanceMonad DijkstraCaches (Maybe Distance)
+  FunctionEntry -> LocalStmtId -> DistanceMonad DijkstraCaches (Maybe Distance)
 
 -- | Collects the minimum distance in the state
-minDist :: [StatementNode] -> IOState DijkstraState (Maybe Distance)
-minDist statTargets = do
+minDist :: [LocalStmtId] -> IOState DijkstraState (Maybe Distance)
+minDist stmtTargets = do
   visited <- zoom targetDistances get
-  pure $ minimumMay $ Maybe.catMaybes $ Maybe.mapMaybe (`Map.lookup` visited) statTargets
+  pure $ minimumMay $ Maybe.catMaybes $ Maybe.mapMaybe (`Map.lookup` visited) stmtTargets
 
-allMapped :: [StatementNode] -> IOState DijkstraState Bool
-allMapped statTargets = do
+allMapped :: [LocalStmtId] -> IOState DijkstraState Bool
+allMapped stmtTargets = do
   visited <- zoom targetDistances get
-  pure $ all (`Map.member` visited) statTargets
+  pure $ all (`Map.member` visited) stmtTargets
 
 popMinPsq :: (Ord k, Ord p) => IOState (OrdPSQ.OrdPSQ k p v) (Maybe (k, p, v))
 popMinPsq =
@@ -372,16 +393,16 @@ popMinPsq =
 
 withIntraSuccessors ::
   forall a.
-  StatementNode ->
+  LocalStmtId ->
   Some.Some CCC.AnyCFG ->
   ( forall blocks ext ret ctx ctx'.
-    CrucibleStmt blocks ext ret ctx ctx' -> StatementNode -> WPL.ProgramLoc -> a
+    CrucibleStmt blocks ext ret ctx ctx' -> LocalStmtId -> WPL.ProgramLoc -> a
   ) ->
   [a]
-withIntraSuccessors snode cfg f = withStatement snode cfg $ \_ loc stat ->
+withIntraSuccessors sId cfg f = withStatement sId cfg $ \_ loc stmt ->
   let normSucc :: CCC.BlockID blks tp -> a
-      normSucc bid = f stat (makeJmpNorm bid) loc
-   in case stat of
+      normSucc bid = f stmt (makeJmpNorm bid) loc
+   in case stmt of
         -- jumps
         Left (CCC.Jump (CCC.JumpTarget bid _ _)) -> [normSucc bid]
         Left (CCC.Br _ (CCC.JumpTarget bid1 _ _) (CCC.JumpTarget bid2 _ _)) -> [normSucc bid1, normSucc bid2]
@@ -391,27 +412,28 @@ withIntraSuccessors snode cfg f = withStatement snode cfg $ \_ loc stat ->
         Left (CCC.Return _) -> []
         Left (CCC.TailCall{}) -> []
         Left (CCC.ErrorStmt _) -> []
-        Right (CCC.CallHandle{}) -> [f stat (nextSnode snode) loc]
+        Right (CCC.CallHandle{}) -> [f stmt (nextStmtId sId) loc]
         -- Any non-term besides a call can just be treated as next
         Right _ ->
-          [f stat (nextSnode snode) loc]
+          [f stmt (nextStmtId sId) loc]
  where
-  makeJmpNorm :: CCC.BlockID blks tp -> StatementNode
-  makeJmpNorm bidTarget = StatementNode{blockId = Ctx.indexVal $ CCC.blockIDIndex bidTarget, statId = 0}
+  makeJmpNorm :: CCC.BlockID blks tp -> LocalStmtId
+  makeJmpNorm bidTarget =
+    LocalStmtId{blockId = Ctx.indexVal $ CCC.blockIDIndex bidTarget, stmtIdx = StmtIdx 0}
 
 -- | finds distance from current node to intraprocedural successors, for normal successors this is
 -- just a distance of 1, for calls, the intra successor is the shortest ret distance
 getDistToSuccessors ::
   FunctionEntry ->
   Distance ->
-  StatementNode ->
+  LocalStmtId ->
   Some.Some CCC.AnyCFG ->
   CallDistanceResolver ->
-  DistanceMonad DijkstraCaches [(StatementNode, Distance)]
-getDistToSuccessors fEntry currDist currSnode cfg cdResolver =
+  DistanceMonad DijkstraCaches [(LocalStmtId, Distance)]
+getDistToSuccessors fEntry currDist currId cfg cdResolver =
   Maybe.catMaybes
     <$> Monad.sequence
-      ( withIntraSuccessors currSnode cfg $ \stmt snode loc -> do
+      ( withIntraSuccessors currId cfg $ \stmt sId loc -> do
           let
             dist :: DistanceMonad DijkstraCaches (Maybe Distance)
             dist = case stmt of
@@ -423,17 +445,17 @@ getDistToSuccessors fEntry currDist currSnode cfg cdResolver =
            in
             ( do
                 mbDist <- dist
-                pure $ (snode,) <$> mbDist
+                pure $ (sId,) <$> mbDist
             ) ::
-              DistanceMonad DijkstraCaches (Maybe (StatementNode, Distance))
+              DistanceMonad DijkstraCaches (Maybe (LocalStmtId, Distance))
       )
 
-updateNode :: StatementNode -> Distance -> IOState DijkstraQueue ()
-updateNode tgtNode distanceCandidate =
+updateId :: LocalStmtId -> Distance -> IOState DijkstraQueue ()
+updateId tgtId distanceCandidate =
   do
     psq <- get
-    let it = OrdPSQ.lookup tgtNode psq
-    let update = put $ OrdPSQ.insert tgtNode distanceCandidate () psq
+    let it = OrdPSQ.lookup tgtId psq
+    let update = put $ OrdPSQ.insert tgtId distanceCandidate () psq
     case it of
       Just (currDist, _)
         | distanceCandidate < currDist -> update
@@ -452,7 +474,7 @@ logDebug :: (MonadIO m, PP.Pretty a) => ScreachLogAction -> a -> m ()
 logDebug sla item = LJ.writeLog sla (ScrchDiagnostic.DistanceDiagnostic $ Diagnostic.GenericDebugOutput item)
 
 {-
-First check if all statement nodes are in the visited set if so halt, the result is the min of all StatementNode->Distance for the targets
+First check if all statement nodes are in the visited set if so halt, the result is the min of all LocalStmtId->Distance for the targets
 
 If we are not done grab a node from the queue and fetch the statement. Then we need to eval the statement.
 If it is a target commit it by using the 'TargetDistanceResolver'.
@@ -466,27 +488,27 @@ dijkstras ::
   -- | All intra targets, these targets may reach the "real" target.
   -- When searching for an interprocedural target this is going to be the return (if the return may reach),
   -- and calls that may reach, and potentially the target statement itself if it is present
-  [(StatementNode, TargetType)] ->
+  [(LocalStmtId, TargetType)] ->
   Some.Some CCC.AnyCFG ->
   CallDistanceResolver ->
   InterTargetDistanceResolver ->
   DistanceMonad DijkstraState (Maybe Distance)
-dijkstras statTargets currCfg@(Some.Some (CCC.AnyCFG bdCfg)) cdResolver targetResolver = do
+dijkstras stmtTargets currCfg@(Some.Some (CCC.AnyCFG bdCfg)) cdResolver targetResolver = do
   let fentry = FunctionEntry $ CCC.blockLoc $ CCC.getBlock (CCC.cfgEntryBlockID bdCfg) (CCC.cfgBlockMap bdCfg)
-  let nextWork = dijkstras statTargets currCfg cdResolver targetResolver
-  let targetSnodes = List.map fst statTargets
-  let currMinDist = lift $ minDist targetSnodes
+  let nextWork = dijkstras stmtTargets currCfg cdResolver targetResolver
+  let targetIds = List.map fst stmtTargets
+  let currMinDist = lift $ minDist targetIds
   minIt <- lift $ zoom priorityQueue popMinPsq
-  earlyStop <- lift $ allMapped targetSnodes
+  earlyStop <- lift $ allMapped targetIds
   case (earlyStop, minIt) of
     -- we are done, collect min dist
     (_, Nothing) -> currMinDist
     (True, _) -> currMinDist
     (_, Just (statementToVisit, currDist, _)) -> do
-      chc <- zoom visitedNodeMinDist get
+      chc <- zoom visitedIdMinDist get
       case Map.lookup statementToVisit chc of
         Nothing -> do
-          case List.find (\(stTarget, _) -> statementToVisit == stTarget) statTargets of
+          case List.find (\(stTarget, _) -> statementToVisit == stTarget) stmtTargets of
             Just (_, ty) ->
               do
                 mbRemDist <- zoom caches $
@@ -499,56 +521,57 @@ dijkstras statTargets currCfg@(Some.Some (CCC.AnyCFG bdCfg)) cdResolver targetRe
                     targetDistances
                   $ modify (Map.insert statementToVisit dist)
             Nothing -> pure ()
-          zoom visitedNodeMinDist $ modify (Map.insert statementToVisit (Just currDist))
+          zoom visitedIdMinDist $ modify (Map.insert statementToVisit (Just currDist))
           -- we've updated our distance now go see if we have any successors to update
           successors <-
             mapReaderT (zoom caches) (getDistToSuccessors fentry currDist statementToVisit currCfg cdResolver)
           lift $
             zoom priorityQueue $
               forM_ successors $
-                uncurry updateNode
+                uncurry updateId
           pure ()
         Just _ -> pure ()
       nextWork
 
-cfgEntryBlockID :: Some.Some CCC.AnyCFG -> InterproceduralBlockID
-cfgEntryBlockID (Some.Some (CCC.AnyCFG cfg)) =
-  InterproceduralBlockID
-    { cfgId = cfgIDFromHandle $ CCC.cfgHandle cfg
-    , statementNode = cfgEntrySnode cfg
+cfgEntryGlobalStmtId :: Some.Some CCC.AnyCFG -> GlobalStmtId
+cfgEntryGlobalStmtId (Some.Some (CCC.AnyCFG cfg)) =
+  GlobalStmtId
+    { cfgId = cfgIdFromHandle $ CCC.cfgHandle cfg
+    , localStmtId = cfgEntryStmtId cfg
     }
 
-interBlockIDFromSnode :: Some.Some CCC.AnyCFG -> StatementNode -> InterproceduralBlockID
-interBlockIDFromSnode (Some.Some (CCC.AnyCFG cfg)) snode =
-  InterproceduralBlockID
-    { cfgId = cfgIDFromHandle $ CCC.cfgHandle cfg
-    , statementNode = snode
+globalStmtId :: Some.Some CCC.AnyCFG -> LocalStmtId -> GlobalStmtId
+globalStmtId (Some.Some (CCC.AnyCFG cfg)) sId =
+  GlobalStmtId
+    { cfgId = cfgIdFromHandle $ CCC.cfgHandle cfg
+    , localStmtId = sId
     }
 
 findCallWithLoc ::
-  CCC.CFG ext block init arg -> WPL.ProgramLoc -> CCC.BlockID block bargs -> Maybe StatementNode
+  CCC.CFG ext block init arg -> WPL.ProgramLoc -> CCC.BlockID block bargs -> Maybe LocalStmtId
 findCallWithLoc cfg searchLoc bid =
-  Maybe.listToMaybe $ allStatementsOfBlock bid cfg $ \snode _ loc stmt ->
+  Maybe.listToMaybe $ allStmtsOfBlock bid cfg $ \sId _ loc stmt ->
     case stmt of
-      (Right (CCC.CallHandle{})) | loc == searchLoc -> [snode]
+      (Right (CCC.CallHandle{})) | loc == searchLoc -> [sId]
       _ -> []
 
--- | Takes a call frame and caches the CFG against its ID so it can be referenced in the future and produces a block ID for it
-interBlockIDFromFrame ::
-  C.CallFrame sym ext blocks ret args -> IOState DijkstraCaches InterproceduralBlockID
-interBlockIDFromFrame cf@C.CallFrame{C._frameCFG = cfg, C._frameBlockID = Some.Some bid} = do
+-- | Cache the CFG from a call frame and produce the global ID of the statement
+-- to which the frame will return.
+globalStmtIdFromFrame ::
+  C.CallFrame sym ext blocks ret args -> IOState DijkstraCaches GlobalStmtId
+globalStmtIdFromFrame cf@C.CallFrame{C._frameCFG = cfg, C._frameBlockID = Some.Some bid} = do
   let packedAnyCfg = Some.Some $ CCC.AnyCFG cfg
-  let cid = cfgIDFromHandle $ CCC.cfgHandle cfg
+  let cid = cfgIdFromHandle $ CCC.cfgHandle cfg
   let loc = C.frameProgramLoc cf
   dijkstraCfgCache %= insertCFGIntoCache cid packedAnyCfg
   -- Assumption: this should be safe since we are in a callframe a call frame should only result from
   -- A call (assuming tail call frames are discarded so we should be able to find the corresponding call to a frame we
   -- return from)
-  let snodeOfCall = case findCallWithLoc cfg loc bid of
+  let callId = case findCallWithLoc cfg loc bid of
         Nothing -> Scrch.panic "Should be able to find call inside CFG for call!" []
         Just x -> x
-  let fSnode = nextSnode snodeOfCall
-  pure $ InterproceduralBlockID{cfgId = cid, statementNode = fSnode}
+  let fId = nextStmtId callId
+  pure $ GlobalStmtId{cfgId = cid, localStmtId = fId}
 
 newtype IsTarget
   = IsTarget
@@ -561,13 +584,13 @@ newtype IsTarget
 
 -- | Either return a cached distance or compute a fresh result from the provided computation
 cachedDistanceOrRun ::
-  InterproceduralBlockID ->
+  GlobalStmtId ->
   Lens' DijkstraCaches DistCache ->
   Some.Some CCC.AnyCFG ->
   DistanceMonad DijkstraCaches (Maybe Distance) ->
   DistanceMonad DijkstraCaches (Maybe Distance)
 cachedDistanceOrRun target cacheLens cfg cont = do
-  let entryINode = cfgEntryBlockID cfg
+  let entryId = cfgEntryGlobalStmtId cfg
   cache <- zoom cacheLens get
   res <-
     -- we place a temporary Nothing in the map so that if we hit
@@ -578,7 +601,7 @@ cachedDistanceOrRun target cacheLens cfg cont = do
     -- These are separate caches so we still allow a return.
     maybe
       ( do
-          _ <- zoom cacheLens (put $ Map.insert entryINode Nothing cache)
+          _ <- zoom cacheLens (put $ Map.insert entryId Nothing cache)
           cont
       )
       pure
@@ -598,10 +621,10 @@ distResolver ::
   ResolveCall ->
   IsTarget ->
   FunctionEntry ->
-  StatementNode ->
+  LocalStmtId ->
   DistanceMonad DijkstraCaches (Maybe Distance)
-distResolver cfg sla retHandler rCall isTarget fentry callingNode =
-  withStatement callingNode cfg $ \_ loc stmt ->
+distResolver cfg sla retHandler rCall isTarget fentry callingId =
+  withStatement callingId cfg $ \_ loc stmt ->
     let cs = Callsite loc
         followCall newRhandle =
           do
@@ -609,11 +632,11 @@ distResolver cfg sla retHandler rCall isTarget fentry callingNode =
             -- TODO(internal#106) rcall is going to need to coordinate the cache of cfgs right here
             newCFGS <- liftIO $ rCall fentry cs
             alldists <- forM newCFGS $ \newCFG ->
-              let entrySnode = cfgEntryBlockID newCFG
-               in computeMinDistanceTargetsFromStatmementExt
-                    newCFG
+              let entryId = cfgEntryGlobalStmtId newCFG
+               in computeDistance
                     sla
-                    (statementNode entrySnode)
+                    newCFG
+                    (localStmtId entryId)
                     isTarget
                     newRhandle
                     rCall
@@ -630,10 +653,10 @@ distResolver cfg sla retHandler rCall isTarget fentry callingNode =
                   applyReturn (returnCallstack rinfo) fentry cs (returnResolver rinfo) (returnCfgBuidler rinfo)
             alldists <- forM tasks $ \expTask ->
               let nextRetHandler = ReturnHandler (Just $ rinfo{returnCallstack = expCallStack expTask})
-               in computeMinDistanceTargetsFromStatmementExt
-                    (expCfg expTask)
+               in computeDistance
                     sla
-                    (expStatmentNode expTask)
+                    (expCfg expTask)
+                    (expStmtId expTask)
                     isTarget
                     nextRetHandler
                     rCall
@@ -646,9 +669,9 @@ collectLocEquivs ::
   Some.Some CCC.AnyCFG ->
   -- | Whether this location matches the target location
   (WPL.ProgramLoc -> Bool) ->
-  [StatementNode]
+  [LocalStmtId]
 collectLocEquivs cfg isTgt =
-  allStatements cfg $ \snode _ loc _ -> [snode | isTgt loc]
+  allStmts cfg $ \sId _ loc _ -> [sId | isTgt loc]
 
 freshDijkstraState :: Some.Some CCC.AnyCFG -> DistanceMonad DijkstraCaches DijkstraState
 freshDijkstraState cfg = do
@@ -658,7 +681,7 @@ freshDijkstraState cfg = do
   pure $
     DijkstraState
       { _caches = currCaches
-      , _visitedNodeMinDist = Map.fromList ((,Nothing) <$> infLocs)
+      , _visitedIdMinDist = Map.fromList ((,Nothing) <$> infLocs)
       , _targetDistances = Map.empty
       , _priorityQueue = OrdPSQ.empty
       }
@@ -682,12 +705,12 @@ callDistResolverFromResolveCall sla callResolve fEntry callSite = do
     computeMinimumReturnDistance sla currCfg callResolve
   pure $ collectDistances (defaultRetDist conf) dists
 
-runDijkstrasFromSnode ::
+runDijkstrasFromStmt ::
   Some.Some CCC.AnyCFG ->
-  StatementNode ->
+  LocalStmtId ->
   DistanceMonad DijkstraState (Maybe Distance) ->
   DistanceMonad DijkstraCaches (Maybe Distance)
-runDijkstrasFromSnode cfg startSnode dijkstrasRun = do
+runDijkstrasFromStmt cfg startStmtId dijkstrasRun = do
   frsh <- freshDijkstraState cfg
   let nstate = queueEntry frsh
   (resDist, fullState) <-
@@ -700,37 +723,40 @@ runDijkstrasFromSnode cfg startSnode dijkstrasRun = do
   pure resDist
  where
   queueEntry :: DijkstraState -> DijkstraState
-  queueEntry = over priorityQueue (OrdPSQ.insert startSnode (Distance 0) ())
+  queueEntry = over priorityQueue (OrdPSQ.insert startStmtId (Distance 0) ())
 
 runDijkstrasFromEntry ::
   Some.Some CCC.AnyCFG ->
   DistanceMonad DijkstraState (Maybe Distance) ->
   DistanceMonad DijkstraCaches (Maybe Distance)
 runDijkstrasFromEntry cfg djikstasRun =
-  let snode = cfgEntryBlockID cfg
-   in runDijkstrasFromSnode cfg (statementNode snode) djikstasRun
+  let sId = cfgEntryGlobalStmtId cfg
+   in runDijkstrasFromStmt cfg (localStmtId sId) djikstasRun
 
 data ReturnResolutionInfo = ReturnResolutionInfo
   {returnResolver :: ResolveReturn, returnCfgBuidler :: GetCFG, returnCallstack :: CallStack}
 newtype ReturnHandler = ReturnHandler (Maybe ReturnResolutionInfo)
 
-computeMinDistanceTargetsFromStatmementExt ::
-  Some.Some CCC.AnyCFG ->
+-- | Compute the minimum distance from a statement to a target.
+--
+-- Based on Dijkstra\'s algorithm.
+computeDistance ::
   ScreachLogAction ->
-  StatementNode ->
+  Some.Some CCC.AnyCFG ->
+  LocalStmtId ->
   IsTarget ->
   ReturnHandler ->
   ResolveCall ->
   DistanceMonad DijkstraCaches (Maybe Distance)
-computeMinDistanceTargetsFromStatmementExt cfg sla startSnode tgts@(IsTarget isTarget) retHandler resolveCall =
+computeDistance sla cfg startId tgts@(IsTarget isTarget) retHandler resolveCall =
   cachedDistanceOrRun
-    (interBlockIDFromSnode cfg startSnode)
+    (globalStmtId cfg startId)
     targetDistCache
     cfg
     ( do
-        let cloc = getCFGLoc cfg
+        let cLoc = getCFGLoc cfg
         _ <-
-          liftIO $ logDebug sla ("computing min dist for cfg: " ++ show cloc ++ " snode: " ++ show startSnode)
+          liftIO $ logDebug sla ("computing min dist for cfg: " ++ show cLoc ++ " sId: " ++ show startId)
         let currDistReslver = distResolver cfg sla retHandler resolveCall tgts
         let mbFunEntry = cfgFunctionEntry cfg
         maybe
@@ -741,25 +767,25 @@ computeMinDistanceTargetsFromStatmementExt cfg sla startSnode tgts@(IsTarget isT
               maybe
                 []
                 ( \fentry ->
-                    allStatements
+                    allStmts
                       cfg
-                      ( \snode _ loc stmt ->
-                          Maybe.maybeToList $ (snode,) <$> isTarget fentry loc stmt
+                      ( \sId _ loc stmt ->
+                          Maybe.maybeToList $ (sId,) <$> isTarget fentry loc stmt
                       )
                 )
                 mbFunEntry
         _ <- liftIO $ logDebug sla ("Target list: " ++ show tgtList)
         let dist = dijkstras tgtList cfg (callDistResolverFromResolveCall sla resolveCall) currDistReslver
-        r <- runDijkstrasFromSnode cfg startSnode dist
-        _ <- liftIO $ logDebug sla ("done computed min dist for cfg: " ++ show cloc)
+        r <- runDijkstrasFromStmt cfg startId dist
+        _ <- liftIO $ logDebug sla ("done computed min dist for cfg: " ++ show cLoc)
         pure r
     )
 
-collectReturnTargets :: Some.Some CCC.AnyCFG -> [(StatementNode, TargetType)]
-collectReturnTargets cfg = allStatements cfg $ \snode _ _ stmt ->
+collectReturnTargets :: Some.Some CCC.AnyCFG -> [(LocalStmtId, TargetType)]
+collectReturnTargets cfg = allStmts cfg $ \sId _ _ stmt ->
   case stmt of
-    Left (CCC.Return _) -> [(snode, IntraTarget)]
-    Left (CCC.TailCall{}) -> [(snode, InterTarget)]
+    Left (CCC.Return _) -> [(sId, IntraTarget)]
+    Left (CCC.TailCall{}) -> [(sId, InterTarget)]
     _ -> []
 
 minReturnDistResolver ::
@@ -767,10 +793,10 @@ minReturnDistResolver ::
   Some.Some CCC.AnyCFG ->
   ResolveCall ->
   FunctionEntry ->
-  StatementNode ->
+  LocalStmtId ->
   DistanceMonad DijkstraCaches (Maybe Distance)
-minReturnDistResolver sla cfg rCall fentry callingNode =
-  withStatement callingNode cfg $ \_ loc stmt ->
+minReturnDistResolver sla cfg rCall fentry callingId =
+  withStatement callingId cfg $ \_ loc stmt ->
     let cs = Callsite loc
         followCall =
           do
@@ -788,8 +814,8 @@ getCFGLoc :: Some.Some CCC.AnyCFG -> WPL.ProgramLoc
 getCFGLoc (Some.Some (CCC.AnyCFG up)) =
   let ent = CCC.getBlock (CCC.cfgEntryBlockID up) (CCC.cfgBlockMap up)
    in case view CCC.blockStmts ent of
-        CCC.TermStmt cloc _ -> cloc
-        CCC.ConsStmt cloc _ _ -> cloc
+        CCC.TermStmt cLoc _ -> cLoc
+        CCC.ConsStmt cLoc _ _ -> cLoc
 
 -- | Computes the minimum interprocedural distance to a return. We discard the target cache because we should only impact the
 -- return dist cache
@@ -800,7 +826,7 @@ computeMinimumReturnDistance ::
   DistanceMonad DijkstraCaches (Maybe Distance)
 computeMinimumReturnDistance sla cfg rcall =
   cachedDistanceOrRun
-    (cfgEntryBlockID cfg)
+    (cfgEntryGlobalStmtId cfg)
     returnDistCache
     cfg
     ( do

@@ -88,7 +88,7 @@ toSsaSomeCfg ::
   CCC.SomeCFG ext init ret
 toSsaSomeCfg (CCR.SomeCFG cfg) = CCS.toSSA cfg
 
-type DistTask = (CCC.Some CCC.AnyCFG, Dist.StatementNode)
+type DistTask = (CCC.Some CCC.AnyCFG, Dist.LocalStmtId)
 
 data TestTask = TestTask {longer :: DistTask, shorter :: DistTask}
 
@@ -102,7 +102,7 @@ getTaskForFunc tgtName symMap buildCFG = do
     Nothing -> fail $ "Could not find target function: " ++ show tgtName
     Just x -> pure x
   (CCC.Some (CCC.AnyCFG cfg)) <- buildCFG targetAddr
-  let ent = Dist.cfgEntrySnode cfg
+  let ent = Dist.cfgEntryStmtId cfg
   pure (CCC.Some (CCC.AnyCFG cfg), ent)
 
 getTestTask ::
@@ -233,9 +233,9 @@ runDistTest DisttestConfig{callgraph = callgraph, progConfig = pconf} =
       ( \(cfg, snode) ->
           evalStateT
             ( runReaderT
-                ( Dist.computeMinDistanceTargetsFromStatmementExt
-                    cfg
+                ( Dist.computeDistance
                     sla
+                    cfg
                     snode
                     (Dist.IsTarget isTarget)
                     nullReturnHandler

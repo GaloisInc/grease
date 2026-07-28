@@ -48,26 +48,26 @@ import What4.ProgramLoc qualified as WPL
 class HasDistancesState p where
   distancesRef :: p -> IORef Dist.DijkstraCaches
 
-getPausedFrameStatementNode :: C.PausedFrame p sym ext rtp f -> Dist.StatementNode
-getPausedFrameStatementNode paused =
+getPausedFrameLocalStmtId :: C.PausedFrame p sym ext rtp f -> Dist.LocalStmtId
+getPausedFrameLocalStmtId paused =
   case C.resume paused of
     C.ContinueResumption (C.ResolvedJump bId _) ->
-      Dist.StatementNode
+      Dist.LocalStmtId
         { Dist.blockId = Ctx.indexVal (CCC.blockIDIndex bId)
-        , Dist.statId = 0
+        , Dist.stmtIdx = Dist.StmtIdx 0
         }
     _ ->
       panic
-        "getPausedFrameStatementNode"
+        "getPausedFrameLocalStmtId"
         ["hopefully not possible? we should only invoke this function on paused frames from SymBranch"]
 
 getExplorationEntry ::
   C.SimState p sym ext rtp f ('Just args) ->
   C.PausedFrame p sym ext rtp f ->
-  IO (Maybe (Some.Some CCC.AnyCFG, Dist.StatementNode))
+  IO (Maybe (Some.Some CCC.AnyCFG, Dist.LocalStmtId))
 getExplorationEntry st pf = case st ^. C.stateTree . C.actFrame . C.gpValue of
   C.MF (C.CallFrame{C._frameCFG = cfg}) -> do
-    let snode = getPausedFrameStatementNode pf
+    let snode = getPausedFrameLocalStmtId pf
     pure $ Just (Some.Some $ CCC.AnyCFG cfg, snode)
   _ -> pure Nothing
 
@@ -153,14 +153,14 @@ callStackFromSimState ::
   C.SimState p sym ext rtp f ('Just args) -> StateT Dist.DijkstraCaches IO Dist.CallStack
 callStackFromSimState st = do
   let frms = C.activeFrames $ st ^. C.stateTree
-  bids <- forM frms frmToICFGBlock
-  pure $ Dist.CallStack $ Maybe.catMaybes bids
+  stmtIds <- forM frms frameToGlobalStmtId
+  pure $ Dist.CallStack $ Maybe.catMaybes stmtIds
  where
-  frmToICFGBlock ::
+  frameToGlobalStmtId ::
     C.SomeFrame (C.SimFrame sym ext) ->
-    StateT Dist.DijkstraCaches IO (Maybe Dist.InterproceduralBlockID)
-  frmToICFGBlock (C.SomeFrame (C.MF cf)) = Just <$> Dist.interBlockIDFromFrame cf
-  frmToICFGBlock _ = pure Nothing
+    StateT Dist.DijkstraCaches IO (Maybe Dist.GlobalStmtId)
+  frameToGlobalStmtId (C.SomeFrame (C.MF cf)) = Just <$> Dist.globalStmtIdFromFrame cf
+  frameToGlobalStmtId _ = pure Nothing
 
 -- | Run a 'StateT DijkstraCaches IO' computation using an 'IORef' for mutable state.
 runWithCachesRef :: IORef Dist.DijkstraCaches -> StateT Dist.DijkstraCaches IO a -> IO a
@@ -228,7 +228,7 @@ sdsePrioritizationFunction tgtAddr tgtFunction archCtx cg cache distConfig sla g
                         }
                   )
           let x =
-                Dist.computeMinDistanceTargetsFromStatmementExt cfg sla snode (Dist.IsTarget isT) retHandler rcall
+                Dist.computeDistance sla cfg snode (Dist.IsTarget isT) retHandler rcall
           MaybeT x
    in do
         prevDist <- fromIntegral <$> getTraceDistance state
